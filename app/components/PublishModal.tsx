@@ -15,7 +15,7 @@ interface PublishModalProps {
 
 const categoryDefaults: Record<CategoryId, Record<string, string | number>> = {
   vehiculos: {
-    año: "2024",
+    anio: "2024",
     kilometraje: "30.000 km",
     transmision: "Automatica",
     marca: "Toyota",

@@ -43,6 +43,7 @@ export const listings = sqliteTable(
     location: text("location").notNull(),
     shipping: text("shipping").notNull(),
     status: text("status").notNull().default("online"),
+    source: text("source").notNull().default("user"),
     metadataJson: text("metadata_json").notNull(),
     tagsJson: text("tags_json").notNull(),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -73,6 +74,26 @@ export const listingViews = sqliteTable(
     userViewedAtIdx: index("listing_views_user_viewed_at_idx").on(
       table.userId,
       table.viewedAt,
+    ),
+  }),
+);
+
+export const userSearches = sqliteTable(
+  "user_searches",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    query: text("query").notNull(),
+    categoryId: text("category_id"),
+    tagsJson: text("tags_json").notNull(),
+    searchedAt: text("searched_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    userSearchedAtIdx: index("user_searches_user_searched_at_idx").on(
+      table.userId,
+      table.searchedAt,
     ),
   }),
 );

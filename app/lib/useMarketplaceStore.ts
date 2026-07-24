@@ -11,8 +11,9 @@ import {
   type ProductVisual,
   type UserProfile,
 } from "../data/marketplace";
+import { inferCategoryFromText, tagsFromQuery } from "./recommendations";
 
-const STORAGE_KEY = "mercado-live-state-v1";
+const STORAGE_KEY = "mercado-live-state-v3";
 const CHANNEL_KEY = "mercado-live-realtime";
 
 export interface PublishListingInput {
@@ -46,7 +47,16 @@ function safeParseState(value: string | null): MarketplaceState | null {
       return null;
     }
 
-    return parsed;
+    return {
+      ...createInitialMarketplaceState(),
+      ...parsed,
+      activeUserId: parsed.activeUserId ?? null,
+      searches: Array.isArray(parsed.searches) ? parsed.searches : [],
+      listings: parsed.listings.map((listing) => ({
+        ...listing,
+        source: listing.source ?? (listing.categoryId === "streaming" ? "catalog" : "user"),
+      })),
+    };
   } catch {
     return null;
   }
@@ -167,7 +177,7 @@ export function useMarketplaceStore() {
   }, []);
 
   const activeUser = useMemo(
-    () => state.users.find((user) => user.id === state.activeUserId) ?? state.users[0],
+    () => state.users.find((user) => user.id === state.activeUserId && !user.isSystem),
     [state.activeUserId, state.users],
   );
 
@@ -175,15 +185,9 @@ export function useMarketplaceStore() {
     (userId: string) => {
       commit((previous) => ({
         ...previous,
-        activeUserId: userId,
-        notifications: [
-          {
-            id: createId("note"),
-            text: `${previous.users.find((user) => user.id === userId)?.name ?? "Usuario"} inicio sesion`,
-            createdAt: new Date().toISOString(),
-          },
-          ...previous.notifications,
-        ].slice(0, 8),
+        activeUserId: previous.users.some((user) => user.id === userId && !user.isSystem)
+          ? userId
+          : previous.activeUserId,
       }));
     },
     [commit],
@@ -209,12 +213,15 @@ export function useMarketplaceStore() {
 
       commit((previous) => ({
         ...previous,
-        users: [...previous.users, user],
-        activeUserId: user.id,
+        users: previous.users.some((candidate) => candidate.email === user.email)
+          ? previous.users
+          : [...previous.users, user],
+        activeUserId:
+          previous.users.find((candidate) => candidate.email === user.email)?.id ?? user.id,
         notifications: [
           {
             id: createId("note"),
-            text: `${user.name} se registro como nuevo usuario`,
+            text: `${user.name} creo su cuenta`,
             createdAt: new Date().toISOString(),
           },
           ...previous.notifications,
@@ -222,6 +229,39 @@ export function useMarketplaceStore() {
       }));
     },
     [commit],
+  );
+
+  const logout = useCallback(() => {
+    commit((previous) => ({
+      ...previous,
+      activeUserId: null,
+    }));
+  }, [commit]);
+
+  const recordSearch = useCallback(
+    (query: string) => {
+      if (!activeUser || !query.trim()) {
+        return;
+      }
+
+      const tags = tagsFromQuery(query);
+      const categoryId = inferCategoryFromText(query);
+      commit((previous) => ({
+        ...previous,
+        searches: [
+          {
+            id: createId("search"),
+            userId: activeUser.id,
+            query: query.trim(),
+            categoryId,
+            tags,
+            searchedAt: new Date().toISOString(),
+          },
+          ...previous.searches,
+        ].slice(0, 80),
+      }));
+    },
+    [activeUser, commit],
   );
 
   const recordView = useCallback(
@@ -283,6 +323,7 @@ export function useMarketplaceStore() {
         tags: input.tags,
         meta: input.meta,
         badge: "Nuevo online",
+        source: "user",
         visual: makeVisual(input.categoryId, input.title),
       };
 
@@ -312,7 +353,7 @@ export function useMarketplaceStore() {
         notifications: [
           {
             id: createId("note"),
-            text: `${activeUser.name} publico: ${listing.title}`,
+            text: `${activeUser.name} publico online: ${listing.title}`,
             createdAt: new Date().toISOString(),
           },
           ...previous.notifications,
@@ -331,7 +372,7 @@ export function useMarketplaceStore() {
       const seller = state.users.find((user) => user.id === listing.sellerId);
       const counterpart =
         listing.sellerId === activeUser.id
-          ? state.users.find((user) => user.id !== activeUser.id)
+          ? state.users.find((user) => user.id !== activeUser.id && !user.isSystem)
           : seller;
 
       if (!counterpart) {
@@ -459,6 +500,8 @@ export function useMarketplaceStore() {
     actions: {
       loginAs,
       registerUser,
+      logout,
+      recordSearch,
       recordView,
       publishListing,
       sendMessage,

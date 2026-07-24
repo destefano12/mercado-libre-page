@@ -31,9 +31,9 @@ test("server-renders the Mercado Live marketplace shell", async () => {
   const html = await response.text();
   assert.match(html, /<title>Mercado Live \| Home<\/title>/i);
   assert.match(html, /mercado/i);
-  assert.match(html, /Categorias/i);
-  assert.match(html, /Basado en lo ultimo que viste/i);
-  assert.match(html, /GPS simulado/i);
+  assert.match(html, /Inicia sesion o registrate/i);
+  assert.match(html, /Todavia no hay cuentas creadas/i);
+  assert.match(html, /Crear cuenta y entrar/i);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
 });
 

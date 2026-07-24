@@ -6,6 +6,7 @@ import categoriesReference from "@/IMG/Captura de pantalla 2026-07-24 015558.png
 import { categories, type AssetKey, type CategoryId, type Listing } from "../data/marketplace";
 import {
   getRecommendationShelves,
+  inferCategoryFromText,
   matchesCategoryFilter,
   matchesListingQuery,
   sortListingsForCategory,
@@ -83,10 +84,10 @@ export function MarketplaceApp() {
   const { state, activeUser, actions } = useMarketplaceStore();
   const [query, setQuery] = useState("");
   const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
-  const [activeCategoryId, setActiveCategoryId] = useState<CategoryId>("tecnologia");
-  const [sortMode, setSortMode] = useState("Mejor match");
+  const [activeCategoryId, setActiveCategoryId] = useState<CategoryId>("streaming");
+  const [sortMode, setSortMode] = useState("Entrega mas rapida");
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
-  const [selectedListingId, setSelectedListingId] = useState<string | null>("stream-hbo");
+  const [selectedListingId, setSelectedListingId] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
@@ -106,8 +107,8 @@ export function MarketplaceApp() {
     [selectedListing?.id, state.shipments],
   );
   const shelves = useMemo(
-    () => getRecommendationShelves(state, activeUser?.id ?? state.activeUserId),
-    [activeUser?.id, state],
+    () => (activeUser ? getRecommendationShelves(state, activeUser.id) : null),
+    [activeUser, state],
   );
   const activeCategory = categories.find((category) => category.id === activeCategoryId) ?? categories[0];
   const liveResults = useMemo(
@@ -125,10 +126,29 @@ export function MarketplaceApp() {
         .slice(0, 8),
     [activeCategoryId, activeFilter, sortMode, state.listings],
   );
-
+  const streamingCatalog = useMemo(
+    () =>
+      sortListingsForCategory(state.listings, "streaming", "Entrega mas rapida").filter(
+        (listing) => listing.source === "catalog",
+      ),
+    [state.listings],
+  );
   function openListing(listing: Listing) {
     setSelectedListingId(listing.id);
     actions.recordView(listing.id);
+  }
+
+  function submitSearch() {
+    const cleanQuery = query.trim();
+    if (!cleanQuery) {
+      return;
+    }
+
+    actions.recordSearch(cleanQuery);
+    const inferredCategory = inferCategoryFromText(cleanQuery);
+    if (inferredCategory) {
+      changeCategory(inferredCategory);
+    }
   }
 
   function changeCategory(categoryId: CategoryId) {
@@ -139,6 +159,41 @@ export function MarketplaceApp() {
     setCategoryMenuOpen(false);
   }
 
+  if (!activeUser) {
+    return (
+      <main
+        className="marketplace-shell auth-shell"
+        style={{ "--asset-home": `url("${assetUrls.home}")` } as CSSProperties}
+      >
+        <header className="topbar topbar--auth">
+          <div className="topbar__inner topbar__inner--auth">
+            <button className="brand brand--capture" type="button" aria-label="Mercado Libre">
+              <span
+                className="brand__mark"
+                style={{ backgroundImage: `url("${assetUrls.home}")` }}
+                aria-hidden="true"
+              />
+              <span className="brand__text">mercado libre</span>
+            </button>
+            <div className="topbar__promo">
+              <span className="promo-badge">%</span>
+              <strong>Ofertas por tiempo limitado</strong>
+            </div>
+          </div>
+        </header>
+        <section className="auth-landing">
+          <div className="auth-landing__visual" aria-hidden="true" />
+          <AuthModal
+            users={state.users}
+            onLogin={actions.loginAs}
+            onRegister={actions.registerUser}
+            blocking
+          />
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main
       className="marketplace-shell"
@@ -146,24 +201,32 @@ export function MarketplaceApp() {
     >
       <header className="topbar">
         <div className="topbar__inner">
-          <button className="brand" type="button" onClick={() => setSelectedListingId(null)}>
+          <button className="brand brand--capture" type="button" onClick={() => setSelectedListingId(null)}>
             <span
               className="brand__mark"
               style={{ backgroundImage: `url("${assetUrls.home}")` }}
               aria-hidden="true"
             />
-            <span className="brand__text">
-              mercado
-              <br />
-              libre
-            </span>
+            <span className="brand__text">mercado libre</span>
           </button>
 
           <div className="search-zone">
-            <form className="search-box" onSubmit={(event) => event.preventDefault()}>
+            <form
+              className="search-box"
+              onSubmit={(event) => {
+                event.preventDefault();
+                submitSearch();
+              }}
+            >
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    submitSearch();
+                  }
+                }}
                 placeholder="Buscar productos, marcas y mas..."
                 aria-label="Buscar productos"
               />
@@ -188,6 +251,7 @@ export function MarketplaceApp() {
                         key={listing.id}
                         type="button"
                         onClick={() => {
+                          actions.recordSearch(query);
                           openListing(listing);
                           setQuery("");
                         }}
@@ -196,7 +260,7 @@ export function MarketplaceApp() {
                         <div>
                           <strong>{listing.title}</strong>
                           <small>
-                            {money(listing.price)} · {seller?.name ?? "Vendedor"} ·{" "}
+                            {money(listing.price)} - {seller?.name ?? "Vendedor"} -{" "}
                             {timeAgo(listing.createdAt)}
                           </small>
                         </div>
@@ -239,10 +303,13 @@ export function MarketplaceApp() {
           <div className="account-actions">
             <button type="button" onClick={() => setAuthOpen(true)}>
               <span>{activeUser?.avatar ?? "US"}</span>
-              {activeUser?.name ?? "Entrar"}
+              {activeUser.name}
             </button>
             <button type="button">Mis compras</button>
             <button type="button">Favoritos</button>
+            <button type="button" onClick={actions.logout}>
+              Salir
+            </button>
           </div>
 
           {categoryMenuOpen ? (
@@ -275,9 +342,9 @@ export function MarketplaceApp() {
       <section className="quick-access" aria-label="Accesos rapidos">
         {[
           ["Envio gratis", "Beneficio por tu primera compra", "Mostrar productos"],
-          ["Visto recientemente", shelves.recentlyViewed[0]?.title ?? "Explora ofertas activas", "Retomar"],
-          ["Porque te interesa", shelves.inspiredByHistory[0]?.title ?? "Productos relacionados", "Ver mas"],
-          ["Lo queres", "Ofertas por historial y tags", "Guardar"],
+          ["Visto recientemente", shelves?.recentlyViewed[0]?.title ?? "Todavia no viste nada", "Retomar"],
+          ["Porque te interesa", shelves?.inspiredByHistory[0]?.title ?? "Busca para personalizar", "Ver mas"],
+          ["Lo queres", shelves?.hasPersonalActivity ? "Ofertas por historial y tags" : "Se activa con tu actividad", "Guardar"],
           ["Mercado Play", "Peliculas, accesos y streaming", "Ver gratis"],
           ["Medios de pago", "Compra rapida, cuotas y proteccion", "Conocer"],
         ].map(([title, body, action], index) => (
@@ -296,25 +363,54 @@ export function MarketplaceApp() {
             <div className="section-heading">
               <div>
                 <span>Historial inteligente</span>
-                <h2>Basado en lo ultimo que viste</h2>
+                <h2>{shelves?.hasPersonalActivity ? "Basado en tu actividad" : "Tu historial empieza vacio"}</h2>
               </div>
               <button type="button" onClick={actions.resetDemo}>
                 Reiniciar demo
               </button>
             </div>
+            {shelves?.hasPersonalActivity && shelves.inspiredByHistory.length > 0 ? (
+              <div className="product-row">
+                {shelves.inspiredByHistory.slice(0, 6).map((listing) => (
+                    <ProductCard
+                      assetUrls={assetUrls}
+                      key={listing.id}
+                      listing={listing}
+                      seller={state.users.find((user) => user.id === listing.sellerId)}
+                      onOpen={openListing}
+                      compact
+                    />
+                  ))}
+              </div>
+            ) : (
+              <div className="empty-state">
+                <strong>No hay recomendaciones todavia</strong>
+                <p>Busca HBO, Disney, tecnologia o cualquier categoria. Desde esa accion esta cuenta empieza a recibir productos similares.</p>
+              </div>
+            )}
+          </section>
+
+          <section className="shelf shelf--play">
+            <div className="section-heading">
+              <div>
+                <span>Catalogo inicial permitido</span>
+                <h2>Disney, HBO Max y entretenimiento</h2>
+              </div>
+              <button type="button" onClick={() => changeCategory("streaming")}>
+                Mercado Play
+              </button>
+            </div>
             <div className="product-row">
-              {(shelves.inspiredByHistory.length ? shelves.inspiredByHistory : shelves.trending)
-                .slice(0, 6)
-                .map((listing) => (
-                  <ProductCard
-                    assetUrls={assetUrls}
-                    key={listing.id}
-                    listing={listing}
-                    seller={state.users.find((user) => user.id === listing.sellerId)}
-                    onOpen={openListing}
-                    compact
-                  />
-                ))}
+              {streamingCatalog.slice(0, 6).map((listing) => (
+                <ProductCard
+                  assetUrls={assetUrls}
+                  key={listing.id}
+                  listing={listing}
+                  seller={state.users.find((user) => user.id === listing.sellerId)}
+                  onOpen={openListing}
+                  compact
+                />
+              ))}
             </div>
           </section>
 
@@ -384,17 +480,27 @@ export function MarketplaceApp() {
                   </article>
                 ))}
               </div>
-              <div className="category-products">
-                {categoryListings.map((listing) => (
-                  <ProductCard
-                    assetUrls={assetUrls}
-                    key={listing.id}
-                    listing={listing}
-                    seller={state.users.find((user) => user.id === listing.sellerId)}
-                    onOpen={openListing}
-                  />
-                ))}
-              </div>
+              {categoryListings.length > 0 ? (
+                <div className="category-products">
+                  {categoryListings.map((listing) => (
+                    <ProductCard
+                      assetUrls={assetUrls}
+                      key={listing.id}
+                      listing={listing}
+                      seller={state.users.find((user) => user.id === listing.sellerId)}
+                      onOpen={openListing}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state empty-state--category">
+                  <strong>Todavia no hay publicaciones en {activeCategory.label}</strong>
+                  <p>Cuando un usuario publique algo en esta categoria, aparecera aca y tambien en la busqueda global.</p>
+                  <button type="button" onClick={() => setPublishOpen(true)}>
+                    Publicar primero
+                  </button>
+                </div>
+              )}
             </div>
           </section>
         </div>
@@ -407,13 +513,20 @@ export function MarketplaceApp() {
                 <h2>Publicaciones en vivo</h2>
               </div>
             </div>
-            {state.notifications.slice(0, 5).map((notification) => (
-              <div className="live-event" key={notification.id}>
-                <span />
-                <p>{notification.text}</p>
-                <small>{timeAgo(notification.createdAt)}</small>
+            {state.notifications.length > 0 ? (
+              state.notifications.slice(0, 5).map((notification) => (
+                <div className="live-event" key={notification.id}>
+                  <span />
+                  <p>{notification.text}</p>
+                  <small>{timeAgo(notification.createdAt)}</small>
+                </div>
+              ))
+            ) : (
+              <div className="empty-state empty-state--small">
+                <strong>Sin publicaciones nuevas</strong>
+                <p>El feed se mueve cuando una cuenta publica o manda mensajes.</p>
               </div>
-            ))}
+            )}
           </section>
 
           <section className="shelf shelf--side">
@@ -424,16 +537,23 @@ export function MarketplaceApp() {
               </div>
             </div>
             <div className="mini-list">
-              {shelves.nearYou.slice(0, 4).map((listing) => (
-                <button key={listing.id} type="button" onClick={() => openListing(listing)}>
-                  <strong>{listing.title}</strong>
-                  <span>{money(listing.price)}</span>
-                </button>
-              ))}
+              {shelves?.nearYou.length ? (
+                shelves.nearYou.slice(0, 4).map((listing) => (
+                  <button key={listing.id} type="button" onClick={() => openListing(listing)}>
+                    <strong>{listing.title}</strong>
+                    <span>{money(listing.price)}</span>
+                  </button>
+                ))
+              ) : (
+                <div className="empty-state empty-state--small">
+                  <strong>Sin entregas cercanas</strong>
+                  <p>Se activa con publicaciones de usuarios en tu zona.</p>
+                </div>
+              )}
             </div>
           </section>
 
-          <ShippingMap shipment={selectedShipment ?? state.shipments[0]} />
+          <ShippingMap shipment={selectedShipment} />
         </aside>
       </section>
 
@@ -458,7 +578,7 @@ export function MarketplaceApp() {
           />
           <div className="detail-drawer__body">
             <span className="detail-drawer__condition">
-              {selectedListing.condition} · {selectedListing.sold} vendidos
+              {selectedListing.condition} - {selectedListing.sold} vendidos
             </span>
             <h2>{selectedListing.title}</h2>
             <strong>{money(selectedListing.price)}</strong>
