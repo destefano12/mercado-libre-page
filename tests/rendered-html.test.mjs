@@ -156,7 +156,7 @@ test("uses the ERLC map for shipment tracking zones", async () => {
     "utf8",
   );
   const mapAsset = await stat(
-    new URL("../public/erlc-delivery-map.jpg", import.meta.url),
+    new URL("../IMG/official/erlc-delivery-map.jpg", import.meta.url),
   );
 
   assert.ok(mapAsset.size > 1_000_000);

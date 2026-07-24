@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 import type { Shipment } from "../data/marketplace";
+import erlcDeliveryMap from "@/IMG/official/erlc-delivery-map.jpg";
 
 interface ShippingMapProps {
   shipment?: Shipment;
@@ -24,6 +25,9 @@ export function ShippingMap({ shipment }: ShippingMapProps) {
   );
   const activePoint = shipment.route[pointIndex] ?? shipment.route[0];
   const routeProgress = Math.min(100, Math.max(0, shipment.progress));
+  const mapSource = typeof erlcDeliveryMap === "string"
+    ? erlcDeliveryMap
+    : erlcDeliveryMap.src;
 
   return (
     <section className="gps-card">
@@ -37,7 +41,7 @@ export function ShippingMap({ shipment }: ShippingMapProps) {
       <div className="gps-map" aria-label="Mapa visual de seguimiento de envio">
         <img
           className="gps-map__image"
-          src="/erlc-delivery-map.jpg"
+          src={mapSource}
           alt="Mapa de reparto con zonas de creacion, retiro y viviendas"
         />
         <div className="gps-map__legend" aria-hidden="true">
