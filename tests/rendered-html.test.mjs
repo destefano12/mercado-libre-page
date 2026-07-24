@@ -72,6 +72,13 @@ test("keeps accounts private and routes messages through authenticated APIs", as
   assert.doesNotMatch(authModal, /users\.map|loginAs/);
   assert.match(authModal, /type="password"/);
   assert.match(store, /fetch\("\/api\/messages"/);
+  assert.match(store, /setState\(\(previous\) => \(\{ \.\.\.previous, chats: result\.threads/);
+  const page = await readFile(
+    new URL("../app/components/MarketplaceApp.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(page, /className=\{`messages-link/);
+  assert.match(page, />Mensajes</);
   assert.doesNotMatch(store, /setTimeout[\s\S]{0,500}respond/);
   assert.match(authRoute, /passwordMatches/);
   assert.match(serverAuth, /PBKDF2/);

@@ -566,17 +566,18 @@ export function MarketplaceApp() {
               <span className="nav-chevron">⌄</span>
             </button>
             <button type="button" onClick={() => openPage("purchases")}>Mis compras</button>
-            <button type="button" onClick={() => openPage("favorites")}>Favoritos</button>
             <button
-              className="notification-button"
+              className={`messages-link ${unreadMessageCount ? "messages-link--unread" : ""}`}
               type="button"
               title="Mensajes"
               aria-label={`${unreadMessageCount} mensajes sin leer`}
               onClick={() => openPage("messages")}
             >
-              <span />
+              <span aria-hidden="true" />
+              <em>Mensajes</em>
               {unreadMessageCount ? <b>{Math.min(unreadMessageCount, 99)}</b> : null}
             </button>
+            <button type="button" onClick={() => openPage("favorites")}>Favoritos</button>
             <button className="cart-button" type="button" title="Carrito" aria-label={`${cartIds.length} productos en tu carrito`} onClick={() => openPage("cart")}>
               <span>{cartIds.length || ""}</span>
             </button>
@@ -590,7 +591,9 @@ export function MarketplaceApp() {
               <p><strong>{activeUser.name}</strong><small>{activeUser.email}</small></p>
             </div>
             <button type="button" onClick={() => openPage("purchases")}>Mis compras</button>
-            <button type="button" onClick={() => openPage("messages")}>Mensajes</button>
+            <button type="button" onClick={() => openPage("messages")}>
+              Mensajes{unreadMessageCount ? ` (${Math.min(unreadMessageCount, 99)})` : ""}
+            </button>
             <button type="button" onClick={() => setPublishOpen(true)}>Vender</button>
             <button
               type="button"

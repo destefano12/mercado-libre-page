@@ -362,6 +362,44 @@ button {
   font-weight: 700;
 }
 
+.messages-link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  min-width: 92px;
+}
+
+.messages-link span {
+  position: relative;
+  width: 14px;
+  height: 13px;
+  flex: 0 0 14px;
+  border: 1.5px solid #333;
+  border-radius: 7px 7px 3px 3px;
+}
+
+.messages-link span::after {
+  position: absolute;
+  bottom: -5px;
+  left: 4px;
+  width: 4px;
+  height: 4px;
+  content: "";
+  background: #333;
+  border-radius: 50%;
+}
+
+.messages-link em {
+  font-style: normal;
+}
+
+.messages-link--unread {
+  color: #111;
+  font-weight: 600;
+}
+
 .notification-button {
   position: relative;
   width: 20px;
@@ -389,10 +427,11 @@ button {
   border-radius: 50%;
 }
 
+.messages-link > b,
 .notification-button > b {
   position: absolute;
   top: -1px;
-  right: -7px;
+  right: -8px;
   display: grid;
   min-width: 16px;
   height: 16px;
@@ -3729,7 +3768,7 @@ button {
     display: none;
   }
 
-  .account-links > button:not(.account-button):not(.notification-button):not(.cart-button) {
+  .account-links > button:not(.account-button):not(.messages-link):not(.notification-button):not(.cart-button) {
     display: none;
   }
 
