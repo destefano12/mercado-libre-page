@@ -110,6 +110,10 @@ export function ReviewSection({
   const [saved, setSaved] = useState(false);
 
   const loadReviews = useCallback(async () => {
+    setData(null);
+    setLoading(true);
+    setError(null);
+    setSaved(false);
     try {
       const response = await fetch(
         `/api/reviews?listingId=${encodeURIComponent(listing.id)}`,
@@ -242,8 +246,8 @@ export function ReviewSection({
             >
               <div className="review-form__heading">
                 <div>
-                  <span>Compra verificada</span>
-                  <h3>{data.ownReview ? "Editá tu opinión" : "Contá cómo fue tu compra"}</h3>
+                  <span>{data.ownReview ? "Opinión registrada" : "Cuenta registrada"}</span>
+                  <h3>{data.ownReview ? "Editá tu opinión" : "Contá tu experiencia"}</h3>
                 </div>
                 {data.ownReview ? <small>Podés actualizarla cuando quieras</small> : null}
               </div>
@@ -271,7 +275,7 @@ export function ReviewSection({
                   }}
                   minLength={10}
                   maxLength={1000}
-                  placeholder="¿Qué te pareció el producto y la experiencia de compra?"
+                  placeholder="¿Qué te pareció el producto y la atención del vendedor?"
                   required
                 />
                 <small>{comment.length}/1000</small>
@@ -295,22 +299,22 @@ export function ReviewSection({
             <div className="review-eligibility">
               {data.reason === "own_listing"
                 ? "No podés calificar tu propia publicación."
-                : data.reason === "purchase_required"
-                  ? "Podrás opinar después de comprar este producto."
-                  : "Ingresá con tu cuenta para publicar una opinión."}
+                : "Ingresá con tu cuenta para publicar una opinión."}
             </div>
           )}
 
           {data.reviews.length > 0 ? (
             <div className="review-list">
-              <h3>Opiniones de compradores</h3>
+              <h3>Opiniones de usuarios</h3>
               {data.reviews.map((review) => (
                 <article className="review-item" key={review.id}>
                   <div className="review-item__author">
                     <span>{review.authorAvatar}</span>
                     <div>
                       <strong>{review.authorName}</strong>
-                      <small>Compra verificada · {reviewDate(review.updatedAt)}</small>
+                      <small>
+                        {review.verifiedPurchase ? "Compra verificada" : "Usuario registrado"} · {reviewDate(review.updatedAt)}
+                      </small>
                     </div>
                   </div>
                   <StarDisplay value={review.productRating} label="Calificación del producto" />

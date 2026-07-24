@@ -4,6 +4,7 @@ import {
   type AuthenticatedProfile,
   type MarketplaceDatabase,
 } from "../../lib/server/auth";
+import { createInitialMarketplaceState } from "../../data/marketplace";
 
 interface MarketplaceListing {
   id: string;
@@ -33,6 +34,7 @@ interface ReviewRow {
   updated_at: string;
   author_name: string | null;
   author_avatar: string | null;
+  verified_purchase: number | null;
 }
 
 interface AggregateRow {
@@ -66,6 +68,7 @@ async function ensureReviewTables(database: MarketplaceDatabase) {
         product_rating INTEGER NOT NULL,
         seller_rating INTEGER NOT NULL,
         comment TEXT NOT NULL,
+        verified_purchase INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         UNIQUE(listing_id, author_id)
@@ -85,22 +88,46 @@ async function ensureReviewTables(database: MarketplaceDatabase) {
       )`,
     ),
   ]);
+  try {
+    await database.prepare(
+      "ALTER TABLE marketplace_reviews ADD COLUMN verified_purchase INTEGER NOT NULL DEFAULT 0",
+    ).run();
+  } catch {
+    // Existing databases already have the column.
+  }
 }
 
 async function marketplaceSnapshot(database: MarketplaceDatabase) {
+  const initial = createInitialMarketplaceState();
   const row = await database.prepare(
     "SELECT payload FROM marketplace_realtime WHERE id = ?",
   )
     .bind("marketplace")
     .first<{ payload: string }>();
   if (!row) {
-    return null;
+    return {
+      listings: initial.listings,
+      shipments: initial.shipments,
+    };
   }
 
   try {
-    return JSON.parse(row.payload) as MarketplaceSnapshot;
+    const payload = JSON.parse(row.payload) as MarketplaceSnapshot;
+    const payloadListings = Array.isArray(payload.listings) ? payload.listings : [];
+    const catalogIds = new Set(payloadListings.map((listing) => listing.id));
+    return {
+      ...payload,
+      listings: [
+        ...initial.listings.filter((listing) => !catalogIds.has(listing.id)),
+        ...payloadListings,
+      ],
+      shipments: Array.isArray(payload.shipments) ? payload.shipments : initial.shipments,
+    };
   } catch {
-    return null;
+    return {
+      listings: initial.listings,
+      shipments: initial.shipments,
+    };
   }
 }
 
@@ -146,6 +173,7 @@ async function reviewDetails(
   const reviewsResult = await database.prepare(
     `SELECT r.id, r.listing_id, r.seller_id, r.author_id,
             r.product_rating, r.seller_rating, r.comment,
+            r.verified_purchase,
             r.created_at, r.updated_at,
             a.name AS author_name, a.avatar AS author_avatar
      FROM marketplace_reviews r
@@ -187,21 +215,12 @@ async function reviewDetails(
   const ownReview = user
     ? rows.find((review) => review.author_id === user.id)
     : undefined;
-  const purchased = Boolean(
-    user &&
-      context.shipments.some(
-        (shipment) =>
-          shipment.listingId === listingId && shipment.buyerId === user.id,
-      ),
-  );
   const ownListing = user?.id === context.listing.sellerId;
   const reason = !user
     ? "login_required"
     : ownListing
       ? "own_listing"
-      : purchased
-        ? null
-        : "purchase_required";
+      : null;
 
   return {
     product: {
@@ -218,7 +237,7 @@ async function reviewDetails(
       comment: review.comment,
       createdAt: review.created_at,
       updatedAt: review.updated_at,
-      verifiedPurchase: true,
+      verifiedPurchase: Boolean(review.verified_purchase),
     })),
     ownReview: ownReview
       ? {
@@ -228,7 +247,7 @@ async function reviewDetails(
           comment: ownReview.comment,
         }
       : null,
-    canReview: Boolean(user && purchased && !ownListing),
+    canReview: Boolean(user && !ownListing),
     reason,
   };
 }
@@ -339,13 +358,6 @@ export async function POST(request: Request) {
       (shipment) =>
         shipment.listingId === listingId && shipment.buyerId === user.id,
     );
-    if (!purchased) {
-      return json(
-        { error: "Sólo quienes compraron este producto pueden opinar" },
-        403,
-      );
-    }
-
     const existing = await database.prepare(
       "SELECT id, created_at FROM marketplace_reviews WHERE listing_id = ? AND author_id = ?",
     )
@@ -355,12 +367,13 @@ export async function POST(request: Request) {
     await database.prepare(
       `INSERT INTO marketplace_reviews (
         id, listing_id, seller_id, author_id, product_rating,
-        seller_rating, comment, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        seller_rating, comment, verified_purchase, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(listing_id, author_id) DO UPDATE SET
         product_rating = excluded.product_rating,
         seller_rating = excluded.seller_rating,
         comment = excluded.comment,
+        verified_purchase = MAX(marketplace_reviews.verified_purchase, excluded.verified_purchase),
         updated_at = excluded.updated_at`,
     )
       .bind(
@@ -371,6 +384,7 @@ export async function POST(request: Request) {
         productRating,
         sellerRating,
         comment,
+        purchased ? 1 : 0,
         existing?.created_at ?? now,
         now,
       )

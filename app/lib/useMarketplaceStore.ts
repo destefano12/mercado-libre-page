@@ -581,6 +581,47 @@ export function useMarketplaceStore() {
     [activeUser, commit],
   );
 
+  const deleteListing = useCallback(
+    (listingId: string) => {
+      if (!activeUser) {
+        return false;
+      }
+
+      let removed = false;
+      commit((previous) => {
+        const listing = previous.listings.find((candidate) => candidate.id === listingId);
+        if (
+          !listing ||
+          listing.source !== "user" ||
+          listing.sellerId !== activeUser.id
+        ) {
+          return previous;
+        }
+
+        removed = true;
+        return {
+          ...previous,
+          listings: previous.listings.filter((candidate) => candidate.id !== listingId),
+          favorites: previous.favorites.filter((favorite) => favorite.listingId !== listingId),
+          carts: previous.carts.filter((cart) => cart.listingId !== listingId),
+          chats: previous.chats.filter((thread) => thread.listingId !== listingId),
+          shipments: previous.shipments.filter((shipment) => shipment.listingId !== listingId),
+          views: previous.views.filter((view) => view.listingId !== listingId),
+          notifications: [
+            {
+              id: createId("note"),
+              text: `${activeUser.name} elimino la publicacion: ${listing.title}`,
+              createdAt: new Date().toISOString(),
+            },
+            ...previous.notifications,
+          ].slice(0, 8),
+        };
+      });
+      return removed;
+    },
+    [activeUser, commit],
+  );
+
   const buyListing = useCallback(
     (listing: Listing) => {
       if (!activeUser || listing.sellerId === activeUser.id) {
@@ -750,6 +791,7 @@ export function useMarketplaceStore() {
       recordSearch,
       recordView,
       publishListing,
+      deleteListing,
       buyListing,
       sendMessage,
       markThreadRead,

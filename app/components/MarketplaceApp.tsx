@@ -967,9 +967,27 @@ export function MarketplaceApp() {
                 </select>
               </label>
               {selectedListing.sellerId === activeUser.id ? (
-                <button className="buy-box__disabled" type="button" disabled>
-                  Esta es tu publicación
-                </button>
+                <>
+                  <button className="buy-box__disabled" type="button" disabled>
+                    Esta es tu publicación
+                  </button>
+                  {selectedListing.source === "user" ? (
+                    <button
+                      className="buy-box__danger"
+                      type="button"
+                      onClick={() => {
+                        if (actions.deleteListing(selectedListing.id)) {
+                          setSelectedListingId(null);
+                          setChatOpen(false);
+                          setView("home");
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }
+                      }}
+                    >
+                      Eliminar publicación
+                    </button>
+                  ) : null}
+                </>
               ) : selectedCategory?.layout === "vehicle" || selectedCategory?.layout === "real-estate" ? (
                 <button
                   className="buy-box__primary"

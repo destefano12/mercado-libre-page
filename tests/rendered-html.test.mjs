@@ -106,11 +106,36 @@ test("keeps product opinions and seller reputation tied to verified users", asyn
   assert.match(page, /<ReviewSection/);
   assert.doesNotMatch(page, /128 opiniones|128 calificaciones/i);
   assert.match(reviewSection, /Compra verificada/);
+  assert.match(reviewSection, /Usuario registrado/);
   assert.match(reviewSection, /productRating/);
   assert.match(reviewSection, /sellerRating/);
   assert.match(reviewRoute, /marketplace_reviews/);
-  assert.match(reviewRoute, /purchase_required/);
+  assert.match(reviewRoute, /verified_purchase/);
   assert.match(reviewRoute, /UNIQUE\(listing_id, author_id\)/);
-  assert.match(reviewRoute, /shipment\.buyerId === user\.id/);
+  assert.match(reviewRoute, /context\.listing\.sellerId === user\.id/);
   assert.match(marketplace, /rating: 0/);
+});
+
+test("publishes category-specific listings and lets owners remove them", async () => {
+  const publishModal = await readFile(
+    new URL("../app/components/PublishModal.tsx", import.meta.url),
+    "utf8",
+  );
+  const page = await readFile(
+    new URL("../app/components/MarketplaceApp.tsx", import.meta.url),
+    "utf8",
+  );
+  const store = await readFile(
+    new URL("../app/lib/useMarketplaceStore.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(publishModal, /categories\.map\(\(type\)/);
+  assert.match(publishModal, /Mesa ratona de madera/);
+  assert.match(publishModal, /Muebles, decoracion y articulos del hogar/);
+  assert.match(page, /Eliminar publicación/);
+  assert.match(page, /actions\.deleteListing/);
+  assert.match(store, /listing\.source !== "user"/);
+  assert.match(store, /listing\.sellerId !== activeUser\.id/);
+  assert.match(store, /chats: previous\.chats\.filter/);
 });

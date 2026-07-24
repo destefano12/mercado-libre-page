@@ -1457,6 +1457,7 @@ button {
 .buy-box__primary,
 .buy-box__secondary,
 .buy-box__message,
+.buy-box__danger,
 .buy-box__disabled {
   width: 100%;
   min-height: 46px;
@@ -1490,6 +1491,16 @@ button {
   color: #888;
   background: #eee;
   cursor: default;
+}
+
+.buy-box__danger {
+  color: #b3261e;
+  border: 1px solid #f1c7c2;
+  background: #fff;
+}
+
+.buy-box__danger:hover {
+  background: #fff6f5;
 }
 
 .buyer-protection {
