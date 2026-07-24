@@ -17,9 +17,13 @@ import { ProductCard } from "./ProductCard";
 import { PublishModal } from "./PublishModal";
 import { ShippingMap } from "./ShippingMap";
 
+function assetSource(asset: string | { src: string }) {
+  return typeof asset === "string" ? asset : asset.src;
+}
+
 const assetUrls: Record<AssetKey, string> = {
-  home: homeReference.src,
-  categories: categoriesReference.src,
+  home: assetSource(homeReference),
+  categories: assetSource(categoriesReference),
 };
 
 function money(value: number) {
