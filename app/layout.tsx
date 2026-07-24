@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Mercado Live | Demo marketplace multiusuario",
+  title: "Mercado Live | Marketplace multiusuario",
   description:
     "Marketplace interactivo inspirado en Mercado Libre con usuarios, publicaciones, chat, recomendaciones y GPS simulado.",
   icons: {
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Mercado Live",
     description:
-      "Demo marketplace con personalizacion, publicaciones en vivo, chat y seguimiento de envios.",
+      "Marketplace con personalizacion, publicaciones en vivo, chat y seguimiento de envios.",
   },
 };
 
