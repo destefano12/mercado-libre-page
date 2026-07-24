@@ -248,3 +248,32 @@ export const marketplaceChatMessages = sqliteTable(
     ),
   }),
 );
+
+export const marketplaceReviews = sqliteTable(
+  "marketplace_reviews",
+  {
+    id: text("id").primaryKey(),
+    listingId: text("listing_id").notNull(),
+    sellerId: text("seller_id").notNull(),
+    authorId: text("author_id").notNull(),
+    productRating: integer("product_rating").notNull(),
+    sellerRating: integer("seller_rating").notNull(),
+    comment: text("comment").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => ({
+    listingIdx: index("marketplace_reviews_listing_idx").on(
+      table.listingId,
+      table.updatedAt,
+    ),
+    sellerIdx: index("marketplace_reviews_seller_idx").on(
+      table.sellerId,
+      table.updatedAt,
+    ),
+    authorListingIdx: uniqueIndex("marketplace_reviews_author_listing_idx").on(
+      table.listingId,
+      table.authorId,
+    ),
+  }),
+);

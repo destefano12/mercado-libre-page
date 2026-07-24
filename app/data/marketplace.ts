@@ -58,6 +58,16 @@ export interface UserProfile {
   isSystem?: boolean;
 }
 
+export interface RatingSummary {
+  average: number;
+  count: number;
+}
+
+export interface RatingSummaries {
+  listings: Record<string, RatingSummary>;
+  sellers: Record<string, RatingSummary>;
+}
+
 export interface Listing {
   id: string;
   title: string;
@@ -410,7 +420,7 @@ export const users: UserProfile[] = [
     email: "play@demo.local",
     location: "Entrega online",
     avatar: "MP",
-    reputation: 4.9,
+    reputation: 0,
     joinedAt: "2026-07-24T00:00:00.000Z",
     isSystem: true,
   },
@@ -432,7 +442,7 @@ export const listings: Listing[] = [
     createdAt: "2026-07-24T00:05:00.000Z",
     views: 0,
     sold: 0,
-    rating: 4.8,
+    rating: 0,
     tags: ["hbo max", "streaming", "series", "peliculas", "digital"],
     meta: { plataforma: "HBO Max", tipo: "Membresia", entrega: "Instantanea", duracion: "3 meses" },
     badge: "Digital",
@@ -460,7 +470,7 @@ export const listings: Listing[] = [
     createdAt: "2026-07-24T00:04:00.000Z",
     views: 0,
     sold: 0,
-    rating: 4.8,
+    rating: 0,
     tags: ["disney+", "disney", "streaming", "peliculas", "familia"],
     meta: { plataforma: "Disney+", tipo: "Membresia", entrega: "Instantanea", duracion: "1 mes" },
     badge: "Digital",
@@ -487,7 +497,7 @@ export const listings: Listing[] = [
     createdAt: "2026-07-24T00:03:00.000Z",
     views: 0,
     sold: 0,
-    rating: 4.7,
+    rating: 0,
     tags: ["prime video", "streaming", "codigo", "peliculas", "series"],
     meta: { plataforma: "Prime Video", tipo: "Codigo", entrega: "24 horas", duracion: "1 mes" },
     badge: "Codigo",

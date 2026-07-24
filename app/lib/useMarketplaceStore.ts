@@ -9,12 +9,14 @@ import {
   type Listing,
   type MarketplaceState,
   type ProductVisual,
+  type RatingSummaries,
   type UserProfile,
 } from "../data/marketplace";
 import { inferCategoryFromText, tagsFromQuery } from "./recommendations";
 
 const STORAGE_KEY = "mercado-live-state-v5";
 const CHANNEL_KEY = "mercado-live-realtime";
+const EMPTY_RATINGS: RatingSummaries = { listings: {}, sellers: {} };
 
 export interface PublishListingInput {
   title: string;
@@ -53,6 +55,7 @@ function safeParseState(value: string | null): MarketplaceState | null {
       .filter((listing) => listing.source === "user")
       .map((listing) => ({
         ...listing,
+        rating: 0,
         source: "user" as const,
         images: Array.isArray(listing.images)
           ? listing.images
@@ -65,7 +68,11 @@ function safeParseState(value: string | null): MarketplaceState | null {
       ...initial,
       ...parsed,
       activeUserId: null,
-      users: parsed.users.map((user) => ({ ...user, email: undefined })),
+      users: parsed.users.map((user) => ({
+        ...user,
+        email: undefined,
+        reputation: 0,
+      })),
       searches: Array.isArray(parsed.searches) ? parsed.searches : [],
       listings: [...initial.listings, ...userListings],
       chats: [],
@@ -154,6 +161,8 @@ export function useMarketplaceStore() {
   const [state, setState] = useState<MarketplaceState>(() => createInitialMarketplaceState());
   const [sessionUser, setSessionUser] = useState<UserProfile | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  const [ratingSummaries, setRatingSummaries] =
+    useState<RatingSummaries>(EMPTY_RATINGS);
   const channelRef = useRef<BroadcastChannel | null>(null);
   const clientId = useRef(createId("client"));
   const remoteVersionRef = useRef<string | null>(null);
@@ -194,6 +203,39 @@ export function useMarketplaceStore() {
     },
     [broadcast],
   );
+
+  const refreshRatings = useCallback(async () => {
+    try {
+      const response = await fetch("/api/reviews?summary=1", { cache: "no-store" });
+      const result = await response.json() as RatingSummaries;
+      if (!response.ok || !result.listings || !result.sellers) {
+        return;
+      }
+      setRatingSummaries(result);
+      setState((previous) => ({
+        ...previous,
+        listings: previous.listings.map((listing) => ({
+          ...listing,
+          rating: result.listings[listing.id]?.average ?? 0,
+        })),
+        users: previous.users.map((user) => ({
+          ...user,
+          reputation: result.sellers[user.id]?.average ?? 0,
+        })),
+      }));
+    } catch {
+      // Ratings stay at their last verified values while the service reconnects.
+    }
+  }, []);
+
+  useEffect(() => {
+    const initialTimer = window.setTimeout(() => void refreshRatings(), 0);
+    const timer = window.setInterval(() => void refreshRatings(), 5000);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(timer);
+    };
+  }, [refreshRatings]);
 
   useEffect(() => {
     const persisted = safeParseState(window.localStorage.getItem(STORAGE_KEY));
@@ -505,7 +547,7 @@ export function useMarketplaceStore() {
         createdAt: new Date().toISOString(),
         views: 0,
         sold: 0,
-        rating: activeUser.reputation,
+        rating: 0,
         tags: input.tags,
         meta: input.meta,
         badge: "Nuevo online",
@@ -700,6 +742,7 @@ export function useMarketplaceStore() {
     state,
     activeUser,
     authReady,
+    ratingSummaries,
     actions: {
       login,
       registerUser,
@@ -710,6 +753,7 @@ export function useMarketplaceStore() {
       buyListing,
       sendMessage,
       markThreadRead,
+      refreshRatings,
       advanceShipments,
       resetDemo,
     },

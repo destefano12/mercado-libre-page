@@ -37,6 +37,7 @@ import { ChatDock } from "./ChatDock";
 import { MessagesView } from "./MessagesView";
 import { formatPrice, ListingVisual, ProductCard } from "./ProductCard";
 import { PublishModal } from "./PublishModal";
+import { ReviewSection } from "./ReviewSection";
 import { ShippingMap } from "./ShippingMap";
 
 type ViewName =
@@ -120,7 +121,7 @@ function CategoryGlyph({ categoryId }: { categoryId: CategoryId }) {
 }
 
 export function MarketplaceApp() {
-  const { state, activeUser, actions } = useMarketplaceStore();
+  const { state, activeUser, ratingSummaries, actions } = useMarketplaceStore();
   const [view, setView] = useState<ViewName>("home");
   const [query, setQuery] = useState("");
   const [searchSuggestionsOpen, setSearchSuggestionsOpen] = useState(false);
@@ -190,6 +191,12 @@ export function MarketplaceApp() {
     selectedThreadId,
   );
   const selectedSeller = state.users.find((user) => user.id === selectedListing?.sellerId);
+  const selectedProductRating = selectedListing
+    ? ratingSummaries.listings[selectedListing.id] ?? { average: 0, count: 0 }
+    : { average: 0, count: 0 };
+  const selectedSellerRating = selectedListing
+    ? ratingSummaries.sellers[selectedListing.sellerId] ?? { average: 0, count: 0 }
+    : { average: 0, count: 0 };
   const selectedCategory = listingCategory(selectedListing);
   const shelves = useMemo(
     () => (activeUser ? getRecommendationShelves(state, activeUser.id) : null),
@@ -348,6 +355,13 @@ export function MarketplaceApp() {
     setQuery("");
     setSearchSuggestionsOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function openReviews(listing: Listing) {
+    openListing(listing);
+    window.setTimeout(() => {
+      document.getElementById("reviews")?.scrollIntoView({ behavior: "smooth" });
+    }, 120);
   }
 
   function publishListing(input: PublishListingInput) {
@@ -888,9 +902,24 @@ export function MarketplaceApp() {
                 </button>
               </div>
               <button className="rating-link" type="button" onClick={() => document.getElementById("reviews")?.scrollIntoView()}>
-                <span>{selectedListing.rating.toFixed(1)}</span>
-                <span className="stars">★★★★★</span>
-                <span>{selectedListing.source === "catalog" ? "128 opiniones" : "Sin opiniones"}</span>
+                {selectedProductRating.count > 0 ? (
+                  <>
+                    <span>{selectedProductRating.average.toFixed(1)}</span>
+                    <span className="stars">
+                      {[1, 2, 3, 4, 5]
+                        .map((value) =>
+                          value <= Math.round(selectedProductRating.average) ? "★" : "☆",
+                        )
+                        .join("")}
+                    </span>
+                    <span>
+                      {selectedProductRating.count}{" "}
+                      {selectedProductRating.count === 1 ? "opinión" : "opiniones"}
+                    </span>
+                  </>
+                ) : (
+                  <span>Sin opiniones todavía</span>
+                )}
               </button>
               {selectedListing.oldPrice ? (
                 <p className="product-summary__old-price">{formatPrice(selectedListing.oldPrice)}</p>
@@ -983,7 +1012,13 @@ export function MarketplaceApp() {
               </p>
               <p className="seller-line">
                 Vendido por <strong>{selectedSeller?.name ?? "Vendedor"}</strong>
-                <small>{selectedSeller?.reputation.toFixed(1)} de reputación</small>
+                <small>
+                  {selectedSellerRating.count > 0
+                    ? `${selectedSellerRating.average.toFixed(1)} de reputación · ${selectedSellerRating.count} ${
+                        selectedSellerRating.count === 1 ? "calificación" : "calificaciones"
+                      }`
+                    : "Sin calificaciones todavía"}
+                </small>
               </p>
             </aside>
           </article>
@@ -999,10 +1034,30 @@ export function MarketplaceApp() {
                 </div>
               </div>
               <div className="reputation-meter" aria-label="Reputación del vendedor">
-                <span /><span /><span /><span /><span className="is-active" />
+                {[1, 2, 3, 4, 5].map((value) => (
+                  <span
+                    className={
+                      value <= Math.round(selectedSellerRating.average) ? "is-active" : ""
+                    }
+                    key={value}
+                  />
+                ))}
               </div>
               <div className="seller-metrics">
-                <div><strong>{selectedSeller?.reputation.toFixed(1)}</strong><span>Reputación</span></div>
+                <div>
+                  <strong>
+                    {selectedSellerRating.count > 0
+                      ? selectedSellerRating.average.toFixed(1)
+                      : "Nueva"}
+                  </strong>
+                  <span>
+                    {selectedSellerRating.count > 0
+                      ? `${selectedSellerRating.count} ${
+                          selectedSellerRating.count === 1 ? "calificación" : "calificaciones"
+                        }`
+                      : "sin calificaciones"}
+                  </span>
+                </div>
                 <div><strong>{selectedListing.sold}</strong><span>Ventas</span></div>
                 <div>
                   <strong>{selectedSeller?.isSystem ? "Catálogo" : "Mensajes"}</strong>
@@ -1051,21 +1106,12 @@ export function MarketplaceApp() {
               )}
             </section>
 
-            <section className="product-section reviews-section" id="reviews">
-              <h2>Opiniones del producto</h2>
-              {selectedListing.source === "catalog" ? (
-                <div className="reviews-summary">
-                  <div><strong>{selectedListing.rating.toFixed(1)}</strong><span className="stars">★★★★★</span><p>128 calificaciones</p></div>
-                  <div className="rating-bars">
-                    {[84, 11, 3, 1, 1].map((width, index) => (
-                      <span key={`${width}-${index}`}><small>{5 - index}</small><i><b style={{ width: `${width}%` }} /></i></span>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <p className="reviews-empty">Este producto todavía no tiene opiniones.</p>
-              )}
-            </section>
+            <ReviewSection
+              key={selectedListing.id}
+              listing={selectedListing}
+              seller={selectedSeller}
+              onRatingsChanged={actions.refreshRatings}
+            />
           </div>
 
           {relatedListings.length > 0 ? (
@@ -1386,7 +1432,10 @@ export function MarketplaceApp() {
                         <h2>{listing.title}</h2>
                         <p>{shipment.status}</p>
                       </div>
-                      <button type="button" onClick={() => openListing(listing)}>Ver compra</button>
+                      <div className="purchase-item__actions">
+                        <button type="button" onClick={() => openListing(listing)}>Ver compra</button>
+                        <button type="button" onClick={() => openReviews(listing)}>Opinar</button>
+                      </div>
                     </div>
                     {listing.condition === "Digital" ? (
                       <div className="digital-delivery">

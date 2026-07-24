@@ -77,3 +77,33 @@ test("keeps accounts private and routes messages through authenticated APIs", as
   assert.match(serverAuth, /PBKDF2/);
   assert.match(serverAuth, /HttpOnly/);
 });
+
+test("keeps product opinions and seller reputation tied to verified users", async () => {
+  const page = await readFile(
+    new URL("../app/components/MarketplaceApp.tsx", import.meta.url),
+    "utf8",
+  );
+  const reviewSection = await readFile(
+    new URL("../app/components/ReviewSection.tsx", import.meta.url),
+    "utf8",
+  );
+  const reviewRoute = await readFile(
+    new URL("../app/api/reviews/route.ts", import.meta.url),
+    "utf8",
+  );
+  const marketplace = await readFile(
+    new URL("../app/data/marketplace.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(page, /<ReviewSection/);
+  assert.doesNotMatch(page, /128 opiniones|128 calificaciones/i);
+  assert.match(reviewSection, /Compra verificada/);
+  assert.match(reviewSection, /productRating/);
+  assert.match(reviewSection, /sellerRating/);
+  assert.match(reviewRoute, /marketplace_reviews/);
+  assert.match(reviewRoute, /purchase_required/);
+  assert.match(reviewRoute, /UNIQUE\(listing_id, author_id\)/);
+  assert.match(reviewRoute, /shipment\.buyerId === user\.id/);
+  assert.match(marketplace, /rating: 0/);
+});

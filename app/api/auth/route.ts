@@ -118,7 +118,7 @@ export async function POST(request: Request) {
       email,
       location,
       avatar: initialsFor(name),
-      reputation: 5,
+      reputation: 0,
       joined_at: joinedAt,
       password_hash: credentials.hash,
       password_salt: credentials.salt,

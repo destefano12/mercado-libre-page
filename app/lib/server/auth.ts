@@ -45,7 +45,7 @@ export async function ensureAuthTables(database: MarketplaceDatabase) {
         email TEXT NOT NULL COLLATE NOCASE UNIQUE,
         location TEXT NOT NULL,
         avatar TEXT NOT NULL,
-        reputation REAL NOT NULL DEFAULT 5,
+        reputation REAL NOT NULL DEFAULT 0,
         joined_at TEXT NOT NULL,
         password_hash TEXT NOT NULL,
         password_salt TEXT NOT NULL
