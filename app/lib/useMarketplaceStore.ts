@@ -684,7 +684,7 @@ export function useMarketplaceStore() {
               progress: digital ? 100 : 8,
               etaMinutes: digital ? 0 : 72,
               route: [
-                { label: "Creacion", x: 49.5, y: 77.6 },
+                { label: "Creacion 3031", x: 49.5, y: 82.4 },
                 { label: "Reparto / retiro", x: 47.8, y: 61.1 },
                 { label: "En camino", x: (47.8 + destinationZone.x) / 2, y: (61.1 + destinationZone.y) / 2 },
                 { label: destinationZone.label, x: destinationZone.x, y: destinationZone.y },
