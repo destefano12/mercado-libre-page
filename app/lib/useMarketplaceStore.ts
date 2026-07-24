@@ -157,6 +157,35 @@ function getShipmentStatus(progress: number) {
   return "Preparando paquete";
 }
 
+const housingZones = [
+  { label: "Vivienda 704", x: 19, y: 45 },
+  { label: "Vivienda 405", x: 17, y: 60 },
+  { label: "Vivienda 907", x: 58, y: 31 },
+  { label: "Vivienda 1202", x: 84, y: 61 },
+];
+
+function destinationZoneFor(location: string) {
+  const digits = location.match(/\d+/)?.[0] ?? "";
+  if (digits.startsWith("4")) {
+    return housingZones[1];
+  }
+  if (digits.startsWith("9")) {
+    return housingZones[2];
+  }
+  if (digits.startsWith("12")) {
+    return housingZones[3];
+  }
+  if (digits.startsWith("7") || digits.startsWith("8")) {
+    return housingZones[0];
+  }
+
+  const seed = Array.from(location).reduce(
+    (total, character) => total + character.charCodeAt(0),
+    0,
+  );
+  return housingZones[seed % housingZones.length];
+}
+
 export function useMarketplaceStore() {
   const [state, setState] = useState<MarketplaceState>(() => createInitialMarketplaceState());
   const [sessionUser, setSessionUser] = useState<UserProfile | null>(null);
@@ -638,6 +667,7 @@ export function useMarketplaceStore() {
 
         const digital = listing.condition === "Digital";
         const now = new Date().toISOString();
+        const destinationZone = destinationZoneFor(activeUser.location);
         return {
           ...previous,
           listings: previous.listings.map((candidate) =>
@@ -654,10 +684,10 @@ export function useMarketplaceStore() {
               progress: digital ? 100 : 8,
               etaMinutes: digital ? 0 : 72,
               route: [
-                { label: "Origen", x: 10, y: 70 },
-                { label: "Centro", x: 34, y: 42 },
-                { label: "Reparto", x: 62, y: 55 },
-                { label: "Destino", x: 88, y: 24 },
+                { label: "Creacion", x: 50, y: 79 },
+                { label: "Reparto / retiro", x: 48, y: 61 },
+                { label: "En camino", x: (48 + destinationZone.x) / 2, y: (61 + destinationZone.y) / 2 },
+                { label: destinationZone.label, x: destinationZone.x, y: destinationZone.y },
               ],
             },
             ...previous.shipments,

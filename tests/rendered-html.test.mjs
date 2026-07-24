@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import test from "node:test";
 
 async function render() {
@@ -140,4 +140,30 @@ test("publishes category-specific listings and lets owners remove them", async (
   assert.match(store, /listing\.source !== "user"/);
   assert.match(store, /listing\.sellerId !== activeUser\.id/);
   assert.match(store, /chats: previous\.chats\.filter/);
+});
+
+test("uses the ERLC map for shipment tracking zones", async () => {
+  const shippingMap = await readFile(
+    new URL("../app/components/ShippingMap.tsx", import.meta.url),
+    "utf8",
+  );
+  const store = await readFile(
+    new URL("../app/lib/useMarketplaceStore.ts", import.meta.url),
+    "utf8",
+  );
+  const authModal = await readFile(
+    new URL("../app/components/AuthModal.tsx", import.meta.url),
+    "utf8",
+  );
+  const mapAsset = await stat(
+    new URL("../public/erlc-delivery-map.jpg", import.meta.url),
+  );
+
+  assert.ok(mapAsset.size > 1_000_000);
+  assert.match(shippingMap, /erlc-delivery-map\.jpg/);
+  assert.match(shippingMap, /Creacion 3031/);
+  assert.match(shippingMap, /Reparto \/ retiro 308/);
+  assert.match(store, /destinationZoneFor/);
+  assert.match(store, /Vivienda 1202/);
+  assert.match(authModal, /número de casa/);
 });

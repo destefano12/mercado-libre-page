@@ -28,7 +28,7 @@ export function AuthModal({
   const [mode, setMode] = useState<"login" | "register">("login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [location, setLocation] = useState("Buenos Aires");
+  const [location, setLocation] = useState("7043");
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -143,12 +143,12 @@ export function AuthModal({
 
           {mode === "register" ? (
             <label>
-              Ubicación
+              Ubicación / número de casa
               <input
                 value={location}
                 onChange={(event) => setLocation(event.target.value)}
-                placeholder="Ciudad o localidad"
-                autoComplete="address-level2"
+                placeholder="Ej.: 7043, 9072, 12021"
+                autoComplete="street-address"
                 required
               />
             </label>
