@@ -8,14 +8,12 @@ export type CategoryId =
   | "herramientas"
   | "supermercado";
 
-export type AssetKey = "home" | "categories";
-
 export type ProductVisual =
   | {
-      type: "asset";
-      asset: AssetKey;
-      objectPosition: string;
-      label?: string;
+      type: "image";
+      src: string;
+      alt: string;
+      objectPosition?: string;
     }
   | {
       type: "generated";
@@ -82,6 +80,11 @@ export interface Listing {
   sponsored?: boolean;
   source: "catalog" | "user";
   visual: ProductVisual;
+  images: string[];
+}
+
+function assetSource(asset: string | { src: string }) {
+  return typeof asset === "string" ? asset : asset.src;
 }
 
 export interface ViewEvent {
@@ -123,6 +126,7 @@ export interface ChatThread {
 export interface Shipment {
   id: string;
   listingId: string;
+  buyerId: string;
   origin: string;
   destination: string;
   status: string;
@@ -434,10 +438,12 @@ export const listings: Listing[] = [
     badge: "Digital",
     source: "catalog",
     visual: {
-      type: "generated",
-      gradient: "linear-gradient(135deg, #1e1b4b, #7c3aed 48%, #db2777)",
-      label: "HBO",
+      type: "image",
+      src: assetSource(hboWidget),
+      alt: "HBO Max",
+      objectPosition: "center",
     },
+    images: [assetSource(hboWidget)],
   },
   {
     id: "stream-disney",
@@ -460,10 +466,12 @@ export const listings: Listing[] = [
     badge: "Digital",
     source: "catalog",
     visual: {
-      type: "generated",
-      gradient: "linear-gradient(135deg, #082f49, #0284c7 45%, #7dd3fc)",
-      label: "Disney+",
+      type: "image",
+      src: assetSource(disneyWidget),
+      alt: "Disney+",
+      objectPosition: "center",
     },
+    images: [assetSource(disneyWidget)],
   },
   {
     id: "stream-prime",
@@ -485,31 +493,12 @@ export const listings: Listing[] = [
     badge: "Codigo",
     source: "catalog",
     visual: {
-      type: "generated",
-      gradient: "linear-gradient(135deg, #0f172a, #2563eb 48%, #38bdf8)",
-      label: "Prime",
+      type: "image",
+      src: assetSource(primeWidget),
+      alt: "Prime Video",
+      objectPosition: "center",
     },
-  },
-  {
-    id: "stream-ilusionistas",
-    title: "Los Ilusionistas - acceso HD 48 horas",
-    description: "Pelicula digital para ver en alta definicion.",
-    categoryId: "streaming",
-    sellerId: "u-streaming",
-    price: 0,
-    currency: "ARS",
-    condition: "Digital",
-    location: "Entrega online",
-    shipping: "Ver gratis",
-    createdAt: "2026-07-24T00:02:00.000Z",
-    views: 0,
-    sold: 0,
-    rating: 4.6,
-    tags: ["pelicula", "streaming", "hd", "mercado play", "gratis"],
-    meta: { plataforma: "HBO Max", tipo: "Pelicula", entrega: "Instantanea", duracion: "48 horas" },
-    badge: "Ver gratis",
-    source: "catalog",
-    visual: { type: "asset", asset: "home", objectPosition: "67% 62%", label: "Play" },
+    images: [assetSource(primeWidget)],
   },
 ];
 
@@ -525,3 +514,6 @@ export function createInitialMarketplaceState(): MarketplaceState {
     notifications: [],
   });
 }
+import hboWidget from "@/IMG/official/hbo-widget.jpg";
+import disneyWidget from "@/IMG/official/disney-widget.jpg";
+import primeWidget from "@/IMG/streaming/prime-video-hero.avif";

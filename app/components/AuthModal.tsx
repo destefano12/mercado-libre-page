@@ -28,7 +28,7 @@ export function AuthModal({ users, onLogin, onRegister, onClose, blocking }: Aut
         <div className="modal-card__header">
           <div>
             <span>Cuenta propia</span>
-            <h2>Inicia sesion o registrate</h2>
+            <h2>Iniciá sesión o registrate</h2>
           </div>
           {onClose ? (
             <button type="button" onClick={onClose} aria-label="Cerrar">
@@ -57,7 +57,7 @@ export function AuthModal({ users, onLogin, onRegister, onClose, blocking }: Aut
           </div>
         ) : (
           <p className="auth-modal__empty">
-            Todavia no hay cuentas creadas en este navegador. Crea la primera para empezar.
+            Todavía no hay cuentas creadas en este navegador. Creá la primera para empezar.
           </p>
         )}
 
@@ -87,11 +87,11 @@ export function AuthModal({ users, onLogin, onRegister, onClose, blocking }: Aut
             />
           </label>
           <label>
-            Ubicacion
+            Ubicación
             <input
               value={location}
               onChange={(event) => setLocation(event.target.value)}
-              placeholder="Ciudad o direccion"
+              placeholder="Ciudad o dirección"
             />
           </label>
           <button type="submit">Crear cuenta y entrar</button>

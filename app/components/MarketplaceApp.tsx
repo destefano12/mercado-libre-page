@@ -1,9 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import homeReference from "@/IMG/Captura de pantalla 2026-07-24 015510.png";
-import categoriesReference from "@/IMG/Captura de pantalla 2026-07-24 015558.png";
-import { categories, type AssetKey, type CategoryId, type Listing } from "../data/marketplace";
+import { useEffect, useMemo, useState } from "react";
+import mercadoLibreLogo from "@/IMG/official/mercado-libre-logo.webp";
+import homeHero from "@/IMG/official/home-hero.webp";
+import headerOffer from "@/IMG/official/header-offer.webp";
+import newBuyerIcon from "@/IMG/official/new-buyer.svg";
+import registrationIcon from "@/IMG/official/registration.svg";
+import paymentMethodsIcon from "@/IMG/official/payment-methods.svg";
+import categoryVehicles from "@/IMG/official/category-vehicles.webp";
+import categoryProperties from "@/IMG/official/category-properties.webp";
+import categoryTechnology from "@/IMG/official/category-technology.webp";
+import categoryFashion from "@/IMG/official/category-fashion.webp";
+import categoryHome from "@/IMG/official/category-home.webp";
+import categoryTools from "@/IMG/official/category-tools.webp";
+import categoryStreaming from "@/IMG/official/category-streaming.webp";
+import categorySupermarket from "@/IMG/official/category-supermarket.webp";
+import {
+  categories,
+  type CategoryId,
+  type Listing,
+} from "../data/marketplace";
 import {
   getRecommendationShelves,
   inferCategoryFromText,
@@ -11,178 +27,328 @@ import {
   matchesListingQuery,
   sortListingsForCategory,
 } from "../lib/recommendations";
-import { useMarketplaceStore } from "../lib/useMarketplaceStore";
+import {
+  useMarketplaceStore,
+  type PublishListingInput,
+} from "../lib/useMarketplaceStore";
 import { AuthModal } from "./AuthModal";
 import { ChatDock } from "./ChatDock";
-import { ProductCard } from "./ProductCard";
+import { formatPrice, ListingVisual, ProductCard } from "./ProductCard";
 import { PublishModal } from "./PublishModal";
 import { ShippingMap } from "./ShippingMap";
+
+type ViewName =
+  | "home"
+  | "results"
+  | "detail"
+  | "purchases"
+  | "coupons"
+  | "offers"
+  | "favorites"
+  | "help"
+  | "cart";
 
 function assetSource(asset: string | { src: string }) {
   return typeof asset === "string" ? asset : asset.src;
 }
 
-const assetUrls: Record<AssetKey, string> = {
-  home: assetSource(homeReference),
-  categories: assetSource(categoriesReference),
+const officialAssets = {
+  logo: assetSource(mercadoLibreLogo),
+  hero: assetSource(homeHero),
+  headerOffer: assetSource(headerOffer),
+  newBuyer: assetSource(newBuyerIcon),
+  registration: assetSource(registrationIcon),
+  paymentMethods: assetSource(paymentMethodsIcon),
 };
 
-function money(value: number) {
-  if (value === 0) {
-    return "Gratis";
-  }
+const categoryImages: Record<CategoryId, string> = {
+  vehiculos: assetSource(categoryVehicles),
+  inmuebles: assetSource(categoryProperties),
+  streaming: assetSource(categoryStreaming),
+  tecnologia: assetSource(categoryTechnology),
+  moda: assetSource(categoryFashion),
+  hogar: assetSource(categoryHome),
+  herramientas: assetSource(categoryTools),
+  supermercado: assetSource(categorySupermarket),
+};
 
-  return new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    maximumFractionDigits: 0,
-  }).format(value);
-}
-
-function timeAgo(value: string) {
-  const minutes = Math.max(1, Math.round((Date.now() - new Date(value).getTime()) / 60000));
-  if (minutes < 60) {
-    return `hace ${minutes} min`;
-  }
-
-  const hours = Math.round(minutes / 60);
-  return `hace ${hours} h`;
-}
-
-function categoryIcon(categoryId: CategoryId) {
-  const icons: Record<CategoryId, string> = {
-    vehiculos: "AU",
-    inmuebles: "IN",
-    streaming: "MP",
-    tecnologia: "TE",
-    moda: "MO",
-    hogar: "HO",
-    herramientas: "HE",
-    supermercado: "SU",
-  };
-
-  return icons[categoryId];
-}
-
-function useSelectedThread(state: ReturnType<typeof useMarketplaceStore>["state"], listing?: Listing) {
-  const activeUserId = state.activeUserId;
-
+function useSelectedThread(
+  state: ReturnType<typeof useMarketplaceStore>["state"],
+  activeUserId: string | undefined,
+  listing?: Listing,
+) {
   return useMemo(() => {
     if (!listing) {
       return undefined;
     }
 
-    return state.chats.find((thread) => {
-      const belongsToListing = thread.listingId === listing.id;
-      const hasActiveUser = thread.buyerId === activeUserId || thread.sellerId === activeUserId;
-      return belongsToListing && hasActiveUser;
-    });
+    return state.chats.find(
+      (thread) =>
+        thread.listingId === listing.id &&
+        (thread.buyerId === activeUserId || thread.sellerId === activeUserId),
+    );
   }, [activeUserId, listing, state.chats]);
+}
+
+function listingCategory(listing?: Listing) {
+  return categories.find((category) => category.id === listing?.categoryId);
+}
+
+function CategoryGlyph({ categoryId }: { categoryId: CategoryId }) {
+  return (
+    <span className={`category-glyph category-glyph--${categoryId}`}>
+      <img src={categoryImages[categoryId]} alt="" />
+    </span>
+  );
 }
 
 export function MarketplaceApp() {
   const { state, activeUser, actions } = useMarketplaceStore();
+  const [view, setView] = useState<ViewName>("home");
   const [query, setQuery] = useState("");
-  const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
-  const [activeCategoryId, setActiveCategoryId] = useState<CategoryId>("streaming");
-  const [sortMode, setSortMode] = useState("Entrega mas rapida");
-  const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [searchSuggestionsOpen, setSearchSuggestionsOpen] = useState(false);
+  const [resultQuery, setResultQuery] = useState("");
+  const [resultCategoryId, setResultCategoryId] = useState<CategoryId | undefined>();
+  const [sortMode, setSortMode] = useState("Más relevantes");
+  const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const [selectedListingId, setSelectedListingId] = useState<string | null>(null);
+  const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
-  const [authOpen, setAuthOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  const [cartIds, setCartIds] = useState<string[]>([]);
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
+  const [helpTopic, setHelpTopic] = useState<string | null>(null);
+  const [preferencesReady, setPreferencesReady] = useState(false);
 
   useEffect(() => {
     const timer = window.setInterval(actions.advanceShipments, 2400);
     return () => window.clearInterval(timer);
   }, [actions.advanceShipments]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (!activeUser) {
+        setPreferencesReady(false);
+        return;
+      }
+
+      try {
+        const saved = window.localStorage.getItem(`mercado-live:preferences:${activeUser.id}`);
+        const parsed = saved ? JSON.parse(saved) as { favorites?: string[]; cart?: string[] } : {};
+        setFavoriteIds(Array.isArray(parsed.favorites) ? parsed.favorites : []);
+        setCartIds(Array.isArray(parsed.cart) ? parsed.cart : []);
+      } catch {
+        setFavoriteIds([]);
+        setCartIds([]);
+      }
+      setPreferencesReady(true);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [activeUser]);
+
+  useEffect(() => {
+    if (!activeUser || !preferencesReady) {
+      return;
+    }
+
+    window.localStorage.setItem(
+      `mercado-live:preferences:${activeUser.id}`,
+      JSON.stringify({ favorites: favoriteIds, cart: cartIds }),
+    );
+  }, [activeUser, cartIds, favoriteIds, preferencesReady]);
+
   const selectedListing = useMemo(
     () => state.listings.find((listing) => listing.id === selectedListingId),
     [selectedListingId, state.listings],
   );
-  const selectedThread = useSelectedThread(state, selectedListing);
-  const selectedShipment = useMemo(
-    () => state.shipments.find((shipment) => shipment.listingId === selectedListing?.id),
-    [selectedListing?.id, state.shipments],
-  );
+  const selectedThread = useSelectedThread(state, activeUser?.id, selectedListing);
+  const selectedSeller = state.users.find((user) => user.id === selectedListing?.sellerId);
+  const selectedCategory = listingCategory(selectedListing);
   const shelves = useMemo(
     () => (activeUser ? getRecommendationShelves(state, activeUser.id) : null),
     [activeUser, state],
   );
-  const activeCategory = categories.find((category) => category.id === activeCategoryId) ?? categories[0];
-  const liveResults = useMemo(
-    () =>
-      state.listings
-        .filter((listing) => matchesListingQuery(listing, query))
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        .slice(0, 8),
-    [query, state.listings],
-  );
-  const categoryListings = useMemo(
-    () =>
-      sortListingsForCategory(state.listings, activeCategoryId, sortMode)
-        .filter((listing) => matchesCategoryFilter(listing, activeFilter))
-        .slice(0, 8),
-    [activeCategoryId, activeFilter, sortMode, state.listings],
-  );
   const streamingCatalog = useMemo(
     () =>
-      sortListingsForCategory(state.listings, "streaming", "Entrega mas rapida").filter(
+      sortListingsForCategory(state.listings, "streaming", "Entrega más rápida").filter(
         (listing) => listing.source === "catalog",
       ),
     [state.listings],
   );
-  function openListing(listing: Listing) {
-    setSelectedListingId(listing.id);
-    actions.recordView(listing.id);
+  const userListings = useMemo(
+    () =>
+      state.listings
+        .filter((listing) => listing.source === "user")
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    [state.listings],
+  );
+  const liveResults = useMemo(
+    () =>
+      query.trim()
+        ? state.listings
+            .filter((listing) => matchesListingQuery(listing, query))
+            .sort((a, b) => b.views + b.rating * 10 - (a.views + a.rating * 10))
+            .slice(0, 6)
+        : [],
+    [query, state.listings],
+  );
+  const resultCategory = categories.find((category) => category.id === resultCategoryId);
+  const resultListings = useMemo(() => {
+    let listings = resultCategoryId
+      ? sortListingsForCategory(state.listings, resultCategoryId, sortMode)
+      : [...state.listings].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        );
+
+    if (resultQuery) {
+      listings = listings.filter((listing) => matchesListingQuery(listing, resultQuery));
+    }
+
+    return listings.filter((listing) =>
+      Object.values(activeFilters).every((filter) => matchesCategoryFilter(listing, filter)),
+    );
+  }, [activeFilters, resultCategoryId, resultQuery, sortMode, state.listings]);
+  const purchases = useMemo(
+    () => state.shipments.filter((shipment) => shipment.buyerId === activeUser?.id),
+    [activeUser?.id, state.shipments],
+  );
+  const favoriteListings = useMemo(
+    () => state.listings.filter((listing) => favoriteIds.includes(listing.id)),
+    [favoriteIds, state.listings],
+  );
+  const cartListings = useMemo(
+    () => state.listings.filter((listing) => cartIds.includes(listing.id)),
+    [cartIds, state.listings],
+  );
+  const offerListings = useMemo(
+    () => state.listings.filter((listing) => listing.oldPrice || listing.badge),
+    [state.listings],
+  );
+  const cartSubtotal = useMemo(
+    () => cartListings.reduce((total, listing) => total + listing.price, 0),
+    [cartListings],
+  );
+  const relatedListings = useMemo(
+    () =>
+      selectedListing
+        ? state.listings
+            .filter(
+              (listing) =>
+                listing.id !== selectedListing.id &&
+                listing.categoryId === selectedListing.categoryId,
+            )
+            .slice(0, 5)
+        : [],
+    [selectedListing, state.listings],
+  );
+
+  function goHome() {
+    setView("home");
+    setSelectedListingId(null);
+    setChatOpen(false);
+    setCategoryMenuOpen(false);
+    setSearchSuggestionsOpen(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function submitSearch() {
-    const cleanQuery = query.trim();
+  function openCategory(categoryId: CategoryId) {
+    const category = categories.find((candidate) => candidate.id === categoryId);
+    setResultCategoryId(categoryId);
+    setResultQuery("");
+    setQuery("");
+    setSearchSuggestionsOpen(false);
+    setSortMode(category?.sortModes[0] ?? "Más relevantes");
+    setActiveFilters({});
+    setCategoryMenuOpen(false);
+    setView("results");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function submitSearch(value = query) {
+    const cleanQuery = value.trim();
     if (!cleanQuery) {
       return;
     }
 
-    actions.recordSearch(cleanQuery);
     const inferredCategory = inferCategoryFromText(cleanQuery);
-    if (inferredCategory) {
-      changeCategory(inferredCategory);
+    actions.recordSearch(cleanQuery);
+    setResultQuery(cleanQuery);
+    setResultCategoryId(inferredCategory);
+    setSortMode(
+      categories.find((category) => category.id === inferredCategory)?.sortModes[0] ??
+        "Más relevantes",
+    );
+    setActiveFilters({});
+    setView("results");
+    setCategoryMenuOpen(false);
+    setQuery(cleanQuery);
+    setSearchSuggestionsOpen(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function openListing(listing: Listing) {
+    actions.recordView(listing.id);
+    setSelectedListingId(listing.id);
+    setView("detail");
+    setChatOpen(false);
+    setQuery("");
+    setSearchSuggestionsOpen(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function publishListing(input: PublishListingInput) {
+    const id = actions.publishListing(input);
+    setPublishOpen(false);
+    if (id) {
+      setSelectedListingId(id);
+      setView("detail");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   }
 
-  function changeCategory(categoryId: CategoryId) {
-    const next = categories.find((category) => category.id === categoryId) ?? categories[0];
-    setActiveCategoryId(categoryId);
-    setSortMode(next.sortModes[0]);
-    setActiveFilter(null);
+  function toggleFilter(label: string, value: string) {
+    setActiveFilters((previous) => {
+      if (previous[label] === value) {
+        const next = { ...previous };
+        delete next[label];
+        return next;
+      }
+      return { ...previous, [label]: value };
+    });
+  }
+
+  function openPage(nextView: ViewName) {
+    setView(nextView);
     setCategoryMenuOpen(false);
+    setAccountMenuOpen(false);
+    setSearchSuggestionsOpen(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function addToCart(listingId: string) {
+    setCartIds((previous) =>
+      previous.includes(listingId) ? previous : [...previous, listingId],
+    );
+    openPage("cart");
+  }
+
+  function checkoutCart() {
+    cartListings.forEach((listing) => actions.buyListing(listing));
+    setCartIds([]);
+    openPage("purchases");
   }
 
   if (!activeUser) {
     return (
-      <main
-        className="marketplace-shell auth-shell"
-        style={{ "--asset-home": `url("${assetUrls.home}")` } as CSSProperties}
-      >
-        <header className="topbar topbar--auth">
-          <div className="topbar__inner topbar__inner--auth">
-            <button className="brand brand--capture" type="button" aria-label="Mercado Libre">
-              <span
-                className="brand__mark"
-                style={{ backgroundImage: `url("${assetUrls.home}")` }}
-                aria-hidden="true"
-              />
-              <span className="brand__text">mercado libre</span>
-            </button>
-            <div className="topbar__promo">
-              <span className="promo-badge">%</span>
-              <strong>Ofertas por tiempo limitado</strong>
-            </div>
-          </div>
+      <main className="marketplace-shell marketplace-shell--auth">
+        <header className="auth-header">
+          <img className="ml-logo" src={officialAssets.logo} alt="Mercado Libre" />
         </header>
-        <section className="auth-landing">
-          <div className="auth-landing__visual" aria-hidden="true" />
+        <section className="auth-stage">
           <AuthModal
             users={state.users}
             onLogin={actions.loginAs}
@@ -195,22 +361,14 @@ export function MarketplaceApp() {
   }
 
   return (
-    <main
-      className="marketplace-shell"
-      style={{ "--asset-home": `url("${assetUrls.home}")` } as CSSProperties}
-    >
-      <header className="topbar">
-        <div className="topbar__inner">
-          <button className="brand brand--capture" type="button" onClick={() => setSelectedListingId(null)}>
-            <span
-              className="brand__mark"
-              style={{ backgroundImage: `url("${assetUrls.home}")` }}
-              aria-hidden="true"
-            />
-            <span className="brand__text">mercado libre</span>
+    <main className="marketplace-shell">
+      <header className="site-header">
+        <div className="header-primary">
+          <button className="logo-button" type="button" onClick={goHome} aria-label="Ir al inicio">
+            <img className="ml-logo" src={officialAssets.logo} alt="" />
           </button>
 
-          <div className="search-zone">
+          <div className="search-shell">
             <form
               className="search-box"
               onSubmit={(event) => {
@@ -220,160 +378,225 @@ export function MarketplaceApp() {
             >
               <input
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    submitSearch();
-                  }
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setSearchSuggestionsOpen(true);
                 }}
-                placeholder="Buscar productos, marcas y mas..."
-                aria-label="Buscar productos"
+                onFocus={() => setSearchSuggestionsOpen(true)}
+                placeholder="Buscar productos, marcas y más..."
+                aria-label="Buscar productos, marcas y más"
               />
-              <button type="submit" aria-label="Buscar">
+              {query ? (
+                <button
+                  className="search-box__clear"
+                  type="button"
+                  onClick={() => {
+                    setQuery("");
+                    setSearchSuggestionsOpen(false);
+                  }}
+                  aria-label="Borrar búsqueda"
+                  title="Borrar búsqueda"
+                >
+                  ×
+                </button>
+              ) : null}
+              <button className="search-box__submit" type="submit" aria-label="Buscar" title="Buscar">
                 <span />
               </button>
             </form>
 
-            {query.trim() ? (
-              <div className="search-results">
-                <div className="search-results__header">
-                  <strong>Resultados online</strong>
-                  <span>{liveResults.length} publicaciones vivas</span>
-                </div>
+            {query.trim() && searchSuggestionsOpen ? (
+              <div className="search-suggestions">
+                <button className="search-suggestions__all" type="button" onClick={() => submitSearch()}>
+                  <span className="search-mini-icon" />
+                  <strong>Buscar “{query}”</strong>
+                </button>
+                {liveResults.map((listing) => (
+                  <button key={listing.id} type="button" onClick={() => openListing(listing)}>
+                    <CategoryGlyph categoryId={listing.categoryId} />
+                    <span>
+                      <strong>{listing.title}</strong>
+                      <small>{formatPrice(listing.price)}</small>
+                    </span>
+                  </button>
+                ))}
                 {liveResults.length === 0 ? (
-                  <p className="search-results__empty">No hay coincidencias todavia.</p>
-                ) : (
-                  liveResults.map((listing) => {
-                    const seller = state.users.find((user) => user.id === listing.sellerId);
-                    return (
-                      <button
-                        key={listing.id}
-                        type="button"
-                        onClick={() => {
-                          actions.recordSearch(query);
-                          openListing(listing);
-                          setQuery("");
-                        }}
-                      >
-                        <span>{categoryIcon(listing.categoryId)}</span>
-                        <div>
-                          <strong>{listing.title}</strong>
-                          <small>
-                            {money(listing.price)} - {seller?.name ?? "Vendedor"} -{" "}
-                            {timeAgo(listing.createdAt)}
-                          </small>
-                        </div>
-                      </button>
-                    );
-                  })
-                )}
+                  <p>No hay publicaciones que coincidan todavía.</p>
+                ) : null}
               </div>
             ) : null}
           </div>
 
-          <div className="topbar__promo">
-            <span className="promo-badge">%</span>
-            <strong>Ofertas por tiempo limitado</strong>
-          </div>
+          <button className="header-offer" type="button" onClick={() => openPage("offers")}>
+            <img src={officialAssets.headerOffer} alt="Envío gratis en tu primera compra" />
+          </button>
         </div>
 
-        <nav className="nav-row" aria-label="Navegacion principal">
-          <button className="location-pill" type="button">
-            <span />
-            Enviar a <strong>{activeUser?.location ?? "Buenos Aires"}</strong>
+        <nav className="header-secondary" aria-label="Navegación principal">
+          <button
+            className="delivery-location"
+            type="button"
+            onClick={() => {
+              setHelpTopic("shipping");
+              openPage("help");
+            }}
+          >
+            <span className="location-pin" />
+            <span>
+              Enviar a
+              <strong>{activeUser.location}</strong>
+            </span>
           </button>
-          <div className="nav-row__links">
+
+          <div className="nav-links">
             <button type="button" onClick={() => setCategoryMenuOpen((open) => !open)}>
-              Categorias
+              Categorías <span className="nav-chevron">⌄</span>
             </button>
-            <button type="button">Ofertas</button>
-            <button type="button">Cupones</button>
-            <button type="button">Supermercado</button>
-            <button type="button" onClick={() => changeCategory("moda")}>
-              Moda
+            <button type="button" onClick={() => openPage("offers")}>Ofertas</button>
+            <button type="button" onClick={() => openPage("coupons")}>Cupones</button>
+            <button type="button" onClick={() => openCategory("supermercado")}>Supermercado</button>
+            <button type="button" onClick={() => openCategory("moda")}>Moda</button>
+            <button type="button" onClick={() => openCategory("streaming")}>Mercado Play</button>
+            <button type="button" onClick={() => setPublishOpen(true)}>Vender</button>
+            <button type="button" onClick={() => openPage("help")}>Ayuda</button>
+          </div>
+
+          <div className="account-links">
+            <button
+              className="account-button"
+              type="button"
+              onClick={() => setAccountMenuOpen((open) => !open)}
+            >
+              <span>{activeUser.avatar}</span>
+              {activeUser.name.split(" ")[0]}
+              <span className="nav-chevron">⌄</span>
             </button>
-            <button type="button" onClick={() => changeCategory("streaming")}>
-              Mercado Play
+            <button type="button" onClick={() => openPage("purchases")}>Mis compras</button>
+            <button type="button" onClick={() => openPage("favorites")}>Favoritos</button>
+            <button
+              className="notification-button"
+              type="button"
+              title="Notificaciones"
+              aria-label="Notificaciones"
+              onClick={() => setAccountMenuOpen(true)}
+            >
+              <span />
             </button>
-            <button type="button" onClick={() => setPublishOpen(true)}>
-              Vender
+            <button className="cart-button" type="button" title="Carrito" aria-label={`${cartIds.length} productos en tu carrito`} onClick={() => openPage("cart")}>
+              <span>{cartIds.length || ""}</span>
             </button>
           </div>
-          <div className="account-actions">
-            <button type="button" onClick={() => setAuthOpen(true)}>
-              <span>{activeUser?.avatar ?? "US"}</span>
-              {activeUser.name}
-            </button>
-            <button type="button">Mis compras</button>
-            <button type="button">Favoritos</button>
-            <button type="button" onClick={actions.logout}>
+        </nav>
+
+        {accountMenuOpen ? (
+          <div className="account-menu">
+            <div>
+              <span>{activeUser.avatar}</span>
+              <p><strong>{activeUser.name}</strong><small>{activeUser.email}</small></p>
+            </div>
+            <button type="button" onClick={() => openPage("purchases")}>Mis compras</button>
+            <button type="button" onClick={() => setPublishOpen(true)}>Vender</button>
+            <button
+              type="button"
+              onClick={() => {
+                setAccountMenuOpen(false);
+                setView("home");
+                setSelectedListingId(null);
+                setChatOpen(false);
+                actions.logout();
+              }}
+            >
               Salir
             </button>
           </div>
+        ) : null}
 
-          {categoryMenuOpen ? (
+        {categoryMenuOpen ? (
+          <>
+            <button
+              className="menu-backdrop"
+              type="button"
+              aria-label="Cerrar categorías"
+              onClick={() => setCategoryMenuOpen(false)}
+            />
             <div className="category-menu">
-              {categories.map((category) => (
-                <button key={category.id} type="button" onClick={() => changeCategory(category.id)}>
-                  <span>{category.label}</span>
-                  <small>{category.navLabel}</small>
-                </button>
-              ))}
-              <button type="button" onClick={() => setPublishOpen(true)}>
-                Publicar servicio o producto
-              </button>
+              <div className="category-menu__list">
+                {categories.map((category) => (
+                  <button key={category.id} type="button" onClick={() => openCategory(category.id)}>
+                    {category.label}
+                    <span>›</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          ) : null}
-        </nav>
+          </>
+        ) : null}
       </header>
 
-      <section className="hero">
-        <img src={assetUrls.home} alt="Banner promocional tomado de IMG" />
-        <div className="hero__overlay">
-          <span>Cupones, favoritos y entregas Full</span>
-          <h1>Encontra tus favoritos a precios increibles</h1>
-          <button type="button" onClick={() => changeCategory("streaming")}>
-            Ver recomendaciones
-          </button>
-        </div>
-      </section>
+      {view === "home" ? (
+        <>
+          <section className="home-hero" aria-label="Promociones destacadas">
+            <img src={officialAssets.hero} alt="Ofertazos: hasta 30% off y hasta 18 cuotas sin interés" />
+          </section>
 
-      <section className="quick-access" aria-label="Accesos rapidos">
-        {[
-          ["Envio gratis", "Beneficio por tu primera compra", "Mostrar productos"],
-          ["Visto recientemente", shelves?.recentlyViewed[0]?.title ?? "Todavia no viste nada", "Retomar"],
-          ["Porque te interesa", shelves?.inspiredByHistory[0]?.title ?? "Busca para personalizar", "Ver mas"],
-          ["Lo queres", shelves?.hasPersonalActivity ? "Ofertas por historial y tags" : "Se activa con tu actividad", "Guardar"],
-          ["Mercado Play", "Peliculas, accesos y streaming", "Ver gratis"],
-          ["Medios de pago", "Compra rapida, cuotas y proteccion", "Conocer"],
-        ].map(([title, body, action], index) => (
-          <button className="quick-card" key={title} type="button" onClick={() => changeCategory(index === 4 ? "streaming" : activeCategoryId)}>
-            <span className={`quick-card__icon quick-card__icon--${index + 1}`} />
-            <strong>{title}</strong>
-            <p>{body}</p>
-            <small>{action}</small>
-          </button>
-        ))}
-      </section>
-
-      <section className="content-grid">
-        <div className="main-column">
-          <section className="shelf">
-            <div className="section-heading">
-              <div>
-                <span>Historial inteligente</span>
-                <h2>{shelves?.hasPersonalActivity ? "Basado en tu actividad" : "Tu historial empieza vacio"}</h2>
-              </div>
-              <button type="button" onClick={actions.resetDemo}>
-                Reiniciar demo
+          <div className="home-content">
+            <section className="quick-access" aria-label="Accesos rápidos">
+              <button type="button" onClick={() => openPage("offers")}>
+                <span className="quick-icon"><img src={officialAssets.newBuyer} alt="" /></span>
+                <strong>Envío gratis</strong>
+                <p>Beneficio en tu primera compra</p>
+                <small>Mostrar productos</small>
               </button>
-            </div>
+              <button
+                type="button"
+                onClick={() =>
+                  shelves?.recentlyViewed[0]
+                    ? openListing(shelves.recentlyViewed[0])
+                    : openCategory("streaming")
+                }
+              >
+                <span className="quick-icon quick-icon--history" />
+                <strong>Visto recientemente</strong>
+                <p>{shelves?.recentlyViewed[0]?.title ?? "Tu actividad aparecerá acá"}</p>
+                <small>{shelves?.recentlyViewed.length ? "Volver a ver" : "Explorar"}</small>
+              </button>
+              <button type="button" onClick={() => setAccountMenuOpen(true)}>
+                <span className="quick-icon"><img src={officialAssets.registration} alt="" /></span>
+                <strong>Ingresá a tu cuenta</strong>
+                <p>Consultá compras y publicaciones</p>
+                <small>Ver mi cuenta</small>
+              </button>
+              <button type="button" onClick={() => openCategory("streaming")}>
+                <span className="quick-icon quick-icon--recommendation" />
+                <strong>Porque te interesa</strong>
+                <p>Contenido relacionado con tu actividad</p>
+                <small>Ver recomendaciones</small>
+              </button>
+              <button type="button" onClick={() => openPage("favorites")}>
+                <span className="quick-icon quick-icon--favorite">♡</span>
+                <strong>Lo querés, lo tenés</strong>
+                <p>Guardá publicaciones para después</p>
+                <small>Ver favoritos</small>
+              </button>
+              <button type="button" onClick={() => openPage("help")}>
+                <span className="quick-icon"><img src={officialAssets.paymentMethods} alt="" /></span>
+                <strong>Medios de pago</strong>
+                <p>Pagá tus compras de forma rápida y segura</p>
+                <small>Conocer medios de pago</small>
+              </button>
+            </section>
+
             {shelves?.hasPersonalActivity && shelves.inspiredByHistory.length > 0 ? (
-              <div className="product-row">
-                {shelves.inspiredByHistory.slice(0, 6).map((listing) => (
+              <section className="home-shelf">
+                <div className="home-shelf__heading">
+                  <h2>Basado en lo último que viste</h2>
+                  <button type="button" onClick={() => submitSearch(resultQuery || "streaming")}>
+                    Ver historial
+                  </button>
+                </div>
+                <div className="product-row">
+                  {shelves.inspiredByHistory.slice(0, 5).map((listing) => (
                     <ProductCard
-                      assetUrls={assetUrls}
                       key={listing.id}
                       listing={listing}
                       seller={state.users.find((user) => user.id === listing.sellerId)}
@@ -381,110 +604,137 @@ export function MarketplaceApp() {
                       compact
                     />
                   ))}
-              </div>
-            ) : (
-              <div className="empty-state">
-                <strong>No hay recomendaciones todavia</strong>
-                <p>Busca HBO, Disney, tecnologia o cualquier categoria. Desde esa accion esta cuenta empieza a recibir productos similares.</p>
-              </div>
-            )}
-          </section>
+                </div>
+              </section>
+            ) : null}
 
-          <section className="shelf shelf--play">
-            <div className="section-heading">
-              <div>
-                <span>Catalogo inicial permitido</span>
-                <h2>Disney, HBO Max y entretenimiento</h2>
+            <section className="home-shelf home-shelf--play">
+              <div className="play-band">
+                <span className="play-band__mark">mercado play</span>
+                <strong>Series, películas y accesos digitales</strong>
+                <button type="button" onClick={() => openCategory("streaming")}>Ver todo</button>
               </div>
-              <button type="button" onClick={() => changeCategory("streaming")}>
-                Mercado Play
-              </button>
-            </div>
-            <div className="product-row">
-              {streamingCatalog.slice(0, 6).map((listing) => (
-                <ProductCard
-                  assetUrls={assetUrls}
-                  key={listing.id}
-                  listing={listing}
-                  seller={state.users.find((user) => user.id === listing.sellerId)}
-                  onOpen={openListing}
-                  compact
-                />
-              ))}
-            </div>
-          </section>
-
-          <section className="category-showcase" style={{ "--accent": activeCategory.accent } as CSSProperties}>
-            <div className="category-showcase__banner" style={{ background: activeCategory.tint }}>
-              <div>
-                <span>{activeCategory.navLabel}</span>
-                <h2>{activeCategory.bannerTitle}</h2>
-                <p>{activeCategory.bannerText}</p>
-              </div>
-              <div className="category-showcase__stats">
-                <strong>{categoryListings.length}</strong>
-                <span>publicaciones filtradas</span>
-              </div>
-            </div>
-
-            <div className="category-controls">
-              <div className="category-tabs">
-                {categories.map((category) => (
-                  <button
-                    className={category.id === activeCategoryId ? "is-active" : ""}
-                    key={category.id}
-                    type="button"
-                    onClick={() => changeCategory(category.id)}
-                  >
-                    {category.navLabel}
-                  </button>
+              <div className="product-row">
+                {streamingCatalog.map((listing) => (
+                  <ProductCard
+                    key={listing.id}
+                    listing={listing}
+                    seller={state.users.find((user) => user.id === listing.sellerId)}
+                    onOpen={openListing}
+                    compact
+                  />
                 ))}
               </div>
-              <select value={sortMode} onChange={(event) => setSortMode(event.target.value)} aria-label="Orden">
-                {activeCategory.sortModes.map((mode) => (
-                  <option key={mode}>{mode}</option>
-                ))}
-              </select>
-            </div>
+            </section>
 
-            <div className="filter-strip">
-              <button
-                className={!activeFilter ? "is-active" : ""}
-                type="button"
-                onClick={() => setActiveFilter(null)}
-              >
-                Todo
-              </button>
-              {activeCategory.filters.flatMap((filter) =>
-                filter.values.map((value) => (
-                  <button
-                    className={activeFilter === value ? "is-active" : ""}
-                    key={`${filter.label}-${value}`}
-                    type="button"
-                    onClick={() => setActiveFilter((current) => (current === value ? null : value))}
-                  >
-                    {filter.label}: {value}
-                  </button>
-                )),
-              )}
-            </div>
-
-            <div className={`category-layout category-layout--${activeCategory.layout}`}>
-              <div className="category-ads">
-                {activeCategory.ads.map((ad) => (
-                  <article key={ad.title}>
-                    <span>{ad.eyebrow}</span>
-                    <h3>{ad.title}</h3>
-                    <p>{ad.body}</p>
-                    <strong>{ad.metric}</strong>
-                  </article>
-                ))}
-              </div>
-              {categoryListings.length > 0 ? (
-                <div className="category-products">
-                  {categoryListings.map((listing) => (
+            {userListings.length > 0 ? (
+              <section className="home-shelf">
+                <div className="home-shelf__heading">
+                  <h2>Publicado recientemente</h2>
+                  <button type="button" onClick={() => submitSearch("nuevo")}>Ver más</button>
+                </div>
+                <div className="product-row">
+                  {userListings.slice(0, 5).map((listing) => (
                     <ProductCard
-                      assetUrls={assetUrls}
+                      key={listing.id}
+                      listing={listing}
+                      seller={state.users.find((user) => user.id === listing.sellerId)}
+                      onOpen={openListing}
+                      compact
+                    />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            <section className="category-shortcuts">
+              <h2>Explorá categorías</h2>
+              <div>
+                {categories.map((category) => (
+                  <button key={category.id} type="button" onClick={() => openCategory(category.id)}>
+                    <CategoryGlyph categoryId={category.id} />
+                    <span>{category.label}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          </div>
+        </>
+      ) : null}
+
+      {view === "results" ? (
+        <section className="results-page">
+          <div className="breadcrumb">
+            <button type="button" onClick={goHome}>Inicio</button>
+            <span>›</span>
+            <span>{resultCategory?.label ?? resultQuery}</span>
+          </div>
+
+          {resultCategory?.id === "streaming" ? (
+            <div className="results-promo results-promo--streaming">
+              <span>ENTRETENIMIENTO</span>
+              <h1>Todo para ver, escuchar y disfrutar</h1>
+              <p>Accesos digitales con entrega online.</p>
+            </div>
+          ) : null}
+
+          <div className="results-heading">
+            <div>
+              <h1>{resultQuery || resultCategory?.label || "Publicaciones"}</h1>
+              <p>{resultListings.length} {resultListings.length === 1 ? "resultado" : "resultados"}</p>
+            </div>
+            <label>
+              Ordenar por
+              <select value={sortMode} onChange={(event) => setSortMode(event.target.value)}>
+                {(resultCategory?.sortModes ?? ["Más relevantes", "Menor precio", "Más recientes"]).map(
+                  (mode) => <option key={mode}>{mode}</option>,
+                )}
+              </select>
+            </label>
+          </div>
+
+          <div className="results-layout">
+            <aside className="filters-column">
+              {resultCategory ? (
+                <>
+                  <section>
+                    <h2>Categoría</h2>
+                    <strong>{resultCategory.label}</strong>
+                    <span>{resultListings.length} publicaciones</span>
+                  </section>
+                  {resultCategory.filters.map((filter) => (
+                    <section key={filter.label}>
+                      <h2>{filter.label}</h2>
+                      {filter.values.map((value) => (
+                        <button
+                          className={activeFilters[filter.label] === value ? "is-active" : ""}
+                          key={value}
+                          type="button"
+                          onClick={() => toggleFilter(filter.label, value)}
+                        >
+                          {value}
+                        </button>
+                      ))}
+                    </section>
+                  ))}
+                </>
+              ) : (
+                <section>
+                  <h2>Categorías</h2>
+                  {categories.map((category) => (
+                    <button key={category.id} type="button" onClick={() => openCategory(category.id)}>
+                      {category.label}
+                    </button>
+                  ))}
+                </section>
+              )}
+            </aside>
+
+            <div className="results-content">
+              {resultListings.length > 0 ? (
+                <div className="results-grid">
+                  {resultListings.map((listing) => (
+                    <ProductCard
                       key={listing.id}
                       listing={listing}
                       seller={state.users.find((user) => user.id === listing.sellerId)}
@@ -493,115 +743,551 @@ export function MarketplaceApp() {
                   ))}
                 </div>
               ) : (
-                <div className="empty-state empty-state--category">
-                  <strong>Todavia no hay publicaciones en {activeCategory.label}</strong>
-                  <p>Cuando un usuario publique algo en esta categoria, aparecera aca y tambien en la busqueda global.</p>
+                <div className="results-empty">
+                  <span className="results-empty__icon" />
+                  <h2>No hay publicaciones todavía</h2>
+                  <p>
+                    Esta categoría se completa solamente con artículos publicados por usuarios.
+                  </p>
                   <button type="button" onClick={() => setPublishOpen(true)}>
-                    Publicar primero
+                    Publicar un producto
                   </button>
                 </div>
               )}
             </div>
-          </section>
-        </div>
-
-        <aside className="side-column">
-          <section className="live-panel">
-            <div className="section-heading section-heading--compact">
-              <div>
-                <span>Online</span>
-                <h2>Publicaciones en vivo</h2>
-              </div>
-            </div>
-            {state.notifications.length > 0 ? (
-              state.notifications.slice(0, 5).map((notification) => (
-                <div className="live-event" key={notification.id}>
-                  <span />
-                  <p>{notification.text}</p>
-                  <small>{timeAgo(notification.createdAt)}</small>
-                </div>
-              ))
-            ) : (
-              <div className="empty-state empty-state--small">
-                <strong>Sin publicaciones nuevas</strong>
-                <p>El feed se mueve cuando una cuenta publica o manda mensajes.</p>
-              </div>
-            )}
-          </section>
-
-          <section className="shelf shelf--side">
-            <div className="section-heading section-heading--compact">
-              <div>
-                <span>Cerca tuyo</span>
-                <h2>Entrega rapida</h2>
-              </div>
-            </div>
-            <div className="mini-list">
-              {shelves?.nearYou.length ? (
-                shelves.nearYou.slice(0, 4).map((listing) => (
-                  <button key={listing.id} type="button" onClick={() => openListing(listing)}>
-                    <strong>{listing.title}</strong>
-                    <span>{money(listing.price)}</span>
-                  </button>
-                ))
-              ) : (
-                <div className="empty-state empty-state--small">
-                  <strong>Sin entregas cercanas</strong>
-                  <p>Se activa con publicaciones de usuarios en tu zona.</p>
-                </div>
-              )}
-            </div>
-          </section>
-
-          <ShippingMap shipment={selectedShipment} />
-        </aside>
-      </section>
-
-      {selectedListing ? (
-        <aside className="detail-drawer" aria-label="Detalle de publicacion">
-          <button
-            className="detail-drawer__close"
-            type="button"
-            onClick={() => {
-              setSelectedListingId(null);
-              setChatOpen(false);
-            }}
-            aria-label="Cerrar detalle"
-          >
-            x
-          </button>
-          <ProductCard
-            assetUrls={assetUrls}
-            listing={selectedListing}
-            seller={state.users.find((user) => user.id === selectedListing.sellerId)}
-            onOpen={() => undefined}
-          />
-          <div className="detail-drawer__body">
-            <span className="detail-drawer__condition">
-              {selectedListing.condition} - {selectedListing.sold} vendidos
-            </span>
-            <h2>{selectedListing.title}</h2>
-            <strong>{money(selectedListing.price)}</strong>
-            <p>{selectedListing.description}</p>
-            <div className="detail-drawer__meta">
-              {Object.entries(selectedListing.meta).map(([key, value]) => (
-                <span key={key}>
-                  {key}: {value}
-                </span>
-              ))}
-            </div>
-            <button className="buy-button" type="button">
-              Comprar ahora
-            </button>
-            <button className="secondary-button" type="button" onClick={() => setChatOpen(true)}>
-              Chatear con vendedor
-            </button>
           </div>
-          <ShippingMap shipment={selectedShipment} />
-        </aside>
+        </section>
       ) : null}
 
-      {chatOpen && selectedListing && activeUser ? (
+      {view === "detail" && selectedListing ? (
+        <section className="product-page">
+          <div className="breadcrumb">
+            <button type="button" onClick={goHome}>Inicio</button>
+            <span>›</span>
+            <button type="button" onClick={() => openCategory(selectedListing.categoryId)}>
+              {selectedCategory?.label}
+            </button>
+            <span>›</span>
+            <span>{selectedListing.title}</span>
+          </div>
+
+          <article className="product-main">
+            <section className="product-gallery">
+              <div className="product-gallery__thumb">
+                <ListingVisual visual={selectedListing.visual} />
+              </div>
+              <ListingVisual
+                visual={selectedListing.visual}
+                className="product-gallery__hero"
+              />
+            </section>
+
+            <section className="product-summary">
+              <p className="product-summary__condition">
+                {selectedListing.condition} | {selectedListing.sold} vendidos
+              </p>
+              <div className="product-summary__title">
+                <h1>{selectedListing.title}</h1>
+                <button
+                  className={favoriteIds.includes(selectedListing.id) ? "is-active" : ""}
+                  type="button"
+                  title="Agregar a favoritos"
+                  aria-label="Agregar a favoritos"
+                  onClick={() =>
+                    setFavoriteIds((previous) =>
+                      previous.includes(selectedListing.id)
+                        ? previous.filter((id) => id !== selectedListing.id)
+                        : [...previous, selectedListing.id],
+                    )
+                  }
+                >
+                  ♡
+                </button>
+              </div>
+              <button className="rating-link" type="button" onClick={() => document.getElementById("reviews")?.scrollIntoView()}>
+                <span>{selectedListing.rating.toFixed(1)}</span>
+                <span className="stars">★★★★★</span>
+                <span>{selectedListing.source === "catalog" ? "128 opiniones" : "Sin opiniones"}</span>
+              </button>
+              {selectedListing.oldPrice ? (
+                <p className="product-summary__old-price">{formatPrice(selectedListing.oldPrice)}</p>
+              ) : null}
+              <strong className="product-summary__price">{formatPrice(selectedListing.price)}</strong>
+              {selectedListing.price > 0 ? (
+                <p className="product-summary__installments">
+                  en 6 cuotas de {formatPrice(Math.ceil(selectedListing.price / 6))}
+                </p>
+              ) : null}
+              <button
+                className="product-summary__payment-link"
+                type="button"
+                onClick={() => {
+                  setHelpTopic("payments");
+                  openPage("help");
+                }}
+              >
+                Ver los medios de pago
+              </button>
+
+              <div className="product-summary__features">
+                <h2>Lo que tenés que saber de este producto</h2>
+                <ul>
+                  {Object.entries(selectedListing.meta).map(([key, value]) => (
+                    <li key={key}><strong>{key}:</strong> {value}</li>
+                  ))}
+                  <li>{selectedListing.description}</li>
+                </ul>
+              </div>
+            </section>
+
+            <aside className="buy-box">
+              <p className="buy-box__shipping">{selectedListing.shipping}</p>
+              <p className="buy-box__destination">Enviar a {activeUser.location}</p>
+              <strong>{selectedListing.condition === "Digital" ? "Disponible ahora" : "Stock disponible"}</strong>
+              <label>
+                Cantidad:
+                <select defaultValue="1">
+                  <option value="1">1 unidad</option>
+                  <option value="2">2 unidades</option>
+                </select>
+              </label>
+              {selectedListing.sellerId === activeUser.id ? (
+                <button className="buy-box__disabled" type="button" disabled>
+                  Esta es tu publicación
+                </button>
+              ) : selectedCategory?.layout === "vehicle" || selectedCategory?.layout === "real-estate" ? (
+                <button className="buy-box__primary" type="button" onClick={() => setChatOpen(true)}>
+                  Contactar al vendedor
+                </button>
+              ) : (
+                <>
+                  <button
+                    className="buy-box__primary"
+                    type="button"
+                    onClick={() => {
+                      actions.buyListing(selectedListing);
+                      setView("purchases");
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                  >
+                    Comprar ahora
+                  </button>
+                  <button
+                    className="buy-box__secondary"
+                    type="button"
+                    onClick={() => addToCart(selectedListing.id)}
+                  >
+                    Agregar al carrito
+                  </button>
+                </>
+              )}
+              <p className="buyer-protection">
+                <span>✓</span>
+                Compra protegida. Recibí el producto que esperabas o te devolvemos tu dinero.
+              </p>
+              <p className="seller-line">
+                Vendido por <strong>{selectedSeller?.name ?? "Vendedor"}</strong>
+                <small>{selectedSeller?.reputation.toFixed(1)} de reputación</small>
+              </p>
+            </aside>
+          </article>
+
+          <div className="product-sections">
+            <section className="product-section seller-section">
+              <h2>Información sobre el vendedor</h2>
+              <div className="seller-section__identity">
+                <span>{selectedSeller?.avatar ?? "VE"}</span>
+                <div>
+                  <strong>{selectedSeller?.name ?? "Vendedor"}</strong>
+                  <p>{selectedSeller?.location ?? selectedListing.location}</p>
+                </div>
+              </div>
+              <div className="reputation-meter" aria-label="Reputación del vendedor">
+                <span /><span /><span /><span /><span className="is-active" />
+              </div>
+              <div className="seller-metrics">
+                <div><strong>{selectedSeller?.reputation.toFixed(1)}</strong><span>Reputación</span></div>
+                <div><strong>{selectedListing.sold}</strong><span>Ventas</span></div>
+                <div><strong>Responde</strong><span>por chat</span></div>
+              </div>
+            </section>
+
+            <section className="product-section">
+              <h2>Descripción</h2>
+              <p className="description-copy">{selectedListing.description}</p>
+            </section>
+
+            <section className="product-section questions-section">
+              <h2>Preguntas y respuestas</h2>
+              <h3>¿Qué querés saber?</h3>
+              <div>
+                <button type="button" onClick={() => setChatOpen(true)}>¿Está disponible?</button>
+                <button type="button" onClick={() => setChatOpen(true)}>¿Cómo es la entrega?</button>
+                <button type="button" onClick={() => setChatOpen(true)}>Hacer otra pregunta</button>
+              </div>
+              <p>Todavía no hicieron preguntas.</p>
+            </section>
+
+            <section className="product-section reviews-section" id="reviews">
+              <h2>Opiniones del producto</h2>
+              {selectedListing.source === "catalog" ? (
+                <div className="reviews-summary">
+                  <div><strong>{selectedListing.rating.toFixed(1)}</strong><span className="stars">★★★★★</span><p>128 calificaciones</p></div>
+                  <div className="rating-bars">
+                    {[84, 11, 3, 1, 1].map((width, index) => (
+                      <span key={`${width}-${index}`}><small>{5 - index}</small><i><b style={{ width: `${width}%` }} /></i></span>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="reviews-empty">Este producto todavía no tiene opiniones.</p>
+              )}
+            </section>
+          </div>
+
+          {relatedListings.length > 0 ? (
+            <section className="home-shelf product-related">
+              <div className="home-shelf__heading"><h2>Productos relacionados</h2></div>
+              <div className="product-row">
+                {relatedListings.map((listing) => (
+                  <ProductCard
+                    key={listing.id}
+                    listing={listing}
+                    seller={state.users.find((user) => user.id === listing.sellerId)}
+                    onOpen={openListing}
+                    compact
+                  />
+                ))}
+              </div>
+            </section>
+          ) : null}
+        </section>
+      ) : null}
+
+      {view === "offers" ? (
+        <section className="special-page">
+          <div className="breadcrumb">
+            <button type="button" onClick={goHome}>Inicio</button><span>›</span><span>Ofertas</span>
+          </div>
+          <div className="offers-banner">
+            <img src={officialAssets.hero} alt="Ofertas destacadas" />
+          </div>
+          <div className="special-heading">
+            <div>
+              <h1>Ofertas</h1>
+              <p>Beneficios disponibles para tu cuenta.</p>
+            </div>
+            <button type="button" onClick={() => openCategory("streaming")}>Ver entretenimiento</button>
+          </div>
+          {offerListings.length > 0 ? (
+            <div className="results-grid special-grid">
+              {offerListings.map((listing) => (
+                <ProductCard
+                  key={listing.id}
+                  listing={listing}
+                  seller={state.users.find((user) => user.id === listing.sellerId)}
+                  onOpen={openListing}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="account-empty">
+              <h2>No hay ofertas publicadas</h2>
+              <p>Las promociones aparecerán acá cuando estén disponibles.</p>
+            </div>
+          )}
+        </section>
+      ) : null}
+
+      {view === "coupons" ? (
+        <section className="special-page coupons-page">
+          <div className="breadcrumb">
+            <button type="button" onClick={goHome}>Inicio</button><span>›</span><span>Cupones</span>
+          </div>
+          <div className="coupons-hero">
+            <div>
+              <span>BENEFICIOS</span>
+              <h1>Cupones</h1>
+              <p>Aplicá un código o elegí un beneficio disponible para tu cuenta.</p>
+            </div>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                const code = couponCode.trim().toUpperCase();
+                if (code) setAppliedCoupon(code);
+              }}
+            >
+              <label htmlFor="coupon-code">Ingresá tu código</label>
+              <div>
+                <input
+                  id="coupon-code"
+                  value={couponCode}
+                  onChange={(event) => setCouponCode(event.target.value)}
+                  placeholder="Ej.: BIENVENIDA10"
+                />
+                <button type="submit" disabled={!couponCode.trim()}>Aplicar</button>
+              </div>
+            </form>
+          </div>
+          {appliedCoupon ? (
+            <div className="coupon-confirmation" role="status">
+              <span>✓</span>
+              <div>
+                <strong>Cupón {appliedCoupon} aplicado</strong>
+                <p>Vas a ver el descuento antes de confirmar una compra elegible.</p>
+              </div>
+              <button type="button" onClick={() => setAppliedCoupon(null)}>Quitar</button>
+            </div>
+          ) : null}
+          <div className="special-heading">
+            <div>
+              <h2>Cupones disponibles</h2>
+              <p>Revisá las condiciones de cada beneficio.</p>
+            </div>
+          </div>
+          <div className="coupon-grid">
+            {[
+              { code: "BIENVENIDA10", amount: "10% OFF", detail: "En tu primera compra", minimum: "Compra mínima $ 5.000" },
+              { code: "PLAY15", amount: "15% OFF", detail: "En entretenimiento digital", minimum: "Tope de reintegro $ 3.000" },
+              { code: "ENVIO", amount: "ENVÍO GRATIS", detail: "En productos seleccionados", minimum: "Sujeto a cobertura" },
+            ].map((coupon) => (
+              <article className="coupon-card" key={coupon.code}>
+                <div>
+                  <span>{coupon.amount}</span>
+                  <h3>{coupon.detail}</h3>
+                  <p>{coupon.minimum}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCouponCode(coupon.code);
+                    setAppliedCoupon(coupon.code);
+                  }}
+                >
+                  Aplicar cupón
+                </button>
+              </article>
+            ))}
+          </div>
+          <button className="text-action" type="button" onClick={() => openCategory("streaming")}>
+            Buscar productos elegibles
+          </button>
+        </section>
+      ) : null}
+
+      {view === "favorites" ? (
+        <section className="special-page">
+          <div className="breadcrumb">
+            <button type="button" onClick={goHome}>Inicio</button><span>›</span><span>Favoritos</span>
+          </div>
+          <div className="special-heading">
+            <div>
+              <h1>Favoritos</h1>
+              <p>{favoriteListings.length} publicaciones guardadas</p>
+            </div>
+          </div>
+          {favoriteListings.length > 0 ? (
+            <div className="results-grid special-grid">
+              {favoriteListings.map((listing) => (
+                <ProductCard
+                  key={listing.id}
+                  listing={listing}
+                  seller={state.users.find((user) => user.id === listing.sellerId)}
+                  onOpen={openListing}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="account-empty">
+              <span className="empty-heart">♡</span>
+              <h2>Guardá lo que te gusta</h2>
+              <p>Marcá el corazón de una publicación para encontrarla rápidamente.</p>
+              <button type="button" onClick={() => openCategory("streaming")}>Explorar publicaciones</button>
+            </div>
+          )}
+        </section>
+      ) : null}
+
+      {view === "cart" ? (
+        <section className="special-page cart-page">
+          <div className="breadcrumb">
+            <button type="button" onClick={goHome}>Inicio</button><span>›</span><span>Carrito</span>
+          </div>
+          <div className="special-heading">
+            <div>
+              <h1>Carrito</h1>
+              <p>{cartListings.length} {cartListings.length === 1 ? "producto" : "productos"}</p>
+            </div>
+          </div>
+          {cartListings.length > 0 ? (
+            <div className="cart-layout">
+              <div className="cart-list">
+                {cartListings.map((listing) => (
+                  <article className="cart-item" key={listing.id}>
+                    <button type="button" onClick={() => openListing(listing)}>
+                      <ListingVisual visual={listing.visual} />
+                    </button>
+                    <div>
+                      <span>{listing.condition}</span>
+                      <button type="button" onClick={() => openListing(listing)}>{listing.title}</button>
+                      <p>{listing.shipping}</p>
+                      <button
+                        className="cart-item__remove"
+                        type="button"
+                        onClick={() => setCartIds((previous) => previous.filter((id) => id !== listing.id))}
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+                    <strong>{formatPrice(listing.price)}</strong>
+                  </article>
+                ))}
+              </div>
+              <aside className="cart-summary">
+                <h2>Resumen de compra</h2>
+                <p><span>Productos</span><strong>{formatPrice(cartSubtotal)}</strong></p>
+                <p><span>Envío</span><strong className="is-free">Gratis</strong></p>
+                {appliedCoupon ? <p><span>Cupón {appliedCoupon}</span><strong className="is-free">Aplicado</strong></p> : null}
+                <div><span>Total</span><strong>{formatPrice(cartSubtotal)}</strong></div>
+                <button type="button" onClick={checkoutCart}>Continuar compra</button>
+              </aside>
+            </div>
+          ) : (
+            <div className="account-empty">
+              <span className="empty-cart" />
+              <h2>Tu carrito está vacío</h2>
+              <p>Agregá productos y vas a poder comprarlos juntos desde acá.</p>
+              <button type="button" onClick={() => openCategory("streaming")}>Explorar publicaciones</button>
+            </div>
+          )}
+        </section>
+      ) : null}
+
+      {view === "help" ? (
+        <section className="special-page help-page">
+          <div className="breadcrumb">
+            <button type="button" onClick={goHome}>Inicio</button><span>›</span><span>Ayuda</span>
+          </div>
+          <div className="help-hero">
+            <h1>¿Con qué podemos ayudarte?</h1>
+            <div className="help-search"><span className="search-mini-icon" /><input placeholder="Buscá en Ayuda" /></div>
+          </div>
+          <div className="help-layout">
+            <nav aria-label="Temas de ayuda">
+              {[
+                ["buy", "Compras", "Pagos, entregas y devoluciones"],
+                ["sell", "Ventas", "Publicaciones, cobros y reputación"],
+                ["account", "Tu cuenta", "Datos, seguridad y acceso"],
+                ["shipping", "Envíos", "Seguimiento y direcciones"],
+                ["payments", "Medios de pago", "Tarjetas, cuotas y promociones"],
+              ].map(([id, label, detail]) => (
+                <button
+                  className={helpTopic === id ? "is-active" : ""}
+                  key={id}
+                  type="button"
+                  onClick={() => setHelpTopic(id)}
+                >
+                  <span />
+                  <div><strong>{label}</strong><small>{detail}</small></div>
+                  <b>›</b>
+                </button>
+              ))}
+            </nav>
+            <article className="help-detail">
+              {helpTopic ? (
+                <>
+                  <button type="button" onClick={() => setHelpTopic(null)}>‹ Todos los temas</button>
+                  <h2>{
+                    helpTopic === "buy" ? "Ayuda con tus compras" :
+                    helpTopic === "sell" ? "Ayuda con tus ventas" :
+                    helpTopic === "account" ? "Seguridad de tu cuenta" :
+                    helpTopic === "shipping" ? "Seguimiento de envíos" :
+                    "Medios de pago"
+                  }</h2>
+                  <p>{
+                    helpTopic === "sell"
+                      ? "Desde Vender podés identificar el artículo, agregar fotos propias, completar sus características y definir las condiciones de venta."
+                      : helpTopic === "shipping"
+                        ? "Después de comprar, entrá en Mis compras para ver el estado y el recorrido actualizado de tu envío."
+                        : helpTopic === "payments"
+                          ? "Las alternativas disponibles y las cuotas se muestran antes de confirmar cada compra."
+                          : "Elegí una operación para consultar sus detalles y próximos pasos."
+                  }</p>
+                  <button
+                    className="help-detail__action"
+                    type="button"
+                    onClick={() => helpTopic === "sell" ? setPublishOpen(true) : openPage("purchases")}
+                  >
+                    {helpTopic === "sell" ? "Ir a Vender desde el menú" : "Ver mis compras"}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <h2>Elegí un tema</h2>
+                  <p>Vas a encontrar respuestas y accesos directos relacionados con tu cuenta.</p>
+                </>
+              )}
+            </article>
+          </div>
+        </section>
+      ) : null}
+
+      {view === "purchases" ? (
+        <section className="purchases-page">
+          <div className="breadcrumb">
+            <button type="button" onClick={goHome}>Inicio</button><span>›</span><span>Mis compras</span>
+          </div>
+          <h1>Mis compras</h1>
+          {purchases.length > 0 ? (
+            <div className="purchase-list">
+              {purchases.map((shipment) => {
+                const listing = state.listings.find((candidate) => candidate.id === shipment.listingId);
+                if (!listing) return null;
+                return (
+                  <article className="purchase-item" key={shipment.id}>
+                    <div className="purchase-item__heading">
+                      <ListingVisual visual={listing.visual} />
+                      <div>
+                        <span>{listing.condition === "Digital" ? "Entrega digital" : "Envío en curso"}</span>
+                        <h2>{listing.title}</h2>
+                        <p>{shipment.status}</p>
+                      </div>
+                      <button type="button" onClick={() => openListing(listing)}>Ver compra</button>
+                    </div>
+                    {listing.condition === "Digital" ? (
+                      <div className="digital-delivery">
+                        <span>✓</span>
+                        <div><strong>Tu acceso está disponible</strong><p>La confirmación fue enviada al chat de la compra.</p></div>
+                      </div>
+                    ) : (
+                      <ShippingMap shipment={shipment} />
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="purchases-empty">
+              <h2>Todavía no compraste</h2>
+              <p>Cuando completes una compra, vas a poder seguirla desde acá.</p>
+              <button type="button" onClick={goHome}>Empezar a comprar</button>
+            </div>
+          )}
+        </section>
+      ) : null}
+
+      <footer className="site-footer">
+        <div>
+          <span>Trabajá con nosotros</span>
+          <span>Términos y condiciones</span>
+          <span>Promociones</span>
+          <span>Cómo cuidamos tu privacidad</span>
+          <span>Ayuda</span>
+        </div>
+        <p>Demo privada inspirada en la experiencia de marketplace. No afiliada a Mercado Libre.</p>
+      </footer>
+
+      {chatOpen && selectedListing ? (
         <ChatDock
           activeUser={activeUser}
           listing={selectedListing}
@@ -612,17 +1298,8 @@ export function MarketplaceApp() {
         />
       ) : null}
 
-      {authOpen ? (
-        <AuthModal
-          users={state.users}
-          onLogin={actions.loginAs}
-          onRegister={actions.registerUser}
-          onClose={() => setAuthOpen(false)}
-        />
-      ) : null}
-
       {publishOpen ? (
-        <PublishModal onPublish={actions.publishListing} onClose={() => setPublishOpen(false)} />
+        <PublishModal onPublish={publishListing} onClose={() => setPublishOpen(false)} />
       ) : null}
     </main>
   );

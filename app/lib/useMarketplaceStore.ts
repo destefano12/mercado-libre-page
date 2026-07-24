@@ -13,8 +13,9 @@ import {
 } from "../data/marketplace";
 import { inferCategoryFromText, tagsFromQuery } from "./recommendations";
 
-const STORAGE_KEY = "mercado-live-state-v3";
+const STORAGE_KEY = "mercado-live-state-v5";
 const CHANNEL_KEY = "mercado-live-realtime";
+const SESSION_KEY = "mercado-live-session-user";
 
 export interface PublishListingInput {
   title: string;
@@ -26,6 +27,7 @@ export interface PublishListingInput {
   shipping: string;
   meta: Record<string, string | number>;
   tags: string[];
+  images: string[];
 }
 
 function createId(prefix: string) {
@@ -47,15 +49,25 @@ function safeParseState(value: string | null): MarketplaceState | null {
       return null;
     }
 
-    return {
-      ...createInitialMarketplaceState(),
-      ...parsed,
-      activeUserId: parsed.activeUserId ?? null,
-      searches: Array.isArray(parsed.searches) ? parsed.searches : [],
-      listings: parsed.listings.map((listing) => ({
+    const initial = createInitialMarketplaceState();
+    const userListings = parsed.listings
+      .filter((listing) => listing.source === "user")
+      .map((listing) => ({
         ...listing,
-        source: listing.source ?? (listing.categoryId === "streaming" ? "catalog" : "user"),
-      })),
+        source: "user" as const,
+        images: Array.isArray(listing.images)
+          ? listing.images
+          : listing.visual.type === "image"
+            ? [listing.visual.src]
+            : [],
+      }));
+
+    return {
+      ...initial,
+      ...parsed,
+      activeUserId: null,
+      searches: Array.isArray(parsed.searches) ? parsed.searches : [],
+      listings: [...initial.listings, ...userListings],
     };
   } catch {
     return null;
@@ -82,9 +94,7 @@ function makeVisual(categoryId: CategoryId, title: string): ProductVisual {
 
   return {
     type: "generated",
-    gradient: `linear-gradient(135deg, ${config?.tint ?? "#f5f5f5"}, ${
-      config?.accent ?? "#3483fa"
-    } 50%, #333333)`,
+    gradient: config?.accent ?? "#3483fa",
     label,
   };
 }
@@ -111,8 +121,26 @@ function getShipmentStatus(progress: number) {
 
 export function useMarketplaceStore() {
   const [state, setState] = useState<MarketplaceState>(() => createInitialMarketplaceState());
+  const [sessionUserId, setSessionUserId] = useState<string | null>(null);
   const channelRef = useRef<BroadcastChannel | null>(null);
   const clientId = useRef(createId("client"));
+  const remoteVersionRef = useRef<string | null>(null);
+
+  const pushRemote = useCallback(async (nextState: MarketplaceState) => {
+    try {
+      const response = await fetch("/api/realtime", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ state: { ...nextState, activeUserId: null } }),
+      });
+      const result = await response.json() as { updatedAt?: string };
+      if (response.ok && result.updatedAt) {
+        remoteVersionRef.current = result.updatedAt;
+      }
+    } catch {
+      // Local state remains available when the online service is unreachable.
+    }
+  }, []);
 
   const broadcast = useCallback((nextState: MarketplaceState) => {
     saveState(nextState);
@@ -120,7 +148,8 @@ export function useMarketplaceStore() {
       source: clientId.current,
       state: nextState,
     });
-  }, []);
+    void pushRemote(nextState);
+  }, [pushRemote]);
 
   const commit = useCallback(
     (producer: (previous: MarketplaceState) => MarketplaceState) => {
@@ -135,11 +164,15 @@ export function useMarketplaceStore() {
 
   useEffect(() => {
     const persisted = safeParseState(window.localStorage.getItem(STORAGE_KEY));
-    if (persisted) {
-      setState(persisted);
-    } else {
+    if (!persisted) {
       saveState(state);
     }
+    const hydrationTimer = window.setTimeout(() => {
+      if (persisted) {
+        setState(persisted);
+      }
+      setSessionUserId(window.sessionStorage.getItem(SESSION_KEY));
+    }, 0);
 
     if ("BroadcastChannel" in window) {
       channelRef.current = new BroadcastChannel(CHANNEL_KEY);
@@ -168,7 +201,44 @@ export function useMarketplaceStore() {
 
     window.addEventListener("storage", onStorage);
 
+    let cancelled = false;
+    async function pullRemote() {
+      try {
+        const response = await fetch("/api/realtime", { cache: "no-store" });
+        const result = await response.json() as {
+          state?: MarketplaceState | null;
+          updatedAt?: string | null;
+        };
+        if (
+          cancelled ||
+          !response.ok ||
+          !result.state ||
+          !result.updatedAt ||
+          result.updatedAt === remoteVersionRef.current
+        ) {
+          return;
+        }
+
+        const incoming = safeParseState(JSON.stringify(result.state));
+        if (!incoming) {
+          return;
+        }
+
+        remoteVersionRef.current = result.updatedAt;
+        saveState(incoming);
+        setState(incoming);
+      } catch {
+        // The local marketplace continues to work offline.
+      }
+    }
+
+    void pullRemote();
+    const remoteTimer = window.setInterval(() => void pullRemote(), 1800);
+
     return () => {
+      cancelled = true;
+      window.clearTimeout(hydrationTimer);
+      window.clearInterval(remoteTimer);
       window.removeEventListener("storage", onStorage);
       channelRef.current?.close();
       channelRef.current = null;
@@ -177,20 +247,19 @@ export function useMarketplaceStore() {
   }, []);
 
   const activeUser = useMemo(
-    () => state.users.find((user) => user.id === state.activeUserId && !user.isSystem),
-    [state.activeUserId, state.users],
+    () => state.users.find((user) => user.id === sessionUserId && !user.isSystem),
+    [sessionUserId, state.users],
   );
 
   const loginAs = useCallback(
     (userId: string) => {
-      commit((previous) => ({
-        ...previous,
-        activeUserId: previous.users.some((user) => user.id === userId && !user.isSystem)
-          ? userId
-          : previous.activeUserId,
-      }));
+      if (!state.users.some((user) => user.id === userId && !user.isSystem)) {
+        return;
+      }
+      window.sessionStorage.setItem(SESSION_KEY, userId);
+      setSessionUserId(userId);
     },
-    [commit],
+    [state.users],
   );
 
   const registerUser = useCallback(
@@ -211,13 +280,15 @@ export function useMarketplaceStore() {
         joinedAt: new Date().toISOString(),
       };
 
+      const existingUser = state.users.find((candidate) => candidate.email === user.email);
+      const nextUserId = existingUser?.id ?? user.id;
+
       commit((previous) => ({
         ...previous,
         users: previous.users.some((candidate) => candidate.email === user.email)
           ? previous.users
           : [...previous.users, user],
-        activeUserId:
-          previous.users.find((candidate) => candidate.email === user.email)?.id ?? user.id,
+        activeUserId: null,
         notifications: [
           {
             id: createId("note"),
@@ -227,16 +298,16 @@ export function useMarketplaceStore() {
           ...previous.notifications,
         ].slice(0, 8),
       }));
+      window.sessionStorage.setItem(SESSION_KEY, nextUserId);
+      setSessionUserId(nextUserId);
     },
-    [commit],
+    [commit, state.users],
   );
 
   const logout = useCallback(() => {
-    commit((previous) => ({
-      ...previous,
-      activeUserId: null,
-    }));
-  }, [commit]);
+    window.sessionStorage.removeItem(SESSION_KEY);
+    setSessionUserId(null);
+  }, []);
 
   const recordSearch = useCallback(
     (query: string) => {
@@ -324,32 +395,20 @@ export function useMarketplaceStore() {
         meta: input.meta,
         badge: "Nuevo online",
         source: "user",
-        visual: makeVisual(input.categoryId, input.title),
+        visual: input.images[0]
+          ? {
+              type: "image",
+              src: input.images[0],
+              alt: input.title.trim(),
+              objectPosition: "center",
+            }
+          : makeVisual(input.categoryId, input.title),
+        images: input.images,
       };
 
       commit((previous) => ({
         ...previous,
         listings: [listing, ...previous.listings],
-        shipments: [
-          {
-            id: createId("ship"),
-            listingId: listing.id,
-            origin: listing.location,
-            destination:
-              previous.users.find((user) => user.id === previous.activeUserId)?.location ??
-              "Destino del comprador",
-            status: "Publicacion lista para despacho",
-            progress: 8,
-            etaMinutes: 72,
-            route: [
-              { label: "Origen", x: 10, y: 70 },
-              { label: "Deposito", x: 34, y: 42 },
-              { label: "Reparto", x: 62, y: 55 },
-              { label: "Destino", x: 88, y: 24 },
-            ],
-          },
-          ...previous.shipments,
-        ],
         notifications: [
           {
             id: createId("note"),
@@ -359,6 +418,62 @@ export function useMarketplaceStore() {
           ...previous.notifications,
         ].slice(0, 8),
       }));
+
+      return listing.id;
+    },
+    [activeUser, commit],
+  );
+
+  const buyListing = useCallback(
+    (listing: Listing) => {
+      if (!activeUser || listing.sellerId === activeUser.id) {
+        return;
+      }
+
+      commit((previous) => {
+        const existing = previous.shipments.find(
+          (shipment) => shipment.listingId === listing.id && shipment.buyerId === activeUser.id,
+        );
+        if (existing) {
+          return previous;
+        }
+
+        const digital = listing.condition === "Digital";
+        const now = new Date().toISOString();
+        return {
+          ...previous,
+          listings: previous.listings.map((candidate) =>
+            candidate.id === listing.id ? { ...candidate, sold: candidate.sold + 1 } : candidate,
+          ),
+          shipments: [
+            {
+              id: createId("ship"),
+              listingId: listing.id,
+              buyerId: activeUser.id,
+              origin: listing.location,
+              destination: digital ? "Entrega online" : activeUser.location,
+              status: digital ? "Acceso digital confirmado" : "Preparando paquete",
+              progress: digital ? 100 : 8,
+              etaMinutes: digital ? 0 : 72,
+              route: [
+                { label: "Origen", x: 10, y: 70 },
+                { label: "Centro", x: 34, y: 42 },
+                { label: "Reparto", x: 62, y: 55 },
+                { label: "Destino", x: 88, y: 24 },
+              ],
+            },
+            ...previous.shipments,
+          ],
+          notifications: [
+            {
+              id: createId("note"),
+              text: `${activeUser.name} compro ${listing.title}`,
+              createdAt: now,
+            },
+            ...previous.notifications,
+          ].slice(0, 8),
+        };
+      });
     },
     [activeUser, commit],
   );
@@ -430,6 +545,10 @@ export function useMarketplaceStore() {
         };
       });
 
+      if (!counterpart.isSystem) {
+        return;
+      }
+
       window.setTimeout(() => {
         const replyNow = new Date().toISOString();
         const reply: ChatMessage = {
@@ -470,26 +589,32 @@ export function useMarketplaceStore() {
   );
 
   const advanceShipments = useCallback(() => {
-    commit((previous) => ({
-      ...previous,
-      shipments: previous.shipments.map((shipment) => {
-        if (shipment.progress >= 100) {
-          return shipment;
-        }
+    setState((previous) => {
+      const next = {
+        ...previous,
+        shipments: previous.shipments.map((shipment) => {
+          if (shipment.progress >= 100) {
+            return shipment;
+          }
 
-        const nextProgress = Math.min(100, shipment.progress + 3);
-        return {
-          ...shipment,
-          progress: nextProgress,
-          etaMinutes: Math.max(0, shipment.etaMinutes - 2),
-          status: getShipmentStatus(nextProgress),
-        };
-      }),
-    }));
-  }, [commit]);
+          const nextProgress = Math.min(100, shipment.progress + 3);
+          return {
+            ...shipment,
+            progress: nextProgress,
+            etaMinutes: Math.max(0, shipment.etaMinutes - 2),
+            status: getShipmentStatus(nextProgress),
+          };
+        }),
+      };
+      saveState(next);
+      return next;
+    });
+  }, []);
 
   const resetDemo = useCallback(() => {
     const fresh = createInitialMarketplaceState();
+    window.sessionStorage.removeItem(SESSION_KEY);
+    setSessionUserId(null);
     setState(fresh);
     broadcast(fresh);
   }, [broadcast]);
@@ -504,6 +629,7 @@ export function useMarketplaceStore() {
       recordSearch,
       recordView,
       publishListing,
+      buyListing,
       sendMessage,
       advanceShipments,
       resetDemo,

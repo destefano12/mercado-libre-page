@@ -1,16 +1,15 @@
 "use client";
 
-import type { AssetKey, Listing, ProductVisual, UserProfile } from "../data/marketplace";
+import type { Listing, ProductVisual, UserProfile } from "../data/marketplace";
 
 interface ProductCardProps {
   listing: Listing;
   seller?: UserProfile;
-  assetUrls: Record<AssetKey, string>;
   onOpen: (listing: Listing) => void;
   compact?: boolean;
 }
 
-function formatPrice(value: number) {
+export function formatPrice(value: number) {
   if (value === 0) {
     return "Gratis";
   }
@@ -22,33 +21,37 @@ function formatPrice(value: number) {
   }).format(value);
 }
 
-function ProductVisualBlock({
+export function ListingVisual({
   visual,
-  assetUrls,
+  className = "",
 }: {
   visual: ProductVisual;
-  assetUrls: Record<AssetKey, string>;
+  className?: string;
 }) {
-  if (visual.type === "asset") {
+  if (visual.type === "image") {
     return (
-      <div className="product-visual product-visual--asset">
+      <div className={`product-visual product-visual--image ${className}`}>
         <img
-          src={assetUrls[visual.asset]}
-          alt={visual.label ?? "Producto"}
-          style={{ objectPosition: visual.objectPosition }}
+          src={visual.src}
+          alt={visual.alt}
+          style={{ objectPosition: visual.objectPosition ?? "center" }}
         />
       </div>
     );
   }
 
   return (
-    <div className="product-visual product-visual--generated" style={{ background: visual.gradient }}>
+    <div
+      className={`product-visual product-visual--generated ${className}`}
+      style={{ backgroundColor: visual.gradient }}
+    >
       <span>{visual.label}</span>
+      <small>Acceso digital</small>
     </div>
   );
 }
 
-export function ProductCard({ listing, seller, assetUrls, onOpen, compact }: ProductCardProps) {
+export function ProductCard({ listing, seller, onOpen, compact }: ProductCardProps) {
   const discount = listing.oldPrice
     ? Math.round(((listing.oldPrice - listing.price) / listing.oldPrice) * 100)
     : 0;
@@ -60,22 +63,21 @@ export function ProductCard({ listing, seller, assetUrls, onOpen, compact }: Pro
       onClick={() => onOpen(listing)}
       aria-label={`Abrir publicacion ${listing.title}`}
     >
-      <ProductVisualBlock visual={listing.visual} assetUrls={assetUrls} />
+      <ListingVisual visual={listing.visual} />
       <div className="product-card__body">
         <div className="product-card__title-row">
           {listing.badge ? <span className="product-card__badge">{listing.badge}</span> : null}
           {listing.sponsored ? <span className="product-card__sponsored">Anuncio</span> : null}
         </div>
         <h3>{listing.title}</h3>
+        {listing.oldPrice ? <p className="product-card__old-price">{formatPrice(listing.oldPrice)}</p> : null}
         <div className="product-card__price-line">
           <strong>{formatPrice(listing.price)}</strong>
           {discount > 0 ? <span>{discount}% OFF</span> : null}
         </div>
-        {listing.oldPrice ? <p className="product-card__old-price">{formatPrice(listing.oldPrice)}</p> : null}
         <p className="product-card__shipping">{listing.shipping}</p>
         <div className="product-card__meta">
-          <span>{seller?.name ?? "Vendedor"}</span>
-          <span>{listing.location}</span>
+          <span>Vendido por {seller?.name ?? "Vendedor"}</span>
         </div>
       </div>
     </button>
