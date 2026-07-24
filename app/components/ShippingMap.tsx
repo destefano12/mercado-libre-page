@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from "react";
 import type { Shipment } from "../data/marketplace";
-import erlcDeliveryMap from "@/IMG/official/erlc-delivery-map.jpg";
+import erlcDeliveryMap from "@/IMG/official/erlc-delivery-map.webp";
 
 interface ShippingMapProps {
   shipment?: Shipment;

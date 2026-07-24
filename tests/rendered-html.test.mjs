@@ -156,11 +156,11 @@ test("uses the ERLC map for shipment tracking zones", async () => {
     "utf8",
   );
   const mapAsset = await stat(
-    new URL("../IMG/official/erlc-delivery-map.jpg", import.meta.url),
+    new URL("../IMG/official/erlc-delivery-map.webp", import.meta.url),
   );
 
   assert.ok(mapAsset.size > 1_000_000);
-  assert.match(shippingMap, /erlc-delivery-map\.jpg/);
+  assert.match(shippingMap, /erlc-delivery-map\.webp/);
   assert.match(shippingMap, /Creacion 3031/);
   assert.match(shippingMap, /Reparto \/ retiro 308/);
   assert.match(store, /destinationZoneFor/);
