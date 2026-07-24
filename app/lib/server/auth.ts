@@ -63,6 +63,20 @@ export async function ensureAuthTables(database: MarketplaceDatabase) {
       "CREATE INDEX IF NOT EXISTS marketplace_sessions_user_idx ON marketplace_sessions(user_id)",
     ),
   ]);
+
+  const migrations = [
+    "ALTER TABLE marketplace_accounts ADD COLUMN reputation REAL NOT NULL DEFAULT 0",
+    "ALTER TABLE marketplace_accounts ADD COLUMN joined_at TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE marketplace_accounts ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE marketplace_accounts ADD COLUMN password_salt TEXT NOT NULL DEFAULT ''",
+  ];
+  for (const migration of migrations) {
+    try {
+      await database.prepare(migration).run();
+    } catch {
+      // Older deployments may already have each column.
+    }
+  }
 }
 
 function toHex(value: ArrayBuffer | Uint8Array) {

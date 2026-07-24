@@ -83,6 +83,8 @@ test("keeps accounts private and routes messages through authenticated APIs", as
   assert.match(authRoute, /passwordMatches/);
   assert.match(serverAuth, /PBKDF2/);
   assert.match(serverAuth, /HttpOnly/);
+  assert.match(serverAuth, /ALTER TABLE marketplace_accounts ADD COLUMN password_hash/);
+  assert.match(serverAuth, /ALTER TABLE marketplace_accounts ADD COLUMN password_salt/);
 });
 
 test("keeps product opinions and seller reputation tied to verified users", async () => {
