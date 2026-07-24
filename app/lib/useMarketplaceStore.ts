@@ -158,10 +158,10 @@ function getShipmentStatus(progress: number) {
 }
 
 const housingZones = [
-  { label: "Vivienda 704", x: 19, y: 45 },
-  { label: "Vivienda 405", x: 17, y: 60 },
-  { label: "Vivienda 907", x: 58, y: 31 },
-  { label: "Vivienda 1202", x: 84, y: 61 },
+  { label: "Vivienda 704", x: 21.4, y: 45.7 },
+  { label: "Vivienda 405", x: 18.6, y: 60.4 },
+  { label: "Vivienda 907", x: 57.4, y: 31.4 },
+  { label: "Vivienda 1202", x: 84.2, y: 65.4 },
 ];
 
 function destinationZoneFor(location: string) {
@@ -684,9 +684,9 @@ export function useMarketplaceStore() {
               progress: digital ? 100 : 8,
               etaMinutes: digital ? 0 : 72,
               route: [
-                { label: "Creacion", x: 50, y: 79 },
-                { label: "Reparto / retiro", x: 48, y: 61 },
-                { label: "En camino", x: (48 + destinationZone.x) / 2, y: (61 + destinationZone.y) / 2 },
+                { label: "Creacion", x: 49.5, y: 77.6 },
+                { label: "Reparto / retiro", x: 47.8, y: 61.1 },
+                { label: "En camino", x: (47.8 + destinationZone.x) / 2, y: (61.1 + destinationZone.y) / 2 },
                 { label: destinationZone.label, x: destinationZone.x, y: destinationZone.y },
               ],
             },
