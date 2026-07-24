@@ -15,6 +15,13 @@
       "when": 1784871769548,
       "tag": "0001_lowly_steve_rogers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784877437608,
+      "tag": "0002_marvelous_onslaught",
+      "breakpoints": true
     }
   ]
 }

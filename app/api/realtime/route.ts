@@ -5,6 +5,31 @@ async function getDatabase() {
   return env.DB;
 }
 
+function sanitizePublicState(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const state = value as Record<string, unknown>;
+  const users = Array.isArray(state.users)
+    ? state.users.map((value) => {
+        if (!value || typeof value !== "object" || Array.isArray(value)) {
+          return value;
+        }
+        const profile = { ...(value as Record<string, unknown>) };
+        delete profile.email;
+        return profile;
+      })
+    : [];
+
+  return {
+    ...state,
+    activeUserId: null,
+    users,
+    chats: [],
+  };
+}
+
 async function ensureTable(database: Awaited<ReturnType<typeof getDatabase>>) {
   await database.prepare(
     `CREATE TABLE IF NOT EXISTS marketplace_realtime (
@@ -26,7 +51,7 @@ export async function GET() {
       .first<{ payload: string; updated_at: string }>();
 
     return Response.json({
-      state: row ? JSON.parse(row.payload) : null,
+      state: row ? sanitizePublicState(JSON.parse(row.payload)) : null,
       updatedAt: row?.updated_at ?? null,
     });
   } catch {
@@ -42,10 +67,11 @@ export async function POST(request: Request) {
     }
 
     const updatedAt = new Date().toISOString();
-    const payload = JSON.stringify({
-      ...body.state,
-      activeUserId: null,
-    });
+    const publicState = sanitizePublicState(body.state);
+    if (!publicState) {
+      return Response.json({ ok: false, error: "Estado invalido" }, { status: 400 });
+    }
+    const payload = JSON.stringify(publicState);
 
     if (payload.length > 7_500_000) {
       return Response.json(

@@ -1,5 +1,12 @@
 import { sql } from "drizzle-orm";
-import { index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import {
+  index,
+  integer,
+  real,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable(
   "users",
@@ -160,5 +167,84 @@ export const shipments = sqliteTable(
   (table) => ({
     listingIdx: index("shipments_listing_idx").on(table.listingId),
     statusIdx: index("shipments_status_idx").on(table.status),
+  }),
+);
+
+export const marketplaceRealtime = sqliteTable("marketplace_realtime", {
+  id: text("id").primaryKey(),
+  payload: text("payload").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const marketplaceAccounts = sqliteTable(
+  "marketplace_accounts",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    email: text("email").notNull().unique(),
+    location: text("location").notNull(),
+    avatar: text("avatar").notNull(),
+    reputation: real("reputation").notNull().default(5),
+    joinedAt: text("joined_at").notNull(),
+    passwordHash: text("password_hash").notNull(),
+    passwordSalt: text("password_salt").notNull(),
+  },
+  (table) => ({
+    emailIdx: index("marketplace_accounts_email_idx").on(table.email),
+  }),
+);
+
+export const marketplaceSessions = sqliteTable(
+  "marketplace_sessions",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    userId: text("user_id").notNull(),
+    expiresAt: text("expires_at").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => ({
+    userIdx: index("marketplace_sessions_user_idx").on(table.userId),
+  }),
+);
+
+export const marketplaceChatThreads = sqliteTable(
+  "marketplace_chat_threads",
+  {
+    id: text("id").primaryKey(),
+    listingId: text("listing_id").notNull(),
+    buyerId: text("buyer_id").notNull(),
+    sellerId: text("seller_id").notNull(),
+    createdAt: text("created_at").notNull(),
+    lastMessageAt: text("last_message_at").notNull(),
+  },
+  (table) => ({
+    participantIdx: index("marketplace_chat_user_idx").on(
+      table.buyerId,
+      table.sellerId,
+      table.lastMessageAt,
+    ),
+    participantListingIdx: uniqueIndex("marketplace_chat_thread_unique_idx").on(
+      table.listingId,
+      table.buyerId,
+      table.sellerId,
+    ),
+  }),
+);
+
+export const marketplaceChatMessages = sqliteTable(
+  "marketplace_chat_messages",
+  {
+    id: text("id").primaryKey(),
+    threadId: text("thread_id").notNull(),
+    senderId: text("sender_id").notNull(),
+    body: text("body").notNull(),
+    createdAt: text("created_at").notNull(),
+    readAt: text("read_at"),
+  },
+  (table) => ({
+    threadIdx: index("marketplace_chat_message_idx").on(
+      table.threadId,
+      table.createdAt,
+    ),
   }),
 );

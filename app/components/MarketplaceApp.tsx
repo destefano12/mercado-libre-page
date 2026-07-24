@@ -18,6 +18,7 @@ import categorySupermarket from "@/IMG/official/category-supermarket.webp";
 import {
   categories,
   type CategoryId,
+  type ChatThread,
   type Listing,
 } from "../data/marketplace";
 import {
@@ -33,6 +34,7 @@ import {
 } from "../lib/useMarketplaceStore";
 import { AuthModal } from "./AuthModal";
 import { ChatDock } from "./ChatDock";
+import { MessagesView } from "./MessagesView";
 import { formatPrice, ListingVisual, ProductCard } from "./ProductCard";
 import { PublishModal } from "./PublishModal";
 import { ShippingMap } from "./ShippingMap";
@@ -45,6 +47,7 @@ type ViewName =
   | "coupons"
   | "offers"
   | "favorites"
+  | "messages"
   | "help"
   | "cart";
 
@@ -76,18 +79,32 @@ function useSelectedThread(
   state: ReturnType<typeof useMarketplaceStore>["state"],
   activeUserId: string | undefined,
   listing?: Listing,
+  selectedThreadId?: string | null,
 ) {
   return useMemo(() => {
     if (!listing) {
       return undefined;
     }
 
+    if (selectedThreadId) {
+      return state.chats.find(
+        (thread) =>
+          thread.id === selectedThreadId &&
+          thread.listingId === listing.id &&
+          (thread.buyerId === activeUserId || thread.sellerId === activeUserId),
+      );
+    }
+
+    if (listing.sellerId === activeUserId) {
+      return undefined;
+    }
+
     return state.chats.find(
       (thread) =>
         thread.listingId === listing.id &&
-        (thread.buyerId === activeUserId || thread.sellerId === activeUserId),
+        thread.buyerId === activeUserId,
     );
-  }, [activeUserId, listing, state.chats]);
+  }, [activeUserId, listing, selectedThreadId, state.chats]);
 }
 
 function listingCategory(listing?: Listing) {
@@ -112,6 +129,7 @@ export function MarketplaceApp() {
   const [sortMode, setSortMode] = useState("Más relevantes");
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const [selectedListingId, setSelectedListingId] = useState<string | null>(null);
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
@@ -165,7 +183,12 @@ export function MarketplaceApp() {
     () => state.listings.find((listing) => listing.id === selectedListingId),
     [selectedListingId, state.listings],
   );
-  const selectedThread = useSelectedThread(state, activeUser?.id, selectedListing);
+  const selectedThread = useSelectedThread(
+    state,
+    activeUser?.id,
+    selectedListing,
+    selectedThreadId,
+  );
   const selectedSeller = state.users.find((user) => user.id === selectedListing?.sellerId);
   const selectedCategory = listingCategory(selectedListing);
   const shelves = useMemo(
@@ -232,6 +255,31 @@ export function MarketplaceApp() {
     () => cartListings.reduce((total, listing) => total + listing.price, 0),
     [cartListings],
   );
+  const accountThreads = useMemo(
+    () =>
+      state.chats
+        .filter(
+          (thread) =>
+            thread.buyerId === activeUser?.id || thread.sellerId === activeUser?.id,
+        )
+        .sort(
+          (a, b) =>
+            new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime(),
+        ),
+    [activeUser?.id, state.chats],
+  );
+  const unreadMessageCount = useMemo(
+    () =>
+      accountThreads.reduce(
+        (total, thread) =>
+          total +
+          thread.messages.filter(
+            (message) => message.senderId !== activeUser?.id && !message.read,
+          ).length,
+        0,
+      ),
+    [accountThreads, activeUser?.id],
+  );
   const relatedListings = useMemo(
     () =>
       selectedListing
@@ -249,6 +297,7 @@ export function MarketplaceApp() {
   function goHome() {
     setView("home");
     setSelectedListingId(null);
+    setSelectedThreadId(null);
     setChatOpen(false);
     setCategoryMenuOpen(false);
     setSearchSuggestionsOpen(false);
@@ -293,6 +342,7 @@ export function MarketplaceApp() {
   function openListing(listing: Listing) {
     actions.recordView(listing.id);
     setSelectedListingId(listing.id);
+    setSelectedThreadId(null);
     setView("detail");
     setChatOpen(false);
     setQuery("");
@@ -308,6 +358,37 @@ export function MarketplaceApp() {
       setView("detail");
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
+  }
+
+  function openConversation(listing: Listing) {
+    const seller = state.users.find((user) => user.id === listing.sellerId);
+    if (seller?.isSystem) {
+      return;
+    }
+    if (listing.sellerId === activeUser?.id) {
+      openPage("messages");
+      return;
+    }
+
+    const existingThread = state.chats.find(
+      (thread) =>
+        thread.listingId === listing.id &&
+        thread.buyerId === activeUser?.id &&
+        thread.sellerId === listing.sellerId,
+    );
+    setSelectedListingId(listing.id);
+    setSelectedThreadId(existingThread?.id ?? null);
+    setChatOpen(true);
+    if (existingThread) {
+      actions.markThreadRead(existingThread.id);
+    }
+  }
+
+  function openThread(thread: ChatThread, listing: Listing) {
+    setSelectedListingId(listing.id);
+    setSelectedThreadId(thread.id);
+    setChatOpen(true);
+    actions.markThreadRead(thread.id);
   }
 
   function toggleFilter(label: string, value: string) {
@@ -350,8 +431,7 @@ export function MarketplaceApp() {
         </header>
         <section className="auth-stage">
           <AuthModal
-            users={state.users}
-            onLogin={actions.loginAs}
+            onLogin={actions.login}
             onRegister={actions.registerUser}
             blocking
           />
@@ -476,11 +556,12 @@ export function MarketplaceApp() {
             <button
               className="notification-button"
               type="button"
-              title="Notificaciones"
-              aria-label="Notificaciones"
-              onClick={() => setAccountMenuOpen(true)}
+              title="Mensajes"
+              aria-label={`${unreadMessageCount} mensajes sin leer`}
+              onClick={() => openPage("messages")}
             >
               <span />
+              {unreadMessageCount ? <b>{Math.min(unreadMessageCount, 99)}</b> : null}
             </button>
             <button className="cart-button" type="button" title="Carrito" aria-label={`${cartIds.length} productos en tu carrito`} onClick={() => openPage("cart")}>
               <span>{cartIds.length || ""}</span>
@@ -495,15 +576,17 @@ export function MarketplaceApp() {
               <p><strong>{activeUser.name}</strong><small>{activeUser.email}</small></p>
             </div>
             <button type="button" onClick={() => openPage("purchases")}>Mis compras</button>
+            <button type="button" onClick={() => openPage("messages")}>Mensajes</button>
             <button type="button" onClick={() => setPublishOpen(true)}>Vender</button>
             <button
               type="button"
-              onClick={() => {
+              onClick={async () => {
                 setAccountMenuOpen(false);
                 setView("home");
                 setSelectedListingId(null);
+                setSelectedThreadId(null);
                 setChatOpen(false);
-                actions.logout();
+                await actions.logout();
               }}
             >
               Salir
@@ -856,7 +939,11 @@ export function MarketplaceApp() {
                   Esta es tu publicación
                 </button>
               ) : selectedCategory?.layout === "vehicle" || selectedCategory?.layout === "real-estate" ? (
-                <button className="buy-box__primary" type="button" onClick={() => setChatOpen(true)}>
+                <button
+                  className="buy-box__primary"
+                  type="button"
+                  onClick={() => openConversation(selectedListing)}
+                >
                   Contactar al vendedor
                 </button>
               ) : (
@@ -879,6 +966,15 @@ export function MarketplaceApp() {
                   >
                     Agregar al carrito
                   </button>
+                  {!selectedSeller?.isSystem ? (
+                    <button
+                      className="buy-box__message"
+                      type="button"
+                      onClick={() => openConversation(selectedListing)}
+                    >
+                      Preguntar al vendedor
+                    </button>
+                  ) : null}
                 </>
               )}
               <p className="buyer-protection">
@@ -908,7 +1004,10 @@ export function MarketplaceApp() {
               <div className="seller-metrics">
                 <div><strong>{selectedSeller?.reputation.toFixed(1)}</strong><span>Reputación</span></div>
                 <div><strong>{selectedListing.sold}</strong><span>Ventas</span></div>
-                <div><strong>Responde</strong><span>por chat</span></div>
+                <div>
+                  <strong>{selectedSeller?.isSystem ? "Catálogo" : "Mensajes"}</strong>
+                  <span>{selectedSeller?.isSystem ? "digital" : "entre personas"}</span>
+                </div>
               </div>
             </section>
 
@@ -919,13 +1018,37 @@ export function MarketplaceApp() {
 
             <section className="product-section questions-section">
               <h2>Preguntas y respuestas</h2>
-              <h3>¿Qué querés saber?</h3>
-              <div>
-                <button type="button" onClick={() => setChatOpen(true)}>¿Está disponible?</button>
-                <button type="button" onClick={() => setChatOpen(true)}>¿Cómo es la entrega?</button>
-                <button type="button" onClick={() => setChatOpen(true)}>Hacer otra pregunta</button>
-              </div>
-              <p>Todavía no hicieron preguntas.</p>
+              {selectedSeller?.isSystem ? (
+                <p>
+                  Esta publicación pertenece al catálogo digital y no tiene un vendedor
+                  particular por chat.
+                </p>
+              ) : selectedListing.sellerId === activeUser.id ? (
+                <>
+                  <h3>Consultas de compradores</h3>
+                  <div>
+                    <button type="button" onClick={() => openPage("messages")}>
+                      Ver mensajes recibidos
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h3>¿Qué querés saber?</h3>
+                  <div>
+                    <button type="button" onClick={() => openConversation(selectedListing)}>
+                      ¿Está disponible?
+                    </button>
+                    <button type="button" onClick={() => openConversation(selectedListing)}>
+                      ¿Cómo es la entrega?
+                    </button>
+                    <button type="button" onClick={() => openConversation(selectedListing)}>
+                      Hacer otra pregunta
+                    </button>
+                  </div>
+                  <p>La respuesta llegará desde la cuenta del vendedor.</p>
+                </>
+              )}
             </section>
 
             <section className="product-section reviews-section" id="reviews">
@@ -1232,6 +1355,17 @@ export function MarketplaceApp() {
         </section>
       ) : null}
 
+      {view === "messages" ? (
+        <MessagesView
+          activeUser={activeUser}
+          threads={accountThreads}
+          listings={state.listings}
+          users={state.users}
+          onHome={goHome}
+          onOpen={openThread}
+        />
+      ) : null}
+
       {view === "purchases" ? (
         <section className="purchases-page">
           <div className="breadcrumb">
@@ -1293,6 +1427,7 @@ export function MarketplaceApp() {
           listing={selectedListing}
           onClose={() => setChatOpen(false)}
           onSend={actions.sendMessage}
+          onRead={actions.markThreadRead}
           thread={selectedThread}
           users={state.users}
         />

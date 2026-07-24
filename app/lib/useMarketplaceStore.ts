@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   categories,
   createInitialMarketplaceState,
   type CategoryId,
-  type ChatMessage,
+  type ChatThread,
   type Listing,
   type MarketplaceState,
   type ProductVisual,
@@ -15,7 +15,6 @@ import { inferCategoryFromText, tagsFromQuery } from "./recommendations";
 
 const STORAGE_KEY = "mercado-live-state-v5";
 const CHANNEL_KEY = "mercado-live-realtime";
-const SESSION_KEY = "mercado-live-session-user";
 
 export interface PublishListingInput {
   title: string;
@@ -66,12 +65,44 @@ function safeParseState(value: string | null): MarketplaceState | null {
       ...initial,
       ...parsed,
       activeUserId: null,
+      users: parsed.users.map((user) => ({ ...user, email: undefined })),
       searches: Array.isArray(parsed.searches) ? parsed.searches : [],
       listings: [...initial.listings, ...userListings],
+      chats: [],
     };
   } catch {
     return null;
   }
+}
+
+function publicState(state: MarketplaceState): MarketplaceState {
+  return {
+    ...state,
+    activeUserId: null,
+    users: state.users.map((user) => ({ ...user, email: undefined })),
+    chats: [],
+  };
+}
+
+function withAuthenticatedUser(
+  state: MarketplaceState,
+  user: UserProfile | null,
+): MarketplaceState {
+  if (!user) {
+    return state;
+  }
+
+  const existing = state.users.findIndex((candidate) => candidate.id === user.id);
+  if (existing === -1) {
+    return { ...state, users: [...state.users, user] };
+  }
+
+  return {
+    ...state,
+    users: state.users.map((candidate, index) =>
+      index === existing ? { ...candidate, ...user } : candidate,
+    ),
+  };
 }
 
 function saveState(state: MarketplaceState) {
@@ -79,7 +110,7 @@ function saveState(state: MarketplaceState) {
     return;
   }
 
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(publicState(state)));
 }
 
 function makeVisual(categoryId: CategoryId, title: string): ProductVisual {
@@ -121,17 +152,19 @@ function getShipmentStatus(progress: number) {
 
 export function useMarketplaceStore() {
   const [state, setState] = useState<MarketplaceState>(() => createInitialMarketplaceState());
-  const [sessionUserId, setSessionUserId] = useState<string | null>(null);
+  const [sessionUser, setSessionUser] = useState<UserProfile | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const channelRef = useRef<BroadcastChannel | null>(null);
   const clientId = useRef(createId("client"));
   const remoteVersionRef = useRef<string | null>(null);
+  const sessionUserRef = useRef<UserProfile | null>(null);
 
   const pushRemote = useCallback(async (nextState: MarketplaceState) => {
     try {
       const response = await fetch("/api/realtime", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ state: { ...nextState, activeUserId: null } }),
+        body: JSON.stringify({ state: publicState(nextState) }),
       });
       const result = await response.json() as { updatedAt?: string };
       if (response.ok && result.updatedAt) {
@@ -146,7 +179,7 @@ export function useMarketplaceStore() {
     saveState(nextState);
     channelRef.current?.postMessage({
       source: clientId.current,
-      state: nextState,
+      state: publicState(nextState),
     });
     void pushRemote(nextState);
   }, [pushRemote]);
@@ -169,10 +202,32 @@ export function useMarketplaceStore() {
     }
     const hydrationTimer = window.setTimeout(() => {
       if (persisted) {
-        setState(persisted);
+        setState((previous) => ({
+          ...withAuthenticatedUser(persisted, sessionUserRef.current),
+          chats: previous.chats,
+        }));
       }
-      setSessionUserId(window.sessionStorage.getItem(SESSION_KEY));
     }, 0);
+
+    let authCancelled = false;
+    async function restoreSession() {
+      try {
+        const response = await fetch("/api/auth", { cache: "no-store" });
+        const result = await response.json() as { user?: UserProfile };
+        if (!authCancelled && response.ok && result.user) {
+          sessionUserRef.current = result.user;
+          setSessionUser(result.user);
+          setState((previous) => withAuthenticatedUser(previous, result.user ?? null));
+        }
+      } catch {
+        // The login form remains available when the session service is unreachable.
+      } finally {
+        if (!authCancelled) {
+          setAuthReady(true);
+        }
+      }
+    }
+    void restoreSession();
 
     if ("BroadcastChannel" in window) {
       channelRef.current = new BroadcastChannel(CHANNEL_KEY);
@@ -183,7 +238,10 @@ export function useMarketplaceStore() {
 
         const incoming = event.data?.state as MarketplaceState | undefined;
         if (incoming?.users && incoming?.listings) {
-          setState(incoming);
+          setState((previous) => ({
+            ...withAuthenticatedUser(incoming, sessionUserRef.current),
+            chats: previous.chats,
+          }));
         }
       };
     }
@@ -195,7 +253,10 @@ export function useMarketplaceStore() {
 
       const incoming = safeParseState(event.newValue);
       if (incoming) {
-        setState(incoming);
+        setState((previous) => ({
+          ...withAuthenticatedUser(incoming, sessionUserRef.current),
+          chats: previous.chats,
+        }));
       }
     };
 
@@ -226,7 +287,10 @@ export function useMarketplaceStore() {
 
         remoteVersionRef.current = result.updatedAt;
         saveState(incoming);
-        setState(incoming);
+        setState((previous) => ({
+          ...withAuthenticatedUser(incoming, sessionUserRef.current),
+          chats: previous.chats,
+        }));
       } catch {
         // The local marketplace continues to work offline.
       }
@@ -237,6 +301,7 @@ export function useMarketplaceStore() {
 
     return () => {
       cancelled = true;
+      authCancelled = true;
       window.clearTimeout(hydrationTimer);
       window.clearInterval(remoteTimer);
       window.removeEventListener("storage", onStorage);
@@ -246,67 +311,117 @@ export function useMarketplaceStore() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const activeUser = useMemo(
-    () => state.users.find((user) => user.id === sessionUserId && !user.isSystem),
-    [sessionUserId, state.users],
+  useEffect(() => {
+    if (!sessionUser?.id) {
+      return;
+    }
+
+    let cancelled = false;
+    async function pullMessages() {
+      try {
+        const response = await fetch("/api/messages", { cache: "no-store" });
+        const result = await response.json() as { threads?: ChatThread[] };
+        if (!cancelled && response.ok && Array.isArray(result.threads)) {
+          setState((previous) => ({ ...previous, chats: result.threads ?? [] }));
+        }
+      } catch {
+        // Existing messages remain visible during a temporary network interruption.
+      }
+    }
+
+    void pullMessages();
+    const timer = window.setInterval(() => void pullMessages(), 1600);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [sessionUser?.id]);
+
+  const activeUser = sessionUser;
+
+  const authenticate = useCallback(
+    async (
+      action: "login" | "register",
+      input: {
+        email: string;
+        password: string;
+        name?: string;
+        location?: string;
+      },
+    ) => {
+      try {
+        const response = await fetch("/api/auth", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action, ...input }),
+        });
+        const result = await response.json() as {
+          user?: UserProfile;
+          error?: string;
+        };
+        if (!response.ok || !result.user) {
+          return result.error ?? "No se pudo completar el acceso";
+        }
+
+        sessionUserRef.current = result.user;
+        setSessionUser(result.user);
+        setAuthReady(true);
+        commit((previous) => {
+          const next = withAuthenticatedUser(previous, result.user ?? null);
+          if (action !== "register") {
+            return next;
+          }
+          return {
+            ...next,
+            notifications: [
+              {
+                id: createId("note"),
+                text: `${result.user?.name ?? "Un usuario"} creó su cuenta`,
+                createdAt: new Date().toISOString(),
+              },
+              ...next.notifications,
+            ].slice(0, 8),
+          };
+        });
+        return null;
+      } catch {
+        return "No se pudo conectar con el servicio de cuentas";
+      }
+    },
+    [commit],
   );
 
-  const loginAs = useCallback(
-    (userId: string) => {
-      if (!state.users.some((user) => user.id === userId && !user.isSystem)) {
-        return;
-      }
-      window.sessionStorage.setItem(SESSION_KEY, userId);
-      setSessionUserId(userId);
-    },
-    [state.users],
+  const login = useCallback(
+    (input: { email: string; password: string }) =>
+      authenticate("login", input),
+    [authenticate],
   );
 
   const registerUser = useCallback(
-    (input: { name: string; email: string; location: string }) => {
-      const initials = input.name
-        .split(" ")
-        .map((part) => part[0])
-        .join("")
-        .slice(0, 2)
-        .toUpperCase();
-      const user: UserProfile = {
-        id: createId("u"),
-        name: input.name.trim(),
-        email: input.email.trim().toLowerCase(),
-        location: input.location.trim(),
-        avatar: initials || "US",
-        reputation: 4.5,
-        joinedAt: new Date().toISOString(),
-      };
-
-      const existingUser = state.users.find((candidate) => candidate.email === user.email);
-      const nextUserId = existingUser?.id ?? user.id;
-
-      commit((previous) => ({
-        ...previous,
-        users: previous.users.some((candidate) => candidate.email === user.email)
-          ? previous.users
-          : [...previous.users, user],
-        activeUserId: null,
-        notifications: [
-          {
-            id: createId("note"),
-            text: `${user.name} creo su cuenta`,
-            createdAt: new Date().toISOString(),
-          },
-          ...previous.notifications,
-        ].slice(0, 8),
-      }));
-      window.sessionStorage.setItem(SESSION_KEY, nextUserId);
-      setSessionUserId(nextUserId);
-    },
-    [commit, state.users],
+    (input: {
+      name: string;
+      email: string;
+      location: string;
+      password: string;
+    }) => authenticate("register", input),
+    [authenticate],
   );
 
-  const logout = useCallback(() => {
-    window.sessionStorage.removeItem(SESSION_KEY);
-    setSessionUserId(null);
+  const logout = useCallback(async () => {
+    try {
+      await fetch("/api/auth", { method: "DELETE" });
+    } finally {
+      const currentUserId = sessionUserRef.current?.id;
+      sessionUserRef.current = null;
+      setSessionUser(null);
+      setState((previous) => ({
+        ...previous,
+        chats: [],
+        users: previous.users.map((user) =>
+          user.id === currentUserId ? { ...user, email: undefined } : user,
+        ),
+      }));
+    }
   }, []);
 
   const recordSearch = useCallback(
@@ -479,113 +594,74 @@ export function useMarketplaceStore() {
   );
 
   const sendMessage = useCallback(
-    (listing: Listing, body: string) => {
+    async (listing: Listing, body: string, threadId?: string) => {
       if (!activeUser || !body.trim()) {
-        return;
+        return "Escribí un mensaje antes de enviarlo";
       }
 
-      const seller = state.users.find((user) => user.id === listing.sellerId);
-      const counterpart =
-        listing.sellerId === activeUser.id
-          ? state.users.find((user) => user.id !== activeUser.id && !user.isSystem)
-          : seller;
-
-      if (!counterpart) {
-        return;
-      }
-
-      const buyerId = listing.sellerId === activeUser.id ? counterpart.id : activeUser.id;
-      const sellerId = listing.sellerId;
-      const threadId = `chat-${listing.id}-${buyerId}-${sellerId}`;
-      const now = new Date().toISOString();
-      const message: ChatMessage = {
-        id: createId("msg"),
-        threadId,
-        senderId: activeUser.id,
-        body: body.trim(),
-        createdAt: now,
-        read: true,
-      };
-
-      commit((previous) => {
-        const existing = previous.chats.find((thread) => thread.id === threadId);
-        const chats = existing
-          ? previous.chats.map((thread) =>
-              thread.id === threadId
-                ? {
-                    ...thread,
-                    messages: [...thread.messages, message],
-                    lastMessageAt: now,
-                  }
-                : thread,
-            )
-          : [
-              {
-                id: threadId,
-                listingId: listing.id,
-                buyerId,
-                sellerId,
-                messages: [message],
-                lastMessageAt: now,
-              },
-              ...previous.chats,
-            ];
-
-        return {
-          ...previous,
-          chats,
-          notifications: [
-            {
-              id: createId("note"),
-              text: `Nuevo mensaje en ${listing.title}`,
-              createdAt: now,
-            },
-            ...previous.notifications,
-          ].slice(0, 8),
+      try {
+        const response = await fetch("/api/messages", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            listingId: listing.id,
+            threadId,
+            body: body.trim(),
+          }),
+        });
+        const result = await response.json() as {
+          thread?: ChatThread;
+          error?: string;
         };
-      });
+        if (!response.ok || !result.thread) {
+          return result.error ?? "No se pudo enviar el mensaje";
+        }
 
-      if (!counterpart.isSystem) {
-        return;
-      }
-
-      window.setTimeout(() => {
-        const replyNow = new Date().toISOString();
-        const reply: ChatMessage = {
-          id: createId("msg"),
-          threadId,
-          senderId: counterpart.id,
-          body:
-            listing.condition === "Digital"
-              ? "Te confirmo disponibilidad. Puedo entregar el acceso ahora mismo."
-              : "Si, sigue disponible. Puedo coordinar entrega o retiro y responder dudas.",
-          createdAt: replyNow,
-          read: false,
-        };
-
-        commit((previous) => ({
+        setState((previous) => ({
           ...previous,
-          chats: previous.chats.map((thread) =>
-            thread.id === threadId
-              ? {
-                  ...thread,
-                  messages: [...thread.messages, reply],
-                  lastMessageAt: replyNow,
-                }
-              : thread,
-          ),
-          notifications: [
-            {
-              id: createId("note"),
-              text: `${counterpart.name} respondio el chat`,
-              createdAt: replyNow,
-            },
-            ...previous.notifications,
-          ].slice(0, 8),
+          chats: previous.chats.some((thread) => thread.id === result.thread?.id)
+            ? previous.chats
+                .map((thread) =>
+                  thread.id === result.thread?.id ? result.thread : thread,
+                )
+                .filter((thread): thread is ChatThread => Boolean(thread))
+            : [result.thread, ...previous.chats],
         }));
-      }, 900);
+        return null;
+      } catch {
+        return "No se pudo conectar con Mensajes";
+      }
     },
-    [activeUser, commit, state.users],
+    [activeUser],
+  );
+
+  const markThreadRead = useCallback(
+    (threadId: string) => {
+      if (!activeUser) {
+        return;
+      }
+      setState((previous) => ({
+        ...previous,
+        chats: previous.chats.map((thread) =>
+          thread.id === threadId
+            ? {
+                ...thread,
+                messages: thread.messages.map((message) =>
+                  message.senderId === activeUser.id
+                    ? message
+                    : { ...message, read: true },
+                ),
+              }
+            : thread,
+        ),
+      }));
+      void fetch("/api/messages", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ threadId }),
+      });
+    },
+    [activeUser],
   );
 
   const advanceShipments = useCallback(() => {
@@ -612,9 +688,10 @@ export function useMarketplaceStore() {
   }, []);
 
   const resetDemo = useCallback(() => {
-    const fresh = createInitialMarketplaceState();
-    window.sessionStorage.removeItem(SESSION_KEY);
-    setSessionUserId(null);
+    const fresh = withAuthenticatedUser(
+      createInitialMarketplaceState(),
+      sessionUserRef.current,
+    );
     setState(fresh);
     broadcast(fresh);
   }, [broadcast]);
@@ -622,8 +699,9 @@ export function useMarketplaceStore() {
   return {
     state,
     activeUser,
+    authReady,
     actions: {
-      loginAs,
+      login,
       registerUser,
       logout,
       recordSearch,
@@ -631,6 +709,7 @@ export function useMarketplaceStore() {
       publishListing,
       buyListing,
       sendMessage,
+      markThreadRead,
       advanceShipments,
       resetDemo,
     },

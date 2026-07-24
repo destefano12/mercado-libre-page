@@ -50,7 +50,7 @@ export interface CategoryConfig {
 export interface UserProfile {
   id: string;
   name: string;
-  email: string;
+  email?: string;
   location: string;
   avatar: string;
   reputation: number;

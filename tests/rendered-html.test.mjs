@@ -31,9 +31,10 @@ test("server-renders the Mercado Live marketplace shell", async () => {
   const html = await response.text();
   assert.match(html, /<title>Mercado Live \| Home<\/title>/i);
   assert.match(html, /mercado/i);
-  assert.match(html, /Iniciá sesión o registrate/i);
-  assert.match(html, /Todavía no hay cuentas creadas/i);
-  assert.match(html, /Crear cuenta y entrar/i);
+  assert.match(html, /Ingresá/i);
+  assert.match(html, /Crear cuenta/i);
+  assert.match(html, /Contraseña/i);
+  assert.doesNotMatch(html, /cuentas creadas|elegir una cuenta/i);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
 });
 
@@ -48,4 +49,31 @@ test("keeps the product implementation wired to local IMG assets", async () => {
   assert.match(marketplace, /@\/IMG\/official\/disney-widget\.jpg/);
   assert.doesNotMatch(page, /Captura de pantalla/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
+});
+
+test("keeps accounts private and routes messages through authenticated APIs", async () => {
+  const authModal = await readFile(
+    new URL("../app/components/AuthModal.tsx", import.meta.url),
+    "utf8",
+  );
+  const store = await readFile(
+    new URL("../app/lib/useMarketplaceStore.ts", import.meta.url),
+    "utf8",
+  );
+  const authRoute = await readFile(
+    new URL("../app/api/auth/route.ts", import.meta.url),
+    "utf8",
+  );
+  const serverAuth = await readFile(
+    new URL("../app/lib/server/auth.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.doesNotMatch(authModal, /users\.map|loginAs/);
+  assert.match(authModal, /type="password"/);
+  assert.match(store, /fetch\("\/api\/messages"/);
+  assert.doesNotMatch(store, /setTimeout[\s\S]{0,500}respond/);
+  assert.match(authRoute, /passwordMatches/);
+  assert.match(serverAuth, /PBKDF2/);
+  assert.match(serverAuth, /HttpOnly/);
 });
