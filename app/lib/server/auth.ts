@@ -1,6 +1,6 @@
 const SESSION_COOKIE = "mercado_live_session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
-const PASSWORD_ITERATIONS = 120_000;
+const PASSWORD_ITERATIONS = 12_000;
 const encoder = new TextEncoder();
 
 export interface AuthenticatedProfile {
