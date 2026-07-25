@@ -616,18 +616,20 @@ export function useMarketplaceStore() {
         return false;
       }
 
-      let removed = false;
+      const listing = state.listings.find((candidate) => candidate.id === listingId);
+      if (
+        !listing ||
+        listing.source !== "user" ||
+        listing.sellerId !== activeUser.id
+      ) {
+        return false;
+      }
+
       commit((previous) => {
-        const listing = previous.listings.find((candidate) => candidate.id === listingId);
-        if (
-          !listing ||
-          listing.source !== "user" ||
-          listing.sellerId !== activeUser.id
-        ) {
+        if (!previous.listings.some((candidate) => candidate.id === listingId)) {
           return previous;
         }
 
-        removed = true;
         return {
           ...previous,
           listings: previous.listings.filter((candidate) => candidate.id !== listingId),
@@ -646,9 +648,10 @@ export function useMarketplaceStore() {
           ].slice(0, 8),
         };
       });
-      return removed;
+
+      return true;
     },
-    [activeUser, commit],
+    [activeUser, commit, state.listings],
   );
 
   const buyListing = useCallback(

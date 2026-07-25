@@ -863,6 +863,19 @@ export function MarketplaceApp() {
         </section>
       ) : null}
 
+      {view === "detail" && selectedListingId && !selectedListing ? (
+        <section className="product-page">
+          <div className="results-empty">
+            <span className="results-empty__icon" />
+            <h2>La publicacion ya no esta disponible</h2>
+            <p>Puede haber sido eliminada por quien la publico.</p>
+            <button type="button" onClick={goHome}>
+              Volver al inicio
+            </button>
+          </div>
+        </section>
+      ) : null}
+
       {view === "detail" && selectedListing ? (
         <section className="product-page">
           <div className="breadcrumb">
