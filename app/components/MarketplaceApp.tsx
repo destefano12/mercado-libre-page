@@ -550,7 +550,10 @@ export function MarketplaceApp() {
             <button type="button" onClick={() => openPage("coupons")}>Cupones</button>
             <button type="button" onClick={() => openCategory("supermercado")}>Supermercado</button>
             <button type="button" onClick={() => openCategory("moda")}>Moda</button>
-            <button type="button" onClick={() => openCategory("streaming")}>Mercado Play</button>
+            <button className="nav-play-link" type="button" onClick={() => openCategory("streaming")}>
+              <span>GRATIS</span>
+              Mercado Play
+            </button>
             <button type="button" onClick={() => setPublishOpen(true)}>Vender</button>
             <button type="button" onClick={() => openPage("help")}>Ayuda</button>
           </div>
@@ -562,22 +565,23 @@ export function MarketplaceApp() {
               onClick={() => setAccountMenuOpen((open) => !open)}
             >
               <span>{activeUser.avatar}</span>
-              {activeUser.name.split(" ")[0]}
+              {activeUser.name.split(" ")[0].toUpperCase()}
               <span className="nav-chevron">⌄</span>
             </button>
             <button type="button" onClick={() => openPage("purchases")}>Mis compras</button>
+            <button type="button" onClick={() => openPage("favorites")}>
+              Favoritos <span className="nav-chevron">⌄</span>
+            </button>
             <button
-              className={`messages-link ${unreadMessageCount ? "messages-link--unread" : ""}`}
+              className="notification-button"
               type="button"
               title="Mensajes"
               aria-label={`${unreadMessageCount} mensajes sin leer`}
               onClick={() => openPage("messages")}
             >
               <span aria-hidden="true" />
-              <em>Mensajes</em>
               {unreadMessageCount ? <b>{Math.min(unreadMessageCount, 99)}</b> : null}
             </button>
-            <button type="button" onClick={() => openPage("favorites")}>Favoritos</button>
             <button className="cart-button" type="button" title="Carrito" aria-label={`${cartIds.length} productos en tu carrito`} onClick={() => openPage("cart")}>
               <span>{cartIds.length || ""}</span>
             </button>

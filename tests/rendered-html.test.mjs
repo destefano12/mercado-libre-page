@@ -77,8 +77,8 @@ test("keeps accounts private and routes messages through authenticated APIs", as
     new URL("../app/components/MarketplaceApp.tsx", import.meta.url),
     "utf8",
   );
-  assert.match(page, /className=\{`messages-link/);
-  assert.match(page, />Mensajes</);
+  assert.match(page, /className="notification-button"/);
+  assert.match(page, /openPage\("messages"\)/);
   assert.doesNotMatch(store, /setTimeout[\s\S]{0,500}respond/);
   assert.match(authRoute, /passwordMatches/);
   assert.match(serverAuth, /PBKDF2/);

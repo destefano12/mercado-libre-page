@@ -243,8 +243,8 @@ button {
 
 .header-secondary {
   display: grid;
-  grid-template-columns: 166px 1fr auto;
-  gap: 16px;
+  grid-template-columns: 168px minmax(0, 1fr) auto;
+  gap: 20px;
   align-items: center;
   height: 44px;
 }
@@ -253,8 +253,8 @@ button {
   display: flex;
   align-items: center;
   min-width: 0;
-  gap: 8px;
-  padding: 3px 7px;
+  gap: 7px;
+  padding: 2px 4px;
   text-align: left;
   border: 1px solid transparent;
   background: transparent;
@@ -270,6 +270,7 @@ button {
   min-width: 0;
   color: rgba(0, 0, 0, 0.55);
   font-size: 12px;
+  line-height: 13px;
 }
 
 .delivery-location strong {
@@ -277,47 +278,38 @@ button {
   color: rgba(0, 0, 0, 0.85);
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
-  font-weight: 400;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .location-pin {
   position: relative;
-  width: 16px;
-  height: 19px;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
   border: 1.5px solid #333;
-  border-radius: 9px 9px 10px 10px;
+  background: transparent;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
 }
 
 .location-pin::before {
   position: absolute;
-  top: 4px;
-  left: 5px;
+  top: 3.5px;
+  left: 3.5px;
   width: 4px;
   height: 4px;
   content: "";
-  border: 1px solid #333;
-  border-radius: 50%;
-}
-
-.location-pin::after {
-  position: absolute;
-  bottom: -4px;
-  left: 5px;
-  width: 5px;
-  height: 5px;
-  content: "";
+  border: 1.2px solid #333;
   background: var(--yellow);
-  border-right: 1.5px solid #333;
-  border-bottom: 1.5px solid #333;
-  transform: rotate(45deg);
+  border-radius: 50%;
 }
 
 .nav-links,
 .account-links {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 19px;
 }
 
 .nav-links button,
@@ -327,6 +319,7 @@ button {
   border: 0;
   background: transparent;
   font-size: 14px;
+  line-height: 18px;
 }
 
 .nav-links button:hover,
@@ -336,29 +329,50 @@ button {
 
 .nav-chevron {
   margin-left: 2px;
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.nav-play-link {
+  position: relative;
+}
+
+.nav-play-link > span {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  padding: 0 4px;
+  color: var(--blue);
+  border: 1px solid var(--blue);
+  background: var(--yellow);
+  border-radius: 7px;
+  font-size: 7px;
+  font-weight: 800;
+  line-height: 9px;
+  transform: translateX(-50%);
 }
 
 .account-links {
   justify-content: flex-end;
-  gap: 16px;
+  gap: 17px;
 }
 
 .account-button {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
+  font-weight: 500;
 }
 
 .account-button > span:first-child {
   display: grid;
-  width: 20px;
-  height: 20px;
+  width: 23px;
+  height: 23px;
   place-items: center;
-  color: #fff;
-  background: var(--blue);
+  color: #333;
+  background: #fff;
   border-radius: 50%;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
 }
 
@@ -402,32 +416,33 @@ button {
 
 .notification-button {
   position: relative;
-  width: 20px;
+  width: 22px;
   height: 28px;
+  flex: 0 0 22px;
 }
 
 .notification-button span {
   position: absolute;
   top: 7px;
-  left: 5px;
-  width: 10px;
-  height: 11px;
-  border: 1.5px solid #333;
-  border-radius: 7px 7px 3px 3px;
+  left: 6px;
+  width: 11px;
+  height: 12px;
+  border: 1.6px solid #333;
+  border-bottom: 0;
+  border-radius: 9px 9px 4px 4px;
 }
 
 .notification-button span::after {
   position: absolute;
   bottom: -5px;
   left: 3px;
-  width: 3px;
-  height: 3px;
+  width: 3.5px;
+  height: 3.5px;
   content: "";
   background: #333;
   border-radius: 50%;
 }
 
-.messages-link > b,
 .notification-button > b {
   position: absolute;
   top: -1px;
@@ -446,15 +461,16 @@ button {
 
 .cart-button {
   position: relative;
-  width: 25px;
+  width: 26px;
   height: 28px;
+  flex: 0 0 26px;
 }
 
 .cart-button::before {
   position: absolute;
-  top: 8px;
+  top: 9px;
   left: 5px;
-  width: 14px;
+  width: 15px;
   height: 9px;
   content: "";
   border: 1.5px solid #333;
@@ -3842,7 +3858,7 @@ button {
     display: none;
   }
 
-  .account-links > button:not(.account-button):not(.messages-link):not(.notification-button):not(.cart-button) {
+  .account-links > button:not(.account-button):not(.notification-button):not(.cart-button) {
     display: none;
   }
 
