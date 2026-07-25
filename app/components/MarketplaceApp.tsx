@@ -120,6 +120,35 @@ function CategoryGlyph({ categoryId }: { categoryId: CategoryId }) {
   );
 }
 
+function LocationIcon() {
+  return (
+    <svg className="ml-nav-icon ml-nav-icon--location" viewBox="0 0 18 22" aria-hidden="true">
+      <path d="M9 21S2 12.9 2 7.9C2 4 5.1 1 9 1s7 3 7 6.9C16 12.9 9 21 9 21Z" />
+      <path d="M9 10.6a2.7 2.7 0 1 0 0-5.4 2.7 2.7 0 0 0 0 5.4Z" />
+    </svg>
+  );
+}
+
+function BellIcon() {
+  return (
+    <svg className="ml-nav-icon ml-nav-icon--bell" viewBox="0 0 20 22" aria-hidden="true">
+      <path d="M16.8 14.7c-1.2-1.4-1.8-2.9-1.8-5V8a5 5 0 0 0-10 0v1.7c0 2.1-.6 3.6-1.8 5L2 16h16l-1.2-1.3Z" />
+      <path d="M7.4 18.2a2.7 2.7 0 0 0 5.2 0" />
+      <path d="M10 1v2" />
+    </svg>
+  );
+}
+
+function CartIcon() {
+  return (
+    <svg className="ml-nav-icon ml-nav-icon--cart" viewBox="0 0 24 22" aria-hidden="true">
+      <path d="M1.7 2.2h3l2.4 11.2a2.1 2.1 0 0 0 2.1 1.7h8.4a2.1 2.1 0 0 0 2-1.5l1.8-6.7H6" />
+      <path d="M9.3 20.1a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" />
+      <path d="M18 20.1a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" />
+    </svg>
+  );
+}
+
 export function MarketplaceApp() {
   const { state, activeUser, ratingSummaries, actions } = useMarketplaceStore();
   const [view, setView] = useState<ViewName>("home");
@@ -535,7 +564,7 @@ export function MarketplaceApp() {
               openPage("help");
             }}
           >
-            <span className="location-pin" />
+            <LocationIcon />
             <span>
               Enviar a
               <strong>{activeUser.location}</strong>
@@ -579,10 +608,11 @@ export function MarketplaceApp() {
               aria-label={`${unreadMessageCount} mensajes sin leer`}
               onClick={() => openPage("messages")}
             >
-              <span aria-hidden="true" />
+              <BellIcon />
               {unreadMessageCount ? <b>{Math.min(unreadMessageCount, 99)}</b> : null}
             </button>
             <button className="cart-button" type="button" title="Carrito" aria-label={`${cartIds.length} productos en tu carrito`} onClick={() => openPage("cart")}>
+              <CartIcon />
               <span>{cartIds.length || ""}</span>
             </button>
           </div>

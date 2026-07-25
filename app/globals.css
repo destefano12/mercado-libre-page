@@ -282,27 +282,31 @@ button {
   font-weight: 600;
 }
 
-.location-pin {
-  position: relative;
-  width: 14px;
-  height: 14px;
-  flex: 0 0 14px;
-  border: 1.5px solid #333;
-  background: transparent;
-  border-radius: 50% 50% 50% 0;
-  transform: rotate(-45deg);
+.ml-nav-icon {
+  display: block;
+  flex: 0 0 auto;
+  color: #333;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.65;
+  pointer-events: none;
 }
 
-.location-pin::before {
-  position: absolute;
-  top: 3.5px;
-  left: 3.5px;
-  width: 4px;
-  height: 4px;
-  content: "";
-  border: 1.2px solid #333;
-  background: var(--yellow);
-  border-radius: 50%;
+.ml-nav-icon--location {
+  width: 18px;
+  height: 22px;
+}
+
+.ml-nav-icon--bell {
+  width: 20px;
+  height: 22px;
+}
+
+.ml-nav-icon--cart {
+  width: 24px;
+  height: 22px;
 }
 
 .nav-links,
@@ -376,71 +380,17 @@ button {
   font-weight: 700;
 }
 
-.messages-link {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  min-width: 92px;
-}
-
-.messages-link span {
-  position: relative;
-  width: 14px;
-  height: 13px;
-  flex: 0 0 14px;
-  border: 1.5px solid #333;
-  border-radius: 7px 7px 3px 3px;
-}
-
-.messages-link span::after {
-  position: absolute;
-  bottom: -5px;
-  left: 4px;
-  width: 4px;
-  height: 4px;
-  content: "";
-  background: #333;
-  border-radius: 50%;
-}
-
-.messages-link em {
-  font-style: normal;
-}
-
-.messages-link--unread {
-  color: #111;
-  font-weight: 600;
-}
-
 .notification-button {
   position: relative;
-  width: 22px;
+  display: grid;
+  width: 23px;
   height: 28px;
   flex: 0 0 22px;
+  place-items: center;
 }
 
-.notification-button span {
-  position: absolute;
-  top: 7px;
-  left: 6px;
-  width: 11px;
-  height: 12px;
-  border: 1.6px solid #333;
-  border-bottom: 0;
-  border-radius: 9px 9px 4px 4px;
-}
-
-.notification-button span::after {
-  position: absolute;
-  bottom: -5px;
-  left: 3px;
-  width: 3.5px;
-  height: 3.5px;
-  content: "";
-  background: #333;
-  border-radius: 50%;
+.notification-button .ml-nav-icon {
+  transform: translateY(1px);
 }
 
 .notification-button > b {
@@ -461,33 +411,15 @@ button {
 
 .cart-button {
   position: relative;
-  width: 26px;
+  display: grid;
+  width: 28px;
   height: 28px;
-  flex: 0 0 26px;
+  flex: 0 0 28px;
+  place-items: center;
 }
 
-.cart-button::before {
-  position: absolute;
-  top: 9px;
-  left: 5px;
-  width: 15px;
-  height: 9px;
-  content: "";
-  border: 1.5px solid #333;
-  border-top: 0;
-  transform: skew(-8deg);
-}
-
-.cart-button::after {
-  position: absolute;
-  top: 19px;
-  left: 7px;
-  width: 3px;
-  height: 3px;
-  content: "";
-  background: #333;
-  border-radius: 50%;
-  box-shadow: 10px 0 #333;
+.cart-button .ml-nav-icon {
+  transform: translateY(1px);
 }
 
 .cart-button > span {
