@@ -633,11 +633,15 @@ export function useMarketplaceStore() {
         return {
           ...previous,
           listings: previous.listings.filter((candidate) => candidate.id !== listingId),
-          favorites: previous.favorites.filter((favorite) => favorite.listingId !== listingId),
-          carts: previous.carts.filter((cart) => cart.listingId !== listingId),
-          chats: previous.chats.filter((thread) => thread.listingId !== listingId),
-          shipments: previous.shipments.filter((shipment) => shipment.listingId !== listingId),
-          views: previous.views.filter((view) => view.listingId !== listingId),
+          chats: Array.isArray(previous.chats)
+            ? previous.chats.filter((thread) => thread.listingId !== listingId)
+            : [],
+          shipments: Array.isArray(previous.shipments)
+            ? previous.shipments.filter((shipment) => shipment.listingId !== listingId)
+            : [],
+          views: Array.isArray(previous.views)
+            ? previous.views.filter((view) => view.listingId !== listingId)
+            : [],
           notifications: [
             {
               id: createId("note"),

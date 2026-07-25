@@ -1024,6 +1024,12 @@ export function MarketplaceApp() {
                       type="button"
                       onClick={() => {
                         if (actions.deleteListing(selectedListing.id)) {
+                          setFavoriteIds((previous) =>
+                            previous.filter((id) => id !== selectedListing.id),
+                          );
+                          setCartIds((previous) =>
+                            previous.filter((id) => id !== selectedListing.id),
+                          );
                           setSelectedListingId(null);
                           setChatOpen(false);
                           setView("home");

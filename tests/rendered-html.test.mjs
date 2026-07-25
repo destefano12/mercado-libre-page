@@ -139,7 +139,8 @@ test("publishes category-specific listings and lets owners remove them", async (
   assert.match(page, /actions\.deleteListing/);
   assert.match(store, /listing\.source !== "user"/);
   assert.match(store, /listing\.sellerId !== activeUser\.id/);
-  assert.match(store, /chats: previous\.chats\.filter/);
+  assert.match(store, /Array\.isArray\(previous\.chats\)/);
+  assert.doesNotMatch(store, /previous\.favorites\.filter|previous\.carts\.filter/);
 });
 
 test("uses the ERLC map for shipment tracking zones", async () => {
