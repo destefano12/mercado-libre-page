@@ -213,6 +213,11 @@ const exactHousePoints: Record<string, { label: string; x: number; y: number }> 
   "707": { label: "Vivienda 707", x: 39.0, y: 42.8 },
   "708": { label: "Vivienda 708", x: 18.0, y: 40.2 },
   "709": { label: "Vivienda 709", x: 26.3, y: 38.2 },
+  "7091": { label: "Vivienda 7091", x: 23.7, y: 35.8 },
+  "7092": { label: "Vivienda 7092", x: 26.0, y: 35.7 },
+  "7093": { label: "Vivienda 7093", x: 28.3, y: 35.8 },
+  "7094": { label: "Vivienda 7094", x: 23.9, y: 38.6 },
+  "7095": { label: "Vivienda 7095", x: 29.0, y: 38.6 },
   "710": { label: "Vivienda 710", x: 33.8, y: 37.2 },
   "711": { label: "Vivienda 711", x: 24.4, y: 33.0 },
   "405": { label: "Vivienda 405", x: 18.6, y: 60.4 },
@@ -231,14 +236,21 @@ const housingZones = [
 
 function destinationZoneFor(location: string) {
   const digits = location.match(/\d+/)?.[0] ?? "";
-  if (exactHousePoints[digits]) {
-    return exactHousePoints[digits];
+  const exactKey = exactPointKeyForDigits(digits);
+  if (exactKey) {
+    return exactHousePoints[exactKey];
   }
   const zone = housingZones.find((candidate) =>
     candidate.prefixes.some((prefix) => digits.startsWith(prefix)),
   );
 
   return zone ?? housingZones[0];
+}
+
+function exactPointKeyForDigits(digits: string) {
+  return Object.keys(exactHousePoints)
+    .sort((first, second) => second.length - first.length)
+    .find((key) => digits === key || digits.startsWith(key));
 }
 
 function pointBehindHome(home: { label: string; x: number; y: number }) {

@@ -2581,7 +2581,7 @@ button {
   inset: 0;
   background:
     linear-gradient(90deg, rgba(255, 230, 0, 0.9), rgba(52, 131, 250, 0.9))
-    left bottom / var(--route-progress, 0%) 5px no-repeat;
+    var(--route-left, 0%) bottom / var(--route-width, 0%) 5px no-repeat;
   border-bottom: 5px solid rgba(255, 255, 255, 0.7);
   border-radius: 8px;
   pointer-events: none;

@@ -22,6 +22,8 @@ export interface LiveCourierLocation {
 
 const creationPoint = { label: "Creacion 303", x: 49.6, y: 79.7 };
 const hubPoint = { label: "Reparto / retiro 308", x: 47.8, y: 61.1 };
+const MAP_IMAGE_LEFT_PERCENT = 12.5;
+const MAP_IMAGE_WIDTH_PERCENT = 75;
 
 const exactHousePoints: Record<string, { label: string; x: number; y: number }> = {
   "200": { label: "Postal 200", x: 13.2, y: 84.3 },
@@ -58,6 +60,11 @@ const exactHousePoints: Record<string, { label: string; x: number; y: number }> 
   "707": { label: "Vivienda 707", x: 39.0, y: 42.8 },
   "708": { label: "Vivienda 708", x: 18.0, y: 40.2 },
   "709": { label: "Vivienda 709", x: 26.3, y: 38.2 },
+  "7091": { label: "Vivienda 7091", x: 23.7, y: 35.8 },
+  "7092": { label: "Vivienda 7092", x: 26.0, y: 35.7 },
+  "7093": { label: "Vivienda 7093", x: 28.3, y: 35.8 },
+  "7094": { label: "Vivienda 7094", x: 23.9, y: 38.6 },
+  "7095": { label: "Vivienda 7095", x: 29.0, y: 38.6 },
   "710": { label: "Vivienda 710", x: 33.8, y: 37.2 },
   "711": { label: "Vivienda 711", x: 24.4, y: 33.0 },
   "405": { label: "Vivienda 405", x: 18.6, y: 60.4 },
@@ -79,14 +86,21 @@ const mapHousingZones = [
 
 function destinationZoneFor(destination: string) {
   const digits = destination.match(/\d+/)?.[0] ?? "";
-  if (exactHousePoints[digits]) {
-    return exactHousePoints[digits];
+  const exactKey = exactPointKeyForDigits(digits);
+  if (exactKey) {
+    return exactHousePoints[exactKey];
   }
   return (
     mapHousingZones.find((zone) =>
       zone.prefixes.some((prefix) => digits.startsWith(prefix)),
     ) ?? mapHousingZones[0]
   );
+}
+
+function exactPointKeyForDigits(digits: string) {
+  return Object.keys(exactHousePoints)
+    .sort((first, second) => second.length - first.length)
+    .find((key) => digits === key || digits.startsWith(key));
 }
 
 function pointBehindHome(home: { label: string; x: number; y: number }) {
@@ -111,6 +125,21 @@ function clampPercent(value: number, min = 4, max = 96) {
   return Math.min(max, Math.max(min, value));
 }
 
+function mapImagePoint(point: { x: number; y: number }) {
+  return {
+    x: Number((MAP_IMAGE_LEFT_PERCENT + point.x * (MAP_IMAGE_WIDTH_PERCENT / 100)).toFixed(2)),
+    y: point.y,
+  };
+}
+
+function mapPointStyle(point: { x: number; y: number }) {
+  const rendered = mapImagePoint(point);
+  return {
+    left: `${rendered.x}%`,
+    top: `${rendered.y}%`,
+  };
+}
+
 function worldToMapPoint(location: LiveCourierLocation) {
   if (typeof location.worldX !== "number" || typeof location.worldZ !== "number") {
     return null;
@@ -128,7 +157,10 @@ function courierPointFor(location?: LiveCourierLocation | null) {
     return null;
   }
   const exact = worldToMapPoint(location);
-  const base = exact ?? (location.postalCode ? destinationZoneFor(location.postalCode) : null);
+  const addressPoint = destinationZoneFor(
+    location.buildingNumber ?? location.postalCode ?? "",
+  );
+  const base = exact ?? addressPoint;
   if (!base) {
     return null;
   }
@@ -195,23 +227,26 @@ export function ShippingMap({ shipment, courierLocation }: ShippingMapProps) {
         </div>
         <div
           className="gps-map__route"
-          style={{ "--route-progress": `${routeProgress}%` } as CSSProperties}
+          style={{
+            "--route-left": `${MAP_IMAGE_LEFT_PERCENT}%`,
+            "--route-width": `${(routeProgress / 100) * MAP_IMAGE_WIDTH_PERCENT}%`,
+          } as CSSProperties}
         />
         {route.map((point, index) => (
           <div
             className={`gps-map__pin gps-map__pin--${index === 0 ? "origin" : index === 1 ? "hub" : index === route.length - 1 ? "home" : "transit"}`}
             key={point.label}
-            style={{ left: `${point.x}%`, top: `${point.y}%` }}
+            style={mapPointStyle(point)}
           >
             <span>{point.label}</span>
           </div>
         ))}
         <div
           className="gps-map__vehicle"
-          style={{
-            left: `${Math.min(92, Math.max(6, courierPoint.x))}%`,
-            top: `${Math.min(88, Math.max(10, courierPoint.y))}%`,
-          }}
+          style={mapPointStyle({
+            x: Math.min(96, Math.max(4, courierPoint.x)),
+            y: Math.min(92, Math.max(8, courierPoint.y)),
+          })}
           title={courierStatus}
         >
           <span aria-hidden="true">🛵</span>

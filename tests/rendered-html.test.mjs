@@ -266,6 +266,9 @@ test("tracks delivery courier location from ERLC players on the shipment map", a
   assert.match(shippingMap, /worldToMapPoint/);
   assert.match(shippingMap, /worldX \* 0\.03547/);
   assert.match(shippingMap, /worldZ \* 0\.03532/);
+  assert.match(shippingMap, /MAP_IMAGE_LEFT_PERCENT = 12\.5/);
+  assert.match(shippingMap, /MAP_IMAGE_WIDTH_PERCENT = 75/);
+  assert.match(shippingMap, /mapPointStyle/);
   assert.match(shippingMap, /PostalCode|postalCode/);
   assert.match(shippingMap, /🛵/);
   assert.match(stylesheet, /gps-map__vehicle small/);
@@ -407,6 +410,8 @@ test("uses the ERLC map for shipment tracking zones", async () => {
   assert.match(store, /destinationZoneFor/);
   assert.match(store, /exactHousePoints/);
   assert.match(store, /Vivienda 707/);
+  assert.match(store, /Vivienda 7094/);
+  assert.match(store, /exactPointKeyForDigits/);
   assert.match(store, /routeForLocation\(result\.user\.location\)/);
   assert.match(store, /x: 49\.6, y: 79\.7/);
   assert.match(store, /x: 47\.8, y: 61\.1/);
@@ -415,5 +420,6 @@ test("uses the ERLC map for shipment tracking zones", async () => {
   assert.match(store, /Vivienda 1202/);
   assert.match(stylesheet, /aspect-ratio: 16 \/ 9/);
   assert.match(stylesheet, /object-fit: contain/);
+  assert.match(stylesheet, /var\(--route-left, 0%\) bottom \/ var\(--route-width, 0%\)/);
   assert.match(authModal, /número de casa/);
 });
