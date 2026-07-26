@@ -125,6 +125,26 @@ test("matches the official-style account profile menu", async () => {
   assert.match(stylesheet, /\.account-menu__free/);
 });
 
+test("adds official-style services strip and notification center", async () => {
+  const page = await readFile(
+    new URL("../app/components/MarketplaceApp.tsx", import.meta.url),
+    "utf8",
+  );
+  const stylesheet = await readFile(
+    new URL("../app/globals.css", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(page, /notificationsOpen/);
+  assert.match(page, /notifications-popover/);
+  assert.match(page, /notificationItems/);
+  assert.match(page, /Mercado Pago/);
+  assert.match(page, /Mercado Crédito/);
+  assert.match(page, /Compra protegida/);
+  assert.match(stylesheet, /\.service-strip/);
+  assert.match(stylesheet, /\.notifications-popover/);
+});
+
 test("keeps the product implementation wired to local IMG assets", async () => {
   const page = await readFile(new URL("../app/components/MarketplaceApp.tsx", import.meta.url), "utf8");
   const marketplace = await readFile(new URL("../app/data/marketplace.ts", import.meta.url), "utf8");

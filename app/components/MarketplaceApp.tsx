@@ -194,6 +194,47 @@ function PurchasesEmptyIcon() {
   );
 }
 
+function WalletIcon() {
+  return (
+    <svg className="service-icon" viewBox="0 0 28 28" aria-hidden="true">
+      <path d="M5 8.5h17a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3v-9a3 3 0 0 1 3-3Z" />
+      <path d="M7 8.5V5h12v3.5" />
+      <path d="M20 15.5h5" />
+      <path d="M20 18h.1" />
+    </svg>
+  );
+}
+
+function TruckIcon() {
+  return (
+    <svg className="service-icon" viewBox="0 0 30 28" aria-hidden="true">
+      <path d="M3 8h16v12H3V8Z" />
+      <path d="M19 12h4l4 4v4h-8v-8Z" />
+      <path d="M8 23a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
+      <path d="M22 23a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
+    </svg>
+  );
+}
+
+function CreditIcon() {
+  return (
+    <svg className="service-icon" viewBox="0 0 28 28" aria-hidden="true">
+      <path d="M4 7h20a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z" />
+      <path d="M2 12h24" />
+      <path d="M7 18h5" />
+    </svg>
+  );
+}
+
+function ShieldIcon() {
+  return (
+    <svg className="service-icon" viewBox="0 0 28 28" aria-hidden="true">
+      <path d="M14 3 24 7v7c0 6-4 9.5-10 11-6-1.5-10-5-10-11V7l10-4Z" />
+      <path d="m9.5 14 3 3 6-7" />
+    </svg>
+  );
+}
+
 export function MarketplaceApp() {
   const { state, activeUser, ratingSummaries, actions } = useMarketplaceStore();
   const [view, setView] = useState<ViewName>("home");
@@ -208,6 +249,7 @@ export function MarketplaceApp() {
   const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [favoritesMenuOpen, setFavoritesMenuOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
@@ -281,6 +323,32 @@ export function MarketplaceApp() {
     () => (activeUser ? getRecommendationShelves(state, activeUser.id) : null),
     [activeUser, state],
   );
+  const notificationItems = useMemo(() => {
+    const live = state.notifications.slice(0, 4).map((notification) => ({
+      id: notification.id,
+      title: notification.text,
+      body: "Actividad reciente del marketplace",
+    }));
+
+    return [
+      ...live,
+      {
+        id: "benefit-shipping",
+        title: "Envios gratis desde $ 16.000",
+        body: "El beneficio se calcula segun tu ubicacion y el vendedor.",
+      },
+      {
+        id: "benefit-coupon",
+        title: "Cupones disponibles",
+        body: "Revisa la seccion Cupones para aplicar descuentos.",
+      },
+      {
+        id: "benefit-play",
+        title: "Mercado Play gratis",
+        body: "Series y accesos digitales desde el catalogo inicial.",
+      },
+    ].slice(0, 5);
+  }, [state.notifications]);
   const streamingCatalog = useMemo(
     () =>
       sortListingsForCategory(state.listings, "streaming", "Entrega más rápida").filter(
@@ -507,6 +575,7 @@ export function MarketplaceApp() {
     setCategoryMenuOpen(false);
     setAccountMenuOpen(false);
     setFavoritesMenuOpen(false);
+    setNotificationsOpen(false);
     setSearchSuggestionsOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -673,7 +742,12 @@ export function MarketplaceApp() {
               type="button"
               title="Mensajes"
               aria-label={`${unreadMessageCount} mensajes sin leer`}
-              onClick={() => openPage("messages")}
+              onClick={() => {
+                setNotificationsOpen((open) => !open);
+                setAccountMenuOpen(false);
+                setFavoritesMenuOpen(false);
+                setCategoryMenuOpen(false);
+              }}
             >
               <BellIcon />
               {unreadMessageCount ? <b>{Math.min(unreadMessageCount, 99)}</b> : null}
@@ -684,6 +758,53 @@ export function MarketplaceApp() {
             </button>
           </div>
         </nav>
+
+        {notificationsOpen ? (
+          <>
+            <button
+              className="menu-backdrop menu-backdrop--clear"
+              type="button"
+              aria-label="Cerrar notificaciones"
+              onClick={() => setNotificationsOpen(false)}
+            />
+            <div className="notifications-popover">
+              <div className="notifications-popover__heading">
+                <strong>Notificaciones</strong>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNotificationsOpen(false);
+                    openPage("messages");
+                  }}
+                >
+                  Ver mensajes
+                </button>
+              </div>
+              <div className="notifications-popover__list">
+                {notificationItems.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setNotificationsOpen(false);
+                      if (item.id.includes("coupon")) {
+                        openPage("coupons");
+                        return;
+                      }
+                      openPage("offers");
+                    }}
+                  >
+                    <span aria-hidden="true" />
+                    <div>
+                      <strong>{item.title}</strong>
+                      <small>{item.body}</small>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        ) : null}
 
         {favoritesMenuOpen ? (
           <>
@@ -868,6 +989,25 @@ export function MarketplaceApp() {
                 <strong>Medios de pago</strong>
                 <p>Pagá tus compras de forma rápida y segura</p>
                 <small>Conocer medios de pago</small>
+              </button>
+            </section>
+
+            <section className="service-strip" aria-label="Servicios de Mercado Live">
+              <button type="button" onClick={() => openPage("help")}>
+                <WalletIcon />
+                <span><strong>Mercado Pago</strong><small>Pagá rápido y seguro</small></span>
+              </button>
+              <button type="button" onClick={() => openPage("offers")}>
+                <TruckIcon />
+                <span><strong>Envíos gratis</strong><small>Desde $ 16.000 en productos elegibles</small></span>
+              </button>
+              <button type="button" onClick={() => openPage("coupons")}>
+                <CreditIcon />
+                <span><strong>Mercado Crédito</strong><small>Cuotas y beneficios simulados</small></span>
+              </button>
+              <button type="button" onClick={() => openCategory("streaming")}>
+                <ShieldIcon />
+                <span><strong>Compra protegida</strong><small>Seguimiento, chat y reputación real</small></span>
               </button>
             </section>
 
