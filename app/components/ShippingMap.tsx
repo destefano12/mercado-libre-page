@@ -8,40 +8,40 @@ interface ShippingMapProps {
   shipment?: Shipment;
 }
 
+const creationPoint = { label: "Creacion 303", x: 49.6, y: 79.7 };
+const hubPoint = { label: "Reparto / retiro 308", x: 47.8, y: 61.1 };
+
 const mapHousingZones = [
-  { label: "Vivienda 704", x: 21.4, y: 45.7 },
-  { label: "Vivienda 405", x: 18.6, y: 60.4 },
-  { label: "Vivienda 907", x: 57.4, y: 31.4 },
-  { label: "Vivienda 1202", x: 84.2, y: 65.4 },
+  { prefixes: ["70", "71", "8"], label: "Vivienda 703", x: 22.2, y: 44.9 },
+  { prefixes: ["40", "41", "2"], label: "Vivienda 405", x: 18.6, y: 60.4 },
+  { prefixes: ["90", "91"], label: "Vivienda 907", x: 57.4, y: 31.4 },
+  { prefixes: ["11"], label: "Vivienda 1104", x: 80.3, y: 38.3 },
+  { prefixes: ["12"], label: "Vivienda 1202", x: 84.2, y: 65.4 },
 ];
 
 function destinationZoneFor(destination: string) {
   const digits = destination.match(/\d+/)?.[0] ?? "";
-  if (digits.startsWith("4")) {
-    return mapHousingZones[1];
-  }
-  if (digits.startsWith("9")) {
-    return mapHousingZones[2];
-  }
-  if (digits.startsWith("12")) {
-    return mapHousingZones[3];
-  }
-  if (digits.startsWith("7") || digits.startsWith("8")) {
-    return mapHousingZones[0];
-  }
-  return mapHousingZones[0];
+  return (
+    mapHousingZones.find((zone) =>
+      zone.prefixes.some((prefix) => digits.startsWith(prefix)),
+    ) ?? mapHousingZones[0]
+  );
+}
+
+function pointBehindHome(home: { label: string; x: number; y: number }) {
+  return {
+    label: "En camino",
+    x: Number((home.x + (hubPoint.x - home.x) * 0.18).toFixed(1)),
+    y: Number((home.y + (hubPoint.y - home.y) * 0.18).toFixed(1)),
+  };
 }
 
 function routeFor(destination: string) {
   const destinationZone = destinationZoneFor(destination);
   return [
-    { label: "Creacion 3031", x: 49.5, y: 82.4 },
-    { label: "Reparto / retiro 308", x: 47.8, y: 61.1 },
-    {
-      label: "En camino",
-      x: (47.8 + destinationZone.x) / 2,
-      y: (61.1 + destinationZone.y) / 2,
-    },
+    creationPoint,
+    hubPoint,
+    pointBehindHome(destinationZone),
     destinationZone,
   ];
 }
@@ -84,7 +84,7 @@ export function ShippingMap({ shipment }: ShippingMapProps) {
           alt="Mapa de reparto con zonas de creacion, retiro y viviendas"
         />
         <div className="gps-map__legend" aria-hidden="true">
-          <span><i className="is-origin" /> Creacion 3031</span>
+          <span><i className="is-origin" /> Creacion 303</span>
           <span><i className="is-hub" /> Reparto / retiro 308</span>
           <span><i className="is-home" /> Viviendas</span>
         </div>
@@ -110,7 +110,7 @@ export function ShippingMap({ shipment }: ShippingMapProps) {
         />
       </div>
       <div className="gps-card__footer">
-        <span>Creacion: 3031</span>
+        <span>Creacion: 303</span>
         <span>{shipment.etaMinutes === 0 ? "Entregado" : `${shipment.etaMinutes} min`}</span>
         <span>Destino: {shipment.destination}</span>
       </div>

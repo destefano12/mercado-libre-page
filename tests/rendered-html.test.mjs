@@ -322,13 +322,15 @@ test("uses the ERLC map for shipment tracking zones", async () => {
 
   assert.ok(mapAsset.size > 1_000_000);
   assert.match(shippingMap, /erlc-delivery-map\.webp/);
-  assert.match(shippingMap, /Creacion 3031/);
+  assert.match(shippingMap, /Creacion 303/);
   assert.match(shippingMap, /Reparto \/ retiro 308/);
   assert.match(shippingMap, /routeFor\(shipment\.destination\)/);
   assert.doesNotMatch(shippingMap, /shipment\.route\.map/);
   assert.match(store, /destinationZoneFor/);
-  assert.match(store, /x: 49\.5, y: 82\.4/);
+  assert.match(store, /x: 49\.6, y: 79\.7/);
   assert.match(store, /x: 47\.8, y: 61\.1/);
+  assert.match(store, /pointBehindHome/);
+  assert.match(store, /Vivienda 703/);
   assert.match(store, /Vivienda 1202/);
   assert.match(stylesheet, /aspect-ratio: 16 \/ 9/);
   assert.match(stylesheet, /object-fit: contain/);

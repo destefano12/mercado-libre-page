@@ -157,33 +157,32 @@ function getShipmentStatus(progress: number) {
   return "Preparando paquete";
 }
 
+const creationPoint = { label: "Creacion 303", x: 49.6, y: 79.7 };
+const hubPoint = { label: "Reparto / retiro", x: 47.8, y: 61.1 };
+
 const housingZones = [
-  { label: "Vivienda 704", x: 21.4, y: 45.7 },
-  { label: "Vivienda 405", x: 18.6, y: 60.4 },
-  { label: "Vivienda 907", x: 57.4, y: 31.4 },
-  { label: "Vivienda 1202", x: 84.2, y: 65.4 },
+  { prefixes: ["70", "71", "8"], label: "Vivienda 703", x: 22.2, y: 44.9 },
+  { prefixes: ["40", "41", "2"], label: "Vivienda 405", x: 18.6, y: 60.4 },
+  { prefixes: ["90", "91"], label: "Vivienda 907", x: 57.4, y: 31.4 },
+  { prefixes: ["11"], label: "Vivienda 1104", x: 80.3, y: 38.3 },
+  { prefixes: ["12"], label: "Vivienda 1202", x: 84.2, y: 65.4 },
 ];
 
 function destinationZoneFor(location: string) {
   const digits = location.match(/\d+/)?.[0] ?? "";
-  if (digits.startsWith("4")) {
-    return housingZones[1];
-  }
-  if (digits.startsWith("9")) {
-    return housingZones[2];
-  }
-  if (digits.startsWith("12")) {
-    return housingZones[3];
-  }
-  if (digits.startsWith("7") || digits.startsWith("8")) {
-    return housingZones[0];
-  }
-
-  const seed = Array.from(location).reduce(
-    (total, character) => total + character.charCodeAt(0),
-    0,
+  const zone = housingZones.find((candidate) =>
+    candidate.prefixes.some((prefix) => digits.startsWith(prefix)),
   );
-  return housingZones[seed % housingZones.length];
+
+  return zone ?? housingZones[0];
+}
+
+function pointBehindHome(home: { label: string; x: number; y: number }) {
+  return {
+    label: "En camino",
+    x: Number((home.x + (hubPoint.x - home.x) * 0.18).toFixed(1)),
+    y: Number((home.y + (hubPoint.y - home.y) * 0.18).toFixed(1)),
+  };
 }
 
 export function useMarketplaceStore() {
@@ -727,9 +726,9 @@ export function useMarketplaceStore() {
               progress: digital ? 100 : 8,
               etaMinutes: digital ? 0 : 72,
               route: [
-                { label: "Creacion 3031", x: 49.5, y: 82.4 },
-                { label: "Reparto / retiro", x: 47.8, y: 61.1 },
-                { label: "En camino", x: (47.8 + destinationZone.x) / 2, y: (61.1 + destinationZone.y) / 2 },
+                creationPoint,
+                hubPoint,
+                pointBehindHome(destinationZone),
                 { label: destinationZone.label, x: destinationZone.x, y: destinationZone.y },
               ],
             },
