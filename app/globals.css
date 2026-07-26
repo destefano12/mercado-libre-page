@@ -510,6 +510,103 @@ button {
   background: rgba(0, 0, 0, 0.62);
 }
 
+.menu-backdrop--clear {
+  background: transparent;
+}
+
+.favorites-popover {
+  position: absolute;
+  top: 50px;
+  right: max(8px, calc((100% - 1200px) / 2));
+  z-index: 70;
+  width: 420px;
+  overflow: visible;
+  color: #333;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+}
+
+.favorites-popover::before {
+  position: absolute;
+  top: -8px;
+  right: 14px;
+  width: 18px;
+  height: 18px;
+  content: "";
+  background: #fff;
+  transform: rotate(45deg);
+}
+
+.favorites-popover__title {
+  position: relative;
+  z-index: 1;
+  height: 40px;
+  padding: 13px 20px 0;
+  border-bottom: 1px solid #eee;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.favorites-popover__body {
+  display: grid;
+  min-height: 140px;
+  place-items: center;
+  padding: 30px 42px;
+  text-align: center;
+  background: #f5f5f5;
+}
+
+.favorites-popover__body p {
+  max-width: 260px;
+  margin: 0;
+  color: #222;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.favorites-popover__list {
+  display: grid;
+  width: 100%;
+  gap: 1px;
+}
+
+.favorites-popover__list button {
+  display: grid;
+  grid-template-columns: 46px 1fr;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 54px;
+  padding: 6px 0;
+  text-align: left;
+  border: 0;
+  background: transparent;
+}
+
+.favorites-popover__list .product-visual {
+  width: 44px;
+  height: 44px;
+  flex-basis: 44px;
+  border: 1px solid #eee;
+  border-radius: 4px;
+}
+
+.favorites-popover__list span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.favorites-popover__link {
+  width: 100%;
+  height: 52px;
+  color: var(--blue);
+  border: 0;
+  background: #fff;
+  font-size: 14px;
+}
+
 .category-menu {
   position: absolute;
   top: 100px;
@@ -1923,9 +2020,9 @@ button {
 }
 
 .purchases-page > h1 {
-  margin: 0 0 24px;
-  font-size: 28px;
-  font-weight: 500;
+  margin: 0 0 20px;
+  font-size: 24px;
+  font-weight: 600;
 }
 
 .purchase-list {
@@ -2024,24 +2121,57 @@ button {
 
 .purchases-empty {
   display: grid;
-  min-height: 350px;
+  min-height: 690px;
   place-items: center;
   align-content: center;
-  padding: 40px;
+  padding: 56px 40px 78px;
   text-align: center;
   background: #fff;
-  border-radius: 6px;
+  border-radius: 0;
 }
 
 .purchases-empty h2 {
-  margin: 0 0 8px;
-  font-size: 22px;
-  font-weight: 500;
+  margin: 18px 0 4px;
+  color: #111;
+  font-size: 24px;
+  font-weight: 700;
 }
 
 .purchases-empty p {
-  margin: 0 0 22px;
-  color: var(--muted);
+  margin: 0 0 30px;
+  color: #222;
+  font-size: 16px;
+  line-height: 22px;
+}
+
+.purchases-empty button {
+  min-height: auto;
+  padding: 0;
+  color: #1259c3;
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.purchases-empty__icon {
+  width: 260px;
+  height: 160px;
+  fill: none;
+  stroke: #cfcfcf;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+}
+
+.purchases-empty__icon circle {
+  stroke-width: 2.5;
+}
+
+.purchases-empty__pen {
+  fill: #e6e6e6;
+  stroke: #d7d7d7;
 }
 
 .gps-card {

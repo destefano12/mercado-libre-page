@@ -56,6 +56,27 @@ test("lets users update delivery location and keeps cart icons consistent", asyn
   assert.match(stylesheet, /\.empty-cart \.ml-nav-icon/);
 });
 
+test("matches official empty favorites and purchases surfaces", async () => {
+  const page = await readFile(
+    new URL("../app/components/MarketplaceApp.tsx", import.meta.url),
+    "utf8",
+  );
+  const stylesheet = await readFile(
+    new URL("../app/globals.css", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(page, /favoritesMenuOpen/);
+  assert.match(page, /favorites-popover/);
+  assert.match(page, /Ver todos los favoritos y listas/);
+  assert.match(page, /<PurchasesEmptyIcon \/>/);
+  assert.match(page, /Hacé tu primera compra/);
+  assert.match(page, /Ver ofertas del día/);
+  assert.match(stylesheet, /\.favorites-popover/);
+  assert.match(stylesheet, /\.purchases-empty__icon/);
+  assert.match(stylesheet, /min-height: 690px/);
+});
+
 test("keeps the product implementation wired to local IMG assets", async () => {
   const page = await readFile(new URL("../app/components/MarketplaceApp.tsx", import.meta.url), "utf8");
   const marketplace = await readFile(new URL("../app/data/marketplace.ts", import.meta.url), "utf8");

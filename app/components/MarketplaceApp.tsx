@@ -149,6 +149,22 @@ function CartIcon() {
   );
 }
 
+function PurchasesEmptyIcon() {
+  return (
+    <svg className="purchases-empty__icon" viewBox="0 0 260 160" aria-hidden="true">
+      <path d="M38 136h184" />
+      <path d="M83 32h94a10 10 0 0 1 10 10v86H73V42a10 10 0 0 1 10-10Z" />
+      <path d="M95 48h80v72H85V48h10Z" />
+      <path d="M57 128h146l-8 16H65l-8-16Z" />
+      <path d="M101 128h58v8h-58v-8Z" />
+      <circle cx="130" cy="85" r="38" />
+      <path d="M116 76c1.8-10.8 10.6-16.8 21.2-14.4 10 2.2 16 11.2 12.2 21-2 5.4-6.2 8.8-11.2 12.4-4.6 3.2-6.6 6.2-6.6 11.8" />
+      <path d="M131.5 119h.2" />
+      <path className="purchases-empty__pen" d="M173 18l-36 42 10 8 36-42-10-8Z" />
+    </svg>
+  );
+}
+
 export function MarketplaceApp() {
   const { state, activeUser, ratingSummaries, actions } = useMarketplaceStore();
   const [view, setView] = useState<ViewName>("home");
@@ -162,6 +178,7 @@ export function MarketplaceApp() {
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [favoritesMenuOpen, setFavoritesMenuOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
@@ -453,6 +470,7 @@ export function MarketplaceApp() {
     setView(nextView);
     setCategoryMenuOpen(false);
     setAccountMenuOpen(false);
+    setFavoritesMenuOpen(false);
     setSearchSuggestionsOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -603,7 +621,15 @@ export function MarketplaceApp() {
               <span className="nav-chevron">⌄</span>
             </button>
             <button type="button" onClick={() => openPage("purchases")}>Mis compras</button>
-            <button type="button" onClick={() => openPage("favorites")}>
+            <button
+              className={favoritesMenuOpen ? "is-open" : ""}
+              type="button"
+              onClick={() => {
+                setFavoritesMenuOpen((open) => !open);
+                setAccountMenuOpen(false);
+                setCategoryMenuOpen(false);
+              }}
+            >
               Favoritos <span className="nav-chevron">⌄</span>
             </button>
             <button
@@ -622,6 +648,51 @@ export function MarketplaceApp() {
             </button>
           </div>
         </nav>
+
+        {favoritesMenuOpen ? (
+          <>
+            <button
+              className="menu-backdrop menu-backdrop--clear"
+              type="button"
+              aria-label="Cerrar favoritos"
+              onClick={() => setFavoritesMenuOpen(false)}
+            />
+            <div className="favorites-popover">
+              <div className="favorites-popover__title">Favoritos</div>
+              <div className="favorites-popover__body">
+                {favoriteListings.length > 0 ? (
+                  <div className="favorites-popover__list">
+                    {favoriteListings.slice(0, 3).map((listing) => (
+                      <button
+                        key={listing.id}
+                        type="button"
+                        onClick={() => {
+                          setFavoritesMenuOpen(false);
+                          openListing(listing);
+                        }}
+                      >
+                        <ListingVisual visual={listing.visual} />
+                        <span>{listing.title}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p>Agregá acá los productos que te gustaron para poder verlos más tarde.</p>
+                )}
+              </div>
+              <button
+                className="favorites-popover__link"
+                type="button"
+                onClick={() => {
+                  setFavoritesMenuOpen(false);
+                  openPage("favorites");
+                }}
+              >
+                Ver todos los favoritos y listas
+              </button>
+            </div>
+          </>
+        ) : null}
 
         {accountMenuOpen ? (
           <div className="account-menu">
@@ -1495,10 +1566,7 @@ export function MarketplaceApp() {
 
       {view === "purchases" ? (
         <section className="purchases-page">
-          <div className="breadcrumb">
-            <button type="button" onClick={goHome}>Inicio</button><span>›</span><span>Mis compras</span>
-          </div>
-          <h1>Mis compras</h1>
+          <h1>Compras</h1>
           {purchases.length > 0 ? (
             <div className="purchase-list">
               {purchases.map((shipment) => {
@@ -1532,9 +1600,10 @@ export function MarketplaceApp() {
             </div>
           ) : (
             <div className="purchases-empty">
-              <h2>Todavía no compraste</h2>
-              <p>Cuando completes una compra, vas a poder seguirla desde acá.</p>
-              <button type="button" onClick={goHome}>Empezar a comprar</button>
+              <PurchasesEmptyIcon />
+              <h2>¡Hacé tu primera compra!</h2>
+              <p>Aquí podrás ver tus compras y hacer el seguimiento de tus envíos.</p>
+              <button type="button" onClick={() => openPage("offers")}>Ver ofertas del día</button>
             </div>
           )}
         </section>
