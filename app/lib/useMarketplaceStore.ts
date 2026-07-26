@@ -17,6 +17,15 @@ import { inferCategoryFromText, tagsFromQuery } from "./recommendations";
 const STORAGE_KEY = "mercado-live-state-v5";
 const CHANNEL_KEY = "mercado-live-realtime";
 const EMPTY_RATINGS: RatingSummaries = { listings: {}, sellers: {} };
+const RETIRED_LISTING_IDS = new Set([
+  "erlc-tools-kit",
+  "erlc-blue-car",
+  "erlc-strugatti-ettore-2020",
+  "erlc-falcon-traveller-2003",
+  "erlc-burger-meal",
+  "erlc-drone-kit",
+  "erlc-phone",
+]);
 
 export interface PublishListingInput {
   title: string;
@@ -64,7 +73,7 @@ function safeParseState(value: string | null): MarketplaceState | null {
             : [],
       }));
 
-    return {
+    return cleanRetiredMarketplaceState({
       ...initial,
       ...parsed,
       activeUserId: null,
@@ -76,17 +85,38 @@ function safeParseState(value: string | null): MarketplaceState | null {
       searches: Array.isArray(parsed.searches) ? parsed.searches : [],
       listings: [...initial.listings, ...userListings],
       chats: [],
-    };
+    });
   } catch {
     return null;
   }
 }
 
-function publicState(state: MarketplaceState): MarketplaceState {
+function cleanRetiredMarketplaceState(state: MarketplaceState): MarketplaceState {
   return {
     ...state,
+    users: state.users.filter((user) => user.id !== "u-erlc-catalog"),
+    listings: state.listings.filter((listing) => !RETIRED_LISTING_IDS.has(listing.id)),
+    views: Array.isArray(state.views)
+      ? state.views.filter((view) => !RETIRED_LISTING_IDS.has(view.listingId))
+      : [],
+    chats: Array.isArray(state.chats)
+      ? state.chats.filter((thread) => !RETIRED_LISTING_IDS.has(thread.listingId))
+      : [],
+    shipments: Array.isArray(state.shipments)
+      ? state.shipments.filter((shipment) => !RETIRED_LISTING_IDS.has(shipment.listingId))
+      : [],
+    notifications: Array.isArray(state.notifications)
+      ? state.notifications.filter((notification) => !/Liberty County|Strugatti|Falcon Traveller|GadgetShack|Three Guys|Tool Store/i.test(notification.text))
+      : [],
+  };
+}
+
+function publicState(state: MarketplaceState): MarketplaceState {
+  const cleanState = cleanRetiredMarketplaceState(state);
+  return {
+    ...cleanState,
     activeUserId: null,
-    users: state.users.map((user) => ({ ...user, email: undefined })),
+    users: cleanState.users.map((user) => ({ ...user, email: undefined })),
     chats: [],
   };
 }
@@ -256,7 +286,7 @@ export function useMarketplaceStore() {
   const commit = useCallback(
     (producer: (previous: MarketplaceState) => MarketplaceState) => {
       setState((previous) => {
-        const nextState = producer(previous);
+        const nextState = cleanRetiredMarketplaceState(producer(previous));
         broadcast(nextState);
         return nextState;
       });
@@ -341,7 +371,7 @@ export function useMarketplaceStore() {
         const incoming = event.data?.state as MarketplaceState | undefined;
         if (incoming?.users && incoming?.listings) {
           setState((previous) => ({
-            ...withAuthenticatedUser(incoming, sessionUserRef.current),
+            ...withAuthenticatedUser(cleanRetiredMarketplaceState(incoming), sessionUserRef.current),
             chats: previous.chats,
           }));
         }

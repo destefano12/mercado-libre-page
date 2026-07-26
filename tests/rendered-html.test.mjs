@@ -205,32 +205,19 @@ test("keeps the product implementation wired to local IMG assets", async () => {
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
 });
 
-test("includes Liberty County catalog products with local assets", async () => {
+test("keeps Liberty County trial products removed from the catalog", async () => {
   const marketplace = await readFile(new URL("../app/data/marketplace.ts", import.meta.url), "utf8");
-  const assets = [
-    "../IMG/erlc/erlc-tools-kit.png",
-    "../IMG/erlc/erlc-strugatti-ettore-2020.png",
-    "../IMG/erlc/erlc-falcon-traveller-2003.png",
-    "../IMG/erlc/erlc-burger-meal.png",
-    "../IMG/erlc/erlc-drone-kit.png",
-    "../IMG/erlc/erlc-phone.png",
-  ];
+  const store = await readFile(new URL("../app/lib/useMarketplaceStore.ts", import.meta.url), "utf8");
 
-  assert.match(marketplace, /Liberty County Store/);
-  assert.match(marketplace, /Pack Tool Store: Lockpick, RFID y Scanner/);
-  assert.match(marketplace, /Lockpick, RFID Disruptor, Scanner, Flashlight, Drill y Spray Can/);
-  assert.match(marketplace, /Strugatti Ettore 2020/);
-  assert.match(marketplace, /Falcon Traveller 2003/);
-  assert.match(marketplace, /Combo hamburguesa Three Guys/);
-  assert.match(marketplace, /Drone GadgetShack/);
-  assert.match(marketplace, /Celular Liberty County con cargador/);
-  assert.match(marketplace, /GadgetShack/);
-  assert.doesNotMatch(marketplace, /Auto civil azul Liberty County/);
-
-  for (const asset of assets) {
-    const file = await stat(new URL(asset, import.meta.url));
-    assert.ok(file.size > 100_000);
-  }
+  assert.match(marketplace, /Mercado Play/);
+  assert.doesNotMatch(marketplace, /Liberty County Store/);
+  assert.doesNotMatch(marketplace, /Pack Tool Store|Strugatti Ettore|Falcon Traveller/);
+  assert.doesNotMatch(marketplace, /Combo hamburguesa Three Guys|Drone GadgetShack|Celular Liberty County/);
+  assert.doesNotMatch(marketplace, /@\/IMG\/erlc/);
+  assert.match(store, /RETIRED_LISTING_IDS/);
+  assert.match(store, /cleanRetiredMarketplaceState/);
+  assert.match(store, /shipments\.filter\(\(shipment\) => !RETIRED_LISTING_IDS\.has\(shipment\.listingId\)\)/);
+  assert.match(store, /u-erlc-catalog/);
 });
 
 test("keeps accounts private and routes messages through authenticated APIs", async () => {
