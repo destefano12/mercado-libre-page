@@ -291,6 +291,11 @@ test("publishes category-specific listings and lets owners remove them", async (
   assert.match(publishModal, /categories\.map\(\(type\)/);
   assert.match(publishModal, /Mesa ratona de madera/);
   assert.match(publishModal, /Muebles, decoracion y articulos del hogar/);
+  assert.match(publishModal, /key === "marca"/);
+  assert.match(publishModal, /Escribi la marca/);
+  assert.match(publishModal, /clipboardData\.files/);
+  assert.match(publishModal, /onDrop/);
+  assert.match(publishModal, /is-dragging/);
   assert.match(page, /Eliminar publicación/);
   assert.match(page, /actions\.deleteListing/);
   assert.match(store, /listing\.source !== "user"/);

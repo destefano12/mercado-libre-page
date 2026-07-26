@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import type { ClipboardEvent } from "react";
 import { categories, type CategoryConfig, type CategoryId } from "../data/marketplace";
 import type { PublishListingInput } from "../lib/useMarketplaceStore";
 
@@ -93,22 +94,43 @@ export function PublishModal({ onPublish, onClose }: PublishModalProps) {
   const [metaValues, setMetaValues] = useState<Record<string, string>>({});
   const [images, setImages] = useState<string[]>([]);
   const [imageError, setImageError] = useState("");
+  const [draggingPhotos, setDraggingPhotos] = useState(false);
 
   const category = useMemo(
     () => categories.find((candidate) => candidate.id === categoryId) ?? categories[0],
     [categoryId],
   );
 
-  async function addImages(files: FileList | null) {
+  async function addImages(files: FileList | File[] | null) {
     if (!files?.length) return;
     setImageError("");
     try {
       const available = Math.max(0, 6 - images.length);
-      const selected = Array.from(files).slice(0, available);
+      if (available === 0) {
+        setImageError("Ya cargaste el maximo de 6 fotos.");
+        return;
+      }
+      const selected = Array.from(files)
+        .filter((file) => file.type.startsWith("image/"))
+        .slice(0, available);
+      if (selected.length === 0) {
+        setImageError("Pegá o arrastrá una imagen JPG, PNG o WEBP.");
+        return;
+      }
       const encoded = await Promise.all(selected.map(loadImage));
       setImages((previous) => [...previous, ...encoded].slice(0, 6));
     } catch (error) {
       setImageError(error instanceof Error ? error.message : "No se pudo cargar la imagen");
+    }
+  }
+
+  function pasteImages(event: ClipboardEvent) {
+    const files = Array.from(event.clipboardData.files).filter((file) =>
+      file.type.startsWith("image/"),
+    );
+    if (files.length > 0) {
+      event.preventDefault();
+      void addImages(files);
     }
   }
 
@@ -141,7 +163,7 @@ export function PublishModal({ onPublish, onClose }: PublishModalProps) {
   }
 
   return (
-    <div className="publish-layer" role="dialog" aria-modal="true" aria-label="Publicar">
+    <div className="publish-layer" role="dialog" aria-modal="true" aria-label="Publicar" onPaste={pasteImages}>
       <header className="publish-header">
         <button type="button" onClick={onClose} aria-label="Cerrar publicación">×</button>
         <strong>Publicar</strong>
@@ -216,7 +238,30 @@ export function PublishModal({ onPublish, onClose }: PublishModalProps) {
             <h1>Completá los datos del producto</h1>
             <p>La primera foto será la portada de tu publicación.</p>
 
-            <div className="photo-uploader">
+            <div
+              className={`photo-uploader${draggingPhotos ? " is-dragging" : ""}`}
+              onDragEnter={(event) => {
+                event.preventDefault();
+                setDraggingPhotos(true);
+              }}
+              onDragOver={(event) => {
+                event.preventDefault();
+                setDraggingPhotos(true);
+              }}
+              onDragLeave={(event) => {
+                event.preventDefault();
+                setDraggingPhotos(false);
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                setDraggingPhotos(false);
+                void addImages(event.dataTransfer.files);
+              }}
+              onPaste={pasteImages}
+              tabIndex={0}
+              role="button"
+              aria-label="Agregar fotos arrastrando, pegando o seleccionando archivos"
+            >
               <input
                 ref={fileInput}
                 type="file"
@@ -228,7 +273,7 @@ export function PublishModal({ onPublish, onClose }: PublishModalProps) {
                 <span>+</span>
                 Agregar fotos
               </button>
-              <small>JPG, PNG o WEBP. Hasta 6 fotos.</small>
+              <small>JPG, PNG o WEBP. Hasta 6 fotos. Tambien podes arrastrar una imagen o copiarla y pegarla aca.</small>
             </div>
             {imageError ? <p className="publish-error">{imageError}</p> : null}
             {images.length > 0 ? (
@@ -261,6 +306,20 @@ export function PublishModal({ onPublish, onClose }: PublishModalProps) {
               {category.filters.map((filter) => {
                 const key = filter.label.toLowerCase();
                 const value = metaValues[key] || String(categoryDefaults[category.id]?.[key] ?? filter.values[0]);
+                if (key === "marca") {
+                  return (
+                    <label className="publish-field" key={filter.label}>
+                      {filter.label}
+                      <input
+                        value={metaValues[key] ?? ""}
+                        onChange={(event) =>
+                          setMetaValues((previous) => ({ ...previous, [key]: event.target.value }))
+                        }
+                        placeholder="Escribi la marca. Ej.: Glaciar, Xiaomi, Genérica"
+                      />
+                    </label>
+                  );
+                }
                 return (
                   <label className="publish-field" key={filter.label}>
                     {filter.label}

@@ -4370,6 +4370,12 @@ button {
   border-radius: 6px;
 }
 
+.photo-uploader.is-dragging {
+  border-color: var(--blue);
+  background: #eef4ff;
+  box-shadow: 0 0 0 3px #dceaff;
+}
+
 .photo-uploader input {
   display: none;
 }
