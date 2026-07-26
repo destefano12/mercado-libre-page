@@ -137,12 +137,17 @@ test("adds official-style services strip and notification center", async () => {
 
   assert.match(page, /notificationsOpen/);
   assert.match(page, /notifications-popover/);
-  assert.match(page, /notificationItems/);
+  assert.match(page, /Generales/);
+  assert.match(page, /Tiendas que sigo/);
+  assert.match(page, /No tenés notificaciones/);
+  assert.match(page, /Aprovechá para descubrir productos increíbles/);
   assert.match(page, /Mercado Pago/);
   assert.match(page, /Mercado Crédito/);
   assert.match(page, /Compra protegida/);
   assert.match(stylesheet, /\.service-strip/);
   assert.match(stylesheet, /\.notifications-popover/);
+  assert.match(stylesheet, /\.notifications-popover__tabs button\.is-active/);
+  assert.match(stylesheet, /\.notifications-popover__empty/);
 });
 
 test("keeps the product implementation wired to local IMG assets", async () => {

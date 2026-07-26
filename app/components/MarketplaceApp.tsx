@@ -323,32 +323,6 @@ export function MarketplaceApp() {
     () => (activeUser ? getRecommendationShelves(state, activeUser.id) : null),
     [activeUser, state],
   );
-  const notificationItems = useMemo(() => {
-    const live = state.notifications.slice(0, 4).map((notification) => ({
-      id: notification.id,
-      title: notification.text,
-      body: "Actividad reciente del marketplace",
-    }));
-
-    return [
-      ...live,
-      {
-        id: "benefit-shipping",
-        title: "Envios gratis desde $ 16.000",
-        body: "El beneficio se calcula segun tu ubicacion y el vendedor.",
-      },
-      {
-        id: "benefit-coupon",
-        title: "Cupones disponibles",
-        body: "Revisa la seccion Cupones para aplicar descuentos.",
-      },
-      {
-        id: "benefit-play",
-        title: "Mercado Play gratis",
-        body: "Series y accesos digitales desde el catalogo inicial.",
-      },
-    ].slice(0, 5);
-  }, [state.notifications]);
   const streamingCatalog = useMemo(
     () =>
       sortListingsForCategory(state.listings, "streaming", "Entrega más rápida").filter(
@@ -772,35 +746,23 @@ export function MarketplaceApp() {
                 <strong>Notificaciones</strong>
                 <button
                   type="button"
-                  onClick={() => {
-                    setNotificationsOpen(false);
-                    openPage("messages");
-                  }}
+                  aria-label="Configurar notificaciones"
+                  onClick={() => openPage("help")}
                 >
-                  Ver mensajes
+                  <span aria-hidden="true">⚙</span>
                 </button>
               </div>
-              <div className="notifications-popover__list">
-                {notificationItems.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      setNotificationsOpen(false);
-                      if (item.id.includes("coupon")) {
-                        openPage("coupons");
-                        return;
-                      }
-                      openPage("offers");
-                    }}
-                  >
-                    <span aria-hidden="true" />
-                    <div>
-                      <strong>{item.title}</strong>
-                      <small>{item.body}</small>
-                    </div>
-                  </button>
-                ))}
+              <div className="notifications-popover__tabs">
+                <button className="is-active" type="button">
+                  Generales <span aria-hidden="true" />
+                </button>
+                <button type="button">
+                  Tiendas que sigo <span aria-hidden="true" />
+                </button>
+              </div>
+              <div className="notifications-popover__empty">
+                <strong>No tenés notificaciones</strong>
+                <p>¡Aprovechá para descubrir productos increíbles!</p>
               </div>
             </div>
           </>
