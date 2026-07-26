@@ -2360,7 +2360,8 @@ button {
 }
 
 .auth-modal__form label,
-.publish-modal label {
+.publish-modal label,
+.location-modal label {
   display: grid;
   gap: 6px;
   color: #555;
@@ -2370,7 +2371,8 @@ button {
 .auth-modal__form input,
 .publish-modal input,
 .publish-modal textarea,
-.publish-modal select {
+.publish-modal select,
+.location-modal input {
   width: 100%;
   min-height: 44px;
   padding: 10px 12px;
@@ -2383,13 +2385,15 @@ button {
 .auth-modal__form input:focus,
 .publish-modal input:focus,
 .publish-modal textarea:focus,
-.publish-modal select:focus {
+.publish-modal select:focus,
+.location-modal input:focus {
   border: 2px solid var(--blue);
   padding: 9px 11px;
 }
 
 .auth-modal__form > button,
-.publish-modal__submit {
+.publish-modal__submit,
+.location-modal__submit {
   min-height: 46px;
   margin-top: 4px;
   color: #fff;
@@ -2400,6 +2404,38 @@ button {
 }
 
 .auth-modal__form > button:disabled {
+  background: #9bbce5;
+  cursor: progress;
+}
+
+.location-modal {
+  width: min(440px, 100%);
+}
+
+.location-modal__intro {
+  margin: -8px 0 18px;
+  color: #666;
+  line-height: 20px;
+}
+
+.location-modal__quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.location-modal__quick button {
+  min-height: 34px;
+  padding: 0 14px;
+  color: var(--blue);
+  border: 1px solid rgba(52, 131, 250, 0.35);
+  background: rgba(65, 137, 230, 0.08);
+  border-radius: 18px;
+  font-weight: 600;
+}
+
+.location-modal__submit:disabled {
   background: #9bbce5;
   cursor: progress;
 }
@@ -2853,24 +2889,18 @@ button {
 }
 
 .empty-cart {
-  position: relative;
-  width: 66px;
-  height: 48px;
-  border: 3px solid var(--blue);
-  border-top: 0;
-  transform: skew(-9deg);
+  display: grid;
+  width: 78px;
+  height: 58px;
+  place-items: center;
+  color: var(--blue);
 }
 
-.empty-cart::after {
-  position: absolute;
-  bottom: -13px;
-  left: 8px;
-  width: 8px;
-  height: 8px;
-  content: "";
-  background: var(--blue);
-  border-radius: 50%;
-  box-shadow: 39px 0 var(--blue);
+.empty-cart .ml-nav-icon {
+  width: 68px;
+  height: 54px;
+  color: var(--blue);
+  stroke-width: 1.7;
 }
 
 .coupons-hero {

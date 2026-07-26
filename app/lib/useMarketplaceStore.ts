@@ -478,6 +478,42 @@ export function useMarketplaceStore() {
     [authenticate],
   );
 
+  const updateLocation = useCallback(
+    async (location: string) => {
+      const nextLocation = location.trim();
+      if (!sessionUserRef.current || nextLocation.length < 2) {
+        return { ok: false, error: "Ingresá una ubicación válida" };
+      }
+
+      try {
+        const response = await fetch("/api/auth", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ location: nextLocation }),
+        });
+        const result = await response.json() as {
+          user?: UserProfile;
+          error?: string;
+        };
+
+        if (!response.ok || !result.user) {
+          return {
+            ok: false,
+            error: result.error ?? "No se pudo actualizar la ubicación",
+          };
+        }
+
+        sessionUserRef.current = result.user;
+        setSessionUser(result.user);
+        setState((previous) => withAuthenticatedUser(previous, result.user ?? null));
+        return { ok: true, user: result.user };
+      } catch {
+        return { ok: false, error: "No se pudo conectar para actualizar la ubicación" };
+      }
+    },
+    [],
+  );
+
   const logout = useCallback(async () => {
     try {
       await fetch("/api/auth", { method: "DELETE" });
@@ -825,6 +861,7 @@ export function useMarketplaceStore() {
       login,
       registerUser,
       logout,
+      updateLocation,
       recordSearch,
       recordView,
       publishListing,

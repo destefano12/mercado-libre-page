@@ -38,6 +38,24 @@ test("server-renders the Mercado Live marketplace shell", async () => {
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
 });
 
+test("lets users update delivery location and keeps cart icons consistent", async () => {
+  const page = await readFile(
+    new URL("../app/components/MarketplaceApp.tsx", import.meta.url),
+    "utf8",
+  );
+  const stylesheet = await readFile(
+    new URL("../app/globals.css", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(page, /setLocationModalOpen\(true\)/);
+  assert.match(page, /actions\.updateLocation\(locationDraft\)/);
+  assert.match(page, /<CartIcon \/>/);
+  assert.doesNotMatch(page, /<span className="empty-cart" \/>/);
+  assert.match(stylesheet, /\.location-modal/);
+  assert.match(stylesheet, /\.empty-cart \.ml-nav-icon/);
+});
+
 test("keeps the product implementation wired to local IMG assets", async () => {
   const page = await readFile(new URL("../app/components/MarketplaceApp.tsx", import.meta.url), "utf8");
   const marketplace = await readFile(new URL("../app/data/marketplace.ts", import.meta.url), "utf8");
@@ -81,6 +99,8 @@ test("keeps accounts private and routes messages through authenticated APIs", as
   assert.match(page, /openPage\("messages"\)/);
   assert.doesNotMatch(store, /setTimeout[\s\S]{0,500}respond/);
   assert.match(authRoute, /passwordMatches/);
+  assert.match(authRoute, /export async function PATCH/);
+  assert.match(store, /updateLocation/);
   assert.match(serverAuth, /PBKDF2/);
   assert.match(serverAuth, /HttpOnly/);
   assert.match(serverAuth, /ALTER TABLE marketplace_accounts ADD COLUMN password_hash/);

@@ -168,3 +168,36 @@ export async function DELETE(request: Request) {
     return json({ ok: true });
   }
 }
+
+export async function PATCH(request: Request) {
+  let input: AuthInput;
+  try {
+    input = await request.json() as AuthInput;
+  } catch {
+    return json({ error: "Solicitud invÃ¡lida" }, 400);
+  }
+
+  const location = input.location?.trim() ?? "";
+  if (location.length < 2 || location.length > 120) {
+    return json({ error: "IngresÃ¡ una ubicaciÃ³n vÃ¡lida" }, 400);
+  }
+
+  try {
+    const database = await getDatabase();
+    await ensureAuthTables(database);
+    const user = await authenticateRequest(request, database);
+    if (!user) {
+      return json({ error: "IniciÃ¡ sesiÃ³n para cambiar tu ubicaciÃ³n" }, 401);
+    }
+
+    await database.prepare(
+      "UPDATE marketplace_accounts SET location = ? WHERE id = ?",
+    )
+      .bind(location, user.id)
+      .run();
+
+    return json({ user: { ...user, location } });
+  } catch {
+    return json({ error: "No se pudo actualizar la ubicaciÃ³n" }, 503);
+  }
+}

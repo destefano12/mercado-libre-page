@@ -170,6 +170,10 @@ export function MarketplaceApp() {
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [helpTopic, setHelpTopic] = useState<string | null>(null);
   const [preferencesReady, setPreferencesReady] = useState(false);
+  const [locationModalOpen, setLocationModalOpen] = useState(false);
+  const [locationDraft, setLocationDraft] = useState("");
+  const [locationError, setLocationError] = useState("");
+  const [locationSaving, setLocationSaving] = useState(false);
 
   useEffect(() => {
     const timer = window.setInterval(actions.advanceShipments, 2400);
@@ -560,8 +564,9 @@ export function MarketplaceApp() {
             className="delivery-location"
             type="button"
             onClick={() => {
-              setHelpTopic("shipping");
-              openPage("help");
+              setLocationDraft(activeUser.location);
+              setLocationError("");
+              setLocationModalOpen(true);
             }}
           >
             <LocationIcon />
@@ -1397,7 +1402,9 @@ export function MarketplaceApp() {
             </div>
           ) : (
             <div className="account-empty">
-              <span className="empty-cart" />
+              <span className="empty-cart" aria-hidden="true">
+                <CartIcon />
+              </span>
               <h2>Tu carrito está vacío</h2>
               <p>Agregá productos y vas a poder comprarlos juntos desde acá.</p>
               <button type="button" onClick={() => openCategory("streaming")}>Explorar publicaciones</button>
@@ -1531,6 +1538,66 @@ export function MarketplaceApp() {
             </div>
           )}
         </section>
+      ) : null}
+
+      {locationModalOpen ? (
+        <div className="modal-layer" role="dialog" aria-modal="true" aria-labelledby="location-title">
+          <form
+            className="modal-card location-modal"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              setLocationSaving(true);
+              setLocationError("");
+              const result = await actions.updateLocation(locationDraft);
+              setLocationSaving(false);
+              if (result.ok) {
+                setLocationModalOpen(false);
+                return;
+              }
+              setLocationError(result.error);
+            }}
+          >
+            <div className="modal-card__header">
+              <div>
+                <span>Direccion de entrega</span>
+                <h2 id="location-title">Cambiar ubicacion</h2>
+              </div>
+              <button type="button" aria-label="Cerrar" onClick={() => setLocationModalOpen(false)}>
+                x
+              </button>
+            </div>
+            <p className="location-modal__intro">
+              Elegi la zona o escribi el numero de casa para calcular compras y envios.
+            </p>
+            <label>
+              Numero o zona
+              <input
+                autoFocus
+                value={locationDraft}
+                placeholder="Ej: 7043, 9072 o Vivienda 1202"
+                onChange={(event) => setLocationDraft(event.target.value)}
+              />
+            </label>
+            <div className="location-modal__quick" aria-label="Ubicaciones rapidas">
+              {["7043", "4055", "9072", "1202"].map((location) => (
+                <button
+                  key={location}
+                  type="button"
+                  onClick={() => {
+                    setLocationDraft(location);
+                    setLocationError("");
+                  }}
+                >
+                  {location}
+                </button>
+              ))}
+            </div>
+            {locationError ? <p className="auth-modal__error" role="alert">{locationError}</p> : null}
+            <button className="location-modal__submit" type="submit" disabled={locationSaving}>
+              {locationSaving ? "Guardando..." : "Guardar ubicacion"}
+            </button>
+          </form>
+        </div>
       ) : null}
 
       <footer className="site-footer">
