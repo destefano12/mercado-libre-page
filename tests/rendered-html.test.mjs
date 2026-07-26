@@ -105,6 +105,26 @@ test("includes the expanded official-style category menu", async () => {
   assert.match(recommendations, /return \"mascotas\"/);
 });
 
+test("matches the official-style account profile menu", async () => {
+  const page = await readFile(
+    new URL("../app/components/MarketplaceApp.tsx", import.meta.url),
+    "utf8",
+  );
+  const stylesheet = await readFile(
+    new URL("../app/globals.css", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(page, /account-menu__profile/);
+  assert.match(page, /Agregar cuenta/);
+  assert.match(page, /meli\+ Viví Mercado Libre como un experto/);
+  assert.match(page, /Créditos/);
+  assert.match(page, /Suscripciones/);
+  assert.match(page, /Mercado Play/);
+  assert.match(stylesheet, /\.account-menu__meli/);
+  assert.match(stylesheet, /\.account-menu__free/);
+});
+
 test("keeps the product implementation wired to local IMG assets", async () => {
   const page = await readFile(new URL("../app/components/MarketplaceApp.tsx", import.meta.url), "utf8");
   const marketplace = await readFile(new URL("../app/data/marketplace.ts", import.meta.url), "utf8");

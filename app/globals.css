@@ -445,60 +445,185 @@ button {
 
 .account-menu {
   position: absolute;
-  top: 94px;
-  right: max(16px, calc((100% - 1200px) / 2));
-  z-index: 60;
-  width: 260px;
-  overflow: hidden;
+  top: 50px;
+  right: max(0px, calc((100% - 1200px) / 2));
+  z-index: 80;
+  width: 306px;
+  overflow: visible;
   background: #fff;
-  border-radius: 6px;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25);
+  border-radius: 0 0 4px 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
 }
 
-.account-menu > div {
+.account-menu__profile {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
-  padding: 18px;
+  padding: 16px 16px 14px;
   border-bottom: 1px solid var(--line);
 }
 
-.account-menu > div > span {
+.account-menu__profile > span {
   display: grid;
   width: 42px;
   height: 42px;
   flex: 0 0 42px;
   place-items: center;
-  color: #fff;
-  background: var(--blue);
+  color: #111;
+  border: 1px solid #e5e5e5;
+  background: #fff;
   border-radius: 50%;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 500;
 }
 
-.account-menu p {
+.account-menu__profile p {
   display: grid;
   min-width: 0;
-  gap: 3px;
+  flex: 1;
+  gap: 4px;
   margin: 0;
 }
 
-.account-menu small {
+.account-menu__profile strong {
+  overflow: hidden;
+  color: #111;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 22px;
+}
+
+.account-menu__profile small {
   overflow: hidden;
   color: var(--muted);
   text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
 }
 
-.account-menu > button {
+.account-menu__profile > button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  border: 0;
+  background: #f5f5f5;
+  border-radius: 50%;
+}
+
+.account-menu__profile > button span {
+  transform: translateY(2px);
+}
+
+.account-menu button {
+  font-size: 14px;
+}
+
+.account-menu__add,
+.account-menu__section button,
+.account-menu__logout {
   width: 100%;
-  padding: 14px 18px;
+  min-height: 34px;
+  padding: 0 24px;
   text-align: left;
   border: 0;
-  border-bottom: 1px solid #eee;
   background: #fff;
 }
 
-.account-menu > button:hover {
+.account-menu__add:hover,
+.account-menu__section button:hover,
+.account-menu__logout:hover {
   background: #f5f5f5;
+}
+
+.account-menu__add {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  border-bottom: 1px solid #eee;
+}
+
+.account-menu__add span {
+  position: relative;
+  display: block;
+  width: 31px;
+  height: 31px;
+  flex: 0 0 31px;
+  border: 1px solid #d9d9d9;
+  border-radius: 50%;
+}
+
+.account-menu__add span::before {
+  position: absolute;
+  top: 7px;
+  left: 10px;
+  width: 9px;
+  height: 9px;
+  content: "";
+  border: 1.5px solid #333;
+  border-radius: 50%;
+}
+
+.account-menu__add span::after {
+  position: absolute;
+  top: 19px;
+  left: 7px;
+  width: 15px;
+  height: 8px;
+  content: "";
+  border: 1.5px solid #333;
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+}
+
+.account-menu__meli {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  width: calc(100% - 32px);
+  margin: 14px 16px;
+  padding: 0 12px;
+  color: #fff;
+  border: 0;
+  background: #e6007e;
+  border-radius: 17px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.account-menu__section {
+  padding: 10px 0;
+  border-top: 1px solid #eee;
+}
+
+.account-menu__section button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #444;
+}
+
+.account-menu__free {
+  display: inline-grid;
+  min-width: 50px;
+  height: 16px;
+  place-items: center;
+  color: #fff;
+  background: #00a650;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.account-menu__logout {
+  min-height: 48px;
+  color: #555;
+  border-top: 1px solid #eee;
 }
 
 .menu-backdrop {

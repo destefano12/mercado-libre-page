@@ -732,16 +732,52 @@ export function MarketplaceApp() {
 
         {accountMenuOpen ? (
           <div className="account-menu">
-            <div>
+            <div className="account-menu__profile">
               <span>{activeUser.avatar}</span>
-              <p><strong>{activeUser.name}</strong><small>{activeUser.email}</small></p>
+              <p>
+                <strong>{activeUser.name.toUpperCase()}</strong>
+                <small>{activeUser.email}</small>
+              </p>
+              <button type="button" aria-label="Cerrar cuenta" onClick={() => setAccountMenuOpen(false)}>
+                <span>⌃</span>
+              </button>
             </div>
-            <button type="button" onClick={() => openPage("purchases")}>Mis compras</button>
-            <button type="button" onClick={() => openPage("messages")}>
-              Mensajes{unreadMessageCount ? ` (${Math.min(unreadMessageCount, 99)})` : ""}
+            <button className="account-menu__add" type="button" onClick={() => openPage("help")}>
+              <span aria-hidden="true" />
+              Agregar cuenta
             </button>
-            <button type="button" onClick={() => setPublishOpen(true)}>Vender</button>
+            <button className="account-menu__meli" type="button" onClick={() => openPage("help")}>
+              meli+ Viví Mercado Libre como un experto <span>›</span>
+            </button>
+            <div className="account-menu__section">
+              <button type="button" onClick={() => openPage("purchases")}>Compras</button>
+              <button type="button" onClick={() => submitSearch("historial")}>Historial</button>
+              <button
+                type="button"
+                onClick={() => {
+                  setHelpTopic("buy");
+                  openPage("help");
+                }}
+              >
+                Preguntas
+              </button>
+              <button type="button" onClick={() => openPage("purchases")}>Opiniones</button>
+            </div>
+            <div className="account-menu__section">
+              <button type="button" onClick={() => openPage("coupons")}>Créditos</button>
+              <button type="button" onClick={() => openCategory("streaming")}>Suscripciones</button>
+              <button type="button" onClick={() => openCategory("streaming")}>
+                Mercado Play <span className="account-menu__free">GRATIS</span>
+              </button>
+            </div>
+            <div className="account-menu__section">
+              <button type="button" onClick={() => setPublishOpen(true)}>Vender</button>
+              <button type="button" onClick={() => openPage("messages")}>
+                Resumen{unreadMessageCount ? ` (${Math.min(unreadMessageCount, 99)})` : ""}
+              </button>
+            </div>
             <button
+              className="account-menu__logout"
               type="button"
               onClick={async () => {
                 setAccountMenuOpen(false);
