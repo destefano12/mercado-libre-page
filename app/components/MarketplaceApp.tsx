@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { FormEvent } from "react";
 import mercadoLibreLogo from "@/IMG/official/mercado-libre-logo.webp";
 import homeHero from "@/IMG/official/home-hero.webp";
 import headerOffer from "@/IMG/official/header-offer.webp";
@@ -50,7 +51,82 @@ type ViewName =
   | "favorites"
   | "messages"
   | "help"
-  | "cart";
+  | "cart"
+  | "jobs"
+  | "work"
+  | "work-admin";
+
+interface WorkApplication {
+  id: string;
+  userId: string;
+  userName: string;
+  robloxUsername: string;
+  robloxUserId: string;
+  discordUsername: string;
+  discordId: string;
+  email: string;
+  age: number;
+  characterName: string;
+  rpExperience: string;
+  workExperience: string;
+  availability: string;
+  desiredWork: string;
+  additionalInfo: string;
+  status: "pending" | "accepted" | "rejected";
+  reviewNote: string;
+  createdAt: string;
+}
+
+interface WorkerProfile {
+  available: boolean;
+  completedCount: number;
+  totalRewards: number;
+  totalKm: number;
+  totalMinutes: number;
+  level: number;
+  xp: number;
+}
+
+interface WorkOrder {
+  id: string;
+  kind: string;
+  product: string;
+  quantity: number;
+  clientName: string;
+  address: string;
+  house: string;
+  distanceKm: number;
+  reward: number;
+  etaMinutes: number;
+  difficulty: string;
+  status: "offered" | "active" | "delivered" | "cancelled";
+  coordinationNote: string;
+  createdAt: string;
+}
+
+interface WorkSnapshot {
+  application: WorkApplication | null;
+  worker: WorkerProfile | null;
+  orders: WorkOrder[];
+  isAdmin: boolean;
+  applications: WorkApplication[];
+}
+
+const emptyWorkForm = {
+  robloxUsername: "",
+  robloxUserId: "",
+  discordUsername: "",
+  discordId: "",
+  email: "",
+  age: "",
+  characterName: "",
+  rpExperience: "",
+  workExperience: "",
+  availability: "",
+  desiredWork: "Repartidor",
+  additionalInfo: "",
+  termsAccepted: false,
+};
 
 function assetSource(asset: string | { src: string }) {
   return typeof asset === "string" ? asset : asset.src;
@@ -216,6 +292,18 @@ function TruckIcon() {
   );
 }
 
+function WorkIcon() {
+  return (
+    <svg className="ml-nav-icon ml-nav-icon--work" viewBox="0 0 24 22" aria-hidden="true">
+      <path d="M3 7.5h12v9H3v-9Z" />
+      <path d="M15 10h3.2l2.8 3v3.5h-6V10Z" />
+      <path d="M7 19a1.8 1.8 0 1 0 0-3.6A1.8 1.8 0 0 0 7 19Z" />
+      <path d="M18 19a1.8 1.8 0 1 0 0-3.6A1.8 1.8 0 0 0 18 19Z" />
+      <path d="M5 5h7" />
+    </svg>
+  );
+}
+
 function CreditIcon() {
   return (
     <svg className="service-icon" viewBox="0 0 28 28" aria-hidden="true">
@@ -262,6 +350,11 @@ export function MarketplaceApp() {
   const [locationDraft, setLocationDraft] = useState("");
   const [locationError, setLocationError] = useState("");
   const [locationSaving, setLocationSaving] = useState(false);
+  const [workState, setWorkState] = useState<WorkSnapshot | null>(null);
+  const [workLoading, setWorkLoading] = useState(false);
+  const [workError, setWorkError] = useState("");
+  const [workSubmitting, setWorkSubmitting] = useState(false);
+  const [workForm, setWorkForm] = useState(emptyWorkForm);
 
   useEffect(() => {
     const timer = window.setInterval(actions.advanceShipments, 2400);
@@ -300,6 +393,37 @@ export function MarketplaceApp() {
       JSON.stringify({ favorites: favoriteIds, cart: cartIds }),
     );
   }, [activeUser, cartIds, favoriteIds, preferencesReady]);
+
+  const loadWorkSnapshot = useCallback(async () => {
+    if (!activeUser) {
+      setWorkState(null);
+      return null;
+    }
+    setWorkLoading(true);
+    setWorkError("");
+    try {
+      const response = await fetch("/api/work", { cache: "no-store" });
+      const result = await response.json() as WorkSnapshot | { error?: string };
+      if (!response.ok) {
+        setWorkError("error" in result && result.error ? result.error : "No se pudo cargar el sistema laboral");
+        return null;
+      }
+      setWorkState(result as WorkSnapshot);
+      return result as WorkSnapshot;
+    } catch {
+      setWorkError("No se pudo conectar con el sistema laboral");
+      return null;
+    } finally {
+      setWorkLoading(false);
+    }
+  }, [activeUser]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadWorkSnapshot();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadWorkSnapshot]);
 
   const selectedListing = useMemo(
     () => state.listings.find((listing) => listing.id === selectedListingId),
@@ -428,6 +552,9 @@ export function MarketplaceApp() {
         : [],
     [selectedListing, state.listings],
   );
+  const offeredWorkOrder = workState?.orders.find((order) => order.status === "offered") ?? null;
+  const activeWorkOrder = workState?.orders.find((order) => order.status === "active") ?? null;
+  const deliveredWorkOrders = workState?.orders.filter((order) => order.status === "delivered") ?? [];
 
   function goHome() {
     setView("home");
@@ -567,6 +694,55 @@ export function MarketplaceApp() {
     openPage("purchases");
   }
 
+  async function submitWorkApplication(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setWorkSubmitting(true);
+    setWorkError("");
+    try {
+      const response = await fetch("/api/work", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "apply", ...workForm, age: Number(workForm.age) }),
+      });
+      const result = await response.json() as WorkSnapshot | { error?: string };
+      if (!response.ok) {
+        setWorkError("error" in result && result.error ? result.error : "No se pudo enviar la solicitud");
+        return;
+      }
+      setWorkState(result as WorkSnapshot);
+    } catch {
+      setWorkError("No se pudo conectar con el sistema laboral");
+    } finally {
+      setWorkSubmitting(false);
+    }
+  }
+
+  async function runWorkAction(input: Record<string, unknown>) {
+    setWorkSubmitting(true);
+    setWorkError("");
+    try {
+      const response = await fetch("/api/work", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const result = await response.json() as WorkSnapshot | { error?: string };
+      if (!response.ok) {
+        setWorkError("error" in result && result.error ? result.error : "No se pudo procesar la accion");
+        return;
+      }
+      setWorkState(result as WorkSnapshot);
+    } catch {
+      setWorkError("No se pudo conectar con el sistema laboral");
+    } finally {
+      setWorkSubmitting(false);
+    }
+  }
+
+  function updateWorkForm(field: keyof typeof emptyWorkForm, value: string | boolean) {
+    setWorkForm((previous) => ({ ...previous, [field]: value }));
+  }
+
   if (!activeUser) {
     return (
       <main className="marketplace-shell marketplace-shell--auth">
@@ -700,6 +876,17 @@ export function MarketplaceApp() {
               <span className="nav-chevron">⌄</span>
             </button>
             <button type="button" onClick={() => openPage("purchases")}>Mis compras</button>
+            {workState?.worker ? (
+              <button
+                className="worker-nav-button"
+                type="button"
+                title="Panel de trabajador"
+                onClick={() => openPage("work")}
+              >
+                <WorkIcon />
+                Trabajo
+              </button>
+            ) : null}
             <button
               className={favoritesMenuOpen ? "is-open" : ""}
               type="button"
@@ -1730,6 +1917,233 @@ export function MarketplaceApp() {
         </section>
       ) : null}
 
+      {view === "jobs" ? (
+        <section className="special-page work-page">
+          <div className="breadcrumb">
+            <button type="button" onClick={goHome}>Inicio</button><span>&gt;</span><span>Trabaja con nosotros</span>
+          </div>
+          <div className="work-hero">
+            <div>
+              <span>Mercado Libre RP</span>
+              <h1>Trabaja con nosotros</h1>
+              <p>Postulate para formar parte del equipo de entregas, asistencia y servicios dentro del roleplay.</p>
+            </div>
+            {workState?.isAdmin ? (
+              <button type="button" onClick={() => openPage("work-admin")}>Panel administrativo</button>
+            ) : null}
+          </div>
+
+          {workError ? <p className="work-alert" role="alert">{workError}</p> : null}
+          {workLoading ? <div className="work-card">Cargando solicitud...</div> : null}
+
+          {workState?.application?.status === "pending" ? (
+            <div className="work-status-card">
+              <span>Pendiente</span>
+              <h2>Tu solicitud esta en revision</h2>
+              <p>Un administrador revisara tus datos de Roblox, Discord, experiencia y disponibilidad.</p>
+            </div>
+          ) : null}
+
+          {workState?.application?.status === "accepted" ? (
+            <div className="work-status-card work-status-card--accepted">
+              <span>Aceptada</span>
+              <h2>Ya sos trabajador de Mercado Libre RP</h2>
+              <p>Desde tu panel podes activar disponibilidad, recibir pedidos, completar entregas y ver recompensas.</p>
+              <button type="button" onClick={() => openPage("work")}>Ir al panel de trabajador</button>
+            </div>
+          ) : null}
+
+          {workState?.application?.status === "rejected" ? (
+            <div className="work-status-card">
+              <span>Rechazada</span>
+              <h2>La solicitud anterior fue rechazada</h2>
+              <p>{workState.application.reviewNote || "Podes volver a postularte completando mejor la informacion."}</p>
+            </div>
+          ) : null}
+
+          {!workState?.application || workState.application.status === "rejected" ? (
+            <form className="work-form" onSubmit={submitWorkApplication}>
+              <div className="work-form__heading">
+                <h2>Formulario de postulacion</h2>
+                <p>Los datos se guardan en tu cuenta y solo pueden revisarlos administradores autorizados.</p>
+              </div>
+              <div className="work-form__grid">
+                <label>Usuario de Roblox<input required value={workForm.robloxUsername} onChange={(event) => updateWorkForm("robloxUsername", event.target.value)} /></label>
+                <label>User ID de Roblox<input required inputMode="numeric" value={workForm.robloxUserId} onChange={(event) => updateWorkForm("robloxUserId", event.target.value)} /></label>
+                <label>Usuario de Discord<input required value={workForm.discordUsername} onChange={(event) => updateWorkForm("discordUsername", event.target.value)} /></label>
+                <label>ID de Discord<input required inputMode="numeric" value={workForm.discordId} onChange={(event) => updateWorkForm("discordId", event.target.value)} /></label>
+                <label>Correo electronico<input required type="email" value={workForm.email} onChange={(event) => updateWorkForm("email", event.target.value)} /></label>
+                <label>Edad<input required min="13" max="80" type="number" value={workForm.age} onChange={(event) => updateWorkForm("age", event.target.value)} /></label>
+                <label>Nombre del personaje<input required value={workForm.characterName} onChange={(event) => updateWorkForm("characterName", event.target.value)} /></label>
+                <label>Tipo de trabajo
+                  <select value={workForm.desiredWork} onChange={(event) => updateWorkForm("desiredWork", event.target.value)}>
+                    <option>Repartidor</option>
+                    <option>Conductor</option>
+                    <option>Mecanico</option>
+                    <option>Transporte de vehiculos</option>
+                    <option>Atencion y soporte</option>
+                  </select>
+                </label>
+              </div>
+              <label>Experiencia previa en roleplay<textarea required minLength={20} value={workForm.rpExperience} onChange={(event) => updateWorkForm("rpExperience", event.target.value)} /></label>
+              <label>Experiencia como repartidor, conductor u otros trabajos<textarea required minLength={10} value={workForm.workExperience} onChange={(event) => updateWorkForm("workExperience", event.target.value)} /></label>
+              <label>Disponibilidad<textarea required value={workForm.availability} onChange={(event) => updateWorkForm("availability", event.target.value)} placeholder="Ej.: lunes a viernes 18 a 22 hs" /></label>
+              <label>Informacion adicional<textarea value={workForm.additionalInfo} onChange={(event) => updateWorkForm("additionalInfo", event.target.value)} /></label>
+              <label className="work-terms">
+                <input required type="checkbox" checked={workForm.termsAccepted} onChange={(event) => updateWorkForm("termsAccepted", event.target.checked)} />
+                Acepto los terminos y condiciones de Mercado Libre RP.
+              </label>
+              <button className="work-primary" type="submit" disabled={workSubmitting}>
+                {workSubmitting ? "Enviando..." : "Enviar solicitud"}
+              </button>
+            </form>
+          ) : null}
+        </section>
+      ) : null}
+
+      {view === "work-admin" ? (
+        <section className="special-page work-page">
+          <div className="breadcrumb">
+            <button type="button" onClick={goHome}>Inicio</button><span>&gt;</span><span>Panel administrativo</span>
+          </div>
+          <div className="special-heading">
+            <div>
+              <h1>Solicitudes laborales</h1>
+              <p>Revision de postulantes para Mercado Libre RP.</p>
+            </div>
+            <button type="button" onClick={() => void loadWorkSnapshot()}>Actualizar</button>
+          </div>
+          {workError ? <p className="work-alert" role="alert">{workError}</p> : null}
+          {!workState?.isAdmin ? (
+            <div className="account-empty">
+              <h2>Acceso restringido</h2>
+              <p>Solo administradores autorizados pueden revisar solicitudes.</p>
+            </div>
+          ) : (
+            <div className="work-admin-list">
+              {workState.applications.length ? workState.applications.map((application) => (
+                <article className="work-admin-card" key={application.id}>
+                  <div>
+                    <span className={`work-status work-status--${application.status}`}>{application.status}</span>
+                    <h2>{application.userName}</h2>
+                    <p>{application.email} - {application.age} anos - {application.desiredWork}</p>
+                  </div>
+                  <dl>
+                    <div><dt>Roblox</dt><dd>{application.robloxUsername} ({application.robloxUserId})</dd></div>
+                    <div><dt>Discord</dt><dd>{application.discordUsername} ({application.discordId})</dd></div>
+                    <div><dt>Personaje</dt><dd>{application.characterName}</dd></div>
+                    <div><dt>Disponibilidad</dt><dd>{application.availability}</dd></div>
+                    <div><dt>Experiencia RP</dt><dd>{application.rpExperience}</dd></div>
+                    <div><dt>Experiencia laboral</dt><dd>{application.workExperience}</dd></div>
+                  </dl>
+                  {application.additionalInfo ? <p className="work-admin-card__note">{application.additionalInfo}</p> : null}
+                  <div className="work-admin-card__actions">
+                    <button type="button" disabled={workSubmitting || application.status === "accepted"} onClick={() => runWorkAction({ action: "review", applicationId: application.id, status: "accepted" })}>Aceptar</button>
+                    <button type="button" disabled={workSubmitting || application.status === "rejected"} onClick={() => runWorkAction({ action: "review", applicationId: application.id, status: "rejected", reviewNote: "La solicitud no cumple los requisitos actuales." })}>Rechazar</button>
+                  </div>
+                </article>
+              )) : (
+                <div className="account-empty">
+                  <h2>No hay solicitudes</h2>
+                  <p>Cuando alguien se postule, aparecera en este panel.</p>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      ) : null}
+
+      {view === "work" ? (
+        <section className="special-page work-page">
+          <div className="breadcrumb">
+            <button type="button" onClick={goHome}>Inicio</button><span>&gt;</span><span>Trabajo</span>
+          </div>
+          <div className="work-dashboard-head">
+            <div>
+              <span>Panel del trabajador</span>
+              <h1>Mercado Libre RP Entregas</h1>
+              <p>{workState?.worker?.available ? "Estas disponible para recibir pedidos." : "Activa tu disponibilidad para comenzar."}</p>
+            </div>
+            <div className="work-dashboard-head__actions">
+              <button type="button" onClick={() => runWorkAction({ action: "setAvailability", available: true })} disabled={workSubmitting || !workState?.worker || workState.worker.available}>Comenzar a trabajar</button>
+              <button type="button" onClick={() => runWorkAction({ action: "setAvailability", available: false })} disabled={workSubmitting || !workState?.worker || !workState.worker.available}>Dejar de trabajar</button>
+            </div>
+          </div>
+          {workError ? <p className="work-alert" role="alert">{workError}</p> : null}
+          {!workState?.worker ? (
+            <div className="account-empty">
+              <h2>Todavia no estas aceptado</h2>
+              <p>Primero tenes que enviar la postulacion y esperar la aprobacion de un administrador.</p>
+              <button type="button" onClick={() => openPage("jobs")}>Ir a la postulacion</button>
+            </div>
+          ) : (
+            <>
+              <div className="work-stats">
+                <article><span>Pedidos completados</span><strong>{workState.worker.completedCount}</strong></article>
+                <article><span>Recompensas</span><strong>{formatPrice(workState.worker.totalRewards)}</strong></article>
+                <article><span>Kilometros</span><strong>{workState.worker.totalKm}</strong></article>
+                <article><span>Nivel</span><strong>{workState.worker.level}</strong><small>{workState.worker.xp} XP</small></article>
+              </div>
+
+              <div className="work-order-layout">
+                <section className="work-card">
+                  <div className="work-card__heading">
+                    <span>{activeWorkOrder ? "Pedido activo" : offeredWorkOrder ? "Pedido recibido" : "Sin pedido activo"}</span>
+                    {!activeWorkOrder && !offeredWorkOrder && workState.worker.available ? (
+                      <button type="button" onClick={() => runWorkAction({ action: "generateOrder" })} disabled={workSubmitting}>Buscar pedido</button>
+                    ) : null}
+                  </div>
+                  {activeWorkOrder || offeredWorkOrder ? (
+                    <article className="work-order-card">
+                      {(() => {
+                        const order = activeWorkOrder ?? offeredWorkOrder;
+                        if (!order) return null;
+                        return (
+                          <>
+                            <span className={`work-order-kind work-order-kind--${order.kind}`}>{order.kind === "vehicle" ? "Servicio vehicular" : order.kind === "supermarket" ? "Supermercado" : "Producto general"}</span>
+                            <h2>{order.product}</h2>
+                            <p><strong>Producto:</strong> {order.product} x{order.quantity}</p>
+                            <p><strong>Cliente:</strong> {order.clientName}</p>
+                            <p><strong>Direccion de entrega:</strong> {order.address}, casa {order.house}</p>
+                            <p><strong>Distancia:</strong> {order.distanceKm} km - <strong>ETA:</strong> {order.etaMinutes} min</p>
+                            <p><strong>Recompensa:</strong> {formatPrice(order.reward)}</p>
+                            {order.coordinationNote ? <p className="work-order-card__coordination">{order.coordinationNote}</p> : null}
+                            {order.status === "offered" ? (
+                              <button type="button" onClick={() => runWorkAction({ action: "acceptOrder", orderId: order.id })} disabled={workSubmitting}>Aceptar pedido</button>
+                            ) : (
+                              <button type="button" onClick={() => runWorkAction({ action: "completeOrder", orderId: order.id })} disabled={workSubmitting}>Marcar como entregado</button>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </article>
+                  ) : (
+                    <p className="work-empty">No hay pedidos en curso. Cuando estes disponible, el sistema generara una orden aleatoria para tu cuenta.</p>
+                  )}
+                </section>
+
+                <section className="work-card">
+                  <div className="work-card__heading"><span>Historial de entregas</span></div>
+                  {deliveredWorkOrders.length ? (
+                    <div className="work-history">
+                      {deliveredWorkOrders.map((order) => (
+                        <article key={order.id}>
+                          <strong>{order.product}</strong>
+                          <span>{order.address} {order.house}</span>
+                          <small>{formatPrice(order.reward)} - {order.distanceKm} km</small>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="work-empty">Tus entregas completadas quedaran registradas aca.</p>
+                  )}
+                </section>
+              </div>
+            </>
+          )}
+        </section>
+      ) : null}
+
       {view === "messages" ? (
         <MessagesView
           activeUser={activeUser}
@@ -1848,7 +2262,7 @@ export function MarketplaceApp() {
 
       <footer className="site-footer">
         <div>
-          <span>Trabajá con nosotros</span>
+          <button type="button" onClick={() => openPage("jobs")}>Trabaja con nosotros</button>
           <span>Términos y condiciones</span>
           <span>Promociones</span>
           <span>Cómo cuidamos tu privacidad</span>

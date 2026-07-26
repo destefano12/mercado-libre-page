@@ -309,6 +309,11 @@ button {
   height: 22px;
 }
 
+.ml-nav-icon--work {
+  width: 24px;
+  height: 22px;
+}
+
 .nav-links,
 .account-links {
   display: flex;
@@ -329,6 +334,12 @@ button {
 .nav-links button:hover,
 .account-links button:hover {
   color: #000;
+}
+
+.worker-nav-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .nav-chevron {
@@ -2705,6 +2716,17 @@ button {
   gap: 20px;
 }
 
+.site-footer button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+}
+
+.site-footer button:hover {
+  color: var(--blue);
+}
+
 .site-footer p {
   margin: 18px 0 0;
   color: #777;
@@ -3345,6 +3367,334 @@ button {
   background: var(--blue);
   border-radius: 6px;
   font-weight: 600;
+}
+
+.work-page {
+  color: var(--text);
+}
+
+.work-hero,
+.work-dashboard-head,
+.work-form,
+.work-card,
+.work-status-card,
+.work-admin-card {
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.work-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 30px 34px;
+  border-top: 5px solid var(--yellow);
+}
+
+.work-hero span,
+.work-dashboard-head span,
+.work-form__heading p,
+.work-card__heading span,
+.work-status-card > span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.work-hero h1,
+.work-dashboard-head h1 {
+  margin: 5px 0 8px;
+  font-size: 30px;
+  font-weight: 500;
+}
+
+.work-hero p,
+.work-dashboard-head p,
+.work-status-card p,
+.work-empty {
+  margin: 0;
+  color: var(--muted);
+  line-height: 22px;
+}
+
+.work-hero button,
+.work-primary,
+.work-dashboard-head__actions button:first-child,
+.work-card__heading button,
+.work-order-card button,
+.work-status-card button,
+.work-admin-card__actions button:first-child {
+  min-height: 42px;
+  padding: 0 22px;
+  color: #fff;
+  border: 0;
+  background: var(--blue);
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.work-alert {
+  margin: 18px 0 0;
+  padding: 13px 16px;
+  color: #8a5300;
+  background: #fff5d6;
+  border: 1px solid #f1d48a;
+  border-radius: 6px;
+}
+
+.work-form,
+.work-status-card,
+.work-dashboard-head,
+.work-card {
+  margin-top: 18px;
+  padding: 26px;
+}
+
+.work-form__heading {
+  margin-bottom: 22px;
+}
+
+.work-form__heading h2,
+.work-status-card h2,
+.work-card h2,
+.work-admin-card h2 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 500;
+}
+
+.work-form__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.work-form label {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 16px;
+  color: #333;
+  font-size: 14px;
+}
+
+.work-form input,
+.work-form select,
+.work-form textarea {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid #d8d8d8;
+  border-radius: 6px;
+  background: #fff;
+  font: inherit;
+}
+
+.work-form textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.work-terms {
+  display: flex !important;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px !important;
+}
+
+.work-terms input {
+  width: 18px;
+  min-height: 18px;
+}
+
+.work-status-card {
+  border-left: 5px solid #f5c242;
+}
+
+.work-status-card--accepted {
+  border-left-color: #00a650;
+}
+
+.work-dashboard-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.work-dashboard-head__actions {
+  display: flex;
+  gap: 10px;
+}
+
+.work-dashboard-head__actions button:last-child,
+.work-admin-card__actions button:last-child {
+  min-height: 42px;
+  padding: 0 22px;
+  color: var(--blue);
+  border: 1px solid #d9e7ff;
+  background: #eef4ff;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.work-dashboard-head button:disabled,
+.work-primary:disabled,
+.work-order-card button:disabled,
+.work-admin-card__actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.work-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin: 18px 0;
+}
+
+.work-stats article {
+  display: grid;
+  gap: 5px;
+  padding: 18px;
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 6px;
+}
+
+.work-stats span,
+.work-stats small {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.work-stats strong {
+  font-size: 25px;
+  font-weight: 500;
+}
+
+.work-order-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+  gap: 18px;
+}
+
+.work-card__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.work-order-card {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  background: #f7f7f7;
+  border-radius: 6px;
+}
+
+.work-order-card p {
+  margin: 0;
+  line-height: 22px;
+}
+
+.work-order-kind,
+.work-status {
+  width: fit-content;
+  padding: 4px 8px;
+  color: #006b38;
+  background: #e7f8ef;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.work-order-kind--vehicle,
+.work-status--pending {
+  color: #8a5300;
+  background: #fff3d0;
+}
+
+.work-status--rejected {
+  color: #a61010;
+  background: #ffe8e8;
+}
+
+.work-order-card__coordination {
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+}
+
+.work-history {
+  display: grid;
+  gap: 10px;
+}
+
+.work-history article {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  background: #f7f7f7;
+  border-radius: 6px;
+}
+
+.work-history span,
+.work-history small {
+  color: var(--muted);
+}
+
+.work-admin-list {
+  display: grid;
+  gap: 14px;
+}
+
+.work-admin-card {
+  padding: 22px;
+}
+
+.work-admin-card > div:first-child {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.work-admin-card p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.work-admin-card dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 18px;
+  margin: 18px 0;
+}
+
+.work-admin-card dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.work-admin-card dd {
+  margin: 3px 0 0;
+  line-height: 20px;
+}
+
+.work-admin-card__note {
+  padding: 12px;
+  background: #f7f7f7;
+  border-radius: 6px;
+}
+
+.work-admin-card__actions {
+  display: flex;
+  gap: 10px;
 }
 
 .empty-heart {
@@ -4369,8 +4719,18 @@ button {
   }
 
   .cart-layout,
-  .help-layout {
+  .help-layout,
+  .work-order-layout {
     grid-template-columns: 1fr;
+  }
+
+  .work-form__grid,
+  .work-admin-card dl {
+    grid-template-columns: 1fr;
+  }
+
+  .work-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .sale-type-grid {
@@ -4598,6 +4958,28 @@ button {
   }
 
   .help-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .work-hero,
+  .work-dashboard-head {
+    display: grid;
+    padding: 22px 18px;
+  }
+
+  .work-dashboard-head__actions,
+  .work-admin-card__actions {
+    flex-wrap: wrap;
+  }
+
+  .work-form,
+  .work-card,
+  .work-status-card,
+  .work-admin-card {
+    padding: 20px 16px;
+  }
+
+  .work-stats {
     grid-template-columns: 1fr;
   }
 

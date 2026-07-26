@@ -38,6 +38,40 @@ test("server-renders the Mercado Live marketplace shell", async () => {
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
 });
 
+test("adds the Mercado Libre RP work application and worker flow", async () => {
+  const page = await readFile(
+    new URL("../app/components/MarketplaceApp.tsx", import.meta.url),
+    "utf8",
+  );
+  const workRoute = await readFile(
+    new URL("../app/api/work/route.ts", import.meta.url),
+    "utf8",
+  );
+  const stylesheet = await readFile(
+    new URL("../app/globals.css", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(page, /\"jobs\"/);
+  assert.match(page, /\"work-admin\"/);
+  assert.match(page, /submitWorkApplication/);
+  assert.match(page, /Panel del trabajador/);
+  assert.match(page, /Pedido recibido/);
+  assert.match(page, /Panel administrativo/);
+  assert.match(page, /Trabaja con nosotros/);
+  assert.match(workRoute, /authenticateRequest/);
+  assert.match(workRoute, /isWorkAdmin/);
+  assert.match(workRoute, /marketplace_work_applications/);
+  assert.match(workRoute, /marketplace_workers/);
+  assert.match(workRoute, /marketplace_work_orders/);
+  assert.match(workRoute, /status IN \('pending', 'accepted'\)/);
+  assert.match(workRoute, /reward = template\.base/);
+  assert.match(workRoute, /WHERE id = \? AND worker_id = \? AND status = 'offered'/);
+  assert.match(stylesheet, /\.work-form/);
+  assert.match(stylesheet, /\.work-order-card/);
+  assert.match(stylesheet, /\.worker-nav-button/);
+});
+
 test("lets users update delivery location and keeps cart icons consistent", async () => {
   const page = await readFile(
     new URL("../app/components/MarketplaceApp.tsx", import.meta.url),
