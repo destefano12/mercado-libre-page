@@ -292,6 +292,12 @@ test("keeps accounts private and routes messages through authenticated APIs", as
   assert.match(store, /updateLocation/);
   assert.match(serverAuth, /PBKDF2/);
   assert.match(serverAuth, /HttpOnly/);
+  assert.match(authRoute, /revokeCurrentSession/);
+  assert.match(serverAuth, /DELETE FROM marketplace_sessions WHERE token_hash = \?/);
+  assert.doesNotMatch(serverAuth, /DELETE FROM marketplace_sessions WHERE user_id = \?/);
+  assert.match(store, /const logout = useCallback/);
+  assert.doesNotMatch(store, /logout[\s\S]{0,500}broadcast\(/);
+  assert.doesNotMatch(store, /logout[\s\S]{0,500}pushRemote\(/);
   assert.match(serverAuth, /ALTER TABLE marketplace_accounts ADD COLUMN password_hash/);
   assert.match(serverAuth, /ALTER TABLE marketplace_accounts ADD COLUMN password_salt/);
 });

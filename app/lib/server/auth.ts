@@ -241,7 +241,7 @@ export async function authenticateRequest(
   return toProfile(row);
 }
 
-export async function revokeSession(
+export async function revokeCurrentSession(
   request: Request,
   database: MarketplaceDatabase,
 ) {
@@ -255,6 +255,8 @@ export async function revokeSession(
   }
   return cookieHeader(request, "", 0);
 }
+
+export const revokeSession = revokeCurrentSession;
 
 export function accountRowToProfile(row: AccountRow) {
   return toProfile(row);

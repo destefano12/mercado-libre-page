@@ -7,7 +7,7 @@ import {
   findAccountByEmail,
   getDatabase,
   passwordMatches,
-  revokeSession,
+  revokeCurrentSession,
 } from "../../lib/server/auth";
 
 interface AuthInput {
@@ -162,7 +162,7 @@ export async function DELETE(request: Request) {
   try {
     const database = await getDatabase();
     await ensureAuthTables(database);
-    const expiredCookie = await revokeSession(request, database);
+    const expiredCookie = await revokeCurrentSession(request, database);
     return json({ ok: true }, 200, { "set-cookie": expiredCookie });
   } catch {
     return json({ ok: true });
