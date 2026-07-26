@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from "react";
 import type { Shipment } from "../data/marketplace";
-import erlcDeliveryMap from "@/IMG/official/erlc-delivery-map.webp";
+import erlcDeliveryMap from "@/IMG/official/erlc-delivery-map-numbered.png";
 
 interface ShippingMapProps {
   shipment?: Shipment;
@@ -22,8 +22,12 @@ export interface LiveCourierLocation {
 
 const creationPoint = { label: "Creacion 303", x: 49.6, y: 79.7 };
 const hubPoint = { label: "Reparto / retiro 308", x: 47.8, y: 61.1 };
-const MAP_IMAGE_LEFT_PERCENT = 12.5;
-const MAP_IMAGE_WIDTH_PERCENT = 75;
+const MAP_IMAGE_LEFT_PERCENT = 14.25;
+const MAP_IMAGE_WIDTH_PERCENT = 71.5;
+const NUMBERED_MAP_LEFT_PERCENT = 20.5;
+const NUMBERED_MAP_TOP_PERCENT = 15.45;
+const NUMBERED_MAP_WIDTH_PERCENT = 79.5;
+const NUMBERED_MAP_HEIGHT_PERCENT = 84.55;
 
 const exactHousePoints: Record<string, { label: string; x: number; y: number }> = {
   "200": { label: "Postal 200", x: 13.2, y: 84.3 },
@@ -126,10 +130,21 @@ function clampPercent(value: number, min = 4, max = 96) {
 }
 
 function mapImagePoint(point: { x: number; y: number }) {
+  const xInsideImage =
+    NUMBERED_MAP_LEFT_PERCENT + point.x * (NUMBERED_MAP_WIDTH_PERCENT / 100);
   return {
-    x: Number((MAP_IMAGE_LEFT_PERCENT + point.x * (MAP_IMAGE_WIDTH_PERCENT / 100)).toFixed(2)),
-    y: point.y,
+    x: Number((MAP_IMAGE_LEFT_PERCENT + xInsideImage * (MAP_IMAGE_WIDTH_PERCENT / 100)).toFixed(2)),
+    y: Number((NUMBERED_MAP_TOP_PERCENT + point.y * (NUMBERED_MAP_HEIGHT_PERCENT / 100)).toFixed(2)),
   };
+}
+
+function mapRenderedLeftPercent() {
+  return MAP_IMAGE_LEFT_PERCENT +
+    NUMBERED_MAP_LEFT_PERCENT * (MAP_IMAGE_WIDTH_PERCENT / 100);
+}
+
+function mapRenderedWidthPercent() {
+  return NUMBERED_MAP_WIDTH_PERCENT * (MAP_IMAGE_WIDTH_PERCENT / 100);
 }
 
 function mapPointStyle(point: { x: number; y: number }) {
@@ -228,8 +243,8 @@ export function ShippingMap({ shipment, courierLocation }: ShippingMapProps) {
         <div
           className="gps-map__route"
           style={{
-            "--route-left": `${MAP_IMAGE_LEFT_PERCENT}%`,
-            "--route-width": `${(routeProgress / 100) * MAP_IMAGE_WIDTH_PERCENT}%`,
+            "--route-left": `${mapRenderedLeftPercent()}%`,
+            "--route-width": `${(routeProgress / 100) * mapRenderedWidthPercent()}%`,
           } as CSSProperties}
         />
         {route.map((point, index) => (
