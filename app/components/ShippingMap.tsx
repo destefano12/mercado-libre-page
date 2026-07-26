@@ -59,16 +59,20 @@ const exactHousePoints: Record<string, { label: string; x: number; y: number }> 
   "702": { label: "Vivienda 702", x: 29.3, y: 50.8 },
   "703": { label: "Vivienda 703", x: 38.4, y: 47.2 },
   "704": { label: "Vivienda 704", x: 19.1, y: 44.4 },
+  "7041": { label: "Vivienda 7041", x: 18.1, y: 39.8 },
+  "7042": { label: "Vivienda 7042", x: 19.0, y: 39.8 },
+  "7043": { label: "Vivienda 7043", x: 17.9, y: 43.2 },
+  "7044": { label: "Vivienda 7044", x: 19.6, y: 43.3 },
   "705": { label: "Vivienda 705", x: 27.4, y: 43.2 },
   "706": { label: "Vivienda 706", x: 33.3, y: 44.9 },
   "707": { label: "Vivienda 707", x: 39.0, y: 42.8 },
   "708": { label: "Vivienda 708", x: 18.0, y: 40.2 },
   "709": { label: "Vivienda 709", x: 26.3, y: 38.2 },
-  "7091": { label: "Vivienda 7091", x: 23.7, y: 35.8 },
-  "7092": { label: "Vivienda 7092", x: 26.0, y: 35.7 },
-  "7093": { label: "Vivienda 7093", x: 28.3, y: 35.8 },
-  "7094": { label: "Vivienda 7094", x: 23.9, y: 38.6 },
-  "7095": { label: "Vivienda 7095", x: 29.0, y: 38.6 },
+  "7091": { label: "Vivienda 7091", x: 20.7, y: 32.0 },
+  "7092": { label: "Vivienda 7092", x: 23.5, y: 32.0 },
+  "7093": { label: "Vivienda 7093", x: 26.1, y: 32.0 },
+  "7094": { label: "Vivienda 7094", x: 20.8, y: 33.6 },
+  "7095": { label: "Vivienda 7095", x: 26.8, y: 33.7 },
   "710": { label: "Vivienda 710", x: 33.8, y: 37.2 },
   "711": { label: "Vivienda 711", x: 24.4, y: 33.0 },
   "405": { label: "Vivienda 405", x: 18.6, y: 60.4 },
@@ -90,9 +94,9 @@ const mapHousingZones = [
 
 function destinationZoneFor(destination: string) {
   const digits = destination.match(/\d+/)?.[0] ?? "";
-  const exactKey = exactPointKeyForDigits(digits);
-  if (exactKey) {
-    return exactHousePoints[exactKey];
+  const exactPoint = exactPointForDigits(digits);
+  if (exactPoint) {
+    return exactPoint;
   }
   return (
     mapHousingZones.find((zone) =>
@@ -101,10 +105,26 @@ function destinationZoneFor(destination: string) {
   );
 }
 
-function exactPointKeyForDigits(digits: string) {
-  return Object.keys(exactHousePoints)
+function exactPointForDigits(digits: string) {
+  if (!digits) {
+    return null;
+  }
+  const exactKey = Object.keys(exactHousePoints)
     .sort((first, second) => second.length - first.length)
     .find((key) => digits === key || digits.startsWith(key));
+  return exactKey ? exactHousePoints[exactKey] : null;
+}
+
+function addressPointFor(location: LiveCourierLocation) {
+  const buildingPoint = exactPointForDigits(location.buildingNumber ?? "");
+  if (buildingPoint) {
+    return buildingPoint;
+  }
+  const postalPoint = exactPointForDigits(location.postalCode ?? "");
+  if (postalPoint) {
+    return postalPoint;
+  }
+  return null;
 }
 
 function pointBehindHome(home: { label: string; x: number; y: number }) {
@@ -171,11 +191,9 @@ function courierPointFor(location?: LiveCourierLocation | null) {
   if (!location) {
     return null;
   }
+  const addressPoint = addressPointFor(location);
   const exact = worldToMapPoint(location);
-  const addressPoint = destinationZoneFor(
-    location.buildingNumber ?? location.postalCode ?? "",
-  );
-  const base = exact ?? addressPoint;
+  const base = addressPoint ?? exact;
   if (!base) {
     return null;
   }

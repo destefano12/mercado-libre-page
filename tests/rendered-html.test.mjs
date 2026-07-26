@@ -271,6 +271,9 @@ test("tracks delivery courier location from ERLC players on the shipment map", a
   assert.match(shippingMap, /NUMBERED_MAP_LEFT_PERCENT/);
   assert.match(shippingMap, /mapPointStyle/);
   assert.match(shippingMap, /PostalCode|postalCode/);
+  assert.match(shippingMap, /addressPointFor/);
+  assert.match(shippingMap, /addressPoint \?\? exact/);
+  assert.match(shippingMap, /Vivienda 7042/);
   assert.match(shippingMap, /🛵/);
   assert.match(stylesheet, /gps-map__vehicle small/);
   assert.match(stylesheet, /is-courier/);
@@ -411,6 +414,7 @@ test("uses the ERLC map for shipment tracking zones", async () => {
   assert.match(store, /destinationZoneFor/);
   assert.match(store, /exactHousePoints/);
   assert.match(store, /Vivienda 707/);
+  assert.match(store, /Vivienda 7042/);
   assert.match(store, /Vivienda 7094/);
   assert.match(store, /exactPointKeyForDigits/);
   assert.match(store, /routeForLocation\(result\.user\.location\)/);
