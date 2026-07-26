@@ -327,6 +327,9 @@ test("uses the ERLC map for shipment tracking zones", async () => {
   assert.match(shippingMap, /routeFor\(shipment\.destination\)/);
   assert.doesNotMatch(shippingMap, /shipment\.route\.map/);
   assert.match(store, /destinationZoneFor/);
+  assert.match(store, /exactHousePoints/);
+  assert.match(store, /Vivienda 707/);
+  assert.match(store, /routeForLocation\(result\.user\.location\)/);
   assert.match(store, /x: 49\.6, y: 79\.7/);
   assert.match(store, /x: 47\.8, y: 61\.1/);
   assert.match(store, /pointBehindHome/);

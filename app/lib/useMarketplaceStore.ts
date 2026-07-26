@@ -160,6 +160,25 @@ function getShipmentStatus(progress: number) {
 const creationPoint = { label: "Creacion 303", x: 49.6, y: 79.7 };
 const hubPoint = { label: "Reparto / retiro", x: 47.8, y: 61.1 };
 
+const exactHousePoints: Record<string, { label: string; x: number; y: number }> = {
+  "700": { label: "Vivienda 700", x: 11.3, y: 47.1 },
+  "701": { label: "Vivienda 701", x: 19.5, y: 51.1 },
+  "702": { label: "Vivienda 702", x: 29.3, y: 50.8 },
+  "703": { label: "Vivienda 703", x: 38.4, y: 47.2 },
+  "704": { label: "Vivienda 704", x: 19.1, y: 44.4 },
+  "705": { label: "Vivienda 705", x: 27.4, y: 43.2 },
+  "706": { label: "Vivienda 706", x: 33.3, y: 44.9 },
+  "707": { label: "Vivienda 707", x: 39.0, y: 42.8 },
+  "708": { label: "Vivienda 708", x: 18.0, y: 40.2 },
+  "709": { label: "Vivienda 709", x: 26.3, y: 38.2 },
+  "710": { label: "Vivienda 710", x: 33.8, y: 37.2 },
+  "711": { label: "Vivienda 711", x: 24.4, y: 33.0 },
+  "405": { label: "Vivienda 405", x: 18.6, y: 60.4 },
+  "907": { label: "Vivienda 907", x: 57.4, y: 31.4 },
+  "1104": { label: "Vivienda 1104", x: 80.3, y: 38.3 },
+  "1202": { label: "Vivienda 1202", x: 84.2, y: 65.4 },
+};
+
 const housingZones = [
   { prefixes: ["70", "71", "8"], label: "Vivienda 703", x: 22.2, y: 44.9 },
   { prefixes: ["40", "41", "2"], label: "Vivienda 405", x: 18.6, y: 60.4 },
@@ -170,6 +189,9 @@ const housingZones = [
 
 function destinationZoneFor(location: string) {
   const digits = location.match(/\d+/)?.[0] ?? "";
+  if (exactHousePoints[digits]) {
+    return exactHousePoints[digits];
+  }
   const zone = housingZones.find((candidate) =>
     candidate.prefixes.some((prefix) => digits.startsWith(prefix)),
   );
@@ -183,6 +205,16 @@ function pointBehindHome(home: { label: string; x: number; y: number }) {
     x: Number((home.x + (hubPoint.x - home.x) * 0.18).toFixed(1)),
     y: Number((home.y + (hubPoint.y - home.y) * 0.18).toFixed(1)),
   };
+}
+
+function routeForLocation(location: string) {
+  const destinationZone = destinationZoneFor(location);
+  return [
+    creationPoint,
+    hubPoint,
+    pointBehindHome(destinationZone),
+    { label: destinationZone.label, x: destinationZone.x, y: destinationZone.y },
+  ];
 }
 
 export function useMarketplaceStore() {
@@ -504,13 +536,26 @@ export function useMarketplaceStore() {
 
         sessionUserRef.current = result.user;
         setSessionUser(result.user);
-        setState((previous) => withAuthenticatedUser(previous, result.user ?? null));
+        commit((previous) => ({
+          ...withAuthenticatedUser(previous, result.user ?? null),
+          shipments: previous.shipments.map((shipment) =>
+            shipment.buyerId === result.user?.id &&
+            shipment.destination !== "Entrega online" &&
+            shipment.progress < 100
+              ? {
+                  ...shipment,
+                  destination: result.user.location,
+                  route: routeForLocation(result.user.location),
+                }
+              : shipment,
+          ),
+        }));
         return { ok: true, user: result.user };
       } catch {
         return { ok: false, error: "No se pudo conectar para actualizar la ubicación" };
       }
     },
-    [],
+    [commit],
   );
 
   const logout = useCallback(async () => {
@@ -709,7 +754,6 @@ export function useMarketplaceStore() {
 
         const digital = listing.condition === "Digital";
         const now = new Date().toISOString();
-        const destinationZone = destinationZoneFor(activeUser.location);
         return {
           ...previous,
           listings: previous.listings.map((candidate) =>
@@ -725,12 +769,7 @@ export function useMarketplaceStore() {
               status: digital ? "Acceso digital confirmado" : "Preparando paquete",
               progress: digital ? 100 : 8,
               etaMinutes: digital ? 0 : 72,
-              route: [
-                creationPoint,
-                hubPoint,
-                pointBehindHome(destinationZone),
-                { label: destinationZone.label, x: destinationZone.x, y: destinationZone.y },
-              ],
+              route: routeForLocation(activeUser.location),
             },
             ...previous.shipments,
           ],
