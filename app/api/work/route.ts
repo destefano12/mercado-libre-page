@@ -50,6 +50,10 @@ interface WorkerRow {
 interface WorkOrderRow {
   id: string;
   worker_id: string;
+  source_shipment_id: string | null;
+  listing_id: string | null;
+  buyer_id: string | null;
+  seller_id: string | null;
   kind: string;
   product: string;
   quantity: number;
@@ -65,6 +69,40 @@ interface WorkOrderRow {
   created_at: string;
   accepted_at: string | null;
   completed_at: string | null;
+}
+
+interface MarketplaceListing {
+  id: string;
+  title: string;
+  categoryId: string;
+  sellerId: string;
+  location: string;
+  condition: string;
+  source: "catalog" | "user";
+}
+
+interface MarketplaceUser {
+  id: string;
+  name: string;
+  location: string;
+}
+
+interface MarketplaceShipment {
+  id: string;
+  listingId: string;
+  buyerId: string;
+  origin: string;
+  destination: string;
+  status: string;
+  progress: number;
+  etaMinutes: number;
+  route?: Array<{ label: string; x: number; y: number }>;
+}
+
+interface MarketplaceSnapshot {
+  listings?: MarketplaceListing[];
+  users?: MarketplaceUser[];
+  shipments?: MarketplaceShipment[];
 }
 
 const noStoreHeaders = { "cache-control": "no-store" };
@@ -126,6 +164,10 @@ async function ensureWorkTables(database: MarketplaceDatabase) {
       `CREATE TABLE IF NOT EXISTS marketplace_work_orders (
         id TEXT PRIMARY KEY NOT NULL,
         worker_id TEXT NOT NULL,
+        source_shipment_id TEXT,
+        listing_id TEXT,
+        buyer_id TEXT,
+        seller_id TEXT,
         kind TEXT NOT NULL,
         product TEXT NOT NULL,
         quantity INTEGER NOT NULL,
@@ -147,6 +189,24 @@ async function ensureWorkTables(database: MarketplaceDatabase) {
       "CREATE INDEX IF NOT EXISTS marketplace_work_orders_worker_idx ON marketplace_work_orders(worker_id, status, created_at)",
     ),
   ]);
+
+  const migrations = [
+    "ALTER TABLE marketplace_work_orders ADD COLUMN source_shipment_id TEXT",
+    "ALTER TABLE marketplace_work_orders ADD COLUMN listing_id TEXT",
+    "ALTER TABLE marketplace_work_orders ADD COLUMN buyer_id TEXT",
+    "ALTER TABLE marketplace_work_orders ADD COLUMN seller_id TEXT",
+  ];
+  for (const migration of migrations) {
+    try {
+      await database.prepare(migration).run();
+    } catch {
+      // Existing databases may already have the column.
+    }
+  }
+
+  await database.prepare(
+    "CREATE UNIQUE INDEX IF NOT EXISTS marketplace_work_orders_shipment_idx ON marketplace_work_orders(source_shipment_id)",
+  ).run();
 }
 
 function normalize(value: unknown, max = 500) {
@@ -243,6 +303,10 @@ function mapOrder(row: WorkOrderRow) {
   return {
     id: row.id,
     workerId: row.worker_id,
+    sourceShipmentId: row.source_shipment_id ?? "",
+    listingId: row.listing_id ?? "",
+    buyerId: row.buyer_id ?? "",
+    sellerId: row.seller_id ?? "",
     kind: row.kind,
     product: row.product,
     quantity: row.quantity,
@@ -261,71 +325,153 @@ function mapOrder(row: WorkOrderRow) {
   };
 }
 
-function pick<T>(items: T[]) {
-  const bytes = crypto.getRandomValues(new Uint32Array(1));
-  return items[bytes[0] % items.length];
-}
-
 function randomBetween(min: number, max: number) {
   const bytes = crypto.getRandomValues(new Uint32Array(1));
   return min + (bytes[0] % (max - min + 1));
 }
 
-const orderTemplates = [
-  {
-    kind: "supermarket",
-    products: ["Pack de agua mineral", "Bolsa de alimentos", "Productos de limpieza", "Compra semanal", "Caja de bebidas"],
-    base: 1300,
-  },
-  {
-    kind: "general",
-    products: ["Caja de herramientas", "Accesorios tecnologicos", "Paquete de hogar", "Repuesto pequeno", "Bolsa de encomiendas"],
-    base: 1600,
-  },
-  {
-    kind: "vehicle",
-    products: ["Asistencia mecanica", "Traslado de vehiculo", "Entrega de repuestos", "Revision de auto", "Coordinacion de auxilio"],
-    base: 2400,
-  },
-];
+async function readMarketplaceSnapshot(database: MarketplaceDatabase) {
+  const row = await database.prepare(
+    "SELECT payload FROM marketplace_realtime WHERE id = ?",
+  )
+    .bind("marketplace")
+    .first<{ payload: string }>();
+  if (!row) {
+    return null;
+  }
 
-const clients = ["Mateo Rios", "Camila Torres", "Lucas Medina", "Sofia Acosta", "Benjamin Duarte", "Valentina Molina"];
-const addresses = [
-  { address: "Pineview Circle", house: "7043", km: 4.2 },
-  { address: "Fairfax Road", house: "4055", km: 2.8 },
-  { address: "Lakeview Court", house: "9072", km: 3.6 },
-  { address: "Oak Valley Drive", house: "1202", km: 6.1 },
-  { address: "Cedar Street", house: "1104", km: 5.4 },
-  { address: "Georgia Avenue", house: "3061", km: 1.7 },
-];
+  try {
+    return JSON.parse(row.payload) as MarketplaceSnapshot;
+  } catch {
+    return null;
+  }
+}
 
-function buildOrder(workerId: string) {
-  const template = pick(orderTemplates);
-  const destination = pick(addresses);
-  const difficulty = template.kind === "vehicle"
-    ? pick(["Coordinacion", "Alta"])
-    : pick(["Normal", "Media", "Rapida"]);
-  const distance = Number((destination.km + randomBetween(0, 18) / 10).toFixed(1));
-  const reward = template.base + Math.round(distance * 190) + randomBetween(0, 4) * 150;
-  const eta = Math.max(6, Math.round(distance * 4) + randomBetween(4, 11));
+function distanceFor(shipment: MarketplaceShipment) {
+  const route = shipment.route ?? [];
+  const start = route[1] ?? route[0];
+  const end = route[route.length - 1];
+  if (!start || !end) {
+    return Number((2 + randomBetween(0, 30) / 10).toFixed(1));
+  }
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  return Number(Math.max(1.2, Math.hypot(dx, dy) / 7).toFixed(1));
+}
+
+function orderKindFor(categoryId: string) {
+  if (categoryId === "supermercado") {
+    return "supermarket";
+  }
+  if (categoryId === "vehiculos" || categoryId === "accesorios-vehiculos") {
+    return "vehicle";
+  }
+  return "general";
+}
+
+function rewardFor(kind: string, distance: number) {
+  const base = kind === "vehicle" ? 2600 : kind === "supermarket" ? 1400 : 1700;
+  return base + Math.round(distance * 210);
+}
+
+function buildOrderFromShipment(
+  workerId: string,
+  listing: MarketplaceListing,
+  buyer: MarketplaceUser | undefined,
+  shipment: MarketplaceShipment,
+) {
+  const kind = orderKindFor(listing.categoryId);
+  const distance = distanceFor(shipment);
+  const eta = shipment.etaMinutes > 0
+    ? shipment.etaMinutes
+    : Math.max(8, Math.round(distance * 5) + 6);
 
   return {
     id: `work-order-${crypto.randomUUID()}`,
     workerId,
-    kind: template.kind,
-    product: pick(template.products),
-    quantity: template.kind === "vehicle" ? 1 : randomBetween(1, 6),
-    clientName: pick(clients),
-    address: destination.address,
-    house: destination.house,
+    sourceShipmentId: shipment.id,
+    listingId: listing.id,
+    buyerId: shipment.buyerId,
+    sellerId: listing.sellerId,
+    kind,
+    product: listing.title,
+    quantity: 1,
+    clientName: buyer?.name ?? "Comprador",
+    address: shipment.destination,
+    house: shipment.destination.match(/\d+/)?.[0] ?? shipment.destination,
     distanceKm: distance,
-    reward,
+    reward: rewardFor(kind, distance),
     etaMinutes: eta,
-    difficulty,
-    coordinationNote: template.kind === "vehicle"
-      ? "Este pedido requiere coordinar con el cliente dentro del roleplay antes de marcarlo como entregado."
+    difficulty: kind === "vehicle" ? "Coordinacion" : distance > 5 ? "Media" : "Normal",
+    coordinationNote: kind === "vehicle"
+      ? "Este pedido viene de una compra real de vehiculos o repuestos y requiere coordinar con comprador y vendedor dentro del roleplay."
       : "",
   };
+}
+
+async function findRealPendingShipment(database: MarketplaceDatabase, workerId: string) {
+  const snapshot = await readMarketplaceSnapshot(database);
+  const shipments = Array.isArray(snapshot?.shipments) ? snapshot.shipments : [];
+  const listings = Array.isArray(snapshot?.listings) ? snapshot.listings : [];
+  const users = Array.isArray(snapshot?.users) ? snapshot.users : [];
+
+  for (const shipment of shipments) {
+    if (
+      shipment.destination === "Entrega online" ||
+      shipment.progress >= 100 ||
+      shipment.status.toLowerCase().includes("entregado")
+    ) {
+      continue;
+    }
+    const listing = listings.find((candidate) => candidate.id === shipment.listingId);
+    if (!listing || listing.source !== "user" || listing.condition === "Digital") {
+      continue;
+    }
+    if (listing.sellerId === workerId || shipment.buyerId === workerId) {
+      continue;
+    }
+    const assigned = await database.prepare(
+      "SELECT id FROM marketplace_work_orders WHERE source_shipment_id = ? LIMIT 1",
+    )
+      .bind(shipment.id)
+      .first<{ id: string }>();
+    if (assigned) {
+      continue;
+    }
+    return {
+      listing,
+      buyer: users.find((candidate) => candidate.id === shipment.buyerId),
+      shipment,
+    };
+  }
+
+  return null;
+}
+
+async function markShipmentDelivered(database: MarketplaceDatabase, shipmentId: string | null) {
+  if (!shipmentId) {
+    return;
+  }
+  const snapshot = await readMarketplaceSnapshot(database);
+  if (!snapshot || !Array.isArray(snapshot.shipments)) {
+    return;
+  }
+  const shipments = snapshot.shipments.map((shipment) =>
+    shipment.id === shipmentId
+      ? { ...shipment, status: "Entregado", progress: 100, etaMinutes: 0 }
+      : shipment,
+  );
+  await database.prepare(
+    `INSERT INTO marketplace_realtime (id, payload, updated_at)
+     VALUES (?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at`,
+  )
+    .bind(
+      "marketplace",
+      JSON.stringify({ ...snapshot, shipments }),
+      new Date().toISOString(),
+    )
+    .run();
 }
 
 async function isWorkAdmin(database: MarketplaceDatabase, user: AuthenticatedProfile) {
@@ -375,7 +521,8 @@ async function currentWorker(database: MarketplaceDatabase, userId: string) {
 
 async function currentOrders(database: MarketplaceDatabase, userId: string) {
   const result = await database.prepare(
-    `SELECT id, worker_id, kind, product, quantity, client_name, address, house,
+    `SELECT id, worker_id, source_shipment_id, listing_id, buyer_id, seller_id,
+            kind, product, quantity, client_name, address, house,
             distance_km, reward, eta_minutes, difficulty, status, coordination_note,
             created_at, accepted_at, completed_at
      FROM marketplace_work_orders
@@ -430,7 +577,8 @@ async function requireWorker(database: MarketplaceDatabase, userId: string) {
 
 async function ensureOfferedOrder(database: MarketplaceDatabase, workerId: string) {
   const existing = await database.prepare(
-    `SELECT id, worker_id, kind, product, quantity, client_name, address, house,
+    `SELECT id, worker_id, source_shipment_id, listing_id, buyer_id, seller_id,
+            kind, product, quantity, client_name, address, house,
             distance_km, reward, eta_minutes, difficulty, status, coordination_note,
             created_at, accepted_at, completed_at
      FROM marketplace_work_orders
@@ -444,18 +592,32 @@ async function ensureOfferedOrder(database: MarketplaceDatabase, workerId: strin
     return existing;
   }
 
-  const order = buildOrder(workerId);
+  const source = await findRealPendingShipment(database, workerId);
+  if (!source) {
+    return null;
+  }
+  const order = buildOrderFromShipment(
+    workerId,
+    source.listing,
+    source.buyer,
+    source.shipment,
+  );
   const now = new Date().toISOString();
   await database.prepare(
     `INSERT INTO marketplace_work_orders (
-      id, worker_id, kind, product, quantity, client_name, address, house,
+      id, worker_id, source_shipment_id, listing_id, buyer_id, seller_id,
+      kind, product, quantity, client_name, address, house,
       distance_km, reward, eta_minutes, difficulty, status, coordination_note,
       created_at, accepted_at, completed_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'offered', ?, ?, NULL, NULL)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'offered', ?, ?, NULL, NULL)`,
   )
     .bind(
       order.id,
       workerId,
+      order.sourceShipmentId,
+      order.listingId,
+      order.buyerId,
+      order.sellerId,
       order.kind,
       order.product,
       order.quantity,
@@ -472,7 +634,8 @@ async function ensureOfferedOrder(database: MarketplaceDatabase, workerId: strin
     .run();
 
   return database.prepare(
-    `SELECT id, worker_id, kind, product, quantity, client_name, address, house,
+    `SELECT id, worker_id, source_shipment_id, listing_id, buyer_id, seller_id,
+            kind, product, quantity, client_name, address, house,
             distance_km, reward, eta_minutes, difficulty, status, coordination_note,
             created_at, accepted_at, completed_at
      FROM marketplace_work_orders
@@ -655,12 +818,18 @@ export async function POST(request: Request) {
     if (action === "completeOrder") {
       const orderId = normalize(input.orderId, 90);
       const order = await database.prepare(
-        `SELECT id, reward, distance_km, eta_minutes
+        `SELECT id, source_shipment_id, reward, distance_km, eta_minutes
          FROM marketplace_work_orders
          WHERE id = ? AND worker_id = ? AND status = 'active'`,
       )
         .bind(orderId, user.id)
-        .first<{ id: string; reward: number; distance_km: number; eta_minutes: number }>();
+        .first<{
+          id: string;
+          source_shipment_id: string | null;
+          reward: number;
+          distance_km: number;
+          eta_minutes: number;
+        }>();
       if (!order) {
         return json({ error: "No tenes ese pedido activo" }, 409);
       }
@@ -687,6 +856,7 @@ export async function POST(request: Request) {
         )
           .bind(order.reward, order.distance_km, order.eta_minutes, xp, xp, now, user.id),
       ]);
+      await markShipmentDelivered(database, order.source_shipment_id);
       return json(await snapshot(database, user));
     }
 

@@ -761,7 +761,7 @@ export function MarketplaceApp() {
   }
 
   return (
-    <main className="marketplace-shell">
+    <main className={`marketplace-shell${workState?.worker ? " marketplace-shell--worker" : ""}`}>
       <header className="site-header">
         <div className="header-primary">
           <button className="logo-button" type="button" onClick={goHome} aria-label="Ir al inicio">
@@ -1978,7 +1978,6 @@ export function MarketplaceApp() {
                 <label>Tipo de trabajo
                   <select value={workForm.desiredWork} onChange={(event) => updateWorkForm("desiredWork", event.target.value)}>
                     <option>Repartidor</option>
-                    <option>Conductor</option>
                     <option>Mecanico</option>
                     <option>Transporte de vehiculos</option>
                     <option>Atencion y soporte</option>
@@ -2118,7 +2117,7 @@ export function MarketplaceApp() {
                       })()}
                     </article>
                   ) : (
-                    <p className="work-empty">No hay pedidos en curso. Cuando estes disponible, el sistema generara una orden aleatoria para tu cuenta.</p>
+                    <p className="work-empty">No hay pedidos en curso. Cuando haya compras reales entre usuarios con envio pendiente, apareceran aca para el trabajador disponible.</p>
                   )}
                 </section>
 
