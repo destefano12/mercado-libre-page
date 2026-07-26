@@ -220,6 +220,19 @@ test("keeps Liberty County trial products removed from the catalog", async () =>
   assert.match(store, /u-erlc-catalog/);
 });
 
+test("keeps the ERLC private server key behind a backend route", async () => {
+  const erlcRoute = await readFile(new URL("../app/api/erlc/route.ts", import.meta.url), "utf8");
+  const page = await readFile(new URL("../app/components/MarketplaceApp.tsx", import.meta.url), "utf8");
+  const gitignore = await readFile(new URL("../.gitignore", import.meta.url), "utf8");
+
+  assert.match(erlcRoute, /https:\/\/api\.erlc\.gg/);
+  assert.match(erlcRoute, /\/v2\/server/);
+  assert.match(erlcRoute, /"server-key": serverKey/);
+  assert.match(erlcRoute, /ERLC_API_KEY/);
+  assert.doesNotMatch(page, /ERLC_API_KEY|server-key/);
+  assert.match(gitignore, /\.env\*/);
+});
+
 test("keeps accounts private and routes messages through authenticated APIs", async () => {
   const authModal = await readFile(
     new URL("../app/components/AuthModal.tsx", import.meta.url),
