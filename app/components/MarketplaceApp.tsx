@@ -548,7 +548,13 @@ export function MarketplaceApp() {
     );
   }, [activeFilters, resultCategoryId, resultQuery, sortMode, state.listings]);
   const purchases = useMemo(
-    () => state.shipments.filter((shipment) => shipment.buyerId === activeUser?.id),
+    () =>
+      state.shipments.filter((shipment) =>
+        shipment.buyerId === activeUser?.id &&
+        shipment.progress < 100 &&
+        !shipment.status.toLowerCase().includes("entregado") &&
+        !shipment.status.toLowerCase().includes("confirmado"),
+      ),
     [activeUser?.id, state.shipments],
   );
   const trackedCourierIds = useMemo(

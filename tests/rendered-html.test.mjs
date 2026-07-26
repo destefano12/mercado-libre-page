@@ -98,6 +98,19 @@ test("lets users update delivery location and keeps cart icons consistent", asyn
   assert.match(stylesheet, /\.empty-cart \.ml-nav-icon/);
 });
 
+test("removes delivered purchases from the visible purchases tray", async () => {
+  const page = await readFile(new URL("../app/components/MarketplaceApp.tsx", import.meta.url), "utf8");
+  const store = await readFile(new URL("../app/lib/useMarketplaceStore.ts", import.meta.url), "utf8");
+  const workRoute = await readFile(new URL("../app/api/work/route.ts", import.meta.url), "utf8");
+
+  assert.match(page, /shipment\.progress < 100/);
+  assert.match(page, /!shipment\.status\.toLowerCase\(\)\.includes\("entregado"\)/);
+  assert.match(store, /function isFinishedShipment/);
+  assert.match(store, /\.filter\(\(shipment\) => !isFinishedShipment\(shipment\)\)/);
+  assert.match(workRoute, /const finished = update\.progress >= 100/);
+  assert.match(workRoute, /snapshot\.shipments\.filter\(\(shipment\) => shipment\.id !== shipmentId\)/);
+});
+
 test("matches official empty favorites and purchases surfaces", async () => {
   const page = await readFile(
     new URL("../app/components/MarketplaceApp.tsx", import.meta.url),
@@ -216,7 +229,8 @@ test("keeps Liberty County trial products removed from the catalog", async () =>
   assert.doesNotMatch(marketplace, /@\/IMG\/erlc/);
   assert.match(store, /RETIRED_LISTING_IDS/);
   assert.match(store, /cleanRetiredMarketplaceState/);
-  assert.match(store, /shipments\.filter\(\(shipment\) => !RETIRED_LISTING_IDS\.has\(shipment\.listingId\)\)/);
+  assert.match(store, /!RETIRED_LISTING_IDS\.has\(shipment\.listingId\) &&/);
+  assert.match(store, /!isFinishedShipment\(shipment\)/);
   assert.match(store, /u-erlc-catalog/);
 });
 

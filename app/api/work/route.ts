@@ -476,19 +476,22 @@ async function updateShipmentStage(
   if (!snapshot || !Array.isArray(snapshot.shipments)) {
     return;
   }
-  const shipments = snapshot.shipments.map((shipment) =>
-    shipment.id === shipmentId
-      ? {
-          ...shipment,
-          status: update.status,
-          progress: update.progress,
-          etaMinutes: update.etaMinutes ?? shipment.etaMinutes,
-          courierId: update.courierId ?? shipment.courierId,
-          courierRobloxUserId: update.courierRobloxUserId ?? shipment.courierRobloxUserId,
-          courierRobloxUsername: update.courierRobloxUsername ?? shipment.courierRobloxUsername,
-        }
-      : shipment,
-  );
+  const finished = update.progress >= 100 || update.status.toLowerCase().includes("entregado");
+  const shipments = finished
+    ? snapshot.shipments.filter((shipment) => shipment.id !== shipmentId)
+    : snapshot.shipments.map((shipment) =>
+        shipment.id === shipmentId
+          ? {
+              ...shipment,
+              status: update.status,
+              progress: update.progress,
+              etaMinutes: update.etaMinutes ?? shipment.etaMinutes,
+              courierId: update.courierId ?? shipment.courierId,
+              courierRobloxUserId: update.courierRobloxUserId ?? shipment.courierRobloxUserId,
+              courierRobloxUsername: update.courierRobloxUsername ?? shipment.courierRobloxUsername,
+            }
+          : shipment,
+      );
   await database.prepare(
     `INSERT INTO marketplace_realtime (id, payload, updated_at)
      VALUES (?, ?, ?)

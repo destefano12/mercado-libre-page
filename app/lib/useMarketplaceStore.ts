@@ -103,7 +103,10 @@ function cleanRetiredMarketplaceState(state: MarketplaceState): MarketplaceState
       ? state.chats.filter((thread) => !RETIRED_LISTING_IDS.has(thread.listingId))
       : [],
     shipments: Array.isArray(state.shipments)
-      ? state.shipments.filter((shipment) => !RETIRED_LISTING_IDS.has(shipment.listingId))
+      ? state.shipments.filter((shipment) =>
+          !RETIRED_LISTING_IDS.has(shipment.listingId) &&
+          !isFinishedShipment(shipment),
+        )
       : [],
     notifications: Array.isArray(state.notifications)
       ? state.notifications.filter((notification) => !/Liberty County|Strugatti|Falcon Traveller|GadgetShack|Three Guys|Tool Store/i.test(notification.text))
@@ -185,6 +188,15 @@ function getShipmentStatus(progress: number) {
   }
 
   return "Preparando paquete";
+}
+
+function isFinishedShipment(shipment: { progress: number; status: string }) {
+  const status = shipment.status.toLowerCase();
+  return (
+    shipment.progress >= 100 ||
+    status.includes("entregado") ||
+    status.includes("confirmado")
+  );
 }
 
 const creationPoint = { label: "Creacion 303", x: 49.6, y: 79.7 };
@@ -892,19 +904,21 @@ export function useMarketplaceStore() {
     setState((previous) => {
       const next = {
         ...previous,
-        shipments: previous.shipments.map((shipment) => {
-          if (shipment.progress >= 100) {
-            return shipment;
-          }
+        shipments: previous.shipments
+          .map((shipment) => {
+            if (shipment.progress >= 100) {
+              return shipment;
+            }
 
-          const nextProgress = Math.min(100, shipment.progress + 3);
-          return {
-            ...shipment,
-            progress: nextProgress,
-            etaMinutes: Math.max(0, shipment.etaMinutes - 2),
-            status: getShipmentStatus(nextProgress),
-          };
-        }),
+            const nextProgress = Math.min(100, shipment.progress + 3);
+            return {
+              ...shipment,
+              progress: nextProgress,
+              etaMinutes: Math.max(0, shipment.etaMinutes - 2),
+              status: getShipmentStatus(nextProgress),
+            };
+          })
+          .filter((shipment) => !isFinishedShipment(shipment)),
       };
       saveState(next);
       return next;
