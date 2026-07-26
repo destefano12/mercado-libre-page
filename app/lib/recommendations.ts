@@ -99,9 +99,24 @@ export function inferCategoryFromText(query: string): CategoryId | undefined {
   if (/casa|departamento|ph|ambiente|alquiler|venta|inmueble/.test(value)) return "inmuebles";
   if (/hbo|disney|prime|stream|pelicula|serie|max|video/.test(value)) return "streaming";
   if (/iphone|samsung|notebook|celular|tecnologia|apple|lenovo/.test(value)) return "tecnologia";
+  if (/internacional|importado|importacion|courier|usa|china/.test(value)) return "internacional";
   if (/zapatilla|ropa|moda|talle|campera|jean/.test(value)) return "moda";
+  if (/heladera|lavarropas|microondas|electrodomestico|aire acondicionado/.test(value)) return "electrodomesticos";
   if (/mueble|mesa|sillon|hogar|cocina|dormitorio/.test(value)) return "hogar";
   if (/taladro|herramienta|bosch|makita|dewalt/.test(value)) return "herramientas";
+  if (/construccion|cemento|pintura|sanitario|obra/.test(value)) return "construccion";
+  if (/deporte|fitness|gimnasio|running|bicicleta|futbol/.test(value)) return "deportes";
+  if (/repuesto|cubierta|accesorio vehiculo|audio auto/.test(value)) return "accesorios-vehiculos";
+  if (/negocio|comercio|gastronomia|posnet|mostrador/.test(value)) return "negocio";
+  if (/mascota|perro|gato|purina|alimento balanceado/.test(value)) return "mascotas";
+  if (/juego|juguete|muñeco|muneco|bloques/.test(value)) return "juegos";
+  if (/bebe|bebes|cochecito|silla para bebe/.test(value)) return "bebes";
+  if (/belleza|perfume|maquillaje|skin care|cuidado personal/.test(value)) return "belleza";
+  if (/salud|medico|ortopedia|tensiometro|insumo medico/.test(value)) return "salud";
+  if (/industria|oficina|deposito|seguridad laboral/.test(value)) return "industrias";
+  if (/agro|campo|semilla|tractor|maquinaria agricola/.test(value)) return "agro";
+  if (/sustentable|solar|reciclado|eco|reusable/.test(value)) return "sustentables";
+  if (/servicio|reparacion|instalacion|profesional/.test(value)) return "servicios";
   if (/super|limpieza|bebida|almacen|pack/.test(value)) return "supermercado";
   return undefined;
 }

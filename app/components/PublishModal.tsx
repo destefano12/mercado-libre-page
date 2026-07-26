@@ -9,7 +9,7 @@ interface PublishModalProps {
   onClose: () => void;
 }
 
-const categoryDefaults: Record<CategoryId, Record<string, string | number>> = {
+const categoryDefaults: Partial<Record<CategoryId, Record<string, string | number>>> = {
   vehiculos: { anio: "2024", kilometraje: "30.000 km", transmision: "Automatica", marca: "Toyota" },
   inmuebles: { ambientes: "2 ambientes", metros: "65 m2", ubicacion: "Palermo", operacion: "Alquiler" },
   streaming: { plataforma: "HBO Max", tipo: "Membresia", entrega: "Instantanea", duracion: "1 mes" },
@@ -20,7 +20,7 @@ const categoryDefaults: Record<CategoryId, Record<string, string | number>> = {
   supermercado: { pasillo: "Limpieza", marca: "Ala", pack: "6 unidades", entrega: "Hoy" },
 };
 
-const saleTypeDescriptions: Record<CategoryId, string> = {
+const saleTypeDescriptions: Partial<Record<CategoryId, string>> = {
   vehiculos: "Autos, motos y otros vehiculos",
   inmuebles: "Casas, departamentos y terrenos",
   streaming: "Servicios y accesos digitales",
@@ -31,7 +31,7 @@ const saleTypeDescriptions: Record<CategoryId, string> = {
   supermercado: "Alimentos, limpieza y consumo diario",
 };
 
-const titlePlaceholders: Record<CategoryId, string> = {
+const titlePlaceholders: Partial<Record<CategoryId, string>> = {
   vehiculos: "Ej.: Toyota Corolla 2021 automatico",
   inmuebles: "Ej.: Departamento 2 ambientes en Palermo",
   streaming: "Ej.: Acceso HBO Max 1 mes",
@@ -45,7 +45,7 @@ const titlePlaceholders: Record<CategoryId, string> = {
 function metadataFor(category: CategoryConfig, overrides: Record<string, string>) {
   return category.filters.reduce<Record<string, string>>((meta, filter) => {
     const key = filter.label.toLowerCase();
-    meta[key] = overrides[key] || String(categoryDefaults[category.id][key] ?? filter.values[0]);
+    meta[key] = overrides[key] || String(categoryDefaults[category.id]?.[key] ?? filter.values[0]);
     return meta;
   }, {});
 }
@@ -176,7 +176,7 @@ export function PublishModal({ onPublish, onClose }: PublishModalProps) {
                 >
                   <span />
                   <strong>{type.label}</strong>
-                  <small>{saleTypeDescriptions[type.id]}</small>
+                  <small>{saleTypeDescriptions[type.id] ?? "Productos, servicios o articulos de esta categoria"}</small>
                 </button>
               ))}
             </div>
@@ -203,7 +203,7 @@ export function PublishModal({ onPublish, onClose }: PublishModalProps) {
               <input
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
-                placeholder={titlePlaceholders[categoryId]}
+                placeholder={titlePlaceholders[categoryId] ?? `Ej.: Publicacion de ${category.label.toLowerCase()}`}
                 maxLength={60}
               />
               <small>{title.length}/60</small>
@@ -260,7 +260,7 @@ export function PublishModal({ onPublish, onClose }: PublishModalProps) {
               </label>
               {category.filters.map((filter) => {
                 const key = filter.label.toLowerCase();
-                const value = metaValues[key] || String(categoryDefaults[category.id][key] ?? filter.values[0]);
+                const value = metaValues[key] || String(categoryDefaults[category.id]?.[key] ?? filter.values[0]);
                 return (
                   <label className="publish-field" key={filter.label}>
                     {filter.label}

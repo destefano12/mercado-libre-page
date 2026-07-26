@@ -77,6 +77,34 @@ test("matches official empty favorites and purchases surfaces", async () => {
   assert.match(stylesheet, /min-height: 690px/);
 });
 
+test("includes the expanded official-style category menu", async () => {
+  const page = await readFile(
+    new URL("../app/components/MarketplaceApp.tsx", import.meta.url),
+    "utf8",
+  );
+  const marketplace = await readFile(
+    new URL("../app/data/marketplace.ts", import.meta.url),
+    "utf8",
+  );
+  const publishModal = await readFile(
+    new URL("../app/components/PublishModal.tsx", import.meta.url),
+    "utf8",
+  );
+  const recommendations = await readFile(
+    new URL("../app/lib/recommendations.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(page, /categoryMenuOrder/);
+  assert.match(page, /\"electrodomesticos\"/);
+  assert.match(page, /\"tiendas-oficiales\"/);
+  assert.match(marketplace, /label: \"Construccion\"/);
+  assert.match(marketplace, /label: \"Belleza y Cuidado Personal\"/);
+  assert.match(marketplace, /label: \"Salud y Equipamiento Medico\"/);
+  assert.match(publishModal, /Partial<Record<CategoryId/);
+  assert.match(recommendations, /return \"mascotas\"/);
+});
+
 test("keeps the product implementation wired to local IMG assets", async () => {
   const page = await readFile(new URL("../app/components/MarketplaceApp.tsx", import.meta.url), "utf8");
   const marketplace = await readFile(new URL("../app/data/marketplace.ts", import.meta.url), "utf8");

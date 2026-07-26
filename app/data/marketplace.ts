@@ -3,9 +3,26 @@ export type CategoryId =
   | "inmuebles"
   | "streaming"
   | "tecnologia"
+  | "internacional"
   | "moda"
   | "hogar"
+  | "electrodomesticos"
   | "herramientas"
+  | "construccion"
+  | "deportes"
+  | "accesorios-vehiculos"
+  | "negocio"
+  | "mascotas"
+  | "juegos"
+  | "bebes"
+  | "belleza"
+  | "salud"
+  | "industrias"
+  | "agro"
+  | "sustentables"
+  | "servicios"
+  | "mas-vendidos"
+  | "tiendas-oficiales"
   | "supermercado";
 
 export type ProductVisual =
@@ -160,6 +177,53 @@ export interface MarketplaceState {
   chats: ChatThread[];
   shipments: Shipment[];
   notifications: NotificationEvent[];
+}
+
+function marketCategory(input: {
+  id: CategoryId;
+  label: string;
+  navLabel?: string;
+  bannerTitle?: string;
+  bannerText?: string;
+  accent: string;
+  tint: string;
+  filters?: CategoryFilter[];
+  sortModes?: string[];
+  ads?: CategoryAd[];
+}): CategoryConfig {
+  return {
+    id: input.id,
+    label: input.label,
+    navLabel: input.navLabel ?? input.label,
+    layout: "market",
+    bannerTitle: input.bannerTitle ?? `${input.label} publicado por usuarios`,
+    bannerText:
+      input.bannerText ??
+      "Esta categoria se completa con publicaciones reales creadas por usuarios.",
+    accent: input.accent,
+    tint: input.tint,
+    filters: input.filters ?? [
+      { label: "Tipo", values: ["Nuevo", "Usado", "Servicio", "Accesorio"] },
+      { label: "Entrega", values: ["Hoy", "Programada", "Digital", "A coordinar"] },
+      { label: "Estado", values: ["Nuevo", "Usado"] },
+      { label: "Ubicacion", values: ["Cerca tuyo", "Zona norte", "Zona sur", "Online"] },
+    ],
+    sortModes: input.sortModes ?? ["Mas relevantes", "Menor precio", "Mas recientes", "Mas vistos"],
+    ads: input.ads ?? [
+      {
+        eyebrow: input.label,
+        title: "Publicaciones reales",
+        body: "Los productos aparecen cuando una cuenta los publica.",
+        metric: "P2P",
+      },
+      {
+        eyebrow: "Busquedas",
+        title: "Recomendaciones por cuenta",
+        body: "El historial de cada usuario alimenta resultados relacionados.",
+        metric: "Personal",
+      },
+    ],
+  };
 }
 
 export const categories: CategoryConfig[] = [
@@ -411,6 +475,207 @@ export const categories: CategoryConfig[] = [
       },
     ],
   },
+  marketCategory({
+    id: "internacional",
+    label: "Internacional",
+    accent: "#2563eb",
+    tint: "#edf4ff",
+    filters: [
+      { label: "Origen", values: ["Estados Unidos", "China", "Europa", "Brasil"] },
+      { label: "Entrega", values: ["Importacion", "Courier", "A coordinar"] },
+      { label: "Estado", values: ["Nuevo", "Usado"] },
+      { label: "Categoria", values: ["Tecnologia", "Moda", "Hogar", "Repuestos"] },
+    ],
+  }),
+  marketCategory({
+    id: "electrodomesticos",
+    label: "Electrodomesticos",
+    accent: "#0891b2",
+    tint: "#e6faff",
+    filters: [
+      { label: "Tipo", values: ["Heladera", "Lavarropas", "Cocina", "Aire acondicionado"] },
+      { label: "Marca", values: ["Samsung", "LG", "Whirlpool", "Drean"] },
+      { label: "Eficiencia", values: ["A", "B", "C"] },
+      { label: "Estado", values: ["Nuevo", "Usado"] },
+    ],
+  }),
+  marketCategory({
+    id: "construccion",
+    label: "Construccion",
+    accent: "#d97706",
+    tint: "#fff7ed",
+    filters: [
+      { label: "Rubro", values: ["Materiales", "Pintura", "Sanitarios", "Electricidad"] },
+      { label: "Unidad", values: ["Bolsa", "Metro", "Caja", "Kit"] },
+      { label: "Entrega", values: ["Obra", "Retiro", "A coordinar"] },
+      { label: "Estado", values: ["Nuevo", "Usado"] },
+    ],
+  }),
+  marketCategory({
+    id: "deportes",
+    label: "Deportes y Fitness",
+    accent: "#16a34a",
+    tint: "#ecfdf5",
+    filters: [
+      { label: "Deporte", values: ["Futbol", "Running", "Gimnasio", "Ciclismo"] },
+      { label: "Talle", values: ["S", "M", "L", "XL"] },
+      { label: "Estado", values: ["Nuevo", "Usado"] },
+      { label: "Entrega", values: ["Gratis", "A coordinar"] },
+    ],
+  }),
+  marketCategory({
+    id: "accesorios-vehiculos",
+    label: "Accesorios para Vehiculos",
+    navLabel: "Accesorios Vehiculos",
+    accent: "#475569",
+    tint: "#f1f5f9",
+    filters: [
+      { label: "Tipo", values: ["Repuesto", "Audio", "Cubiertas", "Accesorio"] },
+      { label: "Vehiculo", values: ["Auto", "Moto", "Camioneta"] },
+      { label: "Marca", values: ["Ford", "Toyota", "Volkswagen", "Honda"] },
+      { label: "Estado", values: ["Nuevo", "Usado"] },
+    ],
+  }),
+  marketCategory({
+    id: "negocio",
+    label: "Para tu Negocio",
+    accent: "#0f766e",
+    tint: "#ecfdf5",
+    filters: [
+      { label: "Rubro", values: ["Gastronomia", "Comercio", "Oficina", "Deposito"] },
+      { label: "Tipo", values: ["Maquina", "Mueble", "Insumo", "Servicio"] },
+      { label: "Estado", values: ["Nuevo", "Usado"] },
+      { label: "Entrega", values: ["Retiro", "A coordinar"] },
+    ],
+  }),
+  marketCategory({
+    id: "mascotas",
+    label: "Mascotas",
+    accent: "#ea580c",
+    tint: "#fff7ed",
+    filters: [
+      { label: "Mascota", values: ["Perros", "Gatos", "Aves", "Peces"] },
+      { label: "Tipo", values: ["Alimento", "Juguete", "Cama", "Accesorio"] },
+      { label: "Marca", values: ["Purina", "Royal Canin", "Vitalcan", "Otra"] },
+      { label: "Entrega", values: ["Hoy", "Programada"] },
+    ],
+  }),
+  marketCategory({
+    id: "juegos",
+    label: "Juegos y Juguetes",
+    accent: "#9333ea",
+    tint: "#f5f3ff",
+    filters: [
+      { label: "Edad", values: ["0-2", "3-5", "6-9", "10+"] },
+      { label: "Tipo", values: ["Juego de mesa", "Muñeco", "Bloques", "Consola"] },
+      { label: "Estado", values: ["Nuevo", "Usado"] },
+      { label: "Entrega", values: ["Gratis", "A coordinar"] },
+    ],
+  }),
+  marketCategory({
+    id: "bebes",
+    label: "Bebes",
+    accent: "#ec4899",
+    tint: "#fff1f2",
+    filters: [
+      { label: "Tipo", values: ["Cochecito", "Silla", "Ropa", "Higiene"] },
+      { label: "Edad", values: ["0-6 meses", "6-12 meses", "1-2 años", "3+"] },
+      { label: "Estado", values: ["Nuevo", "Usado"] },
+      { label: "Entrega", values: ["Gratis", "A coordinar"] },
+    ],
+  }),
+  marketCategory({
+    id: "belleza",
+    label: "Belleza y Cuidado Personal",
+    accent: "#db2777",
+    tint: "#fdf2f8",
+    filters: [
+      { label: "Tipo", values: ["Perfumes", "Maquillaje", "Pelo", "Skin care"] },
+      { label: "Marca", values: ["Natura", "Maybelline", "L'Oreal", "Otra"] },
+      { label: "Estado", values: ["Nuevo", "Usado"] },
+      { label: "Entrega", values: ["Hoy", "Programada"] },
+    ],
+  }),
+  marketCategory({
+    id: "salud",
+    label: "Salud y Equipamiento Medico",
+    accent: "#0284c7",
+    tint: "#eefaff",
+    filters: [
+      { label: "Tipo", values: ["Ortopedia", "Medicion", "Insumos", "Equipos"] },
+      { label: "Uso", values: ["Hogar", "Profesional", "Clinica"] },
+      { label: "Estado", values: ["Nuevo", "Usado"] },
+      { label: "Entrega", values: ["A coordinar", "Retiro"] },
+    ],
+  }),
+  marketCategory({
+    id: "industrias",
+    label: "Industrias y Oficinas",
+    accent: "#334155",
+    tint: "#f8fafc",
+    filters: [
+      { label: "Rubro", values: ["Oficina", "Industria", "Deposito", "Seguridad"] },
+      { label: "Tipo", values: ["Mueble", "Equipo", "Insumo", "Servicio"] },
+      { label: "Estado", values: ["Nuevo", "Usado"] },
+      { label: "Entrega", values: ["Retiro", "A coordinar"] },
+    ],
+  }),
+  marketCategory({
+    id: "agro",
+    label: "Agro",
+    accent: "#65a30d",
+    tint: "#f7fee7",
+    filters: [
+      { label: "Rubro", values: ["Maquinaria", "Semillas", "Herramientas", "Animales"] },
+      { label: "Uso", values: ["Campo", "Jardin", "Produccion"] },
+      { label: "Estado", values: ["Nuevo", "Usado"] },
+      { label: "Entrega", values: ["A coordinar", "Retiro"] },
+    ],
+  }),
+  marketCategory({
+    id: "sustentables",
+    label: "Productos Sustentables",
+    accent: "#059669",
+    tint: "#ecfdf5",
+    filters: [
+      { label: "Tipo", values: ["Solar", "Reciclado", "Ahorro energia", "Reusable"] },
+      { label: "Impacto", values: ["Bajo consumo", "Reciclable", "Eco"] },
+      { label: "Estado", values: ["Nuevo", "Usado"] },
+      { label: "Entrega", values: ["Gratis", "A coordinar"] },
+    ],
+  }),
+  marketCategory({
+    id: "servicios",
+    label: "Servicios",
+    accent: "#7c3aed",
+    tint: "#f5f3ff",
+    filters: [
+      { label: "Rubro", values: ["Hogar", "Tecnologia", "Eventos", "Profesional"] },
+      { label: "Modalidad", values: ["Presencial", "Online", "A domicilio"] },
+      { label: "Zona", values: ["Cerca tuyo", "Online", "A coordinar"] },
+      { label: "Disponibilidad", values: ["Hoy", "Semana", "Programada"] },
+    ],
+    sortModes: ["Mas relevantes", "Mas recientes", "Cerca tuyo", "Mejor rating"],
+  }),
+  marketCategory({
+    id: "mas-vendidos",
+    label: "Mas vendidos",
+    accent: "#f59e0b",
+    tint: "#fffbeb",
+    sortModes: ["Mas vendidos", "Mas vistos", "Menor precio", "Mas recientes"],
+  }),
+  marketCategory({
+    id: "tiendas-oficiales",
+    label: "Tiendas oficiales",
+    accent: "#1259c3",
+    tint: "#edf4ff",
+    filters: [
+      { label: "Tienda", values: ["Tecnologia", "Moda", "Hogar", "Supermercado"] },
+      { label: "Tipo", values: ["Catalogo", "Usuario verificado", "Marca"] },
+      { label: "Entrega", values: ["Full", "Gratis", "Programada"] },
+      { label: "Estado", values: ["Nuevo", "Usado"] },
+    ],
+  }),
 ];
 
 export const users: UserProfile[] = [

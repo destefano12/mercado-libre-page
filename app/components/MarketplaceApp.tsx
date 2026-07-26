@@ -65,7 +65,7 @@ const officialAssets = {
   paymentMethods: assetSource(paymentMethodsIcon),
 };
 
-const categoryImages: Record<CategoryId, string> = {
+const categoryImages: Partial<Record<CategoryId, string>> = {
   vehiculos: assetSource(categoryVehicles),
   inmuebles: assetSource(categoryProperties),
   streaming: assetSource(categoryStreaming),
@@ -75,6 +75,35 @@ const categoryImages: Record<CategoryId, string> = {
   herramientas: assetSource(categoryTools),
   supermercado: assetSource(categorySupermarket),
 };
+
+const fallbackCategoryImage = assetSource(categoryHome);
+
+const categoryMenuOrder: CategoryId[] = [
+  "vehiculos",
+  "inmuebles",
+  "supermercado",
+  "tecnologia",
+  "internacional",
+  "hogar",
+  "electrodomesticos",
+  "herramientas",
+  "construccion",
+  "deportes",
+  "accesorios-vehiculos",
+  "negocio",
+  "mascotas",
+  "moda",
+  "juegos",
+  "bebes",
+  "belleza",
+  "salud",
+  "industrias",
+  "agro",
+  "sustentables",
+  "servicios",
+  "mas-vendidos",
+  "tiendas-oficiales",
+];
 
 function useSelectedThread(
   state: ReturnType<typeof useMarketplaceStore>["state"],
@@ -115,7 +144,7 @@ function listingCategory(listing?: Listing) {
 function CategoryGlyph({ categoryId }: { categoryId: CategoryId }) {
   return (
     <span className={`category-glyph category-glyph--${categoryId}`}>
-      <img src={categoryImages[categoryId]} alt="" />
+      <img src={categoryImages[categoryId] ?? fallbackCategoryImage} alt="" />
     </span>
   );
 }
@@ -277,6 +306,13 @@ export function MarketplaceApp() {
     [query, state.listings],
   );
   const resultCategory = categories.find((category) => category.id === resultCategoryId);
+  const categoryMenuItems = useMemo(
+    () =>
+      categoryMenuOrder
+        .map((categoryId) => categories.find((category) => category.id === categoryId))
+        .filter((category): category is (typeof categories)[number] => Boolean(category)),
+    [],
+  );
   const resultListings = useMemo(() => {
     let listings = resultCategoryId
       ? sortListingsForCategory(state.listings, resultCategoryId, sortMode)
@@ -731,12 +767,15 @@ export function MarketplaceApp() {
             />
             <div className="category-menu">
               <div className="category-menu__list">
-                {categories.map((category) => (
+                {categoryMenuItems.map((category) => (
                   <button key={category.id} type="button" onClick={() => openCategory(category.id)}>
                     {category.label}
-                    <span>›</span>
+                    {category.id === "tecnologia" ? <span>›</span> : null}
                   </button>
                 ))}
+                <button type="button" onClick={() => openCategory("streaming")}>
+                  Ver mas categorias
+                </button>
               </div>
             </div>
           </>
