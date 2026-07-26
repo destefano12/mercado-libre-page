@@ -266,8 +266,8 @@ test("tracks delivery courier location from ERLC players on the shipment map", a
   assert.match(shippingMap, /worldToMapPoint/);
   assert.match(shippingMap, /worldX \* 0\.03547/);
   assert.match(shippingMap, /worldZ \* 0\.03532/);
-  assert.match(shippingMap, /MAP_IMAGE_LEFT_PERCENT = 14\.25/);
-  assert.match(shippingMap, /MAP_IMAGE_WIDTH_PERCENT = 71\.5/);
+  assert.match(shippingMap, /MAP_IMAGE_LEFT_PERCENT = 0/);
+  assert.match(shippingMap, /MAP_IMAGE_WIDTH_PERCENT = 100/);
   assert.match(shippingMap, /NUMBERED_MAP_LEFT_PERCENT/);
   assert.match(shippingMap, /mapPointStyle/);
   assert.match(shippingMap, /PostalCode|postalCode/);
@@ -399,11 +399,11 @@ test("uses the ERLC map for shipment tracking zones", async () => {
     "utf8",
   );
   const mapAsset = await stat(
-    new URL("../IMG/official/erlc-delivery-map-numbered.png", import.meta.url),
+    new URL("../IMG/official/erlc-delivery-map-numbered-4k.png", import.meta.url),
   );
 
-  assert.ok(mapAsset.size > 100_000);
-  assert.match(shippingMap, /erlc-delivery-map-numbered\.png/);
+  assert.ok(mapAsset.size > 1_000_000);
+  assert.match(shippingMap, /erlc-delivery-map-numbered-4k\.png/);
   assert.match(shippingMap, /Creacion 303/);
   assert.match(shippingMap, /Reparto \/ retiro 308/);
   assert.match(shippingMap, /routeFor\(shipment\.destination\)/);

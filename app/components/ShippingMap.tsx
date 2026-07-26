@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from "react";
 import type { Shipment } from "../data/marketplace";
-import erlcDeliveryMap from "@/IMG/official/erlc-delivery-map-numbered.png";
+import erlcDeliveryMap from "@/IMG/official/erlc-delivery-map-numbered-4k.png";
 
 interface ShippingMapProps {
   shipment?: Shipment;
@@ -22,12 +22,12 @@ export interface LiveCourierLocation {
 
 const creationPoint = { label: "Creacion 303", x: 49.6, y: 79.7 };
 const hubPoint = { label: "Reparto / retiro 308", x: 47.8, y: 61.1 };
-const MAP_IMAGE_LEFT_PERCENT = 14.25;
-const MAP_IMAGE_WIDTH_PERCENT = 71.5;
-const NUMBERED_MAP_LEFT_PERCENT = 20.5;
-const NUMBERED_MAP_TOP_PERCENT = 15.45;
-const NUMBERED_MAP_WIDTH_PERCENT = 79.5;
-const NUMBERED_MAP_HEIGHT_PERCENT = 84.55;
+const MAP_IMAGE_LEFT_PERCENT = 0;
+const MAP_IMAGE_WIDTH_PERCENT = 100;
+const NUMBERED_MAP_LEFT_PERCENT = 17.94;
+const NUMBERED_MAP_TOP_PERCENT = 2.31;
+const NUMBERED_MAP_WIDTH_PERCENT = 64.09;
+const NUMBERED_MAP_HEIGHT_PERCENT = 95.37;
 
 const exactHousePoints: Record<string, { label: string; x: number; y: number }> = {
   "200": { label: "Postal 200", x: 13.2, y: 84.3 },
