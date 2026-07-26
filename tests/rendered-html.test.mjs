@@ -209,19 +209,23 @@ test("includes Liberty County catalog products with local assets", async () => {
   const marketplace = await readFile(new URL("../app/data/marketplace.ts", import.meta.url), "utf8");
   const assets = [
     "../IMG/erlc/erlc-tools-kit.png",
-    "../IMG/erlc/erlc-blue-car.png",
+    "../IMG/erlc/erlc-strugatti-ettore-2020.png",
+    "../IMG/erlc/erlc-falcon-traveller-2003.png",
     "../IMG/erlc/erlc-burger-meal.png",
     "../IMG/erlc/erlc-drone-kit.png",
     "../IMG/erlc/erlc-phone.png",
   ];
 
   assert.match(marketplace, /Liberty County Store/);
-  assert.match(marketplace, /Kit de herramientas Liberty County/);
-  assert.match(marketplace, /Auto civil azul Liberty County/);
+  assert.match(marketplace, /Pack Tool Store: Lockpick, RFID y Scanner/);
+  assert.match(marketplace, /Lockpick, RFID Disruptor, Scanner, Flashlight, Drill y Spray Can/);
+  assert.match(marketplace, /Strugatti Ettore 2020/);
+  assert.match(marketplace, /Falcon Traveller 2003/);
   assert.match(marketplace, /Combo hamburguesa Three Guys/);
-  assert.match(marketplace, /Drone de vigilancia Liberty County/);
+  assert.match(marketplace, /Drone GadgetShack/);
   assert.match(marketplace, /Celular Liberty County con cargador/);
   assert.match(marketplace, /GadgetShack/);
+  assert.doesNotMatch(marketplace, /Auto civil azul Liberty County/);
 
   for (const asset of assets) {
     const file = await stat(new URL(asset, import.meta.url));
