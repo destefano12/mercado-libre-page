@@ -205,6 +205,30 @@ test("keeps the product implementation wired to local IMG assets", async () => {
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
 });
 
+test("includes Liberty County catalog products with local assets", async () => {
+  const marketplace = await readFile(new URL("../app/data/marketplace.ts", import.meta.url), "utf8");
+  const assets = [
+    "../IMG/erlc/erlc-tools-kit.png",
+    "../IMG/erlc/erlc-blue-car.png",
+    "../IMG/erlc/erlc-burger-meal.png",
+    "../IMG/erlc/erlc-drone-kit.png",
+    "../IMG/erlc/erlc-phone.png",
+  ];
+
+  assert.match(marketplace, /Liberty County Store/);
+  assert.match(marketplace, /Kit de herramientas Liberty County/);
+  assert.match(marketplace, /Auto civil azul Liberty County/);
+  assert.match(marketplace, /Combo hamburguesa Three Guys/);
+  assert.match(marketplace, /Drone de vigilancia Liberty County/);
+  assert.match(marketplace, /Celular Liberty County con cargador/);
+  assert.match(marketplace, /GadgetShack/);
+
+  for (const asset of assets) {
+    const file = await stat(new URL(asset, import.meta.url));
+    assert.ok(file.size > 100_000);
+  }
+});
+
 test("keeps accounts private and routes messages through authenticated APIs", async () => {
   const authModal = await readFile(
     new URL("../app/components/AuthModal.tsx", import.meta.url),
