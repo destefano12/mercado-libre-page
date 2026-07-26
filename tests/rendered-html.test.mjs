@@ -233,6 +233,26 @@ test("keeps the ERLC private server key behind a backend route", async () => {
   assert.match(gitignore, /\.env\*/);
 });
 
+test("tracks delivery courier location from ERLC players on the shipment map", async () => {
+  const marketplace = await readFile(new URL("../app/data/marketplace.ts", import.meta.url), "utf8");
+  const page = await readFile(new URL("../app/components/MarketplaceApp.tsx", import.meta.url), "utf8");
+  const shippingMap = await readFile(new URL("../app/components/ShippingMap.tsx", import.meta.url), "utf8");
+  const workRoute = await readFile(new URL("../app/api/work/route.ts", import.meta.url), "utf8");
+  const stylesheet = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(marketplace, /courierRobloxUserId/);
+  assert.match(workRoute, /courierRobloxUsername/);
+  assert.match(workRoute, /roblox_user_id/);
+  assert.match(page, /\/api\/erlc\?players=true/);
+  assert.match(page, /parseErlcPlayer/);
+  assert.match(page, /courierLocations/);
+  assert.match(shippingMap, /LiveCourierLocation/);
+  assert.match(shippingMap, /PostalCode|postalCode/);
+  assert.match(shippingMap, /🛵/);
+  assert.match(stylesheet, /gps-map__vehicle small/);
+  assert.match(stylesheet, /is-courier/);
+});
+
 test("keeps accounts private and routes messages through authenticated APIs", async () => {
   const authModal = await readFile(
     new URL("../app/components/AuthModal.tsx", import.meta.url),

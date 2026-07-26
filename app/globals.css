@@ -2629,6 +2629,10 @@ button {
   background: #ffd22e;
 }
 
+.gps-map__legend .is-courier {
+  background: #ff4f59;
+}
+
 .gps-map__pin {
   position: absolute;
   z-index: 2;
@@ -2675,32 +2679,37 @@ button {
 .gps-map__vehicle {
   position: absolute;
   z-index: 3;
-  width: 24px;
-  height: 14px;
-  background: var(--yellow);
-  border: 2px solid #333;
-  border-radius: 3px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  background: #fff;
+  border: 2px solid #ff4f59;
+  border-radius: 50%;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
   transform: translate(-50%, -50%);
   transition: left 1.4s ease, top 1.4s ease;
 }
 
-.gps-map__vehicle::before,
-.gps-map__vehicle::after {
+.gps-map__vehicle span {
+  font-size: 21px;
+  line-height: 1;
+}
+
+.gps-map__vehicle small {
   position: absolute;
-  bottom: -6px;
-  width: 6px;
-  height: 6px;
-  content: "";
-  background: #333;
-  border-radius: 50%;
-}
-
-.gps-map__vehicle::before {
-  left: 2px;
-}
-
-.gps-map__vehicle::after {
-  right: 2px;
+  top: 38px;
+  left: 50%;
+  max-width: 180px;
+  padding: 5px 7px;
+  color: #222;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 4px;
+  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.18);
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-weight: 700;
 }
 
 .gps-card__footer {

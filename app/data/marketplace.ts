@@ -160,6 +160,9 @@ export interface Shipment {
   progress: number;
   etaMinutes: number;
   route: Array<{ label: string; x: number; y: number }>;
+  courierId?: string;
+  courierRobloxUserId?: string;
+  courierRobloxUsername?: string;
 }
 
 export interface NotificationEvent {

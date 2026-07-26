@@ -39,7 +39,7 @@ import { MessagesView } from "./MessagesView";
 import { formatPrice, ListingVisual, ProductCard } from "./ProductCard";
 import { PublishModal } from "./PublishModal";
 import { ReviewSection } from "./ReviewSection";
-import { ShippingMap } from "./ShippingMap";
+import { ShippingMap, type LiveCourierLocation } from "./ShippingMap";
 
 type ViewName =
   | "home"
@@ -112,6 +112,29 @@ interface WorkSnapshot {
   applications: WorkApplication[];
 }
 
+interface ErlcPlayerLocation {
+  LocationX?: number;
+  LocationZ?: number;
+  PostalCode?: string;
+  StreetName?: string;
+  BuildingNumber?: string;
+}
+
+interface ErlcPlayer {
+  Player: string;
+  Permission?: string;
+  Team?: string;
+  Location?: ErlcPlayerLocation;
+  WantedStars?: number;
+}
+
+interface ErlcServerResponse {
+  ok?: boolean;
+  server?: {
+    Players?: ErlcPlayer[];
+  };
+}
+
 const emptyWorkForm = {
   robloxUsername: "",
   robloxUserId: "",
@@ -143,6 +166,21 @@ function workOrderStatusLabel(status: WorkOrder["status"]) {
   if (status === "active") return "Repartidor en camino";
   if (status === "delivered") return "Entregado";
   return "Cancelado";
+}
+
+function parseErlcPlayer(player: ErlcPlayer): LiveCourierLocation | null {
+  const [name, robloxUserId] = player.Player.split(":");
+  if (!name || !robloxUserId) {
+    return null;
+  }
+  return {
+    player: name,
+    robloxUserId,
+    team: player.Team ?? "Sin equipo",
+    postalCode: player.Location?.PostalCode,
+    streetName: player.Location?.StreetName,
+    buildingNumber: player.Location?.BuildingNumber,
+  };
 }
 
 function assetSource(asset: string | { src: string }) {
@@ -372,6 +410,7 @@ export function MarketplaceApp() {
   const [workError, setWorkError] = useState("");
   const [workSubmitting, setWorkSubmitting] = useState(false);
   const [workForm, setWorkForm] = useState(emptyWorkForm);
+  const [courierLocations, setCourierLocations] = useState<Record<string, LiveCourierLocation>>({});
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -510,6 +549,53 @@ export function MarketplaceApp() {
     () => state.shipments.filter((shipment) => shipment.buyerId === activeUser?.id),
     [activeUser?.id, state.shipments],
   );
+  const trackedCourierIds = useMemo(
+    () =>
+      Array.from(new Set(
+        purchases
+          .map((shipment) => shipment.courierRobloxUserId)
+          .filter((id): id is string => Boolean(id)),
+      )),
+    [purchases],
+  );
+
+  useEffect(() => {
+    if (trackedCourierIds.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    async function loadCourierLocations() {
+      try {
+        const response = await fetch("/api/erlc?players=true", { cache: "no-store" });
+        const result = await response.json() as ErlcServerResponse;
+        if (!response.ok || !result.ok) {
+          return;
+        }
+        const players = result.server?.Players ?? [];
+        const locations = players.reduce<Record<string, LiveCourierLocation>>((accumulator, player) => {
+          const parsed = parseErlcPlayer(player);
+          if (parsed && trackedCourierIds.includes(parsed.robloxUserId)) {
+            accumulator[parsed.robloxUserId] = parsed;
+          }
+          return accumulator;
+        }, {});
+        if (!cancelled) {
+          setCourierLocations(locations);
+        }
+      } catch {
+        // Si ER:LC no responde, el mapa conserva el ultimo punto conocido.
+      }
+    }
+
+    void loadCourierLocations();
+    const timer = window.setInterval(() => void loadCourierLocations(), 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [trackedCourierIds]);
+
   const favoriteListings = useMemo(
     () => state.listings.filter((listing) => favoriteIds.includes(listing.id)),
     [favoriteIds, state.listings],
@@ -2194,7 +2280,14 @@ export function MarketplaceApp() {
                         <div><strong>Tu acceso está disponible</strong><p>La confirmación fue enviada al chat de la compra.</p></div>
                       </div>
                     ) : (
-                      <ShippingMap shipment={shipment} />
+                      <ShippingMap
+                        shipment={shipment}
+                        courierLocation={
+                          shipment.courierRobloxUserId
+                            ? courierLocations[shipment.courierRobloxUserId] ?? null
+                            : null
+                        }
+                      />
                     )}
                   </article>
                 );

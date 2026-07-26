@@ -103,6 +103,9 @@ interface MarketplaceShipment {
   progress: number;
   etaMinutes: number;
   route?: Array<{ label: string; x: number; y: number }>;
+  courierId?: string;
+  courierRobloxUserId?: string;
+  courierRobloxUsername?: string;
 }
 
 interface MarketplaceSnapshot {
@@ -457,7 +460,14 @@ async function findRealPendingShipment(database: MarketplaceDatabase, workerId: 
 async function updateShipmentStage(
   database: MarketplaceDatabase,
   shipmentId: string | null,
-  update: { status: string; progress: number; etaMinutes?: number },
+  update: {
+    status: string;
+    progress: number;
+    etaMinutes?: number;
+    courierId?: string;
+    courierRobloxUserId?: string;
+    courierRobloxUsername?: string;
+  },
 ) {
   if (!shipmentId) {
     return;
@@ -473,6 +483,9 @@ async function updateShipmentStage(
           status: update.status,
           progress: update.progress,
           etaMinutes: update.etaMinutes ?? shipment.etaMinutes,
+          courierId: update.courierId ?? shipment.courierId,
+          courierRobloxUserId: update.courierRobloxUserId ?? shipment.courierRobloxUserId,
+          courierRobloxUsername: update.courierRobloxUsername ?? shipment.courierRobloxUsername,
         }
       : shipment,
   );
@@ -887,6 +900,15 @@ export async function POST(request: Request) {
       if (!stage) {
         return json({ error: "El pedido no tiene otra etapa pendiente" }, 409);
       }
+      const workerApplication = await database.prepare(
+        `SELECT a.roblox_username, a.roblox_user_id
+         FROM marketplace_workers w
+         JOIN marketplace_work_applications a ON a.id = w.application_id
+         WHERE w.user_id = ?
+         LIMIT 1`,
+      )
+        .bind(user.id)
+        .first<{ roblox_username: string; roblox_user_id: string }>();
 
       if (stage.nextStatus === "delivered") {
         const xp = Math.round(order.reward / 120) + Math.round(order.distance_km * 4);
@@ -919,7 +941,12 @@ export async function POST(request: Request) {
           .bind(stage.nextStatus, now, orderId, user.id, order.status)
           .run();
       }
-      await updateShipmentStage(database, order.source_shipment_id, stage.shipment);
+      await updateShipmentStage(database, order.source_shipment_id, {
+        ...stage.shipment,
+        courierId: user.id,
+        courierRobloxUsername: workerApplication?.roblox_username,
+        courierRobloxUserId: workerApplication?.roblox_user_id,
+      });
       return json(await snapshot(database, user));
     }
 
