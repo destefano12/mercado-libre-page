@@ -245,8 +245,13 @@ test("tracks delivery courier location from ERLC players on the shipment map", a
   assert.match(workRoute, /roblox_user_id/);
   assert.match(page, /\/api\/erlc\?players=true/);
   assert.match(page, /parseErlcPlayer/);
+  assert.match(page, /LocationX/);
+  assert.match(page, /LocationZ/);
   assert.match(page, /courierLocations/);
   assert.match(shippingMap, /LiveCourierLocation/);
+  assert.match(shippingMap, /worldToMapPoint/);
+  assert.match(shippingMap, /worldX \* 0\.03547/);
+  assert.match(shippingMap, /worldZ \* 0\.03532/);
   assert.match(shippingMap, /PostalCode|postalCode/);
   assert.match(shippingMap, /🛵/);
   assert.match(stylesheet, /gps-map__vehicle small/);

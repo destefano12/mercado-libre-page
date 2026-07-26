@@ -177,6 +177,8 @@ function parseErlcPlayer(player: ErlcPlayer): LiveCourierLocation | null {
     player: name,
     robloxUserId,
     team: player.Team ?? "Sin equipo",
+    worldX: player.Location?.LocationX,
+    worldZ: player.Location?.LocationZ,
     postalCode: player.Location?.PostalCode,
     streetName: player.Location?.StreetName,
     buildingNumber: player.Location?.BuildingNumber,

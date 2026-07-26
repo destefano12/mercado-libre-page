@@ -13,6 +13,8 @@ export interface LiveCourierLocation {
   player: string;
   robloxUserId: string;
   team: string;
+  worldX?: number;
+  worldZ?: number;
   postalCode?: string;
   streetName?: string;
   buildingNumber?: string;
@@ -105,11 +107,31 @@ function routeFor(destination: string) {
   ];
 }
 
-function courierPointFor(location?: LiveCourierLocation | null) {
-  if (!location?.postalCode) {
+function clampPercent(value: number, min = 4, max = 96) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function worldToMapPoint(location: LiveCourierLocation) {
+  if (typeof location.worldX !== "number" || typeof location.worldZ !== "number") {
     return null;
   }
-  const base = destinationZoneFor(location.postalCode);
+
+  return {
+    label: "Ubicacion ER:LC en vivo",
+    x: Number(clampPercent(location.worldX * 0.03547 - 9.63, 4, 94).toFixed(1)),
+    y: Number(clampPercent(location.worldZ * 0.03532 - 2.6, 6, 92).toFixed(1)),
+  };
+}
+
+function courierPointFor(location?: LiveCourierLocation | null) {
+  if (!location) {
+    return null;
+  }
+  const exact = worldToMapPoint(location);
+  const base = exact ?? (location.postalCode ? destinationZoneFor(location.postalCode) : null);
+  if (!base) {
+    return null;
+  }
   const detail = [
     location.postalCode ? `Postal ${location.postalCode}` : "",
     location.streetName,
