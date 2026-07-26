@@ -6,7 +6,13 @@ import {
 } from "../../lib/server/auth";
 
 type ApplicationStatus = "pending" | "accepted" | "rejected";
-type OrderStatus = "offered" | "active" | "delivered" | "cancelled";
+type OrderStatus =
+  | "offered"
+  | "preparing"
+  | "pickup"
+  | "active"
+  | "delivered"
+  | "cancelled";
 
 interface WorkApplicationRow {
   id: string;
@@ -448,7 +454,11 @@ async function findRealPendingShipment(database: MarketplaceDatabase, workerId: 
   return null;
 }
 
-async function markShipmentDelivered(database: MarketplaceDatabase, shipmentId: string | null) {
+async function updateShipmentStage(
+  database: MarketplaceDatabase,
+  shipmentId: string | null,
+  update: { status: string; progress: number; etaMinutes?: number },
+) {
   if (!shipmentId) {
     return;
   }
@@ -458,7 +468,12 @@ async function markShipmentDelivered(database: MarketplaceDatabase, shipmentId: 
   }
   const shipments = snapshot.shipments.map((shipment) =>
     shipment.id === shipmentId
-      ? { ...shipment, status: "Entregado", progress: 100, etaMinutes: 0 }
+      ? {
+          ...shipment,
+          status: update.status,
+          progress: update.progress,
+          etaMinutes: update.etaMinutes ?? shipment.etaMinutes,
+        }
       : shipment,
   );
   await database.prepare(
@@ -472,6 +487,50 @@ async function markShipmentDelivered(database: MarketplaceDatabase, shipmentId: 
       new Date().toISOString(),
     )
     .run();
+}
+
+function nextShipmentStage(status: OrderStatus, etaMinutes: number) {
+  if (status === "offered") {
+    return {
+      nextStatus: "preparing" as const,
+      shipment: {
+        status: "El producto se esta preparando",
+        progress: 15,
+        etaMinutes: Math.max(etaMinutes, 20),
+      },
+    };
+  }
+  if (status === "preparing") {
+    return {
+      nextStatus: "pickup" as const,
+      shipment: {
+        status: "El repartidor retiro el producto",
+        progress: 35,
+        etaMinutes: Math.max(10, Math.round(etaMinutes * 0.75)),
+      },
+    };
+  }
+  if (status === "pickup") {
+    return {
+      nextStatus: "active" as const,
+      shipment: {
+        status: "El repartidor esta en camino",
+        progress: 68,
+        etaMinutes: Math.max(4, Math.round(etaMinutes * 0.4)),
+      },
+    };
+  }
+  if (status === "active") {
+    return {
+      nextStatus: "delivered" as const,
+      shipment: {
+        status: "Entregado",
+        progress: 100,
+        etaMinutes: 0,
+      },
+    };
+  }
+  return null;
 }
 
 async function isWorkAdmin(database: MarketplaceDatabase, user: AuthenticatedProfile) {
@@ -526,7 +585,7 @@ async function currentOrders(database: MarketplaceDatabase, userId: string) {
             distance_km, reward, eta_minutes, difficulty, status, coordination_note,
             created_at, accepted_at, completed_at
      FROM marketplace_work_orders
-     WHERE worker_id = ?
+     WHERE worker_id = ? AND source_shipment_id IS NOT NULL
      ORDER BY created_at DESC
      LIMIT 24`,
   )
@@ -582,7 +641,9 @@ async function ensureOfferedOrder(database: MarketplaceDatabase, workerId: strin
             distance_km, reward, eta_minutes, difficulty, status, coordination_note,
             created_at, accepted_at, completed_at
      FROM marketplace_work_orders
-     WHERE worker_id = ? AND status IN ('offered', 'active')
+     WHERE worker_id = ?
+       AND source_shipment_id IS NOT NULL
+       AND status IN ('offered', 'preparing', 'pickup', 'active')
      ORDER BY created_at DESC
      LIMIT 1`,
   )
@@ -802,61 +863,63 @@ export async function POST(request: Request) {
     if (action === "acceptOrder") {
       const orderId = normalize(input.orderId, 90);
       const now = new Date().toISOString();
-      const result = await database.prepare(
-        `UPDATE marketplace_work_orders
-         SET status = 'active', accepted_at = ?
-         WHERE id = ? AND worker_id = ? AND status = 'offered'`,
-      )
-        .bind(now, orderId, user.id)
-        .run();
-      if (!result.success || result.meta.changes !== 1) {
-        return json({ error: "El pedido ya no esta disponible" }, 409);
-      }
-      return json(await snapshot(database, user));
-    }
-
-    if (action === "completeOrder") {
-      const orderId = normalize(input.orderId, 90);
       const order = await database.prepare(
-        `SELECT id, source_shipment_id, reward, distance_km, eta_minutes
+        `SELECT id, source_shipment_id, status, reward, distance_km, eta_minutes
          FROM marketplace_work_orders
-         WHERE id = ? AND worker_id = ? AND status = 'active'`,
+         WHERE id = ?
+           AND worker_id = ?
+           AND source_shipment_id IS NOT NULL
+           AND status IN ('offered', 'preparing', 'pickup', 'active')`,
       )
         .bind(orderId, user.id)
         .first<{
           id: string;
           source_shipment_id: string | null;
+          status: OrderStatus;
           reward: number;
           distance_km: number;
           eta_minutes: number;
         }>();
       if (!order) {
-        return json({ error: "No tenes ese pedido activo" }, 409);
+        return json({ error: "El pedido ya no esta disponible" }, 409);
+      }
+      const stage = nextShipmentStage(order.status, order.eta_minutes);
+      if (!stage) {
+        return json({ error: "El pedido no tiene otra etapa pendiente" }, 409);
       }
 
-      const now = new Date().toISOString();
-      const xp = Math.round(order.reward / 120) + Math.round(order.distance_km * 4);
-      await database.batch([
-        database.prepare(
+      if (stage.nextStatus === "delivered") {
+        const xp = Math.round(order.reward / 120) + Math.round(order.distance_km * 4);
+        await database.batch([
+          database.prepare(
+            `UPDATE marketplace_work_orders
+             SET status = 'delivered', completed_at = ?
+             WHERE id = ? AND worker_id = ? AND status = 'active'`,
+          )
+            .bind(now, orderId, user.id),
+          database.prepare(
+            `UPDATE marketplace_workers
+             SET completed_count = completed_count + 1,
+                 total_rewards = total_rewards + ?,
+                 total_km = total_km + ?,
+                 total_minutes = total_minutes + ?,
+                 xp = xp + ?,
+                 level = MAX(1, CAST(((xp + ?) / 100) AS INTEGER) + 1),
+                 updated_at = ?
+             WHERE user_id = ?`,
+          )
+            .bind(order.reward, order.distance_km, order.eta_minutes, xp, xp, now, user.id),
+        ]);
+      } else {
+        await database.prepare(
           `UPDATE marketplace_work_orders
-           SET status = 'delivered', completed_at = ?
-           WHERE id = ? AND worker_id = ? AND status = 'active'`,
+           SET status = ?, accepted_at = COALESCE(accepted_at, ?)
+           WHERE id = ? AND worker_id = ? AND status = ?`,
         )
-          .bind(now, orderId, user.id),
-        database.prepare(
-          `UPDATE marketplace_workers
-           SET completed_count = completed_count + 1,
-               total_rewards = total_rewards + ?,
-               total_km = total_km + ?,
-               total_minutes = total_minutes + ?,
-               xp = xp + ?,
-               level = MAX(1, CAST(((xp + ?) / 100) AS INTEGER) + 1),
-               updated_at = ?
-           WHERE user_id = ?`,
-        )
-          .bind(order.reward, order.distance_km, order.eta_minutes, xp, xp, now, user.id),
-      ]);
-      await markShipmentDelivered(database, order.source_shipment_id);
+          .bind(stage.nextStatus, now, orderId, user.id, order.status)
+          .run();
+      }
+      await updateShipmentStage(database, order.source_shipment_id, stage.shipment);
       return json(await snapshot(database, user));
     }
 

@@ -68,9 +68,13 @@ test("adds the Mercado Libre RP work application and worker flow", async () => {
   assert.match(workRoute, /readMarketplaceSnapshot/);
   assert.match(workRoute, /source_shipment_id/);
   assert.match(workRoute, /buildOrderFromShipment/);
-  assert.match(workRoute, /markShipmentDelivered/);
+  assert.match(workRoute, /updateShipmentStage/);
+  assert.match(workRoute, /nextShipmentStage/);
+  assert.match(workRoute, /preparing/);
+  assert.match(workRoute, /pickup/);
   assert.doesNotMatch(page, /<option>Conductor<\/option>/);
-  assert.match(workRoute, /WHERE id = \? AND worker_id = \? AND status = 'offered'/);
+  assert.match(workRoute, /status IN \('offered', 'preparing', 'pickup', 'active'\)/);
+  assert.match(page, /workOrderActionLabel/);
   assert.match(stylesheet, /\.work-form/);
   assert.match(stylesheet, /\.work-order-card/);
   assert.match(stylesheet, /\.worker-nav-button/);

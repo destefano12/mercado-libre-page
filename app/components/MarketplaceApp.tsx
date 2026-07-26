@@ -99,7 +99,7 @@ interface WorkOrder {
   reward: number;
   etaMinutes: number;
   difficulty: string;
-  status: "offered" | "active" | "delivered" | "cancelled";
+  status: "offered" | "preparing" | "pickup" | "active" | "delivered" | "cancelled";
   coordinationNote: string;
   createdAt: string;
 }
@@ -127,6 +127,23 @@ const emptyWorkForm = {
   additionalInfo: "",
   termsAccepted: false,
 };
+
+function workOrderActionLabel(status: WorkOrder["status"]) {
+  if (status === "offered") return "Aceptar: se esta preparando";
+  if (status === "preparing") return "Aceptar: producto retirado";
+  if (status === "pickup") return "Aceptar: salir en camino";
+  if (status === "active") return "Aceptar: entregado";
+  return "Aceptar";
+}
+
+function workOrderStatusLabel(status: WorkOrder["status"]) {
+  if (status === "offered") return "Pedido recibido";
+  if (status === "preparing") return "Producto en preparacion";
+  if (status === "pickup") return "Producto retirado";
+  if (status === "active") return "Repartidor en camino";
+  if (status === "delivered") return "Entregado";
+  return "Cancelado";
+}
 
 function assetSource(asset: string | { src: string }) {
   return typeof asset === "string" ? asset : asset.src;
@@ -357,11 +374,6 @@ export function MarketplaceApp() {
   const [workForm, setWorkForm] = useState(emptyWorkForm);
 
   useEffect(() => {
-    const timer = window.setInterval(actions.advanceShipments, 2400);
-    return () => window.clearInterval(timer);
-  }, [actions.advanceShipments]);
-
-  useEffect(() => {
     const timer = window.setTimeout(() => {
       if (!activeUser) {
         setPreferencesReady(false);
@@ -553,7 +565,9 @@ export function MarketplaceApp() {
     [selectedListing, state.listings],
   );
   const offeredWorkOrder = workState?.orders.find((order) => order.status === "offered") ?? null;
-  const activeWorkOrder = workState?.orders.find((order) => order.status === "active") ?? null;
+  const activeWorkOrder = workState?.orders.find((order) =>
+    ["preparing", "pickup", "active"].includes(order.status),
+  ) ?? null;
   const deliveredWorkOrders = workState?.orders.filter((order) => order.status === "delivered") ?? [];
 
   function goHome() {
@@ -2087,7 +2101,7 @@ export function MarketplaceApp() {
               <div className="work-order-layout">
                 <section className="work-card">
                   <div className="work-card__heading">
-                    <span>{activeWorkOrder ? "Pedido activo" : offeredWorkOrder ? "Pedido recibido" : "Sin pedido activo"}</span>
+                    <span>{activeWorkOrder ? workOrderStatusLabel(activeWorkOrder.status) : offeredWorkOrder ? "Pedido recibido" : "Sin pedido activo"}</span>
                     {!activeWorkOrder && !offeredWorkOrder && workState.worker.available ? (
                       <button type="button" onClick={() => runWorkAction({ action: "generateOrder" })} disabled={workSubmitting}>Buscar pedido</button>
                     ) : null}
@@ -2107,11 +2121,9 @@ export function MarketplaceApp() {
                             <p><strong>Distancia:</strong> {order.distanceKm} km - <strong>ETA:</strong> {order.etaMinutes} min</p>
                             <p><strong>Recompensa:</strong> {formatPrice(order.reward)}</p>
                             {order.coordinationNote ? <p className="work-order-card__coordination">{order.coordinationNote}</p> : null}
-                            {order.status === "offered" ? (
-                              <button type="button" onClick={() => runWorkAction({ action: "acceptOrder", orderId: order.id })} disabled={workSubmitting}>Aceptar pedido</button>
-                            ) : (
-                              <button type="button" onClick={() => runWorkAction({ action: "completeOrder", orderId: order.id })} disabled={workSubmitting}>Marcar como entregado</button>
-                            )}
+                            <button type="button" onClick={() => runWorkAction({ action: "acceptOrder", orderId: order.id })} disabled={workSubmitting}>
+                              {workOrderActionLabel(order.status)}
+                            </button>
                           </>
                         );
                       })()}
