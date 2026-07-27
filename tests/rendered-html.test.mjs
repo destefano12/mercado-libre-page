@@ -179,27 +179,48 @@ test("adds official-style surfaces for supermarket, fashion, play, help and offe
 
   assert.match(page, /supermarket-page/);
   assert.match(page, /supermarketAisles/);
+  assert.match(page, /supermarketTab/);
   assert.match(page, /fashion-page/);
   assert.match(page, /fashionBrands/);
-  assert.match(page, /play-page/);
+  assert.match(page, /fashion-campaign-original\.png/);
   assert.match(page, /Suscribite a Paramount\+ con 15% OFF/);
   assert.match(page, /play-shell/);
+  assert.match(page, /play-splash/);
+  assert.match(page, /playHeroIndex/);
   assert.match(page, /playTabs/);
   assert.match(page, /visiblePlayContent/);
   assert.match(page, /openPlay\("inicio"\)/);
   assert.match(page, /offers-tabs/);
   assert.match(page, /offers-sidebar/);
+  assert.match(page, /offerFullOnly/);
+  assert.match(page, /visibleHelpTopics/);
   assert.match(page, /Atajos personalizados/);
   assert.match(page, /Necesitás más ayuda/);
   assert.match(stylesheet, /\.supermarket-hero/);
   assert.match(stylesheet, /\.fashion-hero/);
-  assert.match(stylesheet, /\.play-nav/);
+  assert.match(stylesheet, /\.play-splash/);
   assert.match(stylesheet, /\.play-topbar/);
   assert.match(stylesheet, /\.play-hero-official/);
   assert.match(stylesheet, /\.play-modal/);
   assert.match(stylesheet, /\.offers-layout/);
   assert.match(stylesheet, /\.help-layout--official/);
   assert.match(stylesheet, /\.help-contact/);
+});
+
+test("does not leave inert button-looking controls in the main marketplace", async () => {
+  const page = await readFile(
+    new URL("../app/components/MarketplaceApp.tsx", import.meta.url),
+    "utf8",
+  );
+  const inertButtons = [...page.matchAll(/<button\b(?<attributes>[^>]*)>/gs)]
+    .map((match) => match.groups?.attributes ?? "")
+    .filter((attributes) =>
+      !attributes.includes("onClick=") &&
+      !attributes.includes('type="submit"') &&
+      !attributes.includes("disabled"),
+    );
+
+  assert.deepEqual(inertButtons, []);
 });
 
 test("includes the expanded official-style category menu", async () => {

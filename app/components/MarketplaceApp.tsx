@@ -18,6 +18,7 @@ import categoryStreaming from "@/IMG/official/category-streaming.webp";
 import categorySupermarket from "@/IMG/official/category-supermarket.webp";
 import disneyWidget from "@/IMG/official/disney-widget.jpg";
 import hboWidget from "@/IMG/official/hbo-widget.jpg";
+import fashionCampaign from "@/IMG/official/fashion-campaign-original.png";
 import disneyHero from "@/IMG/streaming/disney-hero.webp";
 import primeHero from "@/IMG/streaming/prime-video-hero.avif";
 import {
@@ -217,6 +218,7 @@ const officialAssets = {
   paymentMethods: assetSource(paymentMethodsIcon),
   playDisney: assetSource(disneyWidget),
   playHbo: assetSource(hboWidget),
+  fashionCampaign: assetSource(fashionCampaign),
   playDisneyHero: assetSource(disneyHero),
   playPrimeHero: assetSource(primeHero),
 };
@@ -369,13 +371,13 @@ const marketplaceCoupons: MarketplaceCoupon[] = [
 ];
 
 const supermarketAisles = [
-  ["💸", "Ofertas"],
-  ["🍪", "Despensa"],
-  ["🍷", "Bebidas alcohólicas"],
-  ["🧴", "Higiene personal y belleza"],
-  ["🧽", "Limpieza del hogar"],
-  ["🥤", "Agua, jugos y gaseosas"],
-  ["🥛", "Lácteos"],
+  { id: "offers", label: "Ofertas", query: "oferta supermercado" },
+  { id: "pantry", label: "Despensa", query: "despensa" },
+  { id: "drinks", label: "Bebidas alcohólicas", query: "bebidas alcohólicas" },
+  { id: "care", label: "Higiene personal y belleza", query: "higiene personal" },
+  { id: "cleaning", label: "Limpieza del hogar", query: "limpieza del hogar" },
+  { id: "soft-drinks", label: "Agua, jugos y gaseosas", query: "agua jugos gaseosas" },
+  { id: "dairy", label: "Lácteos", query: "lácteos" },
 ];
 
 const fashionDeals = [
@@ -390,13 +392,15 @@ const fashionDeals = [
 
 const fashionBrands = ["briganti", "47 STREET", "PORTSAID", "SWEET", "PARKA", "CHEEKY", "JUANITA JO"];
 
-const offerTabs = [
-  ["%", "Todas las ofertas"],
-  ["⚡", "Ofertas relámpago"],
-  ["$", "Precios imbatibles"],
-  ["▯", "Celulares"],
-  ["▱", "Notebooks"],
-  ["SALE", "Liquidación"],
+type OfferTabId = "all" | "flash" | "best" | "phones" | "notebooks" | "clearance";
+
+const offerTabs: Array<{ id: OfferTabId; icon: string; label: string }> = [
+  { id: "all", icon: "%", label: "Todas las ofertas" },
+  { id: "flash", icon: "ϟ", label: "Ofertas relámpago" },
+  { id: "best", icon: "$", label: "Precios imbatibles" },
+  { id: "phones", icon: "▯", label: "Celulares" },
+  { id: "notebooks", icon: "▱", label: "Notebooks" },
+  { id: "clearance", icon: "SALE", label: "Liquidación" },
 ];
 
 const offerCategories = [
@@ -413,6 +417,50 @@ const offerCategories = [
   "Deportes y Fitness",
   "Electrodomésticos",
 ];
+
+const offerCategoryIds: Record<string, CategoryId> = {
+  "Accesorios para Vehículos": "accesorios-vehiculos",
+  Agro: "agro",
+  "Alimentos y Bebidas": "supermercado",
+  "Arte, Librería y Mercería": "hogar",
+  Bebés: "bebes",
+  "Belleza y Cuidado Personal": "belleza",
+  "Celulares y Teléfonos": "tecnologia",
+  Computación: "tecnologia",
+  "Consolas y Videojuegos": "juegos",
+  Construcción: "construccion",
+  "Deportes y Fitness": "deportes",
+  Electrodomésticos: "electrodomesticos",
+};
+
+const helpTopics = {
+  protected: {
+    label: "Qué es Compra Protegida",
+    body: "Tu pago queda protegido durante la compra. Si el producto no llega o no coincide con la publicación, podés iniciar un reclamo desde Mis compras.",
+    action: "Ver mis compras",
+    view: "purchases" as ViewName,
+  },
+  payments: {
+    label: "Cómo puedo pagar una compra",
+    body: "Antes de confirmar vas a ver el precio final, el descuento del cupón y el total. En esta demo las compras se confirman desde el carrito.",
+    action: "Ir al carrito",
+    view: "cart" as ViewName,
+  },
+  coupons: {
+    label: "Ayuda con cupones",
+    body: "Cada cupón indica categoría, compra mínima y tope. El descuento se calcula antes de confirmar y queda registrado en la compra.",
+    action: "Ver cupones",
+    view: "coupons" as ViewName,
+  },
+  faq: {
+    label: "Explorá las preguntas frecuentes",
+    body: "Encontrá respuestas sobre compras, ventas, publicaciones, entregas, seguridad de la cuenta y conversaciones entre usuarios.",
+    action: "Contactarnos",
+    view: "messages" as ViewName,
+  },
+};
+
+type HelpTopicId = keyof typeof helpTopics;
 
 type PlayTab = "inicio" | "gratis" | "peliculas" | "series" | "max" | "disney" | "vix" | "universal" | "alquileres";
 
@@ -771,6 +819,7 @@ export function MarketplaceApp() {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [favoritesMenuOpen, setFavoritesMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationTab, setNotificationTab] = useState<"general" | "stores">("general");
   const [chatOpen, setChatOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
@@ -780,8 +829,16 @@ export function MarketplaceApp() {
   const [couponError, setCouponError] = useState("");
   const [playTab, setPlayTab] = useState<PlayTab>("inicio");
   const [playSearch, setPlaySearch] = useState("");
+  const [playSplashOpen, setPlaySplashOpen] = useState(false);
+  const [playHeroIndex, setPlayHeroIndex] = useState(0);
   const [selectedPlayItem, setSelectedPlayItem] = useState<PlayContentItem | null>(null);
-  const [helpTopic, setHelpTopic] = useState<string | null>(null);
+  const [supermarketTab, setSupermarketTab] = useState<"inicio" | "gondolas">("inicio");
+  const [fashionBrand, setFashionBrand] = useState<string | null>(null);
+  const [offerTab, setOfferTab] = useState<OfferTabId>("all");
+  const [offerCategory, setOfferCategory] = useState<CategoryId | null>(null);
+  const [offerFullOnly, setOfferFullOnly] = useState(false);
+  const [helpTopic, setHelpTopic] = useState<HelpTopicId | null>(null);
+  const [helpQuery, setHelpQuery] = useState("");
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [locationModalOpen, setLocationModalOpen] = useState(false);
   const [locationDraft, setLocationDraft] = useState("");
@@ -992,10 +1049,56 @@ export function MarketplaceApp() {
     () => state.listings.filter((listing) => cartIds.includes(listing.id)),
     [cartIds, state.listings],
   );
-  const offerListings = useMemo(
+  const baseOfferListings = useMemo(
     () => state.listings.filter((listing) => listing.oldPrice || listing.badge),
     [state.listings],
   );
+  const offerListings = useMemo(() => {
+    let listings = [...baseOfferListings];
+
+    if (offerCategory) {
+      listings = listings.filter((listing) => listing.categoryId === offerCategory);
+    }
+
+    if (offerTab === "flash") {
+      listings = listings.filter((listing) => {
+        const discount = listing.oldPrice
+          ? Math.round((1 - listing.price / listing.oldPrice) * 100)
+          : 0;
+        return discount >= 20 || listing.badge?.toLowerCase().includes("oferta");
+      });
+    } else if (offerTab === "best") {
+      listings = listings.filter((listing) => {
+        const discount = listing.oldPrice
+          ? Math.round((1 - listing.price / listing.oldPrice) * 100)
+          : 0;
+        return discount >= 30 || listing.price <= 100000;
+      });
+    } else if (offerTab === "phones") {
+      listings = listings.filter((listing) =>
+        matchesListingQuery(listing, "celular") ||
+        ["iphone", "samsung", "xiaomi", "motorola"].some((term) =>
+          matchesListingQuery(listing, term),
+        ),
+      );
+    } else if (offerTab === "notebooks") {
+      listings = listings.filter((listing) =>
+        ["notebook", "laptop", "computadora"].some((term) =>
+          matchesListingQuery(listing, term),
+        ),
+      );
+    } else if (offerTab === "clearance") {
+      listings = listings.filter((listing) => Boolean(listing.oldPrice));
+    }
+
+    if (offerFullOnly) {
+      listings = listings.filter((listing) =>
+        /full|gratis|hoy/i.test(listing.shipping),
+      );
+    }
+
+    return listings;
+  }, [baseOfferListings, offerCategory, offerFullOnly, offerTab]);
   const visiblePlayContent = useMemo(() => {
     const cleanSearch = playSearch.trim().toLowerCase();
     return playContent.filter((item) => {
@@ -1005,7 +1108,13 @@ export function MarketplaceApp() {
       return matchesTab && matchesSearch;
     });
   }, [playSearch, playTab]);
-  const playHero = playHeroSlides.find((slide) => playTab === "inicio" || slide.tab === playTab) ?? playHeroSlides[0];
+  const playHeroOptions = useMemo(() => {
+    const matches = playTab === "inicio"
+      ? playHeroSlides
+      : playHeroSlides.filter((slide) => slide.tab === playTab);
+    return matches.length > 0 ? matches : playHeroSlides;
+  }, [playTab]);
+  const playHero = playHeroOptions[playHeroIndex % playHeroOptions.length];
   const playBenefitListings = useMemo(
     () =>
       streamingCatalog.filter((listing) =>
@@ -1015,6 +1124,39 @@ export function MarketplaceApp() {
       ),
     [streamingCatalog],
   );
+  const visibleHelpTopics = useMemo(() => {
+    const cleanQuery = helpQuery.trim().toLowerCase();
+    return (Object.entries(helpTopics) as Array<[HelpTopicId, (typeof helpTopics)[HelpTopicId]]>)
+      .filter(([, topic]) =>
+        !cleanQuery ||
+        `${topic.label} ${topic.body}`.toLowerCase().includes(cleanQuery),
+      );
+  }, [helpQuery]);
+
+  useEffect(() => {
+    if (view !== "play" || !playSplashOpen) {
+      return;
+    }
+    const timer = window.setTimeout(() => setPlaySplashOpen(false), 1450);
+    return () => window.clearTimeout(timer);
+  }, [playSplashOpen, view]);
+
+  useEffect(() => {
+    if (
+      view !== "play" ||
+      playSplashOpen ||
+      playSearch.trim() ||
+      playHeroOptions.length < 2
+    ) {
+      return;
+    }
+    const timer = window.setInterval(
+      () => setPlayHeroIndex((previous) => (previous + 1) % playHeroOptions.length),
+      6500,
+    );
+    return () => window.clearInterval(timer);
+  }, [playHeroOptions.length, playSearch, playSplashOpen, view]);
+
   const cartSubtotal = useMemo(
     () => cartListings.reduce((total, listing) => total + listing.price, 0),
     [cartListings],
@@ -1104,13 +1246,23 @@ export function MarketplaceApp() {
     setSearchSuggestionsOpen(false);
     setSortMode(category?.sortModes[0] ?? "Más relevantes");
     setActiveFilters({});
+    if (categoryId === "supermercado") {
+      setSupermarketTab("inicio");
+    }
+    if (categoryId === "moda") {
+      setFashionBrand(null);
+    }
     setCategoryMenuOpen(false);
     setView("results");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function openPlay(nextTab: PlayTab = "inicio") {
+    if (view !== "play") {
+      setPlaySplashOpen(true);
+    }
     setPlayTab(nextTab);
+    setPlayHeroIndex(0);
     setSelectedPlayItem(null);
     setPlaySearch("");
     setResultCategoryId("streaming");
@@ -1123,6 +1275,27 @@ export function MarketplaceApp() {
     setSearchSuggestionsOpen(false);
     setView("play");
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function openCategorySearch(categoryId: CategoryId, searchTerm: string) {
+    const cleanTerm = searchTerm.trim();
+    const category = categories.find((candidate) => candidate.id === categoryId);
+    actions.recordSearch(cleanTerm);
+    setResultCategoryId(categoryId);
+    setResultQuery(cleanTerm);
+    setQuery(cleanTerm);
+    setSortMode(category?.sortModes[0] ?? "Más relevantes");
+    setActiveFilters({});
+    setCategoryMenuOpen(false);
+    setSearchSuggestionsOpen(false);
+    setView("results");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function openOffers(nextTab: OfferTabId = "all", categoryId: CategoryId | null = null) {
+    setOfferTab(nextTab);
+    setOfferCategory(categoryId);
+    openPage("offers");
   }
 
   function openPlayItem(item: PlayContentItem) {
@@ -1380,7 +1553,7 @@ export function MarketplaceApp() {
   }
 
   return (
-    <main className={`marketplace-shell${workState?.worker ? " marketplace-shell--worker" : ""}`}>
+    <main className={`marketplace-shell${workState?.worker ? " marketplace-shell--worker" : ""}${view === "play" ? " marketplace-shell--play" : ""}`}>
       <header className="site-header">
         <div className="header-primary">
           <button className="logo-button" type="button" onClick={goHome} aria-label="Ir al inicio">
@@ -1446,7 +1619,7 @@ export function MarketplaceApp() {
             ) : null}
           </div>
 
-          <button className="header-offer" type="button" onClick={() => openPage("offers")}>
+          <button className="header-offer" type="button" onClick={() => openOffers()}>
             <img src={officialAssets.headerOffer} alt="Envío gratis en tu primera compra" />
           </button>
         </div>
@@ -1472,7 +1645,7 @@ export function MarketplaceApp() {
             <button type="button" onClick={() => setCategoryMenuOpen((open) => !open)}>
               Categorías <span className="nav-chevron">⌄</span>
             </button>
-            <button type="button" onClick={() => openPage("offers")}>Ofertas</button>
+            <button type="button" onClick={() => openOffers()}>Ofertas</button>
             <button type="button" onClick={() => openPage("coupons")}>Cupones</button>
             <button type="button" onClick={() => openCategory("supermercado")}>Supermercado</button>
             <button type="button" onClick={() => openCategory("moda")}>Moda</button>
@@ -1559,17 +1732,47 @@ export function MarketplaceApp() {
                 </button>
               </div>
               <div className="notifications-popover__tabs">
-                <button className="is-active" type="button">
+                <button
+                  className={notificationTab === "general" ? "is-active" : ""}
+                  type="button"
+                  onClick={() => setNotificationTab("general")}
+                >
                   Generales <span aria-hidden="true" />
                 </button>
-                <button type="button">
+                <button
+                  className={notificationTab === "stores" ? "is-active" : ""}
+                  type="button"
+                  onClick={() => setNotificationTab("stores")}
+                >
                   Tiendas que sigo <span aria-hidden="true" />
                 </button>
               </div>
-              <div className="notifications-popover__empty">
-                <strong>No tenés notificaciones</strong>
-                <p>¡Aprovechá para descubrir productos increíbles!</p>
-              </div>
+              {notificationTab === "general" && state.notifications.length > 0 ? (
+                <div className="notifications-popover__list">
+                  {state.notifications.slice(0, 5).map((notification) => (
+                    <article key={notification.id}>
+                      <span aria-hidden="true" />
+                      <div>
+                        <strong>{notification.text}</strong>
+                        <small>{new Date(notification.createdAt).toLocaleString("es-AR")}</small>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="notifications-popover__empty">
+                  <strong>
+                    {notificationTab === "general"
+                      ? "No tenés notificaciones"
+                      : "Todavía no seguís tiendas"}
+                  </strong>
+                  <p>
+                    {notificationTab === "general"
+                      ? "¡Aprovechá para descubrir productos increíbles!"
+                      : "Cuando sigas una tienda, sus novedades aparecerán acá."}
+                  </p>
+                </div>
+              )}
             </div>
           </>
         ) : null}
@@ -1715,7 +1918,7 @@ export function MarketplaceApp() {
 
           <div className="home-content">
             <section className="quick-access" aria-label="Accesos rápidos">
-              <button type="button" onClick={() => openPage("offers")}>
+              <button type="button" onClick={() => openOffers()}>
                 <span className="quick-icon"><img src={officialAssets.newBuyer} alt="" /></span>
                 <strong>Envío gratis</strong>
                 <p>Beneficio en tu primera compra</p>
@@ -1765,7 +1968,7 @@ export function MarketplaceApp() {
                 <WalletIcon />
                 <span><strong>Mercado Pago</strong><small>Pagá rápido y seguro</small></span>
               </button>
-              <button type="button" onClick={() => openPage("offers")}>
+              <button type="button" onClick={() => openOffers()}>
                 <TruckIcon />
                 <span><strong>Envíos gratis</strong><small>Desde $ 16.000 en productos elegibles</small></span>
               </button>
@@ -1857,10 +2060,28 @@ export function MarketplaceApp() {
 
       {view === "play" ? (
         <section className="play-shell">
+          {playSplashOpen ? (
+            <div className="play-splash" role="status" aria-label="Abriendo Mercado Play">
+              <div className="play-splash__identity">
+                <img src={officialAssets.logo} alt="" />
+                <span>mercado</span>
+                <strong>play</strong>
+              </div>
+            </div>
+          ) : null}
+
           <nav className="play-topbar">
-            <button className="play-brand" type="button" onClick={() => openPlay("inicio")}>
-              <span>mercado</span>
-              <strong>play</strong>
+            <button
+              className="play-brand"
+              type="button"
+              onClick={goHome}
+              aria-label="Volver a Mercado Libre"
+              title="Volver a Mercado Libre"
+            >
+              <span className="play-brand__symbol" aria-hidden="true">
+                <img src={officialAssets.logo} alt="" />
+              </span>
+              <span>mercado <strong>play</strong></span>
             </button>
             <div className="play-tabs" role="tablist" aria-label="Mercado Play">
               {playTabs.map((item) => (
@@ -1872,6 +2093,7 @@ export function MarketplaceApp() {
                   type="button"
                   onClick={() => {
                     setPlayTab(item.id);
+                    setPlayHeroIndex(0);
                     setSelectedPlayItem(null);
                   }}
                 >
@@ -1890,35 +2112,110 @@ export function MarketplaceApp() {
             <button className="play-settings" type="button" onClick={() => openPage("help")} aria-label="Configuración">⚙</button>
           </nav>
 
-          <div className="play-hero-official" style={{ backgroundImage: `linear-gradient(90deg, #121212 0%, rgba(18,18,18,.94) 42%, rgba(18,18,18,.2)), url(${playHero.image})` }}>
-            <div>
-              <span className="play-provider">{playHero.provider}</span>
-              <h1>{playHero.title}</h1>
-              <p>{playHero.description}</p>
-              <div className="play-price-line">
-                <b>{playHero.badge}</b>
-                <span>{playHero.meta}</span>
-              </div>
-              <button type="button" onClick={() => activatePlayBenefit(playHero)}>
-                {playHero.kind === "Suscripción" ? "Suscribite con 15% OFF" : "Ver gratis"}
+          <div className="play-hero-stage">
+            {playHeroOptions.length > 1 ? (
+              <button
+                className="play-hero-arrow play-hero-arrow--previous"
+                type="button"
+                aria-label="Anterior"
+                onClick={() =>
+                  setPlayHeroIndex((previous) =>
+                    (previous - 1 + playHeroOptions.length) % playHeroOptions.length,
+                  )
+                }
+              >
+                ‹
               </button>
+            ) : null}
+            <div
+              className="play-hero-official"
+              key={playHero.id}
+              style={{ backgroundImage: `linear-gradient(90deg, #121212 0%, rgba(18,18,18,.94) 42%, rgba(18,18,18,.2)), url(${playHero.image})` }}
+            >
+              <div>
+                <span className="play-provider">{playHero.provider}</span>
+                <h1>{playHero.title}</h1>
+                <p>{playHero.description}</p>
+                <div className="play-price-line">
+                  <b>{playHero.badge}</b>
+                  <span>{playHero.meta}</span>
+                </div>
+                <div className="play-hero-actions">
+                  <button type="button" onClick={() => activatePlayBenefit(playHero)}>
+                    {playHero.kind === "Suscripción" ? "Suscribite con 15% OFF" : "Ver gratis"}
+                  </button>
+                  <button
+                    className="play-hero-actions__secondary"
+                    type="button"
+                    onClick={() => setSelectedPlayItem(playHero)}
+                  >
+                    Más información
+                  </button>
+                </div>
+              </div>
             </div>
+            {playHeroOptions.length > 1 ? (
+              <button
+                className="play-hero-arrow play-hero-arrow--next"
+                type="button"
+                aria-label="Siguiente"
+                onClick={() =>
+                  setPlayHeroIndex((previous) => (previous + 1) % playHeroOptions.length)
+                }
+              >
+                ›
+              </button>
+            ) : null}
           </div>
 
-          <div className="play-dots" aria-hidden="true"><span /><span /><span /></div>
+          <div className="play-dots" aria-label="Diapositivas destacadas">
+            {playHeroOptions.map((slide, index) => (
+              <button
+                aria-label={`Ver ${slide.title}`}
+                className={index === playHeroIndex % playHeroOptions.length ? "is-active" : ""}
+                key={slide.id}
+                type="button"
+                onClick={() => setPlayHeroIndex(index)}
+              />
+            ))}
+          </div>
 
           <section className="play-row">
             <div className="play-row__heading">
               <h2>{playTab === "inicio" ? "Aniversario y destacados" : playTabs.find((item) => item.id === playTab)?.label}</h2>
               <button type="button" onClick={() => setPlaySearch("")}>Ver todo</button>
             </div>
-            <div className="play-card-row">
-              {visiblePlayContent.map((item) => (
-                <button key={item.id} className="play-card" type="button" onClick={() => openPlayItem(item)}>
+            {visiblePlayContent.length > 0 ? (
+              <div className="play-card-row">
+                {visiblePlayContent.map((item) => (
+                  <button key={item.id} className="play-card" type="button" onClick={() => openPlayItem(item)}>
+                    <img src={item.image} alt={item.title} />
+                    <span>{item.badge}</span>
+                    <strong>{item.title}</strong>
+                    <small>{item.meta}</small>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="play-empty">
+                <strong>No encontramos ese título</strong>
+                <p>Probá con otra película, serie o plataforma.</p>
+                <button type="button" onClick={() => setPlaySearch("")}>Limpiar búsqueda</button>
+              </div>
+            )}
+          </section>
+
+          <section className="play-row">
+            <div className="play-row__heading">
+              <h2>Top 10 en Mercado Play</h2>
+            </div>
+            <div className="play-card-row play-card-row--ranked">
+              {playContent.slice(0, 6).map((item, index) => (
+                <button key={`ranked-${item.id}`} className="play-card" type="button" onClick={() => openPlayItem(item)}>
+                  <b aria-hidden="true">{index + 1}</b>
                   <img src={item.image} alt={item.title} />
-                  <span>{item.badge}</span>
                   <strong>{item.title}</strong>
-                  <small>{item.meta}</small>
+                  <small>{item.provider}</small>
                 </button>
               ))}
             </div>
@@ -1980,35 +2277,76 @@ export function MarketplaceApp() {
                 <div><span>🛒</span><strong>FULL · SÚPER</strong></div>
               </div>
               <nav className="supermarket-tabs">
-                <button className="is-active" type="button">Inicio</button>
-                <button type="button">Góndolas</button>
-                <button type="button" onClick={() => openPage("offers")}>Ofertas</button>
+                <button
+                  aria-pressed={supermarketTab === "inicio"}
+                  className={supermarketTab === "inicio" ? "is-active" : ""}
+                  type="button"
+                  onClick={() => setSupermarketTab("inicio")}
+                >
+                  Inicio
+                </button>
+                <button
+                  aria-pressed={supermarketTab === "gondolas"}
+                  className={supermarketTab === "gondolas" ? "is-active" : ""}
+                  type="button"
+                  onClick={() => setSupermarketTab("gondolas")}
+                >
+                  Góndolas
+                </button>
+                <button type="button" onClick={() => openOffers("all", "supermercado")}>Ofertas</button>
               </nav>
-              <div className="supermarket-benefits">
-                <article><b>▦</b><strong>Compra mínima: $ 12.000</strong><span>Armá un carrito que supere este monto.</span></article>
-                <article><b>▣</b><strong>Envío gratis desde $ 65.000</strong><span>En tus carritos de Full Súper.</span></article>
-                <article><b>▤</b><strong>Llega hoy o mañana</strong><span>Desde nuestras bodegas.</span></article>
-              </div>
+              {supermarketTab === "inicio" ? (
+                <div className="supermarket-benefits">
+                  <article><b>▦</b><strong>Compra mínima: $ 12.000</strong><span>Armá un carrito que supere este monto.</span></article>
+                  <article><b>▣</b><strong>Envío gratis desde $ 65.000</strong><span>En tus carritos de Full Súper.</span></article>
+                  <article><b>▤</b><strong>Llega hoy o mañana</strong><span>Desde nuestras bodegas.</span></article>
+                </div>
+              ) : (
+                <div className="supermarket-gondolas-heading">
+                  <span>Góndolas</span>
+                  <h2>Encontrá todo por sección</h2>
+                  <p>Elegí una góndola para filtrar las publicaciones reales de Supermercado.</p>
+                </div>
+              )}
               <div className="supermarket-aisles">
-                {supermarketAisles.map(([icon, label]) => (
-                  <button key={label} type="button" onClick={() => submitSearch(label)}><span>{icon}</span>{label}</button>
+                {supermarketAisles.map((aisle) => (
+                  <button
+                    key={aisle.id}
+                    type="button"
+                    onClick={() =>
+                      aisle.id === "offers"
+                        ? openOffers("all", "supermercado")
+                        : openCategorySearch("supermercado", aisle.query)
+                    }
+                  >
+                    <span className={`supermarket-aisle-icon supermarket-aisle-icon--${aisle.id}`} aria-hidden="true" />
+                    {aisle.label}
+                  </button>
                 ))}
               </div>
-              <div className="category-showcase-heading"><h2>Liquidación Full-Súper</h2><button type="button" onClick={() => openPage("offers")}>Ver más</button></div>
+              <div className="category-showcase-heading"><h2>Liquidación Full-Súper</h2><button type="button" onClick={() => openOffers("all", "supermercado")}>Ver más</button></div>
             </div>
           ) : null}
 
           {resultCategory?.id === "moda" ? (
             <div className="fashion-page">
-              <div className="fashion-hero">
-                <span>FINAL DE TEMPORADA</span>
-                <h1>Liquidación en moda</h1>
-                <p>HASTA <strong>50% OFF</strong></p>
+              <div
+                className="fashion-hero"
+                style={{ backgroundImage: `linear-gradient(90deg, rgba(79, 4, 11, .92) 0%, rgba(79, 4, 11, .28) 46%, rgba(79, 4, 11, .12) 72%, rgba(79, 4, 11, .78) 100%), url(${officialAssets.fashionCampaign})` }}
+              >
+                <div className="fashion-hero__content">
+                  <span>FINAL DE TEMPORADA</span>
+                  <h1>Liquidación en moda</h1>
+                  <p>HASTA <strong>50% OFF</strong></p>
+                  <button type="button" onClick={() => openOffers("clearance", "moda")}>
+                    Ver liquidación
+                  </button>
+                </div>
                 <small>HASTA 9 CUOTAS SIN INTERÉS</small>
               </div>
               <div className="fashion-tiles">
                 {fashionDeals.map(([label, discount]) => (
-                  <button key={label} type="button" onClick={() => submitSearch(label)}>
+                  <button key={label} type="button" onClick={() => openCategorySearch("moda", label)}>
                     <CategoryGlyph categoryId="moda" />
                     <strong>HASTA {discount}</strong>
                     <span>{label}</span>
@@ -2016,26 +2354,21 @@ export function MarketplaceApp() {
                 ))}
               </div>
               <div className="fashion-brands">
-                {fashionBrands.map((brand) => <button key={brand} type="button">{brand}</button>)}
+                {fashionBrands.map((brand) => (
+                  <button
+                    className={fashionBrand === brand ? "is-active" : ""}
+                    key={brand}
+                    type="button"
+                    onClick={() => {
+                      setFashionBrand(brand);
+                      openCategorySearch("moda", brand);
+                    }}
+                  >
+                    {brand}
+                  </button>
+                ))}
               </div>
-              <div className="category-showcase-heading"><h2>Liquidación en moda</h2><button type="button" onClick={() => openPage("offers")}>Ver más</button></div>
-            </div>
-          ) : null}
-
-          {resultCategory?.id === "streaming" ? (
-            <div className="play-page">
-              <nav className="play-nav">
-                <strong>mercado play</strong>
-                {["Inicio", "Gratis", "Películas", "Series", "HBO Max", "Disney+", "ViX"].map((item) => <button key={item} type="button">{item}</button>)}
-                <label><span>⌕</span><input placeholder="Buscar en Mercado Play" onChange={(event) => setQuery(event.target.value)} /></label>
-              </nav>
-              <div className="play-hero">
-                <span>Paramount+</span>
-                <h1>Suscribite a Paramount+ con 15% OFF</h1>
-                <p><b>15% OFF</b> Pagás <s>$ 6.750</s> $ 5.738/mes</p>
-                <button type="button" onClick={() => applyCouponCode("PLAY15")}>Suscribite con 15% OFF</button>
-              </div>
-              <div className="play-row-heading"><h2>Aniversario Harry Potter: 30% OFF en toda la saga</h2></div>
+              <div className="category-showcase-heading"><h2>Liquidación en moda</h2><button type="button" onClick={() => openOffers("clearance", "moda")}>Ver más</button></div>
             </div>
           ) : null}
 
@@ -2468,27 +2801,93 @@ export function MarketplaceApp() {
           <div className="special-heading">
             <div>
               <h1>Ofertas</h1>
-              <p>Beneficios disponibles para tu cuenta.</p>
+              <p>
+                {offerCategory
+                  ? `Filtradas por ${categories.find((category) => category.id === offerCategory)?.label ?? "categoría"}`
+                  : offerTabs.find((tab) => tab.id === offerTab)?.label}
+              </p>
             </div>
             <button type="button" onClick={() => openCategory("streaming")}>Ver entretenimiento</button>
           </div>
           <div className="offers-tabs">
-            {offerTabs.map(([icon, label], index) => (
-              <button className={index === 0 ? "is-active" : ""} key={label} type="button">
-                <span>{icon}</span>{label}
+            {offerTabs.map((tab) => (
+              <button
+                aria-pressed={offerTab === tab.id}
+                className={offerTab === tab.id ? "is-active" : ""}
+                key={tab.id}
+                type="button"
+                onClick={() => {
+                  setOfferTab(tab.id);
+                  if (tab.id === "phones" || tab.id === "notebooks") {
+                    setOfferCategory("tecnologia");
+                  } else {
+                    setOfferCategory(null);
+                  }
+                }}
+              >
+                <span>{tab.icon}</span>{tab.label}
               </button>
             ))}
           </div>
           <div className="offers-layout">
             <aside className="offers-sidebar">
-              <h2>Todas</h2>
-              <p>{Math.max(offerListings.length, 10000).toLocaleString("es-AR")} productos</p>
-              <div className="offers-full"><strong>FULL</strong><span>te ahorra envíos</span><button type="button" /></div>
+              <h2>{offerCategory ? "Categoría seleccionada" : "Todas"}</h2>
+              <p>{offerListings.length.toLocaleString("es-AR")} {offerListings.length === 1 ? "producto" : "productos"}</p>
+              <div className="offers-full">
+                <strong>FULL</strong>
+                <span>te ahorra envíos</span>
+                <button
+                  aria-label="Filtrar por envíos Full"
+                  aria-pressed={offerFullOnly}
+                  className={offerFullOnly ? "is-active" : ""}
+                  type="button"
+                  onClick={() => setOfferFullOnly((active) => !active)}
+                />
+              </div>
               <h3>Tipo de promoción</h3>
-              <button type="button">Oferta relámpago</button>
-              <button type="button">Oferta del día</button>
+              <button
+                className={offerTab === "flash" ? "is-active" : ""}
+                type="button"
+                onClick={() => setOfferTab("flash")}
+              >
+                Oferta relámpago
+              </button>
+              <button
+                className={offerTab === "best" ? "is-active" : ""}
+                type="button"
+                onClick={() => setOfferTab("best")}
+              >
+                Precios imbatibles
+              </button>
               <h3>Categorías</h3>
-              {offerCategories.map((category) => <button key={category} type="button">{category}</button>)}
+              {offerCategories.map((category) => {
+                const categoryId = offerCategoryIds[category];
+                return (
+                  <button
+                    className={offerCategory === categoryId ? "is-active" : ""}
+                    key={category}
+                    type="button"
+                    onClick={() =>
+                      setOfferCategory((current) => current === categoryId ? null : categoryId)
+                    }
+                  >
+                    {category}
+                  </button>
+                );
+              })}
+              {offerCategory || offerFullOnly || offerTab !== "all" ? (
+                <button
+                  className="offers-sidebar__clear"
+                  type="button"
+                  onClick={() => {
+                    setOfferTab("all");
+                    setOfferCategory(null);
+                    setOfferFullOnly(false);
+                  }}
+                >
+                  Limpiar filtros
+                </button>
+              ) : null}
             </aside>
             <div className="offers-results">
           {offerListings.length > 0 ? (
@@ -2504,8 +2903,18 @@ export function MarketplaceApp() {
             </div>
           ) : (
             <div className="account-empty">
-              <h2>No hay ofertas publicadas</h2>
-              <p>Las promociones aparecerán acá cuando estén disponibles.</p>
+              <h2>No hay ofertas con estos filtros</h2>
+              <p>Probá otra categoría o quitá el filtro de envíos.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setOfferTab("all");
+                  setOfferCategory(null);
+                  setOfferFullOnly(false);
+                }}
+              >
+                Ver todas las ofertas
+              </button>
             </div>
           )}
             </div>
@@ -2715,17 +3124,44 @@ export function MarketplaceApp() {
           <div className="help-hero">
             <span>Hola, {activeUser.name.split(" ")[0].toUpperCase()}.</span>
             <h1>¿Con qué podemos ayudarte?</h1>
-            <div className="help-search"><span className="search-mini-icon" /><input placeholder="Escribí tu consulta" /></div>
+            <form
+              className="help-search"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const firstMatch = visibleHelpTopics[0];
+                if (firstMatch) {
+                  setHelpTopic(firstMatch[0]);
+                }
+              }}
+            >
+              <span className="search-mini-icon" />
+              <input
+                aria-label="Buscar en ayuda"
+                placeholder="Escribí tu consulta"
+                value={helpQuery}
+                onChange={(event) => {
+                  setHelpQuery(event.target.value);
+                  setHelpTopic(null);
+                }}
+              />
+              {helpQuery ? (
+                <button
+                  type="button"
+                  aria-label="Borrar consulta"
+                  onClick={() => {
+                    setHelpQuery("");
+                    setHelpTopic(null);
+                  }}
+                >
+                  ×
+                </button>
+              ) : null}
+            </form>
           </div>
           <div className="help-layout help-layout--official">
             <nav aria-label="Atajos personalizados">
-              <h2>Atajos personalizados</h2>
-              {[
-                ["protected", "Qué es Compra Protegida"],
-                ["payments", "Cómo puedo pagar una compra"],
-                ["coupons", "Ayuda con cupones"],
-                ["faq", "Explorá las preguntas frecuentes"],
-              ].map(([id, label, detail]) => (
+              <h2>{helpQuery ? "Resultados de ayuda" : "Atajos personalizados"}</h2>
+              {visibleHelpTopics.map(([id, topic]) => (
                 <button
                   className={helpTopic === id ? "is-active" : ""}
                   key={id}
@@ -2733,11 +3169,39 @@ export function MarketplaceApp() {
                   onClick={() => setHelpTopic(id)}
                 >
                   <span />
-                  <div><strong>{label}</strong>{detail ? <small>{detail}</small> : null}</div>
+                  <div><strong>{topic.label}</strong></div>
                   <b>›</b>
                 </button>
               ))}
+              {visibleHelpTopics.length === 0 ? (
+                <div className="help-search-empty">
+                  <strong>No encontramos esa consulta</strong>
+                  <p>Probá con compras, pagos, cupones o seguridad.</p>
+                </div>
+              ) : null}
             </nav>
+            {helpTopic ? (
+              <section className="help-detail">
+                <button
+                  className="help-detail__close"
+                  type="button"
+                  aria-label="Cerrar respuesta"
+                  onClick={() => setHelpTopic(null)}
+                >
+                  ×
+                </button>
+                <span>Ayuda</span>
+                <h2>{helpTopics[helpTopic].label}</h2>
+                <p>{helpTopics[helpTopic].body}</p>
+                <button
+                  className="help-detail__action"
+                  type="button"
+                  onClick={() => openPage(helpTopics[helpTopic].view)}
+                >
+                  {helpTopics[helpTopic].action}
+                </button>
+              </section>
+            ) : null}
           </div>
           <div className="help-contact">
             <h2>¿Necesitás más ayuda?</h2>
@@ -3032,7 +3496,7 @@ export function MarketplaceApp() {
               <PurchasesEmptyIcon />
               <h2>¡Hacé tu primera compra!</h2>
               <p>Aquí podrás ver tus compras y hacer el seguimiento de tus envíos.</p>
-              <button type="button" onClick={() => openPage("offers")}>Ver ofertas del día</button>
+              <button type="button" onClick={() => openOffers()}>Ver ofertas del día</button>
             </div>
           )}
         </section>

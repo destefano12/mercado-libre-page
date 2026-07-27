@@ -906,6 +906,44 @@ button {
   line-height: 19px;
 }
 
+.notifications-popover__list {
+  max-height: 312px;
+  overflow: auto;
+}
+
+.notifications-popover__list article {
+  display: grid;
+  grid-template-columns: 10px 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 14px 18px;
+  border-bottom: 1px solid #ededed;
+}
+
+.notifications-popover__list article > span {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  background: var(--blue);
+  border-radius: 50%;
+}
+
+.notifications-popover__list article > div {
+  display: grid;
+  gap: 5px;
+}
+
+.notifications-popover__list strong {
+  color: #222;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.notifications-popover__list small {
+  color: #777;
+  font-size: 11px;
+}
+
 .category-menu {
   position: absolute;
   top: 100px;
@@ -1593,6 +1631,27 @@ button {
   font-size: 14px;
 }
 
+.supermarket-gondolas-heading {
+  width: min(1184px, calc(100% - 32px));
+  margin: 34px auto 28px;
+}
+
+.supermarket-gondolas-heading > span {
+  color: var(--blue);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.supermarket-gondolas-heading h2 {
+  margin: 6px 0;
+  font-size: 24px;
+}
+
+.supermarket-gondolas-heading p {
+  margin: 0;
+  color: #666;
+}
+
 .supermarket-aisles,
 .fashion-tiles {
   display: grid;
@@ -1616,8 +1675,111 @@ button {
   font-size: 16px;
 }
 
-.supermarket-aisles span {
-  font-size: 42px;
+.supermarket-aisle-icon {
+  position: relative;
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  color: #333;
+  background: #f5f5f5;
+  border: 1px solid #e5e5e5;
+  border-radius: 50%;
+}
+
+.supermarket-aisle-icon::before,
+.supermarket-aisle-icon::after {
+  position: absolute;
+  content: "";
+}
+
+.supermarket-aisle-icon--offers::before {
+  content: "%";
+  font-size: 30px;
+  font-weight: 500;
+}
+
+.supermarket-aisle-icon--pantry::before {
+  width: 28px;
+  height: 23px;
+  border: 2px solid currentColor;
+  border-radius: 4px;
+  box-shadow: inset 0 7px #ffe600;
+}
+
+.supermarket-aisle-icon--pantry::after {
+  top: 16px;
+  width: 18px;
+  height: 2px;
+  background: currentColor;
+}
+
+.supermarket-aisle-icon--drinks::before,
+.supermarket-aisle-icon--soft-drinks::before {
+  width: 15px;
+  height: 31px;
+  border: 2px solid currentColor;
+  border-radius: 4px 4px 6px 6px;
+}
+
+.supermarket-aisle-icon--drinks::after,
+.supermarket-aisle-icon--soft-drinks::after {
+  top: 10px;
+  width: 8px;
+  height: 6px;
+  border: 2px solid currentColor;
+  border-bottom: 0;
+}
+
+.supermarket-aisle-icon--care::before {
+  width: 24px;
+  height: 30px;
+  border: 2px solid currentColor;
+  border-radius: 12px 12px 7px 7px;
+}
+
+.supermarket-aisle-icon--care::after {
+  top: 10px;
+  width: 11px;
+  height: 5px;
+  border-top: 2px solid currentColor;
+  border-right: 2px solid currentColor;
+}
+
+.supermarket-aisle-icon--cleaning::before {
+  width: 19px;
+  height: 28px;
+  border: 2px solid currentColor;
+  border-radius: 5px;
+  transform: translateY(4px);
+}
+
+.supermarket-aisle-icon--cleaning::after {
+  top: 10px;
+  width: 24px;
+  height: 8px;
+  border-top: 2px solid currentColor;
+  border-right: 2px solid currentColor;
+  transform: translateX(4px);
+}
+
+.supermarket-aisle-icon--dairy::before {
+  width: 23px;
+  height: 31px;
+  border: 2px solid currentColor;
+  clip-path: polygon(0 18%, 28% 0, 100% 0, 100% 100%, 0 100%);
+  box-shadow: inset 0 -10px #e7f0ff;
+}
+
+.supermarket-aisles button,
+.fashion-tiles button {
+  transition: box-shadow 160ms ease, transform 160ms ease;
+}
+
+.supermarket-aisles button:hover,
+.fashion-tiles button:hover {
+  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.14);
+  transform: translateY(-2px);
 }
 
 .category-showcase-heading {
@@ -1644,12 +1806,22 @@ button {
 }
 
 .fashion-hero {
+  display: grid;
+  grid-template-columns: 1fr auto;
   min-height: 340px;
-  padding: 70px 20% 40px;
+  padding: 52px max(40px, calc((100vw - 1184px) / 2));
   color: #fff;
-  background:
-    radial-gradient(circle at 54% 35%, rgba(255,255,255,.18), transparent 16%),
-    linear-gradient(90deg, #6a090d, #8b161c 56%, #4d0508);
+  background-color: #650b14;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+.fashion-hero__content {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  width: min(620px, 56vw);
 }
 
 .fashion-hero span {
@@ -1673,11 +1845,23 @@ button {
   font-size: 22px;
 }
 
+.fashion-hero__content button {
+  min-height: 44px;
+  margin-top: 22px;
+  padding: 0 22px;
+  color: #650b14;
+  border: 0;
+  background: #fff;
+  border-radius: 6px;
+  font-weight: 700;
+}
+
 .fashion-hero small {
-  margin-left: 28%;
+  align-self: end;
   padding: 12px 30px;
   border: 1px solid #fff;
   border-radius: 999px;
+  white-space: nowrap;
 }
 
 .fashion-tiles {
@@ -1710,6 +1894,13 @@ button {
   background: #670b10;
   border-radius: 50%;
   font-weight: 700;
+}
+
+.fashion-brands button:hover,
+.fashion-brands button.is-active {
+  outline: 3px solid #fff;
+  box-shadow: 0 0 0 5px #670b10;
+  transform: translateY(-2px);
 }
 
 .play-page {
@@ -1807,6 +1998,110 @@ button {
   background: #171717;
 }
 
+.marketplace-shell--play {
+  background: #171717;
+}
+
+.marketplace-shell--play .site-header,
+.marketplace-shell--play .site-footer {
+  display: none;
+}
+
+.marketplace-shell--play .play-shell {
+  min-height: 100vh;
+  margin-top: 0;
+}
+
+.play-splash {
+  position: fixed;
+  z-index: 300;
+  display: grid;
+  overflow: hidden;
+  place-items: center;
+  background: #ffe600;
+  animation: play-splash-background 1450ms ease-in-out both;
+  inset: 0;
+}
+
+.play-splash__identity {
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-rows: auto auto;
+  column-gap: 14px;
+  align-items: center;
+  color: #fff;
+  animation: play-splash-identity 1450ms cubic-bezier(.22, .78, .24, 1) both;
+}
+
+.play-splash__identity img {
+  grid-row: 1 / 3;
+  width: 210px;
+  max-width: 48vw;
+}
+
+.play-splash__identity span,
+.play-splash__identity strong {
+  opacity: 0;
+  line-height: .92;
+  animation: play-splash-playmark 1450ms ease both;
+}
+
+.play-splash__identity span {
+  align-self: end;
+  font-size: 22px;
+}
+
+.play-splash__identity strong {
+  align-self: start;
+  font-size: 42px;
+}
+
+@keyframes play-splash-background {
+  0%,
+  46% {
+    background: #ffe600;
+  }
+  72%,
+  100% {
+    background: #050505;
+  }
+}
+
+@keyframes play-splash-identity {
+  0% {
+    opacity: 0;
+    transform: scale(.84);
+  }
+  18%,
+  58% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  76% {
+    transform: translateX(-44px) scale(.88);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-44px) scale(.88);
+  }
+}
+
+@keyframes play-splash-playmark {
+  0%,
+  48% {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  67%,
+  88% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 .play-topbar {
   position: sticky;
   top: 0;
@@ -1822,9 +2117,9 @@ button {
 }
 
 .play-brand {
-  display: grid;
-  gap: 0;
-  justify-items: start;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   color: #fff;
   border: 0;
   background: transparent;
@@ -1832,8 +2127,30 @@ button {
   line-height: 1;
 }
 
+.play-brand__symbol {
+  display: block;
+  width: 38px;
+  height: 30px;
+  overflow: hidden;
+  border-radius: 50%;
+}
+
+.play-brand__symbol img {
+  width: 118px;
+  max-width: none;
+  height: 30px;
+  object-fit: cover;
+  object-position: left center;
+  filter: none;
+}
+
+.play-brand > span:last-child {
+  display: grid;
+  text-align: left;
+}
+
 .play-brand strong {
-  font-size: 22px;
+  font-size: 20px;
 }
 
 .play-tabs {
@@ -1893,6 +2210,10 @@ button {
   font-size: 22px;
 }
 
+.play-hero-stage {
+  position: relative;
+}
+
 .play-hero-official {
   display: grid;
   min-height: 390px;
@@ -1901,6 +2222,16 @@ button {
   background-repeat: no-repeat;
   background-position: right center;
   background-size: min(58vw, 1080px) auto;
+  animation: play-hero-enter 420ms ease-out both;
+}
+
+@keyframes play-hero-enter {
+  from {
+    opacity: .45;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .play-hero-official > div {
@@ -1952,6 +2283,49 @@ button {
   font-weight: 700;
 }
 
+.play-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.play-hero-actions .play-hero-actions__secondary {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.24);
+}
+
+.play-hero-arrow {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
+  width: 54px;
+  color: #fff;
+  border: 0;
+  background: transparent;
+  opacity: 0;
+  font-size: 44px;
+  transition: opacity 180ms ease, background 180ms ease;
+}
+
+.play-hero-stage:hover .play-hero-arrow,
+.play-hero-arrow:focus-visible {
+  opacity: 1;
+}
+
+.play-hero-arrow:hover {
+  background: rgba(0, 0, 0, 0.32);
+}
+
+.play-hero-arrow--previous {
+  left: 0;
+}
+
+.play-hero-arrow--next {
+  right: 0;
+}
+
 .play-dots {
   display: flex;
   justify-content: center;
@@ -1959,12 +2333,19 @@ button {
   margin: -22px 0 38px;
 }
 
-.play-dots span {
-  width: 6px;
-  height: 6px;
-  background: #fff;
+.play-dots button {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border: 0;
+  background: rgba(255, 255, 255, 0.55);
   border-radius: 50%;
-  opacity: 0.7;
+}
+
+.play-dots button.is-active {
+  width: 20px;
+  background: #ffe600;
+  border-radius: 999px;
 }
 
 .play-row {
@@ -2016,6 +2397,12 @@ button {
   object-fit: cover;
   border-radius: 6px;
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.28);
+  transition: box-shadow 180ms ease, transform 180ms ease;
+}
+
+.play-card:hover img {
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.4);
+  transform: translateY(-3px);
 }
 
 .play-card > span,
@@ -2036,6 +2423,61 @@ button {
 
 .play-card small {
   color: rgba(255, 255, 255, 0.68);
+}
+
+.play-card-row--ranked {
+  grid-auto-columns: minmax(240px, 310px);
+}
+
+.play-card-row--ranked .play-card {
+  position: relative;
+  grid-template-columns: 58px 1fr;
+  align-items: end;
+}
+
+.play-card-row--ranked .play-card > b {
+  grid-row: 1;
+  align-self: end;
+  color: transparent;
+  -webkit-text-stroke: 2px #fff;
+  font-size: 86px;
+  line-height: .8;
+}
+
+.play-card-row--ranked .play-card img {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.play-card-row--ranked .play-card strong,
+.play-card-row--ranked .play-card small {
+  grid-column: 2;
+}
+
+.play-empty {
+  display: grid;
+  min-height: 160px;
+  place-items: center;
+  align-content: center;
+  padding: 24px;
+  text-align: center;
+  background: #222;
+  border-radius: 6px;
+}
+
+.play-empty p {
+  margin: 7px 0 16px;
+  color: rgba(255, 255, 255, .68);
+}
+
+.play-empty button {
+  min-height: 38px;
+  padding: 0 16px;
+  color: #111;
+  border: 0;
+  background: #ffe600;
+  border-radius: 6px;
+  font-weight: 600;
 }
 
 .play-benefits-row button {
@@ -4675,7 +5117,7 @@ button {
 
 .help-search {
   display: grid;
-  grid-template-columns: 30px 1fr;
+  grid-template-columns: 30px 1fr auto;
   align-items: center;
   width: min(560px, 100%);
   height: 48px;
@@ -4694,6 +5136,17 @@ button {
   height: 100%;
   border: 0;
   outline: 0;
+}
+
+.help-search > button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  color: #666;
+  border: 0;
+  background: transparent;
+  font-size: 22px;
 }
 
 .help-layout {
@@ -4913,6 +5366,16 @@ button {
   font-size: 14px;
 }
 
+.offers-sidebar > button.is-active {
+  color: var(--blue);
+  font-weight: 600;
+}
+
+.offers-sidebar > button.offers-sidebar__clear {
+  margin-top: 18px;
+  color: var(--blue);
+}
+
 .offers-full {
   display: grid;
   grid-template-columns: auto 1fr 38px;
@@ -4947,6 +5410,15 @@ button {
   background: #fff;
   border-radius: 50%;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 160ms ease;
+}
+
+.offers-full button.is-active {
+  background: var(--blue);
+}
+
+.offers-full button.is-active::after {
+  transform: translateX(14px);
 }
 
 .offers-results .special-grid {
@@ -5003,6 +5475,13 @@ button {
   display: block;
 }
 
+.help-layout--official:has(.help-detail) {
+  display: grid;
+  grid-template-columns: minmax(340px, .9fr) minmax(320px, 1.1fr);
+  width: min(980px, calc(100% - 32px));
+  gap: 20px;
+}
+
 .help-layout--official nav {
   overflow: hidden;
   background: #fff;
@@ -5038,6 +5517,43 @@ button {
 
 .help-layout--official nav small {
   display: none;
+}
+
+.help-search-empty {
+  display: grid;
+  min-height: 138px;
+  place-items: center;
+  align-content: center;
+  padding: 24px;
+  text-align: center;
+}
+
+.help-search-empty p {
+  margin: 6px 0 0;
+  color: #666;
+}
+
+.help-layout--official .help-detail {
+  position: relative;
+  min-height: 280px;
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.help-layout--official .help-detail__close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  color: #666;
+  font-size: 22px;
+}
+
+.help-layout--official .help-detail > span {
+  color: var(--blue);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .help-contact {
@@ -6176,5 +6692,132 @@ button {
 
   .messages-empty {
     padding: 28px 18px;
+  }
+}
+
+@media (max-width: 1120px) {
+  .supermarket-aisles,
+  .fashion-tiles,
+  .fashion-brands {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .offers-tabs {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(120px, 1fr);
+    grid-template-columns: none;
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 860px) {
+  .supermarket-benefits {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
+  .fashion-hero {
+    grid-template-columns: 1fr;
+    min-height: 410px;
+    padding: 44px 24px;
+    background-position: 60% center;
+  }
+
+  .fashion-hero__content {
+    width: min(500px, 72vw);
+  }
+
+  .fashion-hero h1 {
+    font-size: 54px;
+  }
+
+  .fashion-hero small {
+    display: none;
+  }
+
+  .offers-layout {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+
+  .offers-sidebar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .offers-sidebar h2,
+  .offers-sidebar > p,
+  .offers-sidebar .offers-full {
+    grid-column: 1 / -1;
+  }
+
+  .help-layout--official:has(.help-detail) {
+    grid-template-columns: 1fr;
+  }
+
+  .play-hero-arrow {
+    opacity: .72;
+  }
+}
+
+@media (max-width: 620px) {
+  .supermarket-aisles,
+  .fashion-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fashion-brands {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .fashion-hero {
+    min-height: 440px;
+    background-position: 67% center;
+  }
+
+  .fashion-hero__content {
+    width: 82vw;
+  }
+
+  .fashion-hero h1 {
+    font-size: 42px;
+  }
+
+  .fashion-hero p {
+    font-size: 18px;
+  }
+
+  .offers-sidebar {
+    grid-template-columns: 1fr;
+  }
+
+  .offers-sidebar h2,
+  .offers-sidebar > p,
+  .offers-sidebar .offers-full {
+    grid-column: auto;
+  }
+
+  .play-splash__identity {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .play-splash__identity img {
+    grid-row: auto;
+    width: 180px;
+  }
+
+  .play-splash__identity span,
+  .play-splash__identity strong {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .play-splash,
+  .play-splash__identity,
+  .play-splash__identity span,
+  .play-splash__identity strong,
+  .play-hero-official {
+    animation-duration: 1ms;
   }
 }
