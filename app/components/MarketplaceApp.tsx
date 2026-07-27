@@ -16,6 +16,10 @@ import categoryHome from "@/IMG/official/category-home.webp";
 import categoryTools from "@/IMG/official/category-tools.webp";
 import categoryStreaming from "@/IMG/official/category-streaming.webp";
 import categorySupermarket from "@/IMG/official/category-supermarket.webp";
+import disneyWidget from "@/IMG/official/disney-widget.jpg";
+import hboWidget from "@/IMG/official/hbo-widget.jpg";
+import disneyHero from "@/IMG/streaming/disney-hero.webp";
+import primeHero from "@/IMG/streaming/prime-video-hero.avif";
 import {
   categories,
   type CategoryId,
@@ -50,6 +54,7 @@ type ViewName =
   | "offers"
   | "favorites"
   | "messages"
+  | "play"
   | "help"
   | "cart"
   | "jobs"
@@ -210,6 +215,10 @@ const officialAssets = {
   newBuyer: assetSource(newBuyerIcon),
   registration: assetSource(registrationIcon),
   paymentMethods: assetSource(paymentMethodsIcon),
+  playDisney: assetSource(disneyWidget),
+  playHbo: assetSource(hboWidget),
+  playDisneyHero: assetSource(disneyHero),
+  playPrimeHero: assetSource(primeHero),
 };
 
 const categoryImages: Partial<Record<CategoryId, string>> = {
@@ -403,6 +412,143 @@ const offerCategories = [
   "Construcción",
   "Deportes y Fitness",
   "Electrodomésticos",
+];
+
+type PlayTab = "inicio" | "gratis" | "peliculas" | "series" | "max" | "disney" | "vix" | "universal" | "alquileres";
+
+interface PlayContentItem {
+  id: string;
+  title: string;
+  kind: "Película" | "Serie" | "Suscripción";
+  tab: PlayTab;
+  provider: string;
+  image: string;
+  badge: string;
+  meta: string;
+  description: string;
+  listingMatch?: string;
+}
+
+const playTabs: Array<{ id: PlayTab; label: string }> = [
+  { id: "inicio", label: "Inicio" },
+  { id: "gratis", label: "Gratis" },
+  { id: "peliculas", label: "Películas" },
+  { id: "series", label: "Series" },
+  { id: "max", label: "HBO Max" },
+  { id: "disney", label: "Disney+" },
+  { id: "vix", label: "ViX" },
+  { id: "universal", label: "Universal+" },
+  { id: "alquileres", label: "Alquileres" },
+];
+
+const playHeroSlides: PlayContentItem[] = [
+  {
+    id: "paramount-benefit",
+    title: "Suscribite a Paramount+ con 15% OFF",
+    kind: "Suscripción",
+    tab: "inicio",
+    provider: "Paramount+",
+    image: officialAssets.playPrimeHero,
+    badge: "15% OFF",
+    meta: "Pagás $ 5.738/mes",
+    description: "Con Paramount+ disfrutá mucho más contenido desde Mercado Play.",
+    listingMatch: "prime video",
+  },
+  {
+    id: "disney-benefit",
+    title: "Disney+ y ESPN en tus pantallas",
+    kind: "Suscripción",
+    tab: "disney",
+    provider: "Disney+",
+    image: officialAssets.playDisneyHero,
+    badge: "Contenido familiar",
+    meta: "Series, películas y deportes",
+    description: "Accedé a entretenimiento digital y activá beneficios desde tu cuenta.",
+    listingMatch: "disney",
+  },
+  {
+    id: "hbo-benefit",
+    title: "Suscribite a HBO Max con 15% OFF",
+    kind: "Suscripción",
+    tab: "max",
+    provider: "HBO Max",
+    image: officialAssets.playHbo,
+    badge: "15% OFF",
+    meta: "Series premium y películas",
+    description: "Aprovechá el beneficio disponible para entretenimiento digital.",
+    listingMatch: "hbo",
+  },
+];
+
+const playContent: PlayContentItem[] = [
+  {
+    id: "spider-style",
+    title: "El Hombre Araña 2",
+    kind: "Película",
+    tab: "gratis",
+    provider: "Mercado Play",
+    image: officialAssets.playPrimeHero,
+    badge: "Ver gratis",
+    meta: "+14 | Acción | 2 h 7 min | 2004",
+    description: "Una aventura de acción disponible dentro del catálogo simulado.",
+  },
+  {
+    id: "wizard-saga",
+    title: "Saga mágica completa",
+    kind: "Película",
+    tab: "alquileres",
+    provider: "Mercado Play",
+    image: officialAssets.playHbo,
+    badge: "30% OFF",
+    meta: "Disponible para alquilar",
+    description: "Fila de películas con descuento como la sección de sagas del sitio oficial.",
+  },
+  {
+    id: "family-animation",
+    title: "Animación familiar",
+    kind: "Película",
+    tab: "peliculas",
+    provider: "Disney+",
+    image: officialAssets.playDisney,
+    badge: "Top 10",
+    meta: "Aventura | Familiar | HD",
+    description: "Contenido familiar destacado para la fila de películas.",
+    listingMatch: "disney",
+  },
+  {
+    id: "prestige-drama",
+    title: "Drama premium",
+    kind: "Serie",
+    tab: "series",
+    provider: "HBO Max",
+    image: officialAssets.playHbo,
+    badge: "Nuevo",
+    meta: "Serie | Temporadas completas",
+    description: "Series destacadas en formato oscuro con tarjetas horizontales.",
+    listingMatch: "hbo",
+  },
+  {
+    id: "sports-pass",
+    title: "Deportes y eventos",
+    kind: "Suscripción",
+    tab: "vix",
+    provider: "ViX Premium",
+    image: officialAssets.playDisneyHero,
+    badge: "7 días gratis",
+    meta: "Beneficio en entretenimiento",
+    description: "Beneficio de plataforma con navegación y acción propia.",
+  },
+  {
+    id: "universal-pass",
+    title: "Universal+",
+    kind: "Suscripción",
+    tab: "universal",
+    provider: "Universal+",
+    image: officialAssets.playPrimeHero,
+    badge: "15% OFF",
+    meta: "Películas y canales",
+    description: "Tarjeta de beneficio conectada al flujo de cupones y búsqueda.",
+  },
 ];
 
 function useSelectedThread(
@@ -632,6 +778,9 @@ export function MarketplaceApp() {
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [couponError, setCouponError] = useState("");
+  const [playTab, setPlayTab] = useState<PlayTab>("inicio");
+  const [playSearch, setPlaySearch] = useState("");
+  const [selectedPlayItem, setSelectedPlayItem] = useState<PlayContentItem | null>(null);
   const [helpTopic, setHelpTopic] = useState<string | null>(null);
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [locationModalOpen, setLocationModalOpen] = useState(false);
@@ -847,6 +996,25 @@ export function MarketplaceApp() {
     () => state.listings.filter((listing) => listing.oldPrice || listing.badge),
     [state.listings],
   );
+  const visiblePlayContent = useMemo(() => {
+    const cleanSearch = playSearch.trim().toLowerCase();
+    return playContent.filter((item) => {
+      const matchesTab = playTab === "inicio" || item.tab === playTab || item.provider.toLowerCase().includes(playTab);
+      const matchesSearch = !cleanSearch || [item.title, item.provider, item.kind, item.meta, item.description]
+        .some((value) => value.toLowerCase().includes(cleanSearch));
+      return matchesTab && matchesSearch;
+    });
+  }, [playSearch, playTab]);
+  const playHero = playHeroSlides.find((slide) => playTab === "inicio" || slide.tab === playTab) ?? playHeroSlides[0];
+  const playBenefitListings = useMemo(
+    () =>
+      streamingCatalog.filter((listing) =>
+        ["hbo", "disney", "prime", "streaming"].some((term) =>
+          listing.tags.join(" ").toLowerCase().includes(term),
+        ),
+      ),
+    [streamingCatalog],
+  );
   const cartSubtotal = useMemo(
     () => cartListings.reduce((total, listing) => total + listing.price, 0),
     [cartListings],
@@ -925,6 +1093,10 @@ export function MarketplaceApp() {
   }
 
   function openCategory(categoryId: CategoryId) {
+    if (categoryId === "streaming") {
+      openPlay("inicio");
+      return;
+    }
     const category = categories.find((candidate) => candidate.id === categoryId);
     setResultCategoryId(categoryId);
     setResultQuery("");
@@ -935,6 +1107,49 @@ export function MarketplaceApp() {
     setCategoryMenuOpen(false);
     setView("results");
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function openPlay(nextTab: PlayTab = "inicio") {
+    setPlayTab(nextTab);
+    setSelectedPlayItem(null);
+    setPlaySearch("");
+    setResultCategoryId("streaming");
+    setResultQuery("");
+    setQuery("");
+    setCategoryMenuOpen(false);
+    setAccountMenuOpen(false);
+    setFavoritesMenuOpen(false);
+    setNotificationsOpen(false);
+    setSearchSuggestionsOpen(false);
+    setView("play");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function openPlayItem(item: PlayContentItem) {
+    const matchingListing = item.listingMatch
+      ? streamingCatalog.find((listing) =>
+          matchesListingQuery(listing, item.listingMatch ?? ""),
+        )
+      : null;
+    if (matchingListing && item.kind === "Suscripción") {
+      openListing(matchingListing);
+      return;
+    }
+    setSelectedPlayItem(item);
+  }
+
+  function activatePlayBenefit(item: PlayContentItem) {
+    applyCouponCode("PLAY15");
+    const matchingListing = item.listingMatch
+      ? streamingCatalog.find((listing) =>
+          matchesListingQuery(listing, item.listingMatch ?? ""),
+        )
+      : playBenefitListings[0];
+    if (matchingListing) {
+      openListing(matchingListing);
+      return;
+    }
+    openPage("coupons");
   }
 
   function submitSearch(value = query) {
@@ -1638,6 +1853,114 @@ export function MarketplaceApp() {
             </section>
           </div>
         </>
+      ) : null}
+
+      {view === "play" ? (
+        <section className="play-shell">
+          <nav className="play-topbar">
+            <button className="play-brand" type="button" onClick={() => openPlay("inicio")}>
+              <span>mercado</span>
+              <strong>play</strong>
+            </button>
+            <div className="play-tabs" role="tablist" aria-label="Mercado Play">
+              {playTabs.map((item) => (
+                <button
+                  aria-selected={playTab === item.id}
+                  className={playTab === item.id ? "is-active" : ""}
+                  key={item.id}
+                  role="tab"
+                  type="button"
+                  onClick={() => {
+                    setPlayTab(item.id);
+                    setSelectedPlayItem(null);
+                  }}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <label className="play-search">
+              <span>⌕</span>
+              <input
+                placeholder="Buscar en Mercado Play"
+                value={playSearch}
+                onChange={(event) => setPlaySearch(event.target.value)}
+              />
+            </label>
+            <button className="play-settings" type="button" onClick={() => openPage("help")} aria-label="Configuración">⚙</button>
+          </nav>
+
+          <div className="play-hero-official" style={{ backgroundImage: `linear-gradient(90deg, #121212 0%, rgba(18,18,18,.94) 42%, rgba(18,18,18,.2)), url(${playHero.image})` }}>
+            <div>
+              <span className="play-provider">{playHero.provider}</span>
+              <h1>{playHero.title}</h1>
+              <p>{playHero.description}</p>
+              <div className="play-price-line">
+                <b>{playHero.badge}</b>
+                <span>{playHero.meta}</span>
+              </div>
+              <button type="button" onClick={() => activatePlayBenefit(playHero)}>
+                {playHero.kind === "Suscripción" ? "Suscribite con 15% OFF" : "Ver gratis"}
+              </button>
+            </div>
+          </div>
+
+          <div className="play-dots" aria-hidden="true"><span /><span /><span /></div>
+
+          <section className="play-row">
+            <div className="play-row__heading">
+              <h2>{playTab === "inicio" ? "Aniversario y destacados" : playTabs.find((item) => item.id === playTab)?.label}</h2>
+              <button type="button" onClick={() => setPlaySearch("")}>Ver todo</button>
+            </div>
+            <div className="play-card-row">
+              {visiblePlayContent.map((item) => (
+                <button key={item.id} className="play-card" type="button" onClick={() => openPlayItem(item)}>
+                  <img src={item.image} alt={item.title} />
+                  <span>{item.badge}</span>
+                  <strong>{item.title}</strong>
+                  <small>{item.meta}</small>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="play-row">
+            <div className="play-row__heading">
+              <h2>Beneficios en entretenimiento</h2>
+              <button type="button" onClick={() => openPage("coupons")}>Ver cupones</button>
+            </div>
+            <div className="play-benefits-row">
+              {playBenefitListings.map((listing) => (
+                <button key={listing.id} type="button" onClick={() => {
+                  applyCouponCode("PLAY15");
+                  openListing(listing);
+                }}>
+                  <ListingVisual visual={listing.visual} title={listing.title} />
+                  <b>15% OFF</b>
+                  <span>{listing.title}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          {selectedPlayItem ? (
+            <div className="play-modal" role="dialog" aria-modal="true" aria-label={selectedPlayItem.title}>
+              <div className="play-modal__panel">
+                <button className="play-modal__close" type="button" onClick={() => setSelectedPlayItem(null)}>×</button>
+                <img src={selectedPlayItem.image} alt="" />
+                <div>
+                  <span>{selectedPlayItem.provider}</span>
+                  <h2>{selectedPlayItem.title}</h2>
+                  <p>{selectedPlayItem.meta}</p>
+                  <p>{selectedPlayItem.description}</p>
+                  <button type="button" onClick={() => activatePlayBenefit(selectedPlayItem)}>
+                    {selectedPlayItem.kind === "Suscripción" ? "Activar beneficio" : "Ver gratis"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </section>
       ) : null}
 
       {view === "results" ? (

@@ -183,6 +183,10 @@ test("adds official-style surfaces for supermarket, fashion, play, help and offe
   assert.match(page, /fashionBrands/);
   assert.match(page, /play-page/);
   assert.match(page, /Suscribite a Paramount\+ con 15% OFF/);
+  assert.match(page, /play-shell/);
+  assert.match(page, /playTabs/);
+  assert.match(page, /visiblePlayContent/);
+  assert.match(page, /openPlay\("inicio"\)/);
   assert.match(page, /offers-tabs/);
   assert.match(page, /offers-sidebar/);
   assert.match(page, /Atajos personalizados/);
@@ -190,6 +194,9 @@ test("adds official-style surfaces for supermarket, fashion, play, help and offe
   assert.match(stylesheet, /\.supermarket-hero/);
   assert.match(stylesheet, /\.fashion-hero/);
   assert.match(stylesheet, /\.play-nav/);
+  assert.match(stylesheet, /\.play-topbar/);
+  assert.match(stylesheet, /\.play-hero-official/);
+  assert.match(stylesheet, /\.play-modal/);
   assert.match(stylesheet, /\.offers-layout/);
   assert.match(stylesheet, /\.help-layout--official/);
   assert.match(stylesheet, /\.help-contact/);

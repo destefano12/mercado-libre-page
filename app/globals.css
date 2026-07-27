@@ -1800,6 +1800,323 @@ button {
   padding: 0 50px 20px;
 }
 
+.play-shell {
+  min-height: calc(100vh - 104px);
+  margin: -24px calc(50% - 50vw) 0;
+  color: #f5f5f5;
+  background: #171717;
+}
+
+.play-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr) 300px 44px;
+  gap: 24px;
+  align-items: center;
+  min-height: 88px;
+  padding: 0 max(28px, calc((100vw - 1760px) / 2));
+  background: #050505;
+  box-shadow: 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.play-brand {
+  display: grid;
+  gap: 0;
+  justify-items: start;
+  color: #fff;
+  border: 0;
+  background: transparent;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.play-brand strong {
+  font-size: 22px;
+}
+
+.play-tabs {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  min-width: 0;
+}
+
+.play-tabs button {
+  height: 88px;
+  color: #fff;
+  white-space: nowrap;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  font-weight: 600;
+}
+
+.play-tabs button.is-active {
+  color: #ffe600;
+  border-bottom-color: #ffe600;
+}
+
+.play-search {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  align-items: center;
+  height: 36px;
+  padding: 0 12px;
+  color: #fff;
+  background: #4f4f4f;
+  border: 1px solid #777;
+  border-radius: 999px;
+}
+
+.play-search input {
+  min-width: 0;
+  color: #fff;
+  border: 0;
+  outline: 0;
+  background: transparent;
+}
+
+.play-search input::placeholder {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.play-settings {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  color: #fff;
+  border: 0;
+  background: transparent;
+  font-size: 22px;
+}
+
+.play-hero-official {
+  display: grid;
+  min-height: 390px;
+  align-items: center;
+  padding: 56px max(42px, calc((100vw - 1760px) / 2));
+  background-repeat: no-repeat;
+  background-position: right center;
+  background-size: min(58vw, 1080px) auto;
+}
+
+.play-hero-official > div {
+  width: min(560px, 92vw);
+}
+
+.play-provider {
+  display: block;
+  margin-bottom: 14px;
+  color: rgba(255, 255, 255, 0.72);
+  font-weight: 700;
+}
+
+.play-hero-official h1 {
+  margin: 0 0 12px;
+  color: #fff;
+  font-size: 34px;
+  line-height: 1.15;
+}
+
+.play-hero-official p {
+  margin: 0 0 16px;
+  color: #fff;
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.play-price-line {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 0 0 28px;
+}
+
+.play-price-line b {
+  padding: 3px 10px;
+  color: #00a650;
+  background: #e5fff0;
+  border-radius: 999px;
+}
+
+.play-hero-official button,
+.play-modal__panel button:not(.play-modal__close) {
+  min-height: 48px;
+  padding: 0 22px;
+  border: 0;
+  background: #ffe600;
+  border-radius: 6px;
+  font-weight: 700;
+}
+
+.play-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin: -22px 0 38px;
+}
+
+.play-dots span {
+  width: 6px;
+  height: 6px;
+  background: #fff;
+  border-radius: 50%;
+  opacity: 0.7;
+}
+
+.play-row {
+  padding: 0 max(42px, calc((100vw - 1760px) / 2)) 46px;
+}
+
+.play-row__heading {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.play-row__heading h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 21px;
+}
+
+.play-row__heading button {
+  color: #7fb0ff;
+  border: 0;
+  background: transparent;
+}
+
+.play-card-row,
+.play-benefits-row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(220px, 280px);
+  gap: 18px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+}
+
+.play-card,
+.play-benefits-row button {
+  display: grid;
+  gap: 8px;
+  color: #fff;
+  text-align: left;
+  border: 0;
+  background: transparent;
+}
+
+.play-card img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 6px;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.28);
+}
+
+.play-card > span,
+.play-benefits-row b {
+  width: fit-content;
+  padding: 3px 9px;
+  color: #121212;
+  background: #ffe600;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.play-card strong {
+  color: #fff;
+  font-size: 16px;
+}
+
+.play-card small {
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.play-benefits-row button {
+  overflow: hidden;
+  padding: 0 0 14px;
+  background: #242424;
+  border-radius: 8px;
+}
+
+.play-benefits-row .listing-visual {
+  width: 100%;
+  height: 150px;
+  border-radius: 0;
+}
+
+.play-benefits-row b,
+.play-benefits-row span {
+  margin-inline: 14px;
+}
+
+.play-modal {
+  position: fixed;
+  z-index: 150;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.72);
+  inset: 0;
+}
+
+.play-modal__panel {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(260px, 520px) minmax(260px, 430px);
+  overflow: hidden;
+  width: min(960px, 96vw);
+  color: #fff;
+  background: #202020;
+  border-radius: 8px;
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.48);
+}
+
+.play-modal__panel img {
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+  object-fit: cover;
+}
+
+.play-modal__panel > div {
+  display: grid;
+  align-content: center;
+  gap: 12px;
+  padding: 34px;
+}
+
+.play-modal__panel h2,
+.play-modal__panel p {
+  margin: 0;
+}
+
+.play-modal__panel p {
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.play-modal__close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  color: #fff;
+  border: 0;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 50%;
+  font-size: 24px;
+}
+
 .results-heading {
   display: flex;
   align-items: flex-end;
@@ -5170,6 +5487,25 @@ button {
 }
 
 @media (max-width: 1120px) {
+  .play-topbar {
+    grid-template-columns: 110px 1fr 44px;
+    gap: 14px;
+  }
+
+  .play-tabs {
+    overflow-x: auto;
+  }
+
+  .play-search {
+    grid-column: 1 / -1;
+    width: min(520px, 100%);
+    margin: 0 0 14px 124px;
+  }
+
+  .play-hero-official {
+    background-size: 72vw auto;
+  }
+
   .header-primary {
     grid-template-columns: 146px minmax(300px, 1fr) 220px;
   }
@@ -5223,6 +5559,50 @@ button {
 }
 
 @media (max-width: 860px) {
+  .play-topbar {
+    position: relative;
+    grid-template-columns: 1fr 40px;
+    min-height: 0;
+    padding: 14px 16px;
+  }
+
+  .play-tabs {
+    grid-column: 1 / -1;
+    order: 3;
+    gap: 16px;
+  }
+
+  .play-tabs button {
+    height: 44px;
+  }
+
+  .play-search {
+    grid-column: 1 / -1;
+    order: 4;
+    width: 100%;
+    margin: 0;
+  }
+
+  .play-hero-official {
+    min-height: 430px;
+    padding: 220px 20px 34px;
+    background-position: top center;
+    background-size: auto 235px;
+  }
+
+  .play-row {
+    padding-inline: 20px;
+  }
+
+  .play-modal__panel {
+    grid-template-columns: 1fr;
+  }
+
+  .play-modal__panel img {
+    min-height: 210px;
+    max-height: 280px;
+  }
+
   .header-primary,
   .header-secondary,
   .home-content,
@@ -5366,6 +5746,24 @@ button {
 }
 
 @media (max-width: 620px) {
+  .play-shell {
+    margin-top: -14px;
+  }
+
+  .play-card-row,
+  .play-benefits-row {
+    grid-auto-columns: minmax(190px, 78vw);
+  }
+
+  .play-hero-official h1 {
+    font-size: 26px;
+  }
+
+  .play-price-line {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .site-header {
     height: 108px;
   }
