@@ -167,6 +167,34 @@ test("applies category coupons to real purchase totals", async () => {
   assert.match(stylesheet, /\.purchase-item__coupon/);
 });
 
+test("adds official-style surfaces for supermarket, fashion, play, help and offers", async () => {
+  const page = await readFile(
+    new URL("../app/components/MarketplaceApp.tsx", import.meta.url),
+    "utf8",
+  );
+  const stylesheet = await readFile(
+    new URL("../app/globals.css", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(page, /supermarket-page/);
+  assert.match(page, /supermarketAisles/);
+  assert.match(page, /fashion-page/);
+  assert.match(page, /fashionBrands/);
+  assert.match(page, /play-page/);
+  assert.match(page, /Suscribite a Paramount\+ con 15% OFF/);
+  assert.match(page, /offers-tabs/);
+  assert.match(page, /offers-sidebar/);
+  assert.match(page, /Atajos personalizados/);
+  assert.match(page, /Necesitás más ayuda/);
+  assert.match(stylesheet, /\.supermarket-hero/);
+  assert.match(stylesheet, /\.fashion-hero/);
+  assert.match(stylesheet, /\.play-nav/);
+  assert.match(stylesheet, /\.offers-layout/);
+  assert.match(stylesheet, /\.help-layout--official/);
+  assert.match(stylesheet, /\.help-contact/);
+});
+
 test("includes the expanded official-style category menu", async () => {
   const page = await readFile(
     new URL("../app/components/MarketplaceApp.tsx", import.meta.url),

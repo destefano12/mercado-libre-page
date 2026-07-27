@@ -359,6 +359,52 @@ const marketplaceCoupons: MarketplaceCoupon[] = [
   },
 ];
 
+const supermarketAisles = [
+  ["💸", "Ofertas"],
+  ["🍪", "Despensa"],
+  ["🍷", "Bebidas alcohólicas"],
+  ["🧴", "Higiene personal y belleza"],
+  ["🧽", "Limpieza del hogar"],
+  ["🥤", "Agua, jugos y gaseosas"],
+  ["🥛", "Lácteos"],
+];
+
+const fashionDeals = [
+  ["Calzado", "40% OFF"],
+  ["Camperas y abrigos", "50% OFF"],
+  ["Zapatillas", "40% OFF"],
+  ["Sweaters y buzos", "45% OFF"],
+  ["Remeras", "50% OFF"],
+  ["Jeans y pantalones", "40% OFF"],
+  ["Ropa interior", "35% OFF"],
+];
+
+const fashionBrands = ["briganti", "47 STREET", "PORTSAID", "SWEET", "PARKA", "CHEEKY", "JUANITA JO"];
+
+const offerTabs = [
+  ["%", "Todas las ofertas"],
+  ["⚡", "Ofertas relámpago"],
+  ["$", "Precios imbatibles"],
+  ["▯", "Celulares"],
+  ["▱", "Notebooks"],
+  ["SALE", "Liquidación"],
+];
+
+const offerCategories = [
+  "Accesorios para Vehículos",
+  "Agro",
+  "Alimentos y Bebidas",
+  "Arte, Librería y Mercería",
+  "Bebés",
+  "Belleza y Cuidado Personal",
+  "Celulares y Teléfonos",
+  "Computación",
+  "Consolas y Videojuegos",
+  "Construcción",
+  "Deportes y Fitness",
+  "Electrodomésticos",
+];
+
 function useSelectedThread(
   state: ReturnType<typeof useMarketplaceStore>["state"],
   activeUserId: string | undefined,
@@ -1602,7 +1648,75 @@ export function MarketplaceApp() {
             <span>{resultCategory?.label ?? resultQuery}</span>
           </div>
 
+          {resultCategory?.id === "supermercado" ? (
+            <div className="supermarket-page">
+              <div
+                className="supermarket-hero"
+                style={{ backgroundImage: `linear-gradient(90deg, rgba(255,255,255,.12), rgba(255,230,0,.18)), url(${categoryImages.supermercado})` }}
+              >
+                <div><span>🛒</span><strong>FULL · SÚPER</strong></div>
+              </div>
+              <nav className="supermarket-tabs">
+                <button className="is-active" type="button">Inicio</button>
+                <button type="button">Góndolas</button>
+                <button type="button" onClick={() => openPage("offers")}>Ofertas</button>
+              </nav>
+              <div className="supermarket-benefits">
+                <article><b>▦</b><strong>Compra mínima: $ 12.000</strong><span>Armá un carrito que supere este monto.</span></article>
+                <article><b>▣</b><strong>Envío gratis desde $ 65.000</strong><span>En tus carritos de Full Súper.</span></article>
+                <article><b>▤</b><strong>Llega hoy o mañana</strong><span>Desde nuestras bodegas.</span></article>
+              </div>
+              <div className="supermarket-aisles">
+                {supermarketAisles.map(([icon, label]) => (
+                  <button key={label} type="button" onClick={() => submitSearch(label)}><span>{icon}</span>{label}</button>
+                ))}
+              </div>
+              <div className="category-showcase-heading"><h2>Liquidación Full-Súper</h2><button type="button" onClick={() => openPage("offers")}>Ver más</button></div>
+            </div>
+          ) : null}
+
+          {resultCategory?.id === "moda" ? (
+            <div className="fashion-page">
+              <div className="fashion-hero">
+                <span>FINAL DE TEMPORADA</span>
+                <h1>Liquidación en moda</h1>
+                <p>HASTA <strong>50% OFF</strong></p>
+                <small>HASTA 9 CUOTAS SIN INTERÉS</small>
+              </div>
+              <div className="fashion-tiles">
+                {fashionDeals.map(([label, discount]) => (
+                  <button key={label} type="button" onClick={() => submitSearch(label)}>
+                    <CategoryGlyph categoryId="moda" />
+                    <strong>HASTA {discount}</strong>
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="fashion-brands">
+                {fashionBrands.map((brand) => <button key={brand} type="button">{brand}</button>)}
+              </div>
+              <div className="category-showcase-heading"><h2>Liquidación en moda</h2><button type="button" onClick={() => openPage("offers")}>Ver más</button></div>
+            </div>
+          ) : null}
+
           {resultCategory?.id === "streaming" ? (
+            <div className="play-page">
+              <nav className="play-nav">
+                <strong>mercado play</strong>
+                {["Inicio", "Gratis", "Películas", "Series", "HBO Max", "Disney+", "ViX"].map((item) => <button key={item} type="button">{item}</button>)}
+                <label><span>⌕</span><input placeholder="Buscar en Mercado Play" onChange={(event) => setQuery(event.target.value)} /></label>
+              </nav>
+              <div className="play-hero">
+                <span>Paramount+</span>
+                <h1>Suscribite a Paramount+ con 15% OFF</h1>
+                <p><b>15% OFF</b> Pagás <s>$ 6.750</s> $ 5.738/mes</p>
+                <button type="button" onClick={() => applyCouponCode("PLAY15")}>Suscribite con 15% OFF</button>
+              </div>
+              <div className="play-row-heading"><h2>Aniversario Harry Potter: 30% OFF en toda la saga</h2></div>
+            </div>
+          ) : null}
+
+          {false && resultCategory?.id === "streaming" ? (
             <div className="results-promo results-promo--streaming">
               <span>ENTRETENIMIENTO</span>
               <h1>Todo para ver, escuchar y disfrutar</h1>
@@ -2021,7 +2135,7 @@ export function MarketplaceApp() {
       ) : null}
 
       {view === "offers" ? (
-        <section className="special-page">
+        <section className="special-page offers-page">
           <div className="breadcrumb">
             <button type="button" onClick={goHome}>Inicio</button><span>›</span><span>Ofertas</span>
           </div>
@@ -2035,6 +2149,25 @@ export function MarketplaceApp() {
             </div>
             <button type="button" onClick={() => openCategory("streaming")}>Ver entretenimiento</button>
           </div>
+          <div className="offers-tabs">
+            {offerTabs.map(([icon, label], index) => (
+              <button className={index === 0 ? "is-active" : ""} key={label} type="button">
+                <span>{icon}</span>{label}
+              </button>
+            ))}
+          </div>
+          <div className="offers-layout">
+            <aside className="offers-sidebar">
+              <h2>Todas</h2>
+              <p>{Math.max(offerListings.length, 10000).toLocaleString("es-AR")} productos</p>
+              <div className="offers-full"><strong>FULL</strong><span>te ahorra envíos</span><button type="button" /></div>
+              <h3>Tipo de promoción</h3>
+              <button type="button">Oferta relámpago</button>
+              <button type="button">Oferta del día</button>
+              <h3>Categorías</h3>
+              {offerCategories.map((category) => <button key={category} type="button">{category}</button>)}
+            </aside>
+            <div className="offers-results">
           {offerListings.length > 0 ? (
             <div className="results-grid special-grid">
               {offerListings.map((listing) => (
@@ -2052,6 +2185,8 @@ export function MarketplaceApp() {
               <p>Las promociones aparecerán acá cuando estén disponibles.</p>
             </div>
           )}
+            </div>
+          </div>
         </section>
       ) : null}
 
@@ -2255,17 +2390,18 @@ export function MarketplaceApp() {
             <button type="button" onClick={goHome}>Inicio</button><span>›</span><span>Ayuda</span>
           </div>
           <div className="help-hero">
+            <span>Hola, {activeUser.name.split(" ")[0].toUpperCase()}.</span>
             <h1>¿Con qué podemos ayudarte?</h1>
-            <div className="help-search"><span className="search-mini-icon" /><input placeholder="Buscá en Ayuda" /></div>
+            <div className="help-search"><span className="search-mini-icon" /><input placeholder="Escribí tu consulta" /></div>
           </div>
-          <div className="help-layout">
-            <nav aria-label="Temas de ayuda">
+          <div className="help-layout help-layout--official">
+            <nav aria-label="Atajos personalizados">
+              <h2>Atajos personalizados</h2>
               {[
-                ["buy", "Compras", "Pagos, entregas y devoluciones"],
-                ["sell", "Ventas", "Publicaciones, cobros y reputación"],
-                ["account", "Tu cuenta", "Datos, seguridad y acceso"],
-                ["shipping", "Envíos", "Seguimiento y direcciones"],
-                ["payments", "Medios de pago", "Tarjetas, cuotas y promociones"],
+                ["protected", "Qué es Compra Protegida"],
+                ["payments", "Cómo puedo pagar una compra"],
+                ["coupons", "Ayuda con cupones"],
+                ["faq", "Explorá las preguntas frecuentes"],
               ].map(([id, label, detail]) => (
                 <button
                   className={helpTopic === id ? "is-active" : ""}
@@ -2274,46 +2410,15 @@ export function MarketplaceApp() {
                   onClick={() => setHelpTopic(id)}
                 >
                   <span />
-                  <div><strong>{label}</strong><small>{detail}</small></div>
+                  <div><strong>{label}</strong>{detail ? <small>{detail}</small> : null}</div>
                   <b>›</b>
                 </button>
               ))}
             </nav>
-            <article className="help-detail">
-              {helpTopic ? (
-                <>
-                  <button type="button" onClick={() => setHelpTopic(null)}>‹ Todos los temas</button>
-                  <h2>{
-                    helpTopic === "buy" ? "Ayuda con tus compras" :
-                    helpTopic === "sell" ? "Ayuda con tus ventas" :
-                    helpTopic === "account" ? "Seguridad de tu cuenta" :
-                    helpTopic === "shipping" ? "Seguimiento de envíos" :
-                    "Medios de pago"
-                  }</h2>
-                  <p>{
-                    helpTopic === "sell"
-                      ? "Desde Vender podés identificar el artículo, agregar fotos propias, completar sus características y definir las condiciones de venta."
-                      : helpTopic === "shipping"
-                        ? "Después de comprar, entrá en Mis compras para ver el estado y el recorrido actualizado de tu envío."
-                        : helpTopic === "payments"
-                          ? "Las alternativas disponibles y las cuotas se muestran antes de confirmar cada compra."
-                          : "Elegí una operación para consultar sus detalles y próximos pasos."
-                  }</p>
-                  <button
-                    className="help-detail__action"
-                    type="button"
-                    onClick={() => helpTopic === "sell" ? setPublishOpen(true) : openPage("purchases")}
-                  >
-                    {helpTopic === "sell" ? "Ir a Vender desde el menú" : "Ver mis compras"}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <h2>Elegí un tema</h2>
-                  <p>Vas a encontrar respuestas y accesos directos relacionados con tu cuenta.</p>
-                </>
-              )}
-            </article>
+          </div>
+          <div className="help-contact">
+            <h2>¿Necesitás más ayuda?</h2>
+            <button type="button" onClick={() => openPage("messages")}>Contactanos</button>
           </div>
         </section>
       ) : null}

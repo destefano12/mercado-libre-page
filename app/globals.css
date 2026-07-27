@@ -1513,6 +1513,293 @@ button {
   color: rgba(255, 255, 255, 0.72);
 }
 
+.supermarket-page {
+  margin: -24px calc(50% - 50vw) 30px;
+  padding-bottom: 26px;
+  background: #eee;
+}
+
+.supermarket-hero {
+  display: grid;
+  min-height: 98px;
+  place-items: center;
+  background-color: #f8c13a;
+  background-size: auto 120px;
+}
+
+.supermarket-hero > div {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 34px;
+  color: #00a650;
+  background: #fff;
+  border-radius: 5px;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.12);
+  font-size: 20px;
+}
+
+.supermarket-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 28px;
+  min-height: 52px;
+  background: #fff;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+}
+
+.supermarket-tabs button,
+.coupon-tabs button {
+  border: 0;
+  background: transparent;
+  color: #555;
+}
+
+.supermarket-tabs .is-active {
+  color: var(--blue);
+  border-bottom: 3px solid var(--blue);
+}
+
+.supermarket-benefits {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  width: min(1184px, calc(100% - 32px));
+  margin: 32px auto 40px;
+  padding: 16px 24px;
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14);
+}
+
+.supermarket-benefits article {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 8px 14px;
+  align-items: center;
+}
+
+.supermarket-benefits b {
+  grid-row: span 2;
+  display: grid;
+  width: 64px;
+  height: 64px;
+  place-items: center;
+  background: #f1f1f1;
+  border-radius: 6px;
+  font-size: 28px;
+}
+
+.supermarket-benefits span {
+  font-size: 14px;
+}
+
+.supermarket-aisles,
+.fashion-tiles {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  width: min(1184px, calc(100% - 32px));
+  margin: 0 auto 38px;
+  gap: 16px;
+}
+
+.supermarket-aisles button,
+.fashion-tiles button {
+  display: grid;
+  min-height: 160px;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  border: 0;
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  font-size: 16px;
+}
+
+.supermarket-aisles span {
+  font-size: 42px;
+}
+
+.category-showcase-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(1184px, calc(100% - 32px));
+  margin: 0 auto 18px;
+}
+
+.category-showcase-heading h2 {
+  margin: 0;
+}
+
+.category-showcase-heading button {
+  color: var(--blue);
+  border: 0;
+  background: transparent;
+}
+
+.fashion-page {
+  margin: -24px calc(50% - 50vw) 34px;
+  background: #fff;
+}
+
+.fashion-hero {
+  min-height: 340px;
+  padding: 70px 20% 40px;
+  color: #fff;
+  background:
+    radial-gradient(circle at 54% 35%, rgba(255,255,255,.18), transparent 16%),
+    linear-gradient(90deg, #6a090d, #8b161c 56%, #4d0508);
+}
+
+.fashion-hero span {
+  font-weight: 700;
+}
+
+.fashion-hero h1 {
+  margin: 10px 0;
+  font-style: italic;
+  font-size: 76px;
+  line-height: .95;
+}
+
+.fashion-hero p {
+  display: inline-block;
+  margin: 0;
+  padding: 8px 26px;
+  color: #111;
+  background: #fff;
+  border-radius: 999px;
+  font-size: 22px;
+}
+
+.fashion-hero small {
+  margin-left: 28%;
+  padding: 12px 30px;
+  border: 1px solid #fff;
+  border-radius: 999px;
+}
+
+.fashion-tiles {
+  margin-top: 32px;
+}
+
+.fashion-tiles button {
+  min-height: 142px;
+}
+
+.fashion-tiles strong {
+  padding: 6px 12px;
+  color: #fff;
+  background: #6a090d;
+  border-radius: 999px;
+}
+
+.fashion-brands {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  width: min(1040px, calc(100% - 32px));
+  margin: 26px auto 42px;
+  gap: 18px;
+}
+
+.fashion-brands button {
+  aspect-ratio: 1;
+  color: #fff;
+  border: 0;
+  background: #670b10;
+  border-radius: 50%;
+  font-weight: 700;
+}
+
+.play-page {
+  margin: -24px calc(50% - 50vw) 30px;
+  color: #fff;
+  background: #171717;
+}
+
+.play-nav {
+  display: grid;
+  grid-template-columns: 150px repeat(7, auto) 1fr;
+  align-items: center;
+  gap: 22px;
+  min-height: 88px;
+  padding: 0 50px;
+  background: #020202;
+}
+
+.play-nav strong,
+.play-nav button {
+  color: #fff;
+}
+
+.play-nav button {
+  height: 44px;
+  border: 0;
+  background: transparent;
+  font-weight: 600;
+}
+
+.play-nav button:first-of-type {
+  color: #ffe600;
+  border-bottom: 3px solid #ffe600;
+}
+
+.play-nav label {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  width: min(300px, 100%);
+  height: 36px;
+  padding: 0 12px;
+  background: #555;
+  border: 1px solid #777;
+  border-radius: 999px;
+}
+
+.play-nav input {
+  width: 100%;
+  color: #fff;
+  border: 0;
+  outline: 0;
+  background: transparent;
+}
+
+.play-hero {
+  min-height: 360px;
+  padding: 60px 66px;
+  background:
+    linear-gradient(90deg, #171717 0%, rgba(23,23,23,.92) 43%, rgba(23,23,23,.25)),
+    radial-gradient(circle at 76% 35%, #48607f, transparent 25%);
+}
+
+.play-hero h1 {
+  max-width: 620px;
+  margin: 12px 0;
+  font-size: 30px;
+}
+
+.play-hero b {
+  padding: 2px 10px;
+  color: #00a650;
+  background: #e7fff1;
+  border-radius: 999px;
+}
+
+.play-hero button {
+  margin-top: 22px;
+  min-height: 48px;
+  padding: 0 22px;
+  border: 0;
+  background: #ffe600;
+  border-radius: 6px;
+  font-weight: 700;
+}
+
+.play-row-heading {
+  padding: 0 50px 20px;
+}
+
 .results-heading {
   display: flex;
   align-items: flex-end;
@@ -4190,6 +4477,275 @@ button {
   color: #fff;
   border: 0;
   background: var(--blue);
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.offers-page {
+  width: min(1180px, calc(100% - 32px));
+}
+
+.offers-page .breadcrumb,
+.offers-page .offers-banner {
+  display: none;
+}
+
+.offers-page .special-heading {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 52px;
+  align-items: end;
+  margin: -24px calc(50% - 50vw) 0;
+  padding: 24px max(16px, calc((100vw - 1180px) / 2)) 0;
+  background: #fff;
+}
+
+.offers-page .special-heading h1 {
+  margin: 0 0 6px;
+  font-size: 28px;
+}
+
+.offers-page .special-heading p {
+  margin: 0;
+  color: #555;
+}
+
+.offers-page .special-heading > button {
+  display: none;
+}
+
+.offers-tabs {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(92px, 1fr));
+  gap: 22px;
+  margin: 0 calc(50% - 50vw);
+  padding: 0 max(16px, calc((100vw - 1180px) / 2));
+  background: #fff;
+}
+
+.offers-tabs button {
+  display: grid;
+  min-height: 108px;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  color: #666;
+  text-align: center;
+  border: 0;
+  border-bottom: 4px solid transparent;
+  background: transparent;
+  font-size: 14px;
+}
+
+.offers-tabs button span {
+  color: var(--blue);
+  font-size: 34px;
+  line-height: 1;
+}
+
+.offers-tabs button.is-active {
+  color: #222;
+  border-bottom-color: var(--blue);
+}
+
+.offers-layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 52px;
+  align-items: start;
+  min-height: 620px;
+  margin: 0 calc(50% - 50vw);
+  padding: 32px max(16px, calc((100vw - 1180px) / 2)) 56px;
+  background: #e9e9e9;
+}
+
+.offers-sidebar {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.offers-sidebar h2,
+.offers-sidebar h3,
+.offers-sidebar p {
+  margin: 0;
+}
+
+.offers-sidebar h2 {
+  font-size: 18px;
+}
+
+.offers-sidebar p {
+  margin-bottom: 20px;
+  color: #333;
+  font-size: 14px;
+}
+
+.offers-sidebar h3 {
+  margin-top: 26px;
+  font-size: 16px;
+}
+
+.offers-sidebar > button {
+  width: fit-content;
+  padding: 0;
+  color: #444;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  font-size: 14px;
+}
+
+.offers-full {
+  display: grid;
+  grid-template-columns: auto 1fr 38px;
+  gap: 5px;
+  align-items: center;
+  min-height: 70px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.offers-full strong {
+  color: var(--green);
+  font-style: italic;
+}
+
+.offers-full button {
+  width: 38px;
+  height: 24px;
+  border: 0;
+  background: #e5e5e5;
+  border-radius: 999px;
+}
+
+.offers-full button::after {
+  display: block;
+  width: 22px;
+  height: 22px;
+  margin: 1px;
+  content: "";
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.offers-results .special-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.help-page {
+  width: 100%;
+  max-width: none;
+  padding-top: 0;
+}
+
+.help-page .breadcrumb {
+  display: none;
+}
+
+.help-page .help-hero {
+  min-height: 258px;
+  margin: -24px calc(50% - 50vw) 0;
+  padding: 34px 16px 38px;
+  color: #111;
+  background: linear-gradient(#ffe600 0 47px, #f5f5f5 47px);
+  border-radius: 0;
+  box-shadow: inset 0 -1px #e6e6e6;
+}
+
+.help-page .help-hero > span {
+  margin-top: 34px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.help-page .help-hero h1 {
+  margin: 8px 0 26px;
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.help-page .help-search {
+  width: min(752px, calc(100% - 32px));
+  height: 48px;
+  padding: 0 16px;
+  border-radius: 24px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.12);
+}
+
+.help-layout--official,
+.help-contact {
+  width: min(752px, calc(100% - 32px));
+  margin: 52px auto 0;
+}
+
+.help-layout--official {
+  display: block;
+}
+
+.help-layout--official nav {
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.help-layout--official nav h2 {
+  margin: 0;
+  padding: 17px 16px;
+  border-bottom: 1px solid var(--line);
+  font-size: 18px;
+}
+
+.help-layout--official nav > button {
+  min-height: 48px;
+  padding: 0 16px;
+  grid-template-columns: 24px 1fr auto;
+}
+
+.help-layout--official nav > button > span {
+  width: 20px;
+  height: 20px;
+  background: transparent;
+}
+
+.help-layout--official nav > button > span::after {
+  width: 13px;
+  height: 13px;
+  border-color: #333;
+}
+
+.help-layout--official nav small {
+  display: none;
+}
+
+.help-contact {
+  display: grid;
+  grid-template-columns: 1fr 174px;
+  align-items: center;
+  min-height: 82px;
+  margin-top: 46px;
+  padding: 0 16px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.help-contact h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.help-contact button {
+  height: 48px;
+  color: var(--blue);
+  border: 0;
+  background: #e8f1ff;
   border-radius: 6px;
   font-weight: 600;
 }
