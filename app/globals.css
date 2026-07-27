@@ -1558,23 +1558,81 @@ button {
 }
 
 .supermarket-hero {
-  display: grid;
-  min-height: 98px;
-  place-items: center;
-  background-color: #f8c13a;
-  background-size: auto 120px;
+  position: relative;
+  display: flex;
+  min-height: 122px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #f7c744;
+  border-bottom: 1px solid rgba(70, 52, 0, 0.12);
 }
 
-.supermarket-hero > div {
+.supermarket-hero__brand {
+  position: relative;
+  z-index: 2;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 16px 34px;
-  color: #00a650;
+  gap: 12px;
+  min-width: 228px;
+  min-height: 68px;
+  justify-content: center;
+  padding: 9px 22px;
   background: #fff;
-  border-radius: 5px;
-  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.12);
-  font-size: 20px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(53, 41, 0, 0.18);
+}
+
+.supermarket-hero__basket {
+  width: 54px;
+  height: 54px;
+  object-fit: contain;
+}
+
+.supermarket-hero__logo {
+  width: 148px;
+  height: auto;
+}
+
+.supermarket-hero__groceries {
+  position: absolute;
+  inset-block: -8px;
+  display: flex;
+  width: min(38vw, 520px);
+  align-items: center;
+  justify-content: space-evenly;
+  gap: 20px;
+  pointer-events: none;
+}
+
+.supermarket-hero__groceries--left {
+  left: max(12px, calc(50% - 720px));
+}
+
+.supermarket-hero__groceries--right {
+  right: max(12px, calc(50% - 720px));
+}
+
+.supermarket-hero__groceries img {
+  width: clamp(82px, 9vw, 142px);
+  height: clamp(82px, 9vw, 142px);
+  object-fit: contain;
+  filter: saturate(1.03) drop-shadow(0 5px 5px rgba(85, 57, 0, 0.12));
+}
+
+.supermarket-hero__groceries img:nth-child(2) {
+  transform: translateY(14px) scale(1.06);
+}
+
+.supermarket-symbol {
+  width: 48px;
+  height: 48px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 .supermarket-tabs {
@@ -1627,6 +1685,16 @@ button {
   font-size: 28px;
 }
 
+.supermarket-benefits .supermarket-symbol {
+  grid-row: span 2;
+  width: 64px;
+  height: 64px;
+  padding: 13px;
+  color: #333;
+  background: #f1f1f1;
+  border-radius: 6px;
+}
+
 .supermarket-benefits span {
   font-size: 14px;
 }
@@ -1652,7 +1720,19 @@ button {
   color: #666;
 }
 
-.supermarket-aisles,
+.supermarket-aisles {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(142px, 1fr);
+  width: min(1184px, calc(100% - 32px));
+  margin: 0 auto 38px;
+  gap: 16px;
+  overflow-x: auto;
+  padding: 2px 2px 12px;
+  scrollbar-color: #c7c7c7 transparent;
+  scrollbar-width: thin;
+}
+
 .fashion-tiles {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -1678,13 +1758,19 @@ button {
 .supermarket-aisle-icon {
   position: relative;
   display: grid;
-  width: 58px;
-  height: 58px;
+  width: 84px;
+  height: 84px;
   place-items: center;
   color: #333;
-  background: #f5f5f5;
-  border: 1px solid #e5e5e5;
-  border-radius: 50%;
+  background: transparent;
+  border: 0;
+}
+
+.supermarket-aisle-icon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .supermarket-aisle-icon::before,
@@ -2116,6 +2202,13 @@ button {
   box-shadow: 0 1px rgba(255, 255, 255, 0.08);
 }
 
+.play-brand-group {
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  min-width: 0;
+}
+
 .play-brand {
   display: flex;
   align-items: center;
@@ -2151,6 +2244,16 @@ button {
 
 .play-brand strong {
   font-size: 20px;
+}
+
+.play-demo-badge {
+  color: #a5a5a5;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .play-tabs {
@@ -5307,10 +5410,24 @@ button {
   font-size: 14px;
 }
 
-.offers-tabs button span {
+.offer-tab-icon {
+  width: 46px;
+  height: 46px;
   color: var(--blue);
-  font-size: 34px;
-  line-height: 1;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.offer-tab-icon--sale text {
+  fill: currentColor;
+  stroke: none;
+  font-family: Arial, sans-serif;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0;
 }
 
 .offers-tabs button.is-active {
@@ -6696,10 +6813,13 @@ button {
 }
 
 @media (max-width: 1120px) {
-  .supermarket-aisles,
   .fashion-tiles,
   .fashion-brands {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .supermarket-aisles {
+    grid-auto-columns: minmax(142px, 28vw);
   }
 
   .offers-tabs {
@@ -6711,6 +6831,19 @@ button {
 }
 
 @media (max-width: 860px) {
+  .supermarket-hero__groceries {
+    width: 28vw;
+  }
+
+  .supermarket-hero__groceries img {
+    width: 76px;
+    height: 76px;
+  }
+
+  .supermarket-hero__groceries img:nth-child(2) {
+    display: none;
+  }
+
   .supermarket-benefits {
     grid-template-columns: 1fr;
     gap: 18px;
@@ -6760,9 +6893,24 @@ button {
 }
 
 @media (max-width: 620px) {
-  .supermarket-aisles,
+  .supermarket-hero {
+    min-height: 108px;
+  }
+
+  .supermarket-hero__groceries {
+    display: none;
+  }
+
+  .supermarket-hero__brand {
+    transform: scale(.92);
+  }
+
   .fashion-tiles {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .supermarket-aisles {
+    grid-auto-columns: minmax(142px, 68vw);
   }
 
   .fashion-brands {

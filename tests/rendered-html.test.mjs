@@ -207,6 +207,40 @@ test("adds official-style surfaces for supermarket, fashion, play, help and offe
   assert.match(stylesheet, /\.help-contact/);
 });
 
+test("uses real catalog artwork and proper visual icons in Play, supermarket and offers", async () => {
+  const page = await readFile(
+    new URL("../app/components/MarketplaceApp.tsx", import.meta.url),
+    "utf8",
+  );
+  const visuals = await readFile(
+    new URL("../app/data/marketplaceVisuals.ts", import.meta.url),
+    "utf8",
+  );
+  const stylesheet = await readFile(
+    new URL("../app/globals.css", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(page, /Películas gratis para ver ahora/);
+  assert.match(page, /Series para maratonear/);
+  assert.match(page, /Saga Harry Potter: 30% OFF/);
+  assert.match(page, /Duna: Parte Dos/);
+  assert.match(page, /The Rookie/);
+  assert.match(page, /OfferTabIcon/);
+  assert.match(page, /SupermarketBenefitIcon/);
+  assert.match(page, /<img src=\{aisle\.image\}/);
+  assert.match(page, /Demo no afiliada/);
+  assert.match(page, /supermarketBrandImages\.logo/);
+  assert.match(visuals, /streaming\/catalog\/harry-potter-1\.webp/);
+  assert.match(visuals, /streaming\/catalog\/friends\.webp/);
+  assert.match(visuals, /supermarket\/aisles\/offers\.webp/);
+  assert.match(visuals, /supermarket\/full-super-header\.webp/);
+  assert.match(visuals, /supermarket\/full-super-logo\.jpg/);
+  assert.match(stylesheet, /\.offer-tab-icon/);
+  assert.match(stylesheet, /\.supermarket-symbol/);
+  assert.match(stylesheet, /\.supermarket-hero__groceries/);
+});
+
 test("does not leave inert button-looking controls in the main marketplace", async () => {
   const page = await readFile(
     new URL("../app/components/MarketplaceApp.tsx", import.meta.url),

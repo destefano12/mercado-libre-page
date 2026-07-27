@@ -22,6 +22,11 @@ import fashionCampaign from "@/IMG/official/fashion-campaign-original.png";
 import disneyHero from "@/IMG/streaming/disney-hero.webp";
 import primeHero from "@/IMG/streaming/prime-video-hero.avif";
 import {
+  playMedia,
+  supermarketAisleImages,
+  supermarketBrandImages,
+} from "../data/marketplaceVisuals";
+import {
   categories,
   type CategoryId,
   type ChatThread,
@@ -371,14 +376,16 @@ const marketplaceCoupons: MarketplaceCoupon[] = [
 ];
 
 const supermarketAisles = [
-  { id: "offers", label: "Ofertas", query: "oferta supermercado" },
-  { id: "pantry", label: "Despensa", query: "despensa" },
-  { id: "drinks", label: "Bebidas alcohólicas", query: "bebidas alcohólicas" },
-  { id: "care", label: "Higiene personal y belleza", query: "higiene personal" },
-  { id: "cleaning", label: "Limpieza del hogar", query: "limpieza del hogar" },
-  { id: "soft-drinks", label: "Agua, jugos y gaseosas", query: "agua jugos gaseosas" },
-  { id: "dairy", label: "Lácteos", query: "lácteos" },
-];
+  { id: "offers", label: "Ofertas", query: "oferta supermercado", image: supermarketAisleImages.offers },
+  { id: "pantry", label: "Despensa", query: "despensa", image: supermarketAisleImages.pantry },
+  { id: "drinks", label: "Bebidas alcohólicas", query: "bebidas alcohólicas", image: supermarketAisleImages.drinks },
+  { id: "care", label: "Higiene personal y belleza", query: "higiene personal", image: supermarketAisleImages.care },
+  { id: "cleaning", label: "Limpieza del hogar", query: "limpieza del hogar", image: supermarketAisleImages.cleaning },
+  { id: "soft-drinks", label: "Agua, jugos y gaseosas", query: "agua jugos gaseosas", image: supermarketAisleImages["soft-drinks"] },
+  { id: "dairy", label: "Lácteos", query: "lácteos", image: supermarketAisleImages.dairy },
+  { id: "babies", label: "Bebés", query: "bebés", image: supermarketAisleImages.babies },
+  { id: "pharmacy", label: "Farmacia", query: "farmacia", image: supermarketAisleImages.pharmacy },
+] as const;
 
 const fashionDeals = [
   ["Calzado", "40% OFF"],
@@ -394,13 +401,13 @@ const fashionBrands = ["briganti", "47 STREET", "PORTSAID", "SWEET", "PARKA", "C
 
 type OfferTabId = "all" | "flash" | "best" | "phones" | "notebooks" | "clearance";
 
-const offerTabs: Array<{ id: OfferTabId; icon: string; label: string }> = [
-  { id: "all", icon: "%", label: "Todas las ofertas" },
-  { id: "flash", icon: "ϟ", label: "Ofertas relámpago" },
-  { id: "best", icon: "$", label: "Precios imbatibles" },
-  { id: "phones", icon: "▯", label: "Celulares" },
-  { id: "notebooks", icon: "▱", label: "Notebooks" },
-  { id: "clearance", icon: "SALE", label: "Liquidación" },
+const offerTabs: Array<{ id: OfferTabId; label: string }> = [
+  { id: "all", label: "Todas las ofertas" },
+  { id: "flash", label: "Ofertas relámpago" },
+  { id: "best", label: "Precios imbatibles" },
+  { id: "phones", label: "Celulares" },
+  { id: "notebooks", label: "Notebooks" },
+  { id: "clearance", label: "Liquidación" },
 ];
 
 const offerCategories = [
@@ -469,6 +476,7 @@ interface PlayContentItem {
   title: string;
   kind: "Película" | "Serie" | "Suscripción";
   tab: PlayTab;
+  tabs?: PlayTab[];
   provider: string;
   image: string;
   badge: string;
@@ -496,7 +504,7 @@ const playHeroSlides: PlayContentItem[] = [
     kind: "Suscripción",
     tab: "inicio",
     provider: "Paramount+",
-    image: officialAssets.playPrimeHero,
+    image: playMedia.heroParamount,
     badge: "15% OFF",
     meta: "Pagás $ 5.738/mes",
     description: "Con Paramount+ disfrutá mucho más contenido desde Mercado Play.",
@@ -520,82 +528,546 @@ const playHeroSlides: PlayContentItem[] = [
     kind: "Suscripción",
     tab: "max",
     provider: "HBO Max",
-    image: officialAssets.playHbo,
+    image: playMedia.heroHbo,
     badge: "15% OFF",
     meta: "Series premium y películas",
     description: "Aprovechá el beneficio disponible para entretenimiento digital.",
     listingMatch: "hbo",
   },
-];
-
-const playContent: PlayContentItem[] = [
   {
-    id: "spider-style",
+    id: "spiderman-hero",
     title: "El Hombre Araña 2",
     kind: "Película",
     tab: "gratis",
     provider: "Mercado Play",
-    image: officialAssets.playPrimeHero,
+    image: playMedia.heroSpiderman,
     badge: "Ver gratis",
-    meta: "+14 | Acción | 2 h 7 min | 2004",
-    description: "Una aventura de acción disponible dentro del catálogo simulado.",
+    meta: "+14 | Ciencia ficción y acción | 2 h 7 min",
+    description: "Peter Parker enfrenta un nuevo desafío mientras intenta ordenar su vida.",
   },
   {
-    id: "wizard-saga",
-    title: "Saga mágica completa",
+    id: "harry-potter-hero",
+    title: "Harry Potter y la Piedra Filosofal",
     kind: "Película",
     tab: "alquileres",
     provider: "Mercado Play",
-    image: officialAssets.playHbo,
+    image: playMedia.heroHarryPotter,
     badge: "30% OFF",
-    meta: "Disponible para alquilar",
-    description: "Fila de películas con descuento como la sección de sagas del sitio oficial.",
+    meta: "+12 | Fantasía y aventura | 2 h 32 min",
+    description: "El comienzo de la saga mágica está disponible para alquilar.",
   },
   {
-    id: "family-animation",
-    title: "Animación familiar",
+    id: "illusionists-hero",
+    title: "Los ilusionistas: Nada es lo que parece",
     kind: "Película",
-    tab: "peliculas",
-    provider: "Disney+",
-    image: officialAssets.playDisney,
-    badge: "Top 10",
-    meta: "Aventura | Familiar | HD",
-    description: "Contenido familiar destacado para la fila de películas.",
-    listingMatch: "disney",
+    tab: "gratis",
+    provider: "Mercado Play",
+    image: playMedia.heroIllusionists,
+    badge: "Ver gratis",
+    meta: "+14 | Thriller y misterio | 1 h 55 min",
+    description: "Un grupo de ilusionistas queda en el centro de una investigación.",
   },
   {
-    id: "prestige-drama",
-    title: "Drama premium",
+    id: "affair-hero",
+    title: "The Affair",
     kind: "Serie",
     tab: "series",
-    provider: "HBO Max",
-    image: officialAssets.playHbo,
+    provider: "Mercado Play",
+    image: playMedia.heroTheAffair,
+    badge: "Ver gratis",
+    meta: "+16 | Drama | 5 temporadas",
+    description: "Un drama contado desde distintas perspectivas y con temporadas completas.",
+  },
+];
+
+const playContent: PlayContentItem[] = [
+  {
+    id: "spiderman-2",
+    title: "El Hombre Araña 2",
+    kind: "Película",
+    tab: "gratis",
+    tabs: ["peliculas"],
+    provider: "Mercado Play",
+    image: playMedia.heroSpiderman,
+    badge: "Ver gratis",
+    meta: "+14 | Acción | 2 h 7 min | 2004",
+    description: "Acción y ciencia ficción en una de las aventuras más recordadas del héroe.",
+  },
+  {
+    id: "illusionists",
+    title: "Los ilusionistas: Nada es lo que parece",
+    kind: "Película",
+    tab: "gratis",
+    tabs: ["peliculas"],
+    provider: "Mercado Play",
+    image: playMedia.heroIllusionists,
+    badge: "Ver gratis",
+    meta: "+14 | Thriller | 1 h 55 min | 2013",
+    description: "Misterio, espectáculo y una investigación que sigue cada truco.",
+  },
+  {
+    id: "the-affair",
+    title: "The Affair",
+    kind: "Serie",
+    tab: "gratis",
+    tabs: ["series"],
+    provider: "Mercado Play",
+    image: playMedia.heroTheAffair,
+    badge: "Ver gratis",
+    meta: "+16 | Drama | 5 temporadas | 2014",
+    description: "Una historia dramática narrada desde puntos de vista diferentes.",
+  },
+  {
+    id: "ice-age",
+    title: "La era de hielo",
+    kind: "Película",
+    tab: "gratis",
+    tabs: ["peliculas"],
+    provider: "Mercado Play",
+    image: playMedia.iceAge,
+    badge: "Ver gratis",
+    meta: "ATP | Animación y aventura | 1 h 21 min",
+    description: "Una aventura familiar para disfrutar en cualquier momento.",
+  },
+  {
+    id: "rio",
+    title: "Río",
+    kind: "Película",
+    tab: "gratis",
+    tabs: ["peliculas"],
+    provider: "Mercado Play",
+    image: playMedia.rio,
+    badge: "Ver gratis",
+    meta: "ATP | Animación y comedia | 1 h 36 min",
+    description: "Música, color y una aventura familiar ambientada en Río de Janeiro.",
+  },
+  {
+    id: "top-gun-maverick",
+    title: "Top Gun: Maverick",
+    kind: "Película",
+    tab: "gratis",
+    tabs: ["peliculas"],
+    provider: "Paramount+",
+    image: playMedia.topGunMaverick,
+    badge: "Destacada",
+    meta: "+13 | Acción y drama | 2 h 10 min",
+    description: "Aviación, velocidad y una nueva misión para pilotos de élite.",
+  },
+  {
+    id: "deja-vu",
+    title: "Déjà Vu",
+    kind: "Película",
+    tab: "gratis",
+    tabs: ["peliculas"],
+    provider: "Mercado Play",
+    image: playMedia.dejaVu,
+    badge: "Ver gratis",
+    meta: "+13 | Acción y suspenso | 2 h 6 min",
+    description: "Una investigación extraordinaria pone a prueba el tiempo y la memoria.",
+  },
+  {
+    id: "historias-cruzadas",
+    title: "Historias cruzadas",
+    kind: "Película",
+    tab: "gratis",
+    tabs: ["peliculas"],
+    provider: "Mercado Play",
+    image: playMedia.historiasCruzadas,
+    badge: "Recomendada",
+    meta: "+13 | Drama | 2 h 26 min",
+    description: "Una historia humana sobre vínculos, coraje y cambios sociales.",
+  },
+  {
+    id: "scary-movie",
+    title: "Scary Movie",
+    kind: "Película",
+    tab: "gratis",
+    tabs: ["peliculas", "universal"],
+    provider: "Universal+",
+    image: playMedia.scaryMovie,
+    badge: "Ver gratis",
+    meta: "+16 | Comedia | 1 h 28 min",
+    description: "Una comedia que parodia los grandes clásicos del terror.",
+  },
+  {
+    id: "como-perder-hombre",
+    title: "Cómo perder a un hombre en 10 días",
+    kind: "Película",
+    tab: "gratis",
+    tabs: ["peliculas"],
+    provider: "Mercado Play",
+    image: playMedia.comoPerderHombre,
+    badge: "Ver gratis",
+    meta: "+13 | Comedia romántica | 1 h 56 min",
+    description: "Dos planes opuestos se cruzan en una comedia romántica.",
+  },
+  {
+    id: "dungeons-dragons",
+    title: "Dungeons & Dragons: Honor entre ladrones",
+    kind: "Película",
+    tab: "peliculas",
+    provider: "Paramount+",
+    image: playMedia.dungeonsDragons,
     badge: "Nuevo",
-    meta: "Serie | Temporadas completas",
-    description: "Series destacadas en formato oscuro con tarjetas horizontales.",
+    meta: "+13 | Fantasía y aventura | 2 h 14 min",
+    description: "Un equipo improbable se embarca en una misión llena de humor y fantasía.",
+  },
+  {
+    id: "mickey-17",
+    title: "Mickey 17",
+    kind: "Película",
+    tab: "max",
+    tabs: ["peliculas"],
+    provider: "HBO Max",
+    image: playMedia.mickey17,
+    badge: "Estreno",
+    meta: "+16 | Ciencia ficción | 2 h 17 min",
+    description: "Ciencia ficción con una misión espacial que cambia todas las reglas.",
     listingMatch: "hbo",
   },
   {
-    id: "sports-pass",
-    title: "Deportes y eventos",
+    id: "man-of-steel",
+    title: "El hombre de acero",
+    kind: "Película",
+    tab: "max",
+    tabs: ["peliculas"],
+    provider: "HBO Max",
+    image: playMedia.manOfSteel,
+    badge: "Acción",
+    meta: "+13 | Acción y aventura | 2 h 23 min",
+    description: "El origen de un héroe que debe decidir qué representa para el mundo.",
+    listingMatch: "hbo",
+  },
+  {
+    id: "i-am-legend",
+    title: "Soy leyenda",
+    kind: "Película",
+    tab: "max",
+    tabs: ["peliculas"],
+    provider: "HBO Max",
+    image: playMedia.iAmLegend,
+    badge: "Top 10",
+    meta: "+16 | Ciencia ficción | 1 h 41 min",
+    description: "Supervivencia y ciencia ficción en una ciudad completamente transformada.",
+    listingMatch: "hbo",
+  },
+  {
+    id: "dune",
+    title: "Duna",
+    kind: "Película",
+    tab: "max",
+    tabs: ["peliculas"],
+    provider: "HBO Max",
+    image: playMedia.dune,
+    badge: "Imperdible",
+    meta: "+13 | Ciencia ficción | 2 h 35 min",
+    description: "Una épica de ciencia ficción situada en el planeta más importante del universo.",
+    listingMatch: "hbo",
+  },
+  {
+    id: "inception",
+    title: "El origen",
+    kind: "Película",
+    tab: "max",
+    tabs: ["peliculas"],
+    provider: "HBO Max",
+    image: playMedia.inception,
+    badge: "Clásico",
+    meta: "+13 | Ciencia ficción | 2 h 28 min",
+    description: "Un equipo se adentra en los sueños para completar una misión imposible.",
+    listingMatch: "hbo",
+  },
+  {
+    id: "godzilla",
+    title: "Godzilla",
+    kind: "Película",
+    tab: "max",
+    tabs: ["peliculas"],
+    provider: "HBO Max",
+    image: playMedia.godzilla,
+    badge: "Acción",
+    meta: "+13 | Acción | 2 h 3 min",
+    description: "Una amenaza gigantesca cambia el equilibrio del planeta.",
+    listingMatch: "hbo",
+  },
+  {
+    id: "dune-part-two",
+    title: "Duna: Parte Dos",
+    kind: "Película",
+    tab: "max",
+    tabs: ["peliculas"],
+    provider: "HBO Max",
+    image: playMedia.dunePartTwo,
+    badge: "Top 10",
+    meta: "+13 | Ciencia ficción | 2 h 46 min",
+    description: "La lucha por Arrakis continúa con nuevas alianzas y grandes decisiones.",
+    listingMatch: "hbo",
+  },
+  {
+    id: "the-conjuring",
+    title: "El Conjuro",
+    kind: "Película",
+    tab: "max",
+    tabs: ["peliculas"],
+    provider: "HBO Max",
+    image: playMedia.theConjuring,
+    badge: "Terror",
+    meta: "+16 | Terror | 1 h 52 min",
+    description: "Una investigación paranormal enfrenta un caso especialmente inquietante.",
+    listingMatch: "hbo",
+  },
+  {
+    id: "friends",
+    title: "Friends",
+    kind: "Serie",
+    tab: "series",
+    tabs: ["max"],
+    provider: "HBO Max",
+    image: playMedia.friends,
+    badge: "Serie completa",
+    meta: "+13 | Comedia | 10 temporadas",
+    description: "Seis amigos atraviesan juntos la vida cotidiana en Nueva York.",
+    listingMatch: "hbo",
+  },
+  {
+    id: "under-the-dome",
+    title: "Under the Dome",
+    kind: "Serie",
+    tab: "series",
+    provider: "Mercado Play",
+    image: playMedia.underTheDome,
+    badge: "Ver gratis",
+    meta: "+16 | Drama y misterio | 3 temporadas",
+    description: "Una comunidad queda aislada por una barrera que nadie logra explicar.",
+  },
+  {
+    id: "csi-miami",
+    title: "CSI: Miami",
+    kind: "Serie",
+    tab: "series",
+    provider: "Mercado Play",
+    image: playMedia.csiMiami,
+    badge: "Ver gratis",
+    meta: "+16 | Policial | 10 temporadas",
+    description: "Casos criminales investigados con ciencia forense y trabajo en equipo.",
+  },
+  {
+    id: "the-nanny",
+    title: "La niñera",
+    kind: "Serie",
+    tab: "series",
+    provider: "Mercado Play",
+    image: playMedia.theNanny,
+    badge: "Comedia",
+    meta: "ATP | Comedia | 6 temporadas",
+    description: "Una comedia familiar con una protagonista de personalidad inolvidable.",
+  },
+  {
+    id: "the-rookie",
+    title: "The Rookie",
+    kind: "Serie",
+    tab: "series",
+    provider: "Mercado Play",
+    image: playMedia.theRookie,
+    badge: "Top 10",
+    meta: "+13 | Policial | 7 temporadas",
+    description: "Un nuevo comienzo dentro de la policía exige aprender desde cero.",
+  },
+  {
+    id: "the-good-wife",
+    title: "The Good Wife",
+    kind: "Serie",
+    tab: "series",
+    provider: "Mercado Play",
+    image: playMedia.theGoodWife,
+    badge: "Drama",
+    meta: "+13 | Drama legal | 7 temporadas",
+    description: "Una abogada reconstruye su carrera mientras enfrenta casos complejos.",
+  },
+  {
+    id: "fbi",
+    title: "FBI",
+    kind: "Serie",
+    tab: "series",
+    provider: "Mercado Play",
+    image: playMedia.fbi,
+    badge: "Nuevos episodios",
+    meta: "+13 | Acción y policial | 8 temporadas",
+    description: "Investigaciones de alto riesgo a cargo de agentes federales.",
+  },
+  {
+    id: "harry-potter-1",
+    title: "Harry Potter y la Piedra Filosofal",
+    kind: "Película",
+    tab: "alquileres",
+    provider: "Mercado Play",
+    image: playMedia.harryPotter1,
+    badge: "30% OFF",
+    meta: "+12 | Fantasía | 2 h 32 min",
+    description: "El inicio de la historia en Hogwarts.",
+  },
+  {
+    id: "harry-potter-2",
+    title: "Harry Potter y la Cámara Secreta",
+    kind: "Película",
+    tab: "alquileres",
+    provider: "Mercado Play",
+    image: playMedia.harryPotter2,
+    badge: "30% OFF",
+    meta: "+12 | Fantasía | 2 h 41 min",
+    description: "Un nuevo misterio aparece dentro de Hogwarts.",
+  },
+  {
+    id: "harry-potter-3",
+    title: "Harry Potter y el Prisionero de Azkaban",
+    kind: "Película",
+    tab: "alquileres",
+    provider: "Mercado Play",
+    image: playMedia.harryPotter3,
+    badge: "30% OFF",
+    meta: "+12 | Fantasía | 2 h 22 min",
+    description: "Secretos del pasado cambian la historia de Harry.",
+  },
+  {
+    id: "harry-potter-4",
+    title: "Harry Potter y el Cáliz de Fuego",
+    kind: "Película",
+    tab: "alquileres",
+    provider: "Mercado Play",
+    image: playMedia.harryPotter4,
+    badge: "30% OFF",
+    meta: "+12 | Fantasía | 2 h 37 min",
+    description: "El Torneo de los Tres Magos llega a Hogwarts.",
+  },
+  {
+    id: "harry-potter-5",
+    title: "Harry Potter y la Orden del Fénix",
+    kind: "Película",
+    tab: "alquileres",
+    provider: "Mercado Play",
+    image: playMedia.harryPotter5,
+    badge: "30% OFF",
+    meta: "+12 | Fantasía | 2 h 18 min",
+    description: "Los estudiantes se preparan para defenderse de una amenaza creciente.",
+  },
+  {
+    id: "harry-potter-6",
+    title: "Harry Potter y el Misterio del Príncipe",
+    kind: "Película",
+    tab: "alquileres",
+    provider: "Mercado Play",
+    image: playMedia.harryPotter6,
+    badge: "30% OFF",
+    meta: "+12 | Fantasía | 2 h 33 min",
+    description: "Una investigación revela información decisiva sobre el enemigo.",
+  },
+  {
+    id: "harry-potter-7",
+    title: "Harry Potter y las Reliquias de la Muerte - Parte 1",
+    kind: "Película",
+    tab: "alquileres",
+    provider: "Mercado Play",
+    image: playMedia.harryPotter7,
+    badge: "30% OFF",
+    meta: "+12 | Fantasía | 2 h 26 min",
+    description: "La búsqueda final comienza lejos de Hogwarts.",
+  },
+  {
+    id: "harry-potter-8",
+    title: "Harry Potter y las Reliquias de la Muerte - Parte 2",
+    kind: "Película",
+    tab: "alquileres",
+    provider: "Mercado Play",
+    image: playMedia.harryPotter8,
+    badge: "30% OFF",
+    meta: "+12 | Fantasía | 2 h 10 min",
+    description: "La saga concluye con la batalla decisiva.",
+  },
+  {
+    id: "vix-pass",
+    title: "Probá ViX Premium",
     kind: "Suscripción",
     tab: "vix",
     provider: "ViX Premium",
     image: officialAssets.playDisneyHero,
     badge: "7 días gratis",
-    meta: "Beneficio en entretenimiento",
-    description: "Beneficio de plataforma con navegación y acción propia.",
+    meta: "Películas, series y deportes",
+    description: "Activá el período de prueba desde la sección de beneficios.",
   },
   {
     id: "universal-pass",
-    title: "Universal+",
+    title: "Probá Universal+",
     kind: "Suscripción",
     tab: "universal",
     provider: "Universal+",
     image: officialAssets.playPrimeHero,
-    badge: "15% OFF",
+    badge: "7 días gratis",
     meta: "Películas y canales",
-    description: "Tarjeta de beneficio conectada al flujo de cupones y búsqueda.",
+    description: "Accedé al beneficio disponible para tu cuenta.",
+  },
+];
+
+const playHomeShelves: Array<{
+  title: string;
+  tab: PlayTab;
+  ids: string[];
+}> = [
+  {
+    title: "Películas gratis para ver ahora",
+    tab: "gratis",
+    ids: [
+      "spiderman-2",
+      "illusionists",
+      "ice-age",
+      "rio",
+      "top-gun-maverick",
+      "deja-vu",
+      "historias-cruzadas",
+      "scary-movie",
+      "como-perder-hombre",
+    ],
+  },
+  {
+    title: "Series para maratonear",
+    tab: "series",
+    ids: [
+      "the-affair",
+      "friends",
+      "under-the-dome",
+      "csi-miami",
+      "the-nanny",
+      "the-rookie",
+      "the-good-wife",
+      "fbi",
+    ],
+  },
+  {
+    title: "Grandes historias en HBO Max",
+    tab: "max",
+    ids: [
+      "mickey-17",
+      "man-of-steel",
+      "i-am-legend",
+      "dune",
+      "inception",
+      "godzilla",
+      "dune-part-two",
+      "the-conjuring",
+    ],
+  },
+  {
+    title: "Saga Harry Potter: 30% OFF",
+    tab: "alquileres",
+    ids: [
+      "harry-potter-1",
+      "harry-potter-2",
+      "harry-potter-3",
+      "harry-potter-4",
+      "harry-potter-5",
+      "harry-potter-6",
+      "harry-potter-7",
+      "harry-potter-8",
+    ],
   },
 ];
 
@@ -731,6 +1203,91 @@ function CartIcon() {
       <path d="M1.7 2.2h3l2.4 11.2a2.1 2.1 0 0 0 2.1 1.7h8.4a2.1 2.1 0 0 0 2-1.5l1.8-6.7H6" />
       <path d="M9.3 20.1a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" />
       <path d="M18 20.1a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" />
+    </svg>
+  );
+}
+
+function OfferTabIcon({ id }: { id: OfferTabId }) {
+  if (id === "all") {
+    return (
+      <svg className="offer-tab-icon" viewBox="0 0 48 48" aria-hidden="true">
+        <path d="M24 4 39 12.5 36.5 35 24 44 11.5 35 9 12.5 24 4Z" />
+        <path d="m17 31 14-14M18.5 17.5h.1M29.5 30.5h.1" />
+      </svg>
+    );
+  }
+  if (id === "flash") {
+    return (
+      <svg className="offer-tab-icon" viewBox="0 0 48 48" aria-hidden="true">
+        <path d="M27 3 12 27h11l-2 18 15-25H25l2-17Z" />
+      </svg>
+    );
+  }
+  if (id === "best") {
+    return (
+      <svg className="offer-tab-icon" viewBox="0 0 48 48" aria-hidden="true">
+        <circle cx="24" cy="20" r="13" />
+        <path d="M18 31 14 44l10-5 10 5-4-13M27.5 15.5c-1-1-2.2-1.5-3.8-1.5-2.1 0-3.7 1.1-3.7 2.8 0 4.3 8 1.8 8 6.2 0 1.8-1.7 3-4 3-1.7 0-3.2-.6-4.2-1.7M24 11v18" />
+      </svg>
+    );
+  }
+  if (id === "phones") {
+    return (
+      <svg className="offer-tab-icon" viewBox="0 0 48 48" aria-hidden="true">
+        <rect x="15" y="4" width="18" height="40" rx="3" />
+        <path d="M20 9h8M22 39h4" />
+      </svg>
+    );
+  }
+  if (id === "notebooks") {
+    return (
+      <svg className="offer-tab-icon" viewBox="0 0 48 48" aria-hidden="true">
+        <rect x="8" y="7" width="32" height="26" rx="2" />
+        <path d="M4 38h40l-3 5H7l-3-5Z" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="offer-tab-icon offer-tab-icon--sale" viewBox="0 0 48 48" aria-hidden="true">
+      <path d="M12 16h24l3 28H9l3-28ZM18 17v-5a6 6 0 0 1 12 0v5" />
+      <text x="24" y="34" textAnchor="middle">SALE</text>
+    </svg>
+  );
+}
+
+function SupermarketBenefitIcon({
+  kind,
+}: {
+  kind: "basket" | "minimum" | "truck" | "warehouse";
+}) {
+  if (kind === "basket") {
+    return (
+      <svg className="supermarket-symbol" viewBox="0 0 48 48" aria-hidden="true">
+        <path d="M9 19h30l-3 22H12L9 19ZM16 19l5-11M32 19 27 8M16 25v10M24 25v10M32 25v10" />
+      </svg>
+    );
+  }
+  if (kind === "minimum") {
+    return (
+      <svg className="supermarket-symbol" viewBox="0 0 48 48" aria-hidden="true">
+        <circle cx="24" cy="15" r="10" />
+        <path d="M24 9v12M28 11.5c-1.1-1-2.4-1.5-4-1.5-2 0-3.5 1-3.5 2.5 0 3.8 7 1.8 7 5.5 0 1.5-1.5 2.5-3.5 2.5-1.7 0-3.1-.5-4.1-1.5M10 30h28v13H10zM16 34v5M22 34v5M28 34v5M34 34v5" />
+      </svg>
+    );
+  }
+  if (kind === "truck") {
+    return (
+      <svg className="supermarket-symbol" viewBox="0 0 48 48" aria-hidden="true">
+        <path d="M5 10h25v25H5zM30 20h7l6 7v8H30V20ZM10 16h14v12H10z" />
+        <circle cx="14" cy="38" r="4" />
+        <circle cx="36" cy="38" r="4" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="supermarket-symbol" viewBox="0 0 48 48" aria-hidden="true">
+      <path d="M5 17 24 6l19 11v25H5V17ZM11 23h26M11 29h26M11 35h26" />
+      <path d="M19 22v20M29 22v20" />
     </svg>
   );
 }
@@ -1102,12 +1659,26 @@ export function MarketplaceApp() {
   const visiblePlayContent = useMemo(() => {
     const cleanSearch = playSearch.trim().toLowerCase();
     return playContent.filter((item) => {
-      const matchesTab = playTab === "inicio" || item.tab === playTab || item.provider.toLowerCase().includes(playTab);
+      const matchesTab =
+        playTab === "inicio" ||
+        item.tab === playTab ||
+        item.tabs?.includes(playTab) ||
+        item.provider.toLowerCase().includes(playTab);
       const matchesSearch = !cleanSearch || [item.title, item.provider, item.kind, item.meta, item.description]
         .some((value) => value.toLowerCase().includes(cleanSearch));
       return matchesTab && matchesSearch;
     });
   }, [playSearch, playTab]);
+  const primaryVisiblePlayContent =
+    playTab === "inicio" && !playSearch.trim()
+      ? visiblePlayContent.slice(0, 8)
+      : visiblePlayContent;
+  const resolvedPlayShelves = playHomeShelves.map((shelf) => ({
+    ...shelf,
+    items: shelf.ids
+      .map((id) => playContent.find((item) => item.id === id))
+      .filter((item): item is PlayContentItem => Boolean(item)),
+  }));
   const playHeroOptions = useMemo(() => {
     const matches = playTab === "inicio"
       ? playHeroSlides
@@ -2071,18 +2642,21 @@ export function MarketplaceApp() {
           ) : null}
 
           <nav className="play-topbar">
-            <button
-              className="play-brand"
-              type="button"
-              onClick={goHome}
-              aria-label="Volver a Mercado Libre"
-              title="Volver a Mercado Libre"
-            >
-              <span className="play-brand__symbol" aria-hidden="true">
-                <img src={officialAssets.logo} alt="" />
-              </span>
-              <span>mercado <strong>play</strong></span>
-            </button>
+            <div className="play-brand-group">
+              <button
+                className="play-brand"
+                type="button"
+                onClick={goHome}
+                aria-label="Volver al marketplace"
+                title="Volver al inicio"
+              >
+                <span className="play-brand__symbol" aria-hidden="true">
+                  <img src={officialAssets.logo} alt="" />
+                </span>
+                <span>mercado <strong>play</strong></span>
+              </button>
+              <span className="play-demo-badge">Demo no afiliada</span>
+            </div>
             <div className="play-tabs" role="tablist" aria-label="Mercado Play">
               {playTabs.map((item) => (
                 <button
@@ -2185,9 +2759,9 @@ export function MarketplaceApp() {
               <h2>{playTab === "inicio" ? "Aniversario y destacados" : playTabs.find((item) => item.id === playTab)?.label}</h2>
               <button type="button" onClick={() => setPlaySearch("")}>Ver todo</button>
             </div>
-            {visiblePlayContent.length > 0 ? (
+            {primaryVisiblePlayContent.length > 0 ? (
               <div className="play-card-row">
-                {visiblePlayContent.map((item) => (
+                {primaryVisiblePlayContent.map((item) => (
                   <button key={item.id} className="play-card" type="button" onClick={() => openPlayItem(item)}>
                     <img src={item.image} alt={item.title} />
                     <span>{item.badge}</span>
@@ -2220,6 +2794,40 @@ export function MarketplaceApp() {
               ))}
             </div>
           </section>
+
+          {playTab === "inicio" && !playSearch.trim()
+            ? resolvedPlayShelves.map((shelf) => (
+              <section className="play-row play-row--catalog" key={shelf.title}>
+                <div className="play-row__heading">
+                  <h2>{shelf.title}</h2>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPlayTab(shelf.tab);
+                      setPlayHeroIndex(0);
+                    }}
+                  >
+                    Ver todo
+                  </button>
+                </div>
+                <div className="play-card-row">
+                  {shelf.items.map((item) => (
+                    <button
+                      key={`shelf-${item.id}`}
+                      className="play-card"
+                      type="button"
+                      onClick={() => openPlayItem(item)}
+                    >
+                      <img src={item.image} alt={item.title} />
+                      <span>{item.badge}</span>
+                      <strong>{item.title}</strong>
+                      <small>{item.meta}</small>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ))
+            : null}
 
           <section className="play-row">
             <div className="play-row__heading">
@@ -2270,11 +2878,29 @@ export function MarketplaceApp() {
 
           {resultCategory?.id === "supermercado" ? (
             <div className="supermarket-page">
-              <div
-                className="supermarket-hero"
-                style={{ backgroundImage: `linear-gradient(90deg, rgba(255,255,255,.12), rgba(255,230,0,.18)), url(${categoryImages.supermercado})` }}
-              >
-                <div><span>🛒</span><strong>FULL · SÚPER</strong></div>
+              <div className="supermarket-hero">
+                <div className="supermarket-hero__groceries supermarket-hero__groceries--left" aria-hidden="true">
+                  {["pantry", "drinks", "care"].map((aisleId) => (
+                    <img
+                      key={aisleId}
+                      src={supermarketAisleImages[aisleId as keyof typeof supermarketAisleImages]}
+                      alt=""
+                    />
+                  ))}
+                </div>
+                <div className="supermarket-hero__brand">
+                  <img className="supermarket-hero__basket" src={supermarketBrandImages.basket} alt="" />
+                  <img className="supermarket-hero__logo" src={supermarketBrandImages.logo} alt="Full Súper" />
+                </div>
+                <div className="supermarket-hero__groceries supermarket-hero__groceries--right" aria-hidden="true">
+                  {["cleaning", "soft-drinks", "dairy"].map((aisleId) => (
+                    <img
+                      key={aisleId}
+                      src={supermarketAisleImages[aisleId as keyof typeof supermarketAisleImages]}
+                      alt=""
+                    />
+                  ))}
+                </div>
               </div>
               <nav className="supermarket-tabs">
                 <button
@@ -2297,9 +2923,9 @@ export function MarketplaceApp() {
               </nav>
               {supermarketTab === "inicio" ? (
                 <div className="supermarket-benefits">
-                  <article><b>▦</b><strong>Compra mínima: $ 12.000</strong><span>Armá un carrito que supere este monto.</span></article>
-                  <article><b>▣</b><strong>Envío gratis desde $ 65.000</strong><span>En tus carritos de Full Súper.</span></article>
-                  <article><b>▤</b><strong>Llega hoy o mañana</strong><span>Desde nuestras bodegas.</span></article>
+                  <article><SupermarketBenefitIcon kind="minimum" /><strong>Compra mínima: $ 12.000</strong><span>Armá un carrito que supere este monto.</span></article>
+                  <article><SupermarketBenefitIcon kind="truck" /><strong>Envío gratis desde $ 65.000</strong><span>En tus carritos de Full Súper.</span></article>
+                  <article><SupermarketBenefitIcon kind="warehouse" /><strong>Llega hoy o mañana</strong><span>Desde nuestras bodegas.</span></article>
                 </div>
               ) : (
                 <div className="supermarket-gondolas-heading">
@@ -2319,7 +2945,9 @@ export function MarketplaceApp() {
                         : openCategorySearch("supermercado", aisle.query)
                     }
                   >
-                    <span className={`supermarket-aisle-icon supermarket-aisle-icon--${aisle.id}`} aria-hidden="true" />
+                    <span className="supermarket-aisle-icon" aria-hidden="true">
+                      <img src={aisle.image} alt="" />
+                    </span>
                     {aisle.label}
                   </button>
                 ))}
@@ -2825,7 +3453,8 @@ export function MarketplaceApp() {
                   }
                 }}
               >
-                <span>{tab.icon}</span>{tab.label}
+                <OfferTabIcon id={tab.id} />
+                {tab.label}
               </button>
             ))}
           </div>
