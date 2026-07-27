@@ -135,6 +135,20 @@ interface ErlcServerResponse {
   };
 }
 
+interface MarketplaceCoupon {
+  code: string;
+  title: string;
+  detail: string;
+  categoryId: CategoryId | "all";
+  kind: "percent" | "fixed" | "shipping";
+  value: number;
+  minimum: number;
+  cap?: number;
+  expires: string;
+  icon: string;
+  tag: "terminan-hoy" | "mas-usados" | "nuevos";
+}
+
 const emptyWorkForm = {
   robloxUsername: "",
   robloxUserId: "",
@@ -238,6 +252,113 @@ const categoryMenuOrder: CategoryId[] = [
   "tiendas-oficiales",
 ];
 
+const marketplaceCoupons: MarketplaceCoupon[] = [
+  {
+    code: "TECNO50000",
+    title: "$ 50.000 OFF Cupón en tecnología",
+    detail: "En productos seleccionados de tecnología",
+    categoryId: "tecnologia",
+    kind: "fixed",
+    value: 50000,
+    minimum: 505000,
+    cap: 50000,
+    expires: "Vence el viernes",
+    icon: "🏪",
+    tag: "mas-usados",
+  },
+  {
+    code: "TECNO15",
+    title: "15% OFF ELECTROBEAUTY",
+    detail: "Celulares, electrónica y accesorios",
+    categoryId: "tecnologia",
+    kind: "percent",
+    value: 15,
+    minimum: 70000,
+    cap: 11500,
+    expires: "Vence el domingo",
+    icon: "🧴",
+    tag: "nuevos",
+  },
+  {
+    code: "PLAY15",
+    title: "15% OFF Mercado Play",
+    detail: "HBO Max, Disney+, Prime Video y digitales",
+    categoryId: "streaming",
+    kind: "percent",
+    value: 15,
+    minimum: 5000,
+    cap: 3000,
+    expires: "Termina hoy",
+    icon: "🎬",
+    tag: "terminan-hoy",
+  },
+  {
+    code: "SUPER8000",
+    title: "$ 8.000 OFF Supermercado",
+    detail: "Bebidas, almacén, limpieza y packs",
+    categoryId: "supermercado",
+    kind: "fixed",
+    value: 8000,
+    minimum: 45000,
+    cap: 8000,
+    expires: "Vence el sábado",
+    icon: "🛒",
+    tag: "mas-usados",
+  },
+  {
+    code: "HOGAR10",
+    title: "10% OFF Hogar y muebles",
+    detail: "Muebles, decoración y productos del hogar",
+    categoryId: "hogar",
+    kind: "percent",
+    value: 10,
+    minimum: 39000,
+    cap: 12000,
+    expires: "Vence el sábado",
+    icon: "🏠",
+    tag: "nuevos",
+  },
+  {
+    code: "MODA20",
+    title: "20% OFF Moda",
+    detail: "Ropa, calzado y accesorios",
+    categoryId: "moda",
+    kind: "percent",
+    value: 20,
+    minimum: 30000,
+    cap: 9000,
+    expires: "Termina hoy",
+    icon: "👕",
+    tag: "terminan-hoy",
+  },
+  {
+    code: "AUTO30000",
+    title: "$ 30.000 OFF Vehículos",
+    detail: "Vehículos y accesorios seleccionados",
+    categoryId: "vehiculos",
+    kind: "fixed",
+    value: 30000,
+    minimum: 250000,
+    cap: 30000,
+    expires: "Vence el lunes",
+    icon: "🚗",
+    tag: "mas-usados",
+  },
+  {
+    code: "TODO5",
+    title: "5% OFF en publicaciones online",
+    detail: "Para cualquier categoría con compra mínima",
+    categoryId: "all",
+    kind: "percent",
+    value: 5,
+    minimum: 15000,
+    cap: 6000,
+    expires: "Vence el viernes",
+    icon: "🎟️",
+    tag: "nuevos",
+  },
+];
+
 function useSelectedThread(
   state: ReturnType<typeof useMarketplaceStore>["state"],
   activeUserId: string | undefined,
@@ -272,6 +393,69 @@ function useSelectedThread(
 
 function listingCategory(listing?: Listing) {
   return categories.find((category) => category.id === listing?.categoryId);
+}
+
+function couponCategoryLabel(coupon: MarketplaceCoupon) {
+  if (coupon.categoryId === "all") {
+    return "Todas las categorías";
+  }
+  return categories.find((category) => category.id === coupon.categoryId)?.label ?? "Categoría";
+}
+
+function couponEligibleListings(coupon: MarketplaceCoupon, listings: Listing[]) {
+  return listings.filter((listing) =>
+    coupon.categoryId === "all" || listing.categoryId === coupon.categoryId,
+  );
+}
+
+function calculateCouponDiscount(coupon: MarketplaceCoupon | null, listings: Listing[]) {
+  if (!coupon || listings.length === 0) {
+    return { discount: 0, eligibleSubtotal: 0, eligibleListings: [] as Listing[], reason: "Elegí un cupón" };
+  }
+
+  const eligibleListings = couponEligibleListings(coupon, listings);
+  const eligibleSubtotal = eligibleListings.reduce((total, listing) => total + listing.price, 0);
+  if (eligibleListings.length === 0) {
+    return {
+      discount: 0,
+      eligibleSubtotal,
+      eligibleListings,
+      reason: `Solo aplica en ${couponCategoryLabel(coupon)}`,
+    };
+  }
+
+  if (eligibleSubtotal < coupon.minimum) {
+    return {
+      discount: 0,
+      eligibleSubtotal,
+      eligibleListings,
+      reason: `Faltan ${formatPrice(coupon.minimum - eligibleSubtotal)} para usarlo`,
+    };
+  }
+
+  const rawDiscount =
+    coupon.kind === "fixed"
+      ? coupon.value
+      : coupon.kind === "shipping"
+        ? 0
+        : Math.floor((eligibleSubtotal * coupon.value) / 100);
+  const cappedDiscount = Math.min(rawDiscount, coupon.cap ?? rawDiscount, eligibleSubtotal);
+  return {
+    discount: Math.max(0, cappedDiscount),
+    eligibleSubtotal,
+    eligibleListings,
+    reason: "Cupón listo para descontar",
+  };
+}
+
+function couponAmountLabel(coupon: MarketplaceCoupon) {
+  if (coupon.kind === "fixed") {
+    return `${formatPrice(coupon.value)} OFF`;
+  }
+  if (coupon.kind === "shipping") {
+    return "ENVÍO GRATIS";
+  }
+  return `${coupon.value}% OFF`;
 }
 
 function CategoryGlyph({ categoryId }: { categoryId: CategoryId }) {
@@ -401,6 +585,7 @@ export function MarketplaceApp() {
   const [cartIds, setCartIds] = useState<string[]>([]);
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
+  const [couponError, setCouponError] = useState("");
   const [helpTopic, setHelpTopic] = useState<string | null>(null);
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [locationModalOpen, setLocationModalOpen] = useState(false);
@@ -620,6 +805,25 @@ export function MarketplaceApp() {
     () => cartListings.reduce((total, listing) => total + listing.price, 0),
     [cartListings],
   );
+  const appliedCouponDetails = useMemo(
+    () =>
+      appliedCoupon
+        ? marketplaceCoupons.find((coupon) => coupon.code === appliedCoupon)
+        : null,
+    [appliedCoupon],
+  );
+  const selectedCouponResult = useMemo(
+    () =>
+      selectedListing
+        ? calculateCouponDiscount(appliedCouponDetails ?? null, [selectedListing])
+        : calculateCouponDiscount(null, []),
+    [appliedCouponDetails, selectedListing],
+  );
+  const cartCouponResult = useMemo(
+    () => calculateCouponDiscount(appliedCouponDetails ?? null, cartListings),
+    [appliedCouponDetails, cartListings],
+  );
+  const cartTotal = Math.max(0, cartSubtotal - cartCouponResult.discount);
   const accountThreads = useMemo(
     () =>
       state.chats
@@ -796,9 +1000,55 @@ export function MarketplaceApp() {
     openPage("cart");
   }
 
+  function applyCouponCode(code: string) {
+    const cleanCode = code.trim().toUpperCase();
+    const coupon = marketplaceCoupons.find((candidate) => candidate.code === cleanCode);
+    if (!coupon) {
+      setAppliedCoupon(null);
+      setCouponError("Ese código no existe o ya venció.");
+      return;
+    }
+    setCouponCode(cleanCode);
+    setAppliedCoupon(cleanCode);
+    setCouponError("");
+  }
+
+  function couponPurchaseForListing(listing: Listing) {
+    const result = calculateCouponDiscount(appliedCouponDetails ?? null, [listing]);
+    if (!appliedCouponDetails || result.discount <= 0) {
+      return undefined;
+    }
+    return {
+      couponCode: appliedCouponDetails.code,
+      couponDiscount: result.discount,
+      paidPrice: Math.max(0, listing.price - result.discount),
+    };
+  }
+
   function checkoutCart() {
-    cartListings.forEach((listing) => actions.buyListing(listing));
+    let remainingDiscount = cartCouponResult.discount;
+    const eligibleIds = new Set(cartCouponResult.eligibleListings.map((listing) => listing.id));
+    cartListings.forEach((listing) => {
+      const listingDiscount =
+        appliedCouponDetails && eligibleIds.has(listing.id)
+          ? Math.min(listing.price, remainingDiscount)
+          : 0;
+      remainingDiscount -= listingDiscount;
+      actions.buyListing(
+        listing,
+        appliedCouponDetails && listingDiscount > 0
+          ? {
+              couponCode: appliedCouponDetails.code,
+              couponDiscount: listingDiscount,
+              paidPrice: Math.max(0, listing.price - listingDiscount),
+            }
+          : undefined,
+      );
+    });
     setCartIds([]);
+    setAppliedCoupon(null);
+    setCouponCode("");
+    setCouponError("");
     openPage("purchases");
   }
 
@@ -1561,6 +1811,16 @@ export function MarketplaceApp() {
                   <option value="2">2 unidades</option>
                 </select>
               </label>
+              {appliedCouponDetails ? (
+                <div className={`buy-box__coupon ${selectedCouponResult.discount > 0 ? "is-valid" : "is-pending"}`}>
+                  <span>Cupón {appliedCouponDetails.code}</span>
+                  <strong>
+                    {selectedCouponResult.discount > 0
+                      ? `Descuenta ${formatPrice(selectedCouponResult.discount)}`
+                      : selectedCouponResult.reason}
+                  </strong>
+                </div>
+              ) : null}
               {selectedListing.sellerId === activeUser.id ? (
                 <>
                   <button className="buy-box__disabled" type="button" disabled>
@@ -1603,7 +1863,12 @@ export function MarketplaceApp() {
                     className="buy-box__primary"
                     type="button"
                     onClick={() => {
-                      actions.buyListing(selectedListing);
+                      const purchaseCoupon = couponPurchaseForListing(selectedListing);
+                      actions.buyListing(selectedListing, purchaseCoupon);
+                      if (purchaseCoupon) {
+                        setAppliedCoupon(null);
+                        setCouponCode("");
+                      }
                       setView("purchases");
                       window.scrollTo({ top: 0, behavior: "smooth" });
                     }}
@@ -1804,8 +2069,7 @@ export function MarketplaceApp() {
             <form
               onSubmit={(event) => {
                 event.preventDefault();
-                const code = couponCode.trim().toUpperCase();
-                if (code) setAppliedCoupon(code);
+                applyCouponCode(couponCode);
               }}
             >
               <label htmlFor="coupon-code">Ingresá tu código</label>
@@ -1814,10 +2078,11 @@ export function MarketplaceApp() {
                   id="coupon-code"
                   value={couponCode}
                   onChange={(event) => setCouponCode(event.target.value)}
-                  placeholder="Ej.: BIENVENIDA10"
+                  placeholder="Ej.: PLAY15"
                 />
                 <button type="submit" disabled={!couponCode.trim()}>Aplicar</button>
               </div>
+              {couponError ? <p role="alert">{couponError}</p> : null}
             </form>
           </div>
           {appliedCoupon ? (
@@ -1837,7 +2102,26 @@ export function MarketplaceApp() {
             </div>
           </div>
           <div className="coupon-grid">
-            {[
+            {marketplaceCoupons.map((coupon) => (
+              <article className="coupon-card" key={coupon.code}>
+                <div>
+                  <span>{couponAmountLabel(coupon)}</span>
+                  <h3>{coupon.title}</h3>
+                  <p>{coupon.detail}</p>
+                  <p>Compra mínima {formatPrice(coupon.minimum)}</p>
+                  {coupon.cap ? <p>Tope de {formatPrice(coupon.cap)}</p> : null}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    applyCouponCode(coupon.code);
+                  }}
+                >
+                  {appliedCoupon === coupon.code ? "Aplicado" : "Aplicar cupón"}
+                </button>
+              </article>
+            ))}
+            {false && [
               { code: "BIENVENIDA10", amount: "10% OFF", detail: "En tu primera compra", minimum: "Compra mínima $ 5.000" },
               { code: "PLAY15", amount: "15% OFF", detail: "En entretenimiento digital", minimum: "Tope de reintegro $ 3.000" },
               { code: "ENVIO", amount: "ENVÍO GRATIS", detail: "En productos seleccionados", minimum: "Sujeto a cobertura" },
@@ -1851,8 +2135,7 @@ export function MarketplaceApp() {
                 <button
                   type="button"
                   onClick={() => {
-                    setCouponCode(coupon.code);
-                    setAppliedCoupon(coupon.code);
+                    applyCouponCode(coupon.code);
                   }}
                 >
                   Aplicar cupón
@@ -1937,9 +2220,19 @@ export function MarketplaceApp() {
               <aside className="cart-summary">
                 <h2>Resumen de compra</h2>
                 <p><span>Productos</span><strong>{formatPrice(cartSubtotal)}</strong></p>
+                {appliedCouponDetails ? (
+                  <p>
+                    <span>Descuento {appliedCouponDetails.code}</span>
+                    <strong className={cartCouponResult.discount > 0 ? "is-free" : ""}>
+                      {cartCouponResult.discount > 0
+                        ? `- ${formatPrice(cartCouponResult.discount)}`
+                        : cartCouponResult.reason}
+                    </strong>
+                  </p>
+                ) : null}
                 <p><span>Envío</span><strong className="is-free">Gratis</strong></p>
                 {appliedCoupon ? <p><span>Cupón {appliedCoupon}</span><strong className="is-free">Aplicado</strong></p> : null}
-                <div><span>Total</span><strong>{formatPrice(cartSubtotal)}</strong></div>
+                <div><span>Total</span><strong>{formatPrice(cartTotal)}</strong></div>
                 <button type="button" onClick={checkoutCart}>Continuar compra</button>
               </aside>
             </div>
@@ -2276,6 +2569,11 @@ export function MarketplaceApp() {
                         <span>{listing.condition === "Digital" ? "Entrega digital" : "Envío en curso"}</span>
                         <h2>{listing.title}</h2>
                         <p>{shipment.status}</p>
+                        {shipment.couponDiscount ? (
+                          <p className="purchase-item__coupon">
+                            Cupón {shipment.couponCode}: ahorraste {formatPrice(shipment.couponDiscount)} · Pagaste {formatPrice(shipment.paidPrice ?? listing.price)}
+                          </p>
+                        ) : null}
                       </div>
                       <div className="purchase-item__actions">
                         <button type="button" onClick={() => openListing(listing)}>Ver compra</button>

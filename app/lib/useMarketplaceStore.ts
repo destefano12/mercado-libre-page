@@ -800,7 +800,14 @@ export function useMarketplaceStore() {
   );
 
   const buyListing = useCallback(
-    (listing: Listing) => {
+    (
+      listing: Listing,
+      purchase?: {
+        couponCode?: string;
+        couponDiscount?: number;
+        paidPrice?: number;
+      },
+    ) => {
       if (!activeUser || listing.sellerId === activeUser.id) {
         return;
       }
@@ -825,6 +832,10 @@ export function useMarketplaceStore() {
               id: createId("ship"),
               listingId: listing.id,
               buyerId: activeUser.id,
+              originalPrice: listing.price,
+              paidPrice: Math.max(0, purchase?.paidPrice ?? listing.price),
+              couponCode: purchase?.couponCode,
+              couponDiscount: Math.max(0, purchase?.couponDiscount ?? 0),
               origin: listing.location,
               destination: digital ? "Entrega online" : activeUser.location,
               status: digital ? "Acceso digital confirmado" : "Preparando paquete",

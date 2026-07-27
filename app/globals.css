@@ -3801,6 +3801,12 @@ button {
   border: 2px solid var(--blue);
 }
 
+.coupons-hero form p {
+  margin: 10px 0 0;
+  color: #c23d2a;
+  font-size: 13px;
+}
+
 .coupons-hero button,
 .coupon-card button {
   min-height: 44px;
@@ -3861,7 +3867,7 @@ button {
 
 .coupon-card {
   display: grid;
-  min-height: 230px;
+  min-height: 245px;
   padding: 24px;
   background: #fff;
   border-left: 7px solid var(--yellow);
@@ -3881,7 +3887,7 @@ button {
 }
 
 .coupon-card p {
-  margin: 0;
+  margin: 0 0 4px;
   color: var(--muted);
 }
 
@@ -3992,6 +3998,13 @@ button {
   color: var(--green);
 }
 
+.cart-summary p strong:not(.is-free) {
+  max-width: 180px;
+  text-align: right;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .cart-summary > div {
   margin-top: 8px;
   padding-top: 20px;
@@ -4007,6 +4020,36 @@ button {
   border: 0;
   background: var(--blue);
   border-radius: 6px;
+  font-weight: 600;
+}
+
+.buy-box__coupon {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid #d8e7ff;
+  background: #f5f9ff;
+  border-radius: 6px;
+}
+
+.buy-box__coupon span {
+  color: var(--blue);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.buy-box__coupon strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.buy-box__coupon.is-valid strong {
+  color: var(--green);
+}
+
+.purchase-item__coupon {
+  color: var(--green) !important;
+  font-size: 13px;
   font-weight: 600;
 }
 

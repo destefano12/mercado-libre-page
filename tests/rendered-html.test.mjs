@@ -132,6 +132,41 @@ test("matches official empty favorites and purchases surfaces", async () => {
   assert.match(stylesheet, /min-height: 690px/);
 });
 
+test("applies category coupons to real purchase totals", async () => {
+  const page = await readFile(
+    new URL("../app/components/MarketplaceApp.tsx", import.meta.url),
+    "utf8",
+  );
+  const marketplace = await readFile(
+    new URL("../app/data/marketplace.ts", import.meta.url),
+    "utf8",
+  );
+  const store = await readFile(
+    new URL("../app/lib/useMarketplaceStore.ts", import.meta.url),
+    "utf8",
+  );
+  const stylesheet = await readFile(
+    new URL("../app/globals.css", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(page, /interface MarketplaceCoupon/);
+  assert.match(page, /marketplaceCoupons/);
+  assert.match(page, /TECNO50000/);
+  assert.match(page, /SUPER8000/);
+  assert.match(page, /calculateCouponDiscount/);
+  assert.match(page, /applyCouponCode/);
+  assert.match(page, /cartTotal/);
+  assert.match(page, /couponPurchaseForListing/);
+  assert.match(page, /couponDiscount/);
+  assert.match(page, /paidPrice/);
+  assert.match(marketplace, /couponCode\?: string/);
+  assert.match(marketplace, /couponDiscount\?: number/);
+  assert.match(store, /paidPrice: Math\.max\(0, purchase\?\.paidPrice/);
+  assert.match(stylesheet, /\.buy-box__coupon/);
+  assert.match(stylesheet, /\.purchase-item__coupon/);
+});
+
 test("includes the expanded official-style category menu", async () => {
   const page = await readFile(
     new URL("../app/components/MarketplaceApp.tsx", import.meta.url),

@@ -154,6 +154,10 @@ export interface Shipment {
   id: string;
   listingId: string;
   buyerId: string;
+  originalPrice?: number;
+  paidPrice?: number;
+  couponCode?: string;
+  couponDiscount?: number;
   origin: string;
   destination: string;
   status: string;
