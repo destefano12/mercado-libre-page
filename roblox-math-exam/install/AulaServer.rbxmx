@@ -1,0 +1,2448 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
+  <Item class="Script" referent="RBX7">
+    <Properties>
+      <string name="Name">Server</string>
+      <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	SERVIDOR — punto de entrada
+	------------------------------------------------------------------
+	Con Rojo, esta carpeta se convierte en un Script llamado "Server"
+	dentro de ServerScriptService, y los demas archivos quedan como
+	ModuleScripts hijos de este Script.
+
+	Orden de arranque:
+		1. remotes
+		2. aula (todo el 3D)
+		3. servicios (prueba / celular / sospecha)
+		4. profesor
+		5. ronda
+--]]
+
+local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+
+Net.build()
+
+local ClassroomBuilder = require(script:WaitForChild("ClassroomBuilder"))
+local ExamService = require(script:WaitForChild("ExamService"))
+local PhoneService = require(script:WaitForChild("PhoneService"))
+local SuspicionService = require(script:WaitForChild("SuspicionService"))
+local RoundService = require(script:WaitForChild("RoundService"))
+local TeacherAI = require(script:WaitForChild("TeacherAI"))
+
+-- ─────────────────────────────────────────────────────────────
+-- 0. Escenario base
+-- ─────────────────────────────────────────────────────────────
+
+-- Iluminacion de interior. Se aplica por codigo para que el juego se
+-- vea igual venga de Rojo, del .rbxmx o de copiar y pegar a mano.
+local function applyLighting()
+	Lighting.Technology = Enum.Technology.ShadowMap
+	Lighting.Ambient = Color3.fromRGB(90, 92, 102)
+	Lighting.OutdoorAmbient = Color3.fromRGB(115, 120, 132)
+	Lighting.Brightness = 2.2
+	Lighting.ClockTime = 10.5
+	Lighting.GeographicLatitude = -34.6
+	Lighting.EnvironmentDiffuseScale = 0.6
+	Lighting.EnvironmentSpecularScale = 0.4
+	Lighting.GlobalShadows = true
+	Lighting.FogEnd = 400
+
+	if not Lighting:FindFirstChildOfClass("Atmosphere") then
+		local atmosphere = Instance.new("Atmosphere")
+		atmosphere.Density = 0.28
+		atmosphere.Haze = 1.2
+		atmosphere.Glare = 0.15
+		atmosphere.Color = Color3.fromRGB(215, 220, 232)
+		atmosphere.Parent = Lighting
+	end
+end
+
+applyLighting()
+
+-- El baseplate del lugar vacio queda a la misma altura que el piso del
+-- aula y pelean por el mismo pixel. El aula trae su propio piso.
+local baseplate = Workspace:FindFirstChild("Baseplate")
+if baseplate and baseplate:IsA("BasePart") then
+	baseplate:Destroy()
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- 1. Aula
+-- ─────────────────────────────────────────────────────────────
+
+local classroom = ClassroomBuilder.build(Workspace)
+
+-- Spawn de los alumnos: adentro del aula, no en el vacio.
+local spawnLocation = Workspace:FindFirstChildOfClass("SpawnLocation")
+if not spawnLocation then
+	spawnLocation = Instance.new("SpawnLocation")
+	spawnLocation.Parent = Workspace
+end
+spawnLocation.Name = "EntradaAula"
+spawnLocation.Size = Vector3.new(8, 1, 8)
+spawnLocation.CFrame = classroom.studentSpawn * CFrame.new(0, -2.4, 0)
+spawnLocation.Anchored = true
+spawnLocation.Transparency = 1
+spawnLocation.CanCollide = false
+spawnLocation.Neutral = true
+
+-- ─────────────────────────────────────────────────────────────
+-- 2. Servicios
+-- ─────────────────────────────────────────────────────────────
+
+ExamService.init(classroom)
+
+local teacher = TeacherAI.new(classroom, function(player)
+	RoundService.handleCatch(player)
+end)
+
+SuspicionService.init(teacher, function(player)
+	-- Riesgo al maximo: el profe deja lo que estaba haciendo y viene.
+	teacher:confront(player)
+end)
+
+SuspicionService.start()
+PhoneService.start()
+teacher:start()
+
+-- ─────────────────────────────────────────────────────────────
+-- 3. Remotes
+-- ─────────────────────────────────────────────────────────────
+
+Net.func(Net.Functions.GetExam).OnServerInvoke = function(player)
+	RoundService.pushTo(player)
+	return ExamService.snapshot(player)
+end
+
+Net.func(Net.Functions.SubmitAnswer).OnServerInvoke = function(player, questionId, choice)
+	if RoundService.getPhase() ~= "Prueba" then
+		return { ok = false, reason = "La prueba no esta en curso." }
+	end
+	return ExamService.submitAnswer(player, questionId, choice)
+end
+
+Net.func(Net.Functions.TakePhoto).OnServerInvoke = function(player, questionId)
+	if RoundService.getPhase() ~= "Prueba" then
+		return { ok = false, reason = "No hay nada para fotografiar todavia." }
+	end
+	return PhoneService.takePhoto(player, questionId)
+end
+
+Net.func(Net.Functions.AskRoGPT).OnServerInvoke = function(player, photoId)
+	return PhoneService.askRoGPT(player, photoId)
+end
+
+Net.event(Net.Events.PhoneState).OnServerEvent:Connect(function(player, out)
+	if typeof(out) ~= "boolean" then
+		return
+	end
+	if RoundService.getPhase() ~= "Prueba" then
+		PhoneService.setOut(player, false)
+		return
+	end
+	PhoneService.setOut(player, out)
+end)
+
+-- ─────────────────────────────────────────────────────────────
+-- 4. Jugadores
+-- ─────────────────────────────────────────────────────────────
+
+local function onPlayerAdded(player: Player)
+	RoundService.addPlayer(player)
+	player.CharacterAdded:Connect(function(character)
+		RoundService.onCharacter(player, character)
+	end)
+	if player.Character then
+		RoundService.onCharacter(player, player.Character)
+	end
+end
+
+Players.PlayerAdded:Connect(onPlayerAdded)
+for _, player in Players:GetPlayers() do
+	task.spawn(onPlayerAdded, player)
+end
+
+Players.PlayerRemoving:Connect(function(player)
+	PhoneService.reset(player)
+	SuspicionService.reset(player)
+end)
+
+-- ─────────────────────────────────────────────────────────────
+-- 5. Ronda
+-- ─────────────────────────────────────────────────────────────
+
+RoundService.start(classroom, teacher)
+
+print(string.format("[Aula] Listo: %d bancos, %d nodos de patrullaje, prueba de %d ejercicios.",
+	#classroom.desks, #classroom.patrolNodes, Config.Exam.QuestionCount))
+]]></ProtectedString>
+    </Properties>
+    <Item class="ModuleScript" referent="RBX1">
+      <Properties>
+        <string name="Name">ClassroomBuilder</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	ClassroomBuilder
+	------------------------------------------------------------------
+	Construye el aula entera por codigo: piso, paredes, ventanas,
+	luminarias, pizarron, escritorio del profe, y la grilla de bancos
+	con su silla, su hoja de prueba y su lugar para el celular.
+
+	Todo es 3D real y a escala de personaje (nada de planos ni sprites).
+	Devuelve las referencias que necesitan los demas servicios:
+	bancos, nodos de patrullaje, posicion del pizarron y spawn del profe.
+--]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local ClassroomBuilder = {}
+
+export type Desk = {
+	index: number,
+	row: number,
+	column: number,
+	model: Model,
+	seat: Seat,
+	paper: BasePart,
+	deskTop: BasePart,
+	position: Vector3,
+}
+
+export type Classroom = {
+	model: Model,
+	desks: { Desk },
+	patrolNodes: { CFrame },
+	boardStand: CFrame,
+	teacherSpawn: CFrame,
+	studentSpawn: CFrame,
+	roomCenter: Vector3,
+	width: number,
+	depth: number,
+}
+
+local C = Config.Classroom
+
+-- ─────────────────────────────────────────────────────────────
+-- Piezas basicas
+-- ─────────────────────────────────────────────────────────────
+
+local function block(parent: Instance, name: string, size: Vector3, cf: CFrame, color: Color3, material: Enum.Material): BasePart
+	return Util.part({
+		Name = name,
+		Size = size,
+		CFrame = cf,
+		Color = color,
+		Material = material,
+		Parent = parent,
+	})
+end
+
+local function buildFloorAndCeiling(model: Model, width: number, depth: number, center: Vector3)
+	local floor = block(model, "Piso", Vector3.new(width, 1, depth),
+		CFrame.new(center.X, -0.5, center.Z), C.FloorColor, C.FloorMaterial)
+	floor.TopSurface = Enum.SurfaceType.Smooth
+
+	-- Zocalo de goma alrededor del piso
+	block(model, "Ceiling", Vector3.new(width, 1, depth),
+		CFrame.new(center.X, C.WallHeight + 0.5, center.Z), Color3.fromRGB(240, 240, 236), Enum.Material.Plaster)
+end
+
+local function buildWall(model: Model, name: string, size: Vector3, cf: CFrame)
+	local wall = block(model, name, size, cf, C.WallColor, C.WallMaterial)
+	wall.CastShadow = true
+	return wall
+end
+
+local function buildWindowWall(model: Model, wallX: number, zStart: number, zEnd: number, height: number, thickness: number, facingSign: number)
+	-- Ventanal lateral: la pared se construye por segmentos para que los
+	-- huecos sean huecos de verdad (y entre luz natural al aula).
+	local windowWidth = 8
+	local windowHeight = 7
+	local sillHeight = 5
+	local count = 3
+	local span = zEnd - zStart
+	local step = span / (count + 1)
+	local frameColor = C.TrimColor
+
+	local centers: { number } = {}
+	for i = 1, count do
+		table.insert(centers, zStart + step * i)
+	end
+
+	-- Segmentos macizos entre ventanas (y en los extremos del muro)
+	local edges: { number } = { zStart }
+	for _, z in centers do
+		table.insert(edges, z - windowWidth / 2)
+		table.insert(edges, z + windowWidth / 2)
+	end
+	table.insert(edges, zEnd)
+
+	for i = 1, #edges - 1, 2 do
+		local a, b = edges[i], edges[i + 1]
+		if b - a > 0.05 then
+			buildWall(model, "ParedVentanal", Vector3.new(thickness, height, b - a),
+				CFrame.new(wallX, height / 2, (a + b) / 2))
+		end
+	end
+
+	for _, z in centers do
+		-- Antepecho y dintel del hueco
+		buildWall(model, "Antepecho", Vector3.new(thickness, sillHeight, windowWidth),
+			CFrame.new(wallX, sillHeight / 2, z))
+		local lintelHeight = height - (sillHeight + windowHeight)
+		if lintelHeight > 0.05 then
+			buildWall(model, "Dintel", Vector3.new(thickness, lintelHeight, windowWidth),
+				CFrame.new(wallX, height - lintelHeight / 2, z))
+		end
+
+		local frameCF = CFrame.new(wallX, sillHeight + windowHeight / 2, z)
+
+		local glass = block(model, "Vidrio", Vector3.new(0.35, windowHeight, windowWidth), frameCF,
+			Color3.fromRGB(198, 226, 240), Enum.Material.Glass)
+		glass.Transparency = 0.72
+		glass.Reflectance = 0.08
+		glass.CastShadow = false
+
+		block(model, "Marco", Vector3.new(0.6, 0.5, windowWidth + 0.6), frameCF * CFrame.new(0, windowHeight / 2, 0), frameColor, Enum.Material.Metal)
+		block(model, "Marco", Vector3.new(0.6, 0.5, windowWidth + 0.6), frameCF * CFrame.new(0, -windowHeight / 2, 0), frameColor, Enum.Material.Metal)
+		block(model, "Marco", Vector3.new(0.6, windowHeight, 0.5), frameCF * CFrame.new(0, 0, windowWidth / 2), frameColor, Enum.Material.Metal)
+		block(model, "Marco", Vector3.new(0.6, windowHeight, 0.5), frameCF * CFrame.new(0, 0, -windowWidth / 2), frameColor, Enum.Material.Metal)
+		block(model, "Cruceta", Vector3.new(0.45, windowHeight, 0.3), frameCF, frameColor, Enum.Material.Metal)
+
+		block(model, "Alfeizar", Vector3.new(1.8, 0.4, windowWidth + 1.4),
+			CFrame.new(wallX - facingSign * 0.7, sillHeight - 0.15, z), Color3.fromRGB(236, 234, 228), Enum.Material.Marble)
+
+		local light = Instance.new("SurfaceLight")
+		light.Face = facingSign > 0 and Enum.NormalId.Left or Enum.NormalId.Right
+		light.Brightness = 1.6
+		light.Range = 32
+		light.Angle = 120
+		light.Color = Color3.fromRGB(255, 246, 224)
+		light.Parent = glass
+	end
+end
+
+local function buildBoard(model: Model, wallZ: number, width: number): CFrame
+	local boardWidth = math.min(width - 12, 26)
+	-- Rotado 180°: la cara Front del pizarron mira a los alumnos (+Z global).
+	local boardCF = CFrame.new(0, 8, wallZ + 0.7) * CFrame.Angles(0, math.pi, 0)
+
+	block(model, "MarcoPizarron", Vector3.new(boardWidth + 1.2, 9.2, 0.5), boardCF,
+		Color3.fromRGB(96, 74, 52), Enum.Material.Wood)
+	local board = block(model, "Pizarron", Vector3.new(boardWidth, 8, 0.35), boardCF * CFrame.new(0, 0, -0.2),
+		Color3.fromRGB(26, 54, 42), Enum.Material.Slate)
+	board.Name = "Pizarron"
+
+	-- Bandeja de tizas
+	block(model, "BandejaTizas", Vector3.new(boardWidth, 0.35, 1),
+		boardCF * CFrame.new(0, -4.4, -0.5), Color3.fromRGB(120, 96, 68), Enum.Material.Wood)
+	for i = -2, 2 do
+		local chalk = block(model, "Tiza", Vector3.new(0.9, 0.22, 0.22),
+			boardCF * CFrame.new(i * 2.2, -4.05, -0.6), Color3.fromRGB(248, 248, 240), Enum.Material.Sand)
+		chalk.CanCollide = false
+		chalk.Shape = Enum.PartType.Cylinder
+		chalk.Orientation = Vector3.new(0, 0, 0)
+	end
+
+	-- Texto tizado: el enunciado general de la prueba
+	local surface = Instance.new("SurfaceGui")
+	surface.Name = "TextoPizarron"
+	surface.Face = Enum.NormalId.Front
+	surface.CanvasSize = Vector2.new(1000, 320)
+	surface.LightInfluence = 0.35
+	surface.Adornee = board
+	surface.Parent = board
+
+	local title = Instance.new("TextLabel")
+	title.Size = UDim2.fromScale(1, 0.42)
+	title.BackgroundTransparency = 1
+	title.Font = Enum.Font.PermanentMarker
+	title.Text = "EVALUACION DE MATEMATICA"
+	title.TextColor3 = Color3.fromRGB(238, 240, 232)
+	title.TextScaled = true
+	title.Parent = surface
+
+	local subtitle = Instance.new("TextLabel")
+	subtitle.Position = UDim2.fromScale(0, 0.44)
+	subtitle.Size = UDim2.fromScale(1, 0.3)
+	subtitle.BackgroundTransparency = 1
+	subtitle.Font = Enum.Font.PermanentMarker
+	subtitle.Text = "Prohibido el uso de celulares"
+	subtitle.TextColor3 = Color3.fromRGB(196, 214, 200)
+	subtitle.TextScaled = true
+	subtitle.Parent = surface
+
+	return boardCF
+end
+
+local function buildTeacherDesk(model: Model, wallZ: number): CFrame
+	local deskCF = CFrame.new(-9, 0, wallZ + 5)
+	local topCF = deskCF * CFrame.new(0, 3.1, 0)
+
+	block(model, "EscritorioProfe", Vector3.new(8, 0.35, 3.4), topCF, Color3.fromRGB(118, 88, 60), Enum.Material.Wood)
+	block(model, "FrenteEscritorio", Vector3.new(8, 2.6, 0.3), deskCF * CFrame.new(0, 1.6, -1.5),
+		Color3.fromRGB(104, 78, 54), Enum.Material.Wood)
+	for _, offset in { Vector3.new(-3.6, 0, 0), Vector3.new(3.6, 0, 0) } do
+		block(model, "PataEscritorio", Vector3.new(0.4, 3, 3.2), deskCF * CFrame.new(offset.X, 1.5, 0),
+			Color3.fromRGB(88, 66, 46), Enum.Material.Wood)
+	end
+
+	-- Pila de pruebas corregidas + mate del profe
+	for i = 1, 4 do
+		local sheet = block(model, "Pruebas", Vector3.new(2.4, 0.06, 1.8),
+			topCF * CFrame.new(2.2 + math.random() * 0.1, 0.2 + i * 0.07, math.random() * 0.1),
+			Color3.fromRGB(250, 248, 240), Enum.Material.SmoothPlastic)
+		sheet.CanCollide = false
+	end
+	local mate = block(model, "Mate", Vector3.new(1, 1.1, 1), topCF * CFrame.new(-2.6, 0.75, 0),
+		Color3.fromRGB(86, 62, 42), Enum.Material.Wood)
+	mate.Shape = Enum.PartType.Cylinder
+	mate.Orientation = Vector3.new(0, 0, 90)
+	mate.CanCollide = false
+
+	return deskCF
+end
+
+local function buildLighting(model: Model, width: number, depth: number, center: Vector3)
+	local rows, cols = 3, 2
+	for r = 1, rows do
+		for c = 1, cols do
+			local x = center.X + (c - (cols + 1) / 2) * (width / cols) * 0.7
+			local z = center.Z + (r - (rows + 1) / 2) * (depth / rows) * 0.72
+			local fixture = block(model, "Luminaria", Vector3.new(6, 0.4, 1.4),
+				CFrame.new(x, C.WallHeight - 0.6, z), Color3.fromRGB(238, 240, 245), Enum.Material.Metal)
+			fixture.CanCollide = false
+
+			local tube = block(model, "Tubo", Vector3.new(5.6, 0.25, 1),
+				CFrame.new(x, C.WallHeight - 0.9, z), Color3.fromRGB(255, 252, 240), Enum.Material.Neon)
+			tube.CanCollide = false
+			tube.CastShadow = false
+
+			local light = Instance.new("SurfaceLight")
+			light.Face = Enum.NormalId.Bottom
+			light.Brightness = 3
+			light.Range = 34
+			light.Angle = 150
+			light.Color = Color3.fromRGB(255, 250, 235)
+			light.Parent = tube
+		end
+	end
+end
+
+local function buildDoor(model: Model, wallZ: number, width: number): CFrame
+	local doorCF = CFrame.new(width / 2 - 6, 0, wallZ - 0.4)
+	block(model, "MarcoPuerta", Vector3.new(6.4, 10.4, 0.6), doorCF * CFrame.new(0, 5.2, 0),
+		C.TrimColor, Enum.Material.Wood)
+	local door = block(model, "Puerta", Vector3.new(5.6, 9.6, 0.3), doorCF * CFrame.new(0, 4.8, -0.2),
+		Color3.fromRGB(142, 104, 68), Enum.Material.Wood)
+	local knob = block(model, "Picaporte", Vector3.new(0.5, 0.5, 0.5), doorCF * CFrame.new(2.2, 4.6, -0.5),
+		Color3.fromRGB(205, 178, 96), Enum.Material.Metal)
+	knob.Shape = Enum.PartType.Ball
+	knob.CanCollide = false
+	door.CanCollide = true
+	return doorCF
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Banco del alumno
+-- ─────────────────────────────────────────────────────────────
+
+local function buildDesk(parent: Instance, index: number, row: number, column: number, position: Vector3): Desk
+	local model = Instance.new("Model")
+	model.Name = string.format("Banco_%02d", index)
+	model.Parent = parent
+
+	local base = CFrame.new(position)
+	local topHeight = 3.0
+
+	local deskTop = block(model, "Tabla", Vector3.new(4.6, 0.28, 2.8), base * CFrame.new(0, topHeight, 0),
+		Color3.fromRGB(196, 158, 108), Enum.Material.WoodPlanks)
+	block(model, "BordeTabla", Vector3.new(4.7, 0.12, 2.9), base * CFrame.new(0, topHeight - 0.2, 0),
+		Color3.fromRGB(70, 74, 82), Enum.Material.Metal)
+
+	for _, offset in { Vector3.new(-2, 0, -1.1), Vector3.new(2, 0, -1.1), Vector3.new(-2, 0, 1.1), Vector3.new(2, 0, 1.1) } do
+		local leg = block(model, "Pata", Vector3.new(0.22, topHeight, 0.22),
+			base * CFrame.new(offset.X, topHeight / 2, offset.Z), Color3.fromRGB(74, 78, 86), Enum.Material.Metal)
+		leg.CanCollide = false
+	end
+	-- Estante bajo la tabla (mochilas, y el celu escondido)
+	local shelf = block(model, "Estante", Vector3.new(4, 0.15, 2), base * CFrame.new(0, 1.2, 0.1),
+		Color3.fromRGB(150, 120, 84), Enum.Material.Wood)
+	shelf.CanCollide = false
+
+	-- Silla + Seat (el Seat es lo que engancha al jugador a su banco)
+	local chairBase = base * CFrame.new(0, 0, 2.6)
+	local seat = Instance.new("Seat")
+	seat.Name = "Asiento"
+	seat.Size = Vector3.new(2.6, 0.35, 2.4)
+	seat.CFrame = chairBase * CFrame.new(0, 2.1, 0)
+	seat.Anchored = true
+	seat.Color = Color3.fromRGB(58, 96, 156)
+	seat.Material = Enum.Material.Fabric
+	seat.TopSurface = Enum.SurfaceType.Smooth
+	seat.Parent = model
+
+	block(model, "Respaldo", Vector3.new(2.6, 2.4, 0.28), chairBase * CFrame.new(0, 3.3, 1.1),
+		Color3.fromRGB(58, 96, 156), Enum.Material.Fabric)
+	for _, offset in { Vector3.new(-1.1, 0, -1), Vector3.new(1.1, 0, -1), Vector3.new(-1.1, 0, 1), Vector3.new(1.1, 0, 1) } do
+		local leg = block(model, "PataSilla", Vector3.new(0.18, 2.1, 0.18),
+			chairBase * CFrame.new(offset.X, 1.05, offset.Z), Color3.fromRGB(74, 78, 86), Enum.Material.Metal)
+		leg.CanCollide = false
+	end
+
+	-- La hoja de la prueba: parte fisica sobre la tabla, con la UI
+	-- montada en su cara superior (la arma el cliente sobre este Adornee).
+	local paper = Util.part({
+		Name = "HojaDePrueba",
+		Size = Vector3.new(3.2, 0.05, 2.3),
+		CFrame = base * CFrame.new(0, topHeight + 0.17, 0.1) * CFrame.Angles(0, math.rad(-2), 0),
+		Color = Color3.fromRGB(250, 249, 244),
+		Material = Enum.Material.SmoothPlastic,
+		CanCollide = false,
+		Parent = model,
+	})
+
+	-- Lapicera al costado, puro detalle
+	local pen = Util.part({
+		Name = "Lapicera",
+		Size = Vector3.new(0.16, 0.16, 1.4),
+		CFrame = base * CFrame.new(1.75, topHeight + 0.22, -0.4) * CFrame.Angles(0, math.rad(18), math.rad(90)),
+		Color = Color3.fromRGB(32, 46, 120),
+		Material = Enum.Material.Plastic,
+		CanCollide = false,
+		Parent = model,
+	})
+	pen.Shape = Enum.PartType.Cylinder
+
+	model.PrimaryPart = deskTop
+
+	return {
+		index = index,
+		row = row,
+		column = column,
+		model = model,
+		seat = seat,
+		paper = paper,
+		deskTop = deskTop,
+		position = position,
+	}
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Build
+-- ─────────────────────────────────────────────────────────────
+
+function ClassroomBuilder.build(parent: Instance): Classroom
+	local existing = parent:FindFirstChild("Aula")
+	if existing then
+		existing:Destroy()
+	end
+
+	local model = Instance.new("Model")
+	model.Name = "Aula"
+
+	local lastRowZ = C.FirstRowOffsetZ + (C.Rows - 1) * C.DeskSpacingZ
+	local halfWidth = (C.Columns - 1) / 2 * C.DeskSpacingX + C.Padding
+	local frontZ = -3
+	local backZ = lastRowZ + C.Padding
+	local width = halfWidth * 2
+	local depth = backZ - frontZ
+	local center = Vector3.new(0, 0, (frontZ + backZ) / 2)
+
+	buildFloorAndCeiling(model, width, depth, center)
+
+	local h = C.WallHeight
+	local t = C.WallThickness
+	buildWall(model, "ParedFrente", Vector3.new(width, h, t), CFrame.new(0, h / 2, frontZ))
+	buildWall(model, "ParedFondo", Vector3.new(width, h, t), CFrame.new(0, h / 2, backZ))
+	buildWall(model, "ParedIzq", Vector3.new(t, h, depth), CFrame.new(-halfWidth, h / 2, center.Z))
+	buildWindowWall(model, halfWidth, frontZ, backZ, h, t, 1)
+
+	-- Zocalos
+	for _, spec in {
+		{ Vector3.new(width, 1.2, t + 0.3), CFrame.new(0, 0.6, frontZ) },
+		{ Vector3.new(width, 1.2, t + 0.3), CFrame.new(0, 0.6, backZ) },
+		{ Vector3.new(t + 0.3, 1.2, depth), CFrame.new(-halfWidth, 0.6, center.Z) },
+		{ Vector3.new(t + 0.3, 1.2, depth), CFrame.new(halfWidth, 0.6, center.Z) },
+	} do
+		block(model, "Zocalo", spec[1] :: Vector3, spec[2] :: CFrame, C.TrimColor, Enum.Material.Wood)
+	end
+
+	local boardCF = buildBoard(model, frontZ, width)
+	buildTeacherDesk(model, frontZ)
+	buildLighting(model, width, depth, center)
+	buildDoor(model, backZ, width)
+
+	-- Grilla de bancos
+	local desksFolder = Instance.new("Folder")
+	desksFolder.Name = "Bancos"
+	desksFolder.Parent = model
+
+	local desks: { Desk } = {}
+	local index = 0
+	for row = 1, C.Rows do
+		for column = 1, C.Columns do
+			index += 1
+			local x = (column - (C.Columns + 1) / 2) * C.DeskSpacingX
+			local z = C.FirstRowOffsetZ + (row - 1) * C.DeskSpacingZ
+			desks[index] = buildDesk(desksFolder, index, row, column, Vector3.new(x, 0, z))
+		end
+	end
+
+	-- Nodos de patrullaje: el profe recorre pasillo por pasillo.
+	-- Pasillos entre columnas + los dos laterales.
+	local aisleX: { number } = {}
+	for column = 1, C.Columns - 1 do
+		table.insert(aisleX, (column - (C.Columns + 1) / 2 + 0.5) * C.DeskSpacingX)
+	end
+	table.insert(aisleX, -halfWidth + 4.5)
+	table.insert(aisleX, halfWidth - 4.5)
+	table.sort(aisleX)
+
+	local patrolNodes: { CFrame } = {}
+	local frontLane = C.FirstRowOffsetZ - 6
+	local backLane = lastRowZ + 5
+	for i, x in aisleX do
+		local goingBack = i % 2 == 1
+		local startZ = goingBack and frontLane or backLane
+		local endZ = goingBack and backLane or frontLane
+		local steps = C.Rows + 1
+		for s = 0, steps do
+			local alpha = s / steps
+			local z = startZ + (endZ - startZ) * alpha
+			-- Mira hacia donde camina: +Z (hacia el fondo) o -Z (hacia el pizarron).
+			local facing = goingBack and math.pi or 0
+			table.insert(patrolNodes, CFrame.new(x, 0, z) * CFrame.Angles(0, facing, 0))
+		end
+	end
+
+	model.Parent = parent
+
+	return {
+		model = model,
+		desks = desks,
+		patrolNodes = patrolNodes,
+		boardStand = CFrame.new(boardCF.Position.X, 0, boardCF.Position.Z + 4),
+		teacherSpawn = CFrame.new(-9, 3, frontZ + 9) * CFrame.Angles(0, math.pi, 0),
+		studentSpawn = CFrame.new(0, 3, backZ - 6),
+		roomCenter = center,
+		width = width,
+		depth = depth,
+	}
+end
+
+return ClassroomBuilder
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX2">
+      <Properties>
+        <string name="Name">ExamService</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	ExamService
+	------------------------------------------------------------------
+	Dueño de la prueba: genera el examen de la ronda (el mismo para
+	todos, si no copiarse no tendria gracia), reparte bancos, recibe
+	respuestas, lleva el puntaje y calcula la nota final.
+
+	Nunca manda al cliente la respuesta correcta: la hoja viaja
+	"sanitizada". La unica forma de ver la resolucion es el celular.
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local MathEngine = require(Shared:WaitForChild("MathEngine"))
+local Net = require(Shared:WaitForChild("Net"))
+
+local E = Config.Exam
+
+local ExamService = {}
+
+export type AnswerRecord = {
+	choice: number,
+	correct: boolean,
+	usedPhone: boolean,
+	at: number,
+}
+
+export type PlayerExam = {
+	player: Player,
+	desk: any,
+	answers: { [number]: AnswerRecord },
+	answered: number,
+	correct: number,
+	cheated: number,
+	catches: number,
+	points: number,
+	finished: boolean,
+	phoneUsedOn: { [number]: boolean },
+}
+
+local state = {
+	classroom = nil :: any,
+	questions = {} :: { MathEngine.Question },
+	publicQuestions = {} :: { any },
+	seed = 0,
+	players = {} :: { [Player]: PlayerExam },
+}
+
+-- ─────────────────────────────────────────────────────────────
+-- Ronda
+-- ─────────────────────────────────────────────────────────────
+
+function ExamService.init(classroom)
+	state.classroom = classroom
+end
+
+function ExamService.newRound(seed: number)
+	state.seed = seed
+	state.questions = MathEngine.buildExam(seed, E.QuestionCount, E.DifficultyCurve)
+	state.publicQuestions = {}
+	for index, question in state.questions do
+		state.publicQuestions[index] = MathEngine.sanitize(question)
+	end
+
+	for player in state.players do
+		ExamService.resetPlayer(player)
+	end
+end
+
+function ExamService.getPublicExam()
+	return state.publicQuestions
+end
+
+function ExamService.getQuestion(id: number): MathEngine.Question?
+	return state.questions[id]
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Jugadores
+-- ─────────────────────────────────────────────────────────────
+
+local function freeDesk(): any
+	if not state.classroom then
+		return nil
+	end
+	local taken: { [any]: boolean } = {}
+	for _, entry in state.players do
+		if entry.desk then
+			taken[entry.desk] = true
+		end
+	end
+	for _, desk in state.classroom.desks do
+		if not taken[desk] then
+			return desk
+		end
+	end
+	return nil
+end
+
+function ExamService.addPlayer(player: Player): PlayerExam
+	local desk = freeDesk()
+	local entry: PlayerExam = {
+		player = player,
+		desk = desk,
+		answers = {},
+		answered = 0,
+		correct = 0,
+		cheated = 0,
+		catches = 0,
+		points = 0,
+		finished = false,
+		phoneUsedOn = {},
+	}
+	state.players[player] = entry
+
+	if desk then
+		desk.paper:SetAttribute("OwnerUserId", player.UserId)
+		desk.seat:SetAttribute("OwnerUserId", player.UserId)
+	end
+
+	return entry
+end
+
+function ExamService.removePlayer(player: Player)
+	local entry = state.players[player]
+	if entry and entry.desk then
+		entry.desk.paper:SetAttribute("OwnerUserId", 0)
+		entry.desk.seat:SetAttribute("OwnerUserId", 0)
+	end
+	state.players[player] = nil
+end
+
+function ExamService.get(player: Player): PlayerExam?
+	return state.players[player]
+end
+
+function ExamService.resetPlayer(player: Player)
+	local entry = state.players[player]
+	if not entry then
+		return
+	end
+	entry.answers = {}
+	entry.answered = 0
+	entry.correct = 0
+	entry.cheated = 0
+	entry.catches = 0
+	entry.points = 0
+	entry.finished = false
+	entry.phoneUsedOn = {}
+	ExamService.push(player)
+end
+
+--- Sienta al jugador en su banco y lo deja listo para rendir.
+function ExamService.seatPlayer(player: Player)
+	local entry = state.players[player]
+	if not entry or not entry.desk then
+		return
+	end
+	local character = player.Character
+	if not character then
+		return
+	end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then
+		return
+	end
+	character:PivotTo(entry.desk.seat.CFrame * CFrame.new(0, 3, 0))
+	task.wait(0.1)
+	entry.desk.seat:Sit(humanoid)
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Responder
+-- ─────────────────────────────────────────────────────────────
+
+local function grade(entry: PlayerExam): number
+	local total = #state.questions
+	if total == 0 then
+		return 1
+	end
+	local raw = entry.correct / total
+	local value = 1 + raw * (E.MaxGrade - 1)
+	value -= entry.catches * Config.Penalty.GradePerCatch
+	return math.clamp(math.floor(value * 10 + 0.5) / 10, 1, E.MaxGrade)
+end
+
+function ExamService.getGrade(player: Player): number
+	local entry = state.players[player]
+	return entry and grade(entry) or 1
+end
+
+function ExamService.markPhoneUsed(player: Player, questionId: number)
+	local entry = state.players[player]
+	if not entry then
+		return
+	end
+	entry.phoneUsedOn[questionId] = true
+end
+
+function ExamService.submitAnswer(player: Player, questionId: number, choice: number)
+	local entry = state.players[player]
+	if not entry then
+		return { ok = false, reason = "Todavia no estas rindiendo." }
+	end
+	if entry.finished then
+		return { ok = false, reason = "Ya entregaste la prueba." }
+	end
+	local question = state.questions[questionId]
+	if not question then
+		return { ok = false, reason = "Ese ejercicio no existe." }
+	end
+	if entry.answers[questionId] then
+		return { ok = false, reason = "Ya respondiste ese ejercicio." }
+	end
+	if typeof(choice) ~= "number" or choice < 1 or choice > #question.choices or choice % 1 ~= 0 then
+		return { ok = false, reason = "Opcion invalida." }
+	end
+
+	local correct = choice == question.answerIndex
+	local usedPhone = entry.phoneUsedOn[questionId] == true
+
+	entry.answers[questionId] = {
+		choice = choice,
+		correct = correct,
+		usedPhone = usedPhone,
+		at = os.clock(),
+	}
+	entry.answered += 1
+	if correct then
+		entry.correct += 1
+		entry.points += usedPhone and E.PointsCorrect or E.PointsCorrectSolo
+	else
+		entry.points += E.PointsWrong
+	end
+	if usedPhone then
+		entry.cheated += 1
+	end
+
+	if entry.answered >= #state.questions then
+		entry.finished = true
+	end
+
+	ExamService.push(player)
+
+	return {
+		ok = true,
+		correct = correct,
+		answerIndex = question.answerIndex,
+		finished = entry.finished,
+		grade = grade(entry),
+	}
+end
+
+function ExamService.registerCatch(player: Player)
+	local entry = state.players[player]
+	if not entry then
+		return
+	end
+	entry.catches += 1
+	if entry.catches >= Config.Penalty.MaxCatches then
+		entry.finished = true
+	end
+	ExamService.push(player)
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Replicacion
+-- ─────────────────────────────────────────────────────────────
+
+function ExamService.snapshot(player: Player)
+	local entry = state.players[player]
+	if not entry then
+		return nil
+	end
+
+	local answers: { [number]: any } = {}
+	for id, record in entry.answers do
+		answers[id] = { choice = record.choice, correct = record.correct, usedPhone = record.usedPhone }
+	end
+
+	return {
+		questions = state.publicQuestions,
+		answers = answers,
+		answered = entry.answered,
+		correct = entry.correct,
+		cheated = entry.cheated,
+		catches = entry.catches,
+		points = entry.points,
+		grade = grade(entry),
+		finished = entry.finished,
+		seatIndex = entry.desk and entry.desk.index or 0,
+	}
+end
+
+function ExamService.push(player: Player)
+	local snapshot = ExamService.snapshot(player)
+	if snapshot then
+		Net.event(Net.Events.ExamUpdate):FireClient(player, snapshot)
+	end
+end
+
+function ExamService.pushAll()
+	for player in state.players do
+		ExamService.push(player)
+	end
+end
+
+function ExamService.allPlayers(): { [Player]: PlayerExam }
+	return state.players
+end
+
+Players.PlayerRemoving:Connect(function(player)
+	ExamService.removePlayer(player)
+end)
+
+return ExamService
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX3">
+      <Properties>
+        <string name="Name">PhoneService</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	PhoneService
+	------------------------------------------------------------------
+	El celular es autoritativo del lado del servidor: bateria, cooldown
+	de la camara, confiscacion y el contenido de la foto.
+
+	Flujo:
+		1. El cliente pide TakePhoto(questionId)  -> el server valida que
+		   ese ejercicio sea el que el jugador tiene delante y devuelve un
+		   "photoId" (un ticket de un solo uso) con el texto fotografiado.
+		2. El cliente pide AskRoGPT(photoId)      -> el server consume el
+		   ticket, marca el ejercicio como "resuelto con ayuda" y devuelve
+		   la resolucion paso a paso.
+
+	Asi el cliente nunca tiene las respuestas antes de tiempo: primero
+	tiene que arriesgarse a sacar la foto.
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+local PhoneModel = require(Shared:WaitForChild("PhoneModel"))
+
+local ExamService = require(script.Parent:WaitForChild("ExamService"))
+local SuspicionService = require(script.Parent:WaitForChild("SuspicionService"))
+
+local P = Config.Phone
+
+local PhoneService = {}
+
+type Photo = {
+	id: string,
+	questionId: number,
+	prompt: string,
+	topic: string,
+	takenAt: number,
+	used: boolean,
+}
+
+type PhoneData = {
+	battery: number,
+	out: boolean,
+	confiscatedUntil: number,
+	nextPhotoAt: number,
+	photos: { [string]: Photo },
+	photoCount: number,
+	dirty: boolean,
+	model: Model?,
+	weld: Weld?,
+}
+
+local phones: { [Player]: PhoneData } = {}
+
+local function ensure(player: Player): PhoneData
+	local data = phones[player]
+	if not data then
+		data = {
+			battery = P.BatteryMax,
+			out = false,
+			confiscatedUntil = 0,
+			nextPhotoAt = 0,
+			photos = {},
+			photoCount = 0,
+			dirty = true,
+			model = nil,
+			weld = nil,
+		}
+		phones[player] = data
+	end
+	return data
+end
+
+local function snapshot(player: Player, data: PhoneData)
+	local now = os.clock()
+	return {
+		battery = math.floor(data.battery + 0.5),
+		batteryMax = P.BatteryMax,
+		out = data.out,
+		confiscated = now < data.confiscatedUntil,
+		confiscatedFor = math.max(0, data.confiscatedUntil - now),
+		cooldown = math.max(0, data.nextPhotoAt - now),
+		photos = data.photoCount,
+	}
+end
+
+local function push(player: Player)
+	local data = ensure(player)
+	Net.event(Net.Events.PhoneState):FireClient(player, snapshot(player, data))
+	data.dirty = false
+end
+
+function PhoneService.isAvailable(player: Player): (boolean, string?)
+	local data = ensure(player)
+	if os.clock() < data.confiscatedUntil then
+		return false, string.format("El profe te lo saco. Faltan %ds.", math.ceil(data.confiscatedUntil - os.clock()))
+	end
+	if data.battery <= 1 then
+		return false, "Sin bateria. Guardalo un rato para que cargue."
+	end
+	return true, nil
+end
+
+--- Crea (o recrea) el celular fisico soldado al alumno. Lo llama el
+--- servidor cada vez que aparece un personaje nuevo.
+function PhoneService.equip(player: Player): boolean
+	local character = player.Character
+	if not character then
+		return false
+	end
+	local data = ensure(player)
+	if data.model and data.model.Parent == character then
+		return true
+	end
+	local model, weld = PhoneModel.attach(character)
+	data.model = model
+	data.weld = weld
+	data.out = false
+	SuspicionService.setPhoneOut(player, false)
+	push(player)
+	return model ~= nil
+end
+
+local function applyPose(data: PhoneData)
+	if data.weld and data.weld.Parent then
+		PhoneModel.setRaised(data.weld, data.out)
+	end
+end
+
+--- El cliente avisa que saco / guardo el celu. Esto es lo que mira el profe.
+function PhoneService.setOut(player: Player, out: boolean): boolean
+	local data = ensure(player)
+	if out then
+		local ok = PhoneService.isAvailable(player)
+		if not ok then
+			data.out = false
+			applyPose(data)
+			SuspicionService.setPhoneOut(player, false)
+			push(player)
+			return false
+		end
+	end
+	data.out = out
+	applyPose(data)
+	SuspicionService.setPhoneOut(player, out)
+	push(player)
+	return true
+end
+
+function PhoneService.confiscate(player: Player)
+	local data = ensure(player)
+	data.out = false
+	data.confiscatedUntil = os.clock() + P.ConfiscationTime
+	data.photos = {}
+	data.photoCount = 0
+	if data.model then
+		data.model:Destroy()
+		data.model = nil
+		data.weld = nil
+	end
+	-- Se lo devuelve cuando termina la confiscacion.
+	task.delay(P.ConfiscationTime, function()
+		if player.Parent and os.clock() >= data.confiscatedUntil then
+			PhoneService.equip(player)
+		end
+	end)
+	SuspicionService.setPhoneOut(player, false)
+	push(player)
+end
+
+function PhoneService.reset(player: Player)
+	local data = ensure(player)
+	data.battery = P.BatteryMax
+	if data.weld and data.weld.Parent then
+		data.out = false
+		applyPose(data)
+	end
+	data.out = false
+	data.confiscatedUntil = 0
+	data.nextPhotoAt = 0
+	data.photos = {}
+	data.photoCount = 0
+	SuspicionService.setPhoneOut(player, false)
+	push(player)
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Sacar la foto
+-- ─────────────────────────────────────────────────────────────
+
+local function newPhotoId(player: Player, data: PhoneData): string
+	data.photoCount += 1
+	return string.format("IMG_%d_%03d", player.UserId % 100000, data.photoCount)
+end
+
+function PhoneService.takePhoto(player: Player, questionId: number)
+	local data = ensure(player)
+	local now = os.clock()
+
+	local available, reason = PhoneService.isAvailable(player)
+	if not available then
+		return { ok = false, reason = reason }
+	end
+	if not data.out then
+		return { ok = false, reason = "Primero saca el celular." }
+	end
+	if now < data.nextPhotoAt then
+		return { ok = false, reason = "Esperá un segundo, se esta guardando la anterior." }
+	end
+	if typeof(questionId) ~= "number" or questionId % 1 ~= 0 then
+		return { ok = false, reason = "Ejercicio invalido." }
+	end
+
+	local entry = ExamService.get(player)
+	if not entry then
+		return { ok = false, reason = "No estas rindiendo." }
+	end
+	if entry.finished then
+		return { ok = false, reason = "Ya terminaste la prueba." }
+	end
+	if entry.answers[questionId] then
+		return { ok = false, reason = "Ese ejercicio ya lo respondiste." }
+	end
+
+	local question = ExamService.getQuestion(questionId)
+	if not question then
+		return { ok = false, reason = "Ese ejercicio no existe." }
+	end
+
+	data.battery = math.max(0, data.battery - P.BatteryPerPhoto)
+	data.nextPhotoAt = now + P.PhotoCooldown
+
+	local photo: Photo = {
+		id = newPhotoId(player, data),
+		questionId = questionId,
+		prompt = question.prompt,
+		topic = question.topic,
+		takenAt = now,
+		used = false,
+	}
+	data.photos[photo.id] = photo
+	push(player)
+
+	return {
+		ok = true,
+		photoId = photo.id,
+		questionId = questionId,
+		prompt = question.prompt,
+		topic = question.topic,
+		choices = question.choices,
+		uploadTime = Random.new():NextNumber(P.UploadTime.Min, P.UploadTime.Max),
+	}
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Mandarsela a RoGPT
+-- ─────────────────────────────────────────────────────────────
+
+function PhoneService.askRoGPT(player: Player, photoId: string)
+	local data = ensure(player)
+
+	local available, reason = PhoneService.isAvailable(player)
+	if not available then
+		return { ok = false, reason = reason }
+	end
+	if typeof(photoId) ~= "string" then
+		return { ok = false, reason = "Foto invalida." }
+	end
+
+	local photo = data.photos[photoId]
+	if not photo then
+		return { ok = false, reason = "Esa foto no esta en la galeria." }
+	end
+	if photo.used then
+		return { ok = false, reason = "Ya le mandaste esa foto." }
+	end
+
+	local question = ExamService.getQuestion(photo.questionId)
+	if not question then
+		return { ok = false, reason = "No se entiende la foto, esta movida." }
+	end
+
+	photo.used = true
+	ExamService.markPhoneUsed(player, photo.questionId)
+
+	local rng = Random.new()
+	return {
+		ok = true,
+		model = P.ModelName,
+		photoId = photoId,
+		questionId = photo.questionId,
+		topic = question.topic,
+		prompt = question.prompt,
+		steps = question.steps,
+		answer = question.choices[question.answerIndex],
+		thinkTime = rng:NextNumber(P.ThinkTime.Min, P.ThinkTime.Max),
+	}
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Bateria
+-- ─────────────────────────────────────────────────────────────
+
+function PhoneService.start()
+	local accumulator = 0
+	RunService.Heartbeat:Connect(function(dt)
+		accumulator += dt
+		if accumulator < 0.5 then
+			return
+		end
+		local step = accumulator
+		accumulator = 0
+
+		local now = os.clock()
+		for player, data in phones do
+			local before = data.battery
+			if data.out then
+				data.battery = math.max(0, data.battery - P.BatteryDrainPerSecond * step)
+				if data.battery <= 0 then
+					PhoneService.setOut(player, false)
+				end
+			else
+				data.battery = math.min(P.BatteryMax, data.battery + P.BatteryRechargePerSecond * step)
+			end
+			if math.floor(before) ~= math.floor(data.battery) or (data.confiscatedUntil > 0 and now < data.confiscatedUntil + 1) then
+				push(player)
+			end
+		end
+	end)
+end
+
+Players.PlayerRemoving:Connect(function(player)
+	phones[player] = nil
+end)
+
+return PhoneService
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX4">
+      <Properties>
+        <string name="Name">RoundService</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	RoundService
+	------------------------------------------------------------------
+	Ciclo de la clase:
+
+		Preparacion -> los alumnos entran, se sientan, el profe reparte
+		Prueba      -> corre el reloj, se puede responder (y copiarse)
+		Resultados  -> notas, ranking y quien se copio sin que lo vean
+
+	Tambien mantiene leaderstats (Nota / Copiadas / Pillado) y es quien
+	decide que pasa cuando el profe agarra a alguien con el celular.
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+
+local ExamService = require(script.Parent:WaitForChild("ExamService"))
+local PhoneService = require(script.Parent:WaitForChild("PhoneService"))
+local SuspicionService = require(script.Parent:WaitForChild("SuspicionService"))
+
+local E = Config.Exam
+
+local RoundService = {}
+
+local state = {
+	phase = "Preparacion",
+	timeLeft = 0,
+	roundNumber = 0,
+	classroom = nil :: any,
+	teacher = nil :: any,
+	results = {} :: { any },
+}
+
+-- ─────────────────────────────────────────────────────────────
+-- leaderstats
+-- ─────────────────────────────────────────────────────────────
+
+local function setupStats(player: Player)
+	local stats = player:FindFirstChild("leaderstats")
+	if stats then
+		return stats
+	end
+	stats = Instance.new("Folder")
+	stats.Name = "leaderstats"
+
+	local grade = Instance.new("NumberValue")
+	grade.Name = "Nota"
+	grade.Value = 1
+	grade.Parent = stats
+
+	local cheats = Instance.new("IntValue")
+	cheats.Name = "Copiadas"
+	cheats.Parent = stats
+
+	local catches = Instance.new("IntValue")
+	catches.Name = "Pillado"
+	catches.Parent = stats
+
+	stats.Parent = player
+	return stats
+end
+
+local function syncStats(player: Player)
+	local entry = ExamService.get(player)
+	local stats = player:FindFirstChild("leaderstats")
+	if not entry or not stats then
+		return
+	end
+	local grade = stats:FindFirstChild("Nota") :: NumberValue?
+	local cheats = stats:FindFirstChild("Copiadas") :: IntValue?
+	local catches = stats:FindFirstChild("Pillado") :: IntValue?
+	if grade then
+		grade.Value = ExamService.getGrade(player)
+	end
+	if cheats then
+		cheats.Value = entry.cheated
+	end
+	if catches then
+		catches.Value = entry.catches
+	end
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Replicacion de la ronda
+-- ─────────────────────────────────────────────────────────────
+
+local function pushRound(target: Player?)
+	local payload = {
+		phase = state.phase,
+		timeLeft = math.max(0, math.floor(state.timeLeft)),
+		roundNumber = state.roundNumber,
+		questionCount = E.QuestionCount,
+		results = state.results,
+	}
+	if target then
+		Net.event(Net.Events.RoundUpdate):FireClient(target, payload)
+	else
+		Net.event(Net.Events.RoundUpdate):FireAllClients(payload)
+	end
+end
+
+function RoundService.notify(player: Player, text: string, kind: string?)
+	Net.event(Net.Events.Notify):FireClient(player, { text = text, kind = kind or "info" })
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Jugadores
+-- ─────────────────────────────────────────────────────────────
+
+function RoundService.addPlayer(player: Player)
+	setupStats(player)
+	local entry = ExamService.addPlayer(player)
+	if not entry.desk then
+		RoundService.notify(player, "El aula esta llena. Mirá desde el fondo hasta que se libere un banco.", "warn")
+	end
+	PhoneService.reset(player)
+	SuspicionService.reset(player)
+	pushRound(player)
+	ExamService.push(player)
+
+	if state.phase == "Prueba" then
+		task.spawn(function()
+			task.wait(0.5)
+			ExamService.seatPlayer(player)
+			RoundService.notify(player, "Entraste con la prueba empezada. Sentate y arrancá.", "info")
+		end)
+	end
+end
+
+function RoundService.onCharacter(player: Player, character: Model)
+	local humanoid = character:WaitForChild("Humanoid", 10) :: Humanoid?
+	if not humanoid then
+		return
+	end
+	humanoid.UseJumpPower = true
+	humanoid.JumpPower = 0 -- en clase no se salta
+	humanoid.WalkSpeed = 14
+
+	-- El celular fisico se suelda al cuerpo apenas aparece el personaje.
+	PhoneService.equip(player)
+
+	humanoid.Died:Connect(function()
+		SuspicionService.reset(player)
+		PhoneService.setOut(player, false)
+	end)
+
+	if state.phase == "Prueba" then
+		task.spawn(function()
+			task.wait(0.6)
+			ExamService.seatPlayer(player)
+		end)
+	end
+end
+
+--- Lo agarraron con el celu.
+function RoundService.handleCatch(player: Player)
+	PhoneService.confiscate(player)
+	ExamService.registerCatch(player)
+	SuspicionService.pardon(player, 4)
+	syncStats(player)
+
+	local entry = ExamService.get(player)
+	local catches = entry and entry.catches or 1
+	local expelled = catches >= Config.Penalty.MaxCatches
+
+	Net.event(Net.Events.Caught):FireClient(player, {
+		catches = catches,
+		maxCatches = Config.Penalty.MaxCatches,
+		confiscatedFor = Config.Phone.ConfiscationTime,
+		gradePenalty = Config.Penalty.GradePerCatch,
+		expelled = expelled,
+	})
+
+	if expelled then
+		RoundService.notify(player, "Te sacaron de la prueba. Esperá la proxima ronda.", "danger")
+	else
+		RoundService.notify(player, string.format("Te pillaron. -%.1f de nota y sin celu %ds.",
+			Config.Penalty.GradePerCatch, Config.Phone.ConfiscationTime), "danger")
+	end
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Ciclo
+-- ─────────────────────────────────────────────────────────────
+
+local function buildResults()
+	local results = {}
+	for player, entry in ExamService.allPlayers() do
+		table.insert(results, {
+			name = player.DisplayName,
+			userId = player.UserId,
+			grade = ExamService.getGrade(player),
+			correct = entry.correct,
+			answered = entry.answered,
+			cheated = entry.cheated,
+			catches = entry.catches,
+			points = entry.points,
+		})
+	end
+	table.sort(results, function(a, b)
+		if a.grade == b.grade then
+			return a.points > b.points
+		end
+		return a.grade > b.grade
+	end)
+	return results
+end
+
+local function runPhase(name: string, duration: number, onTick: ((number) -> ())?)
+	state.phase = name
+	state.timeLeft = duration
+	pushRound()
+
+	local lastWhole = math.floor(duration)
+	while state.timeLeft > 0 do
+		local dt = task.wait(0.25)
+		state.timeLeft = math.max(0, state.timeLeft - dt)
+		if onTick then
+			onTick(dt)
+		end
+		local whole = math.floor(state.timeLeft)
+		if whole ~= lastWhole then
+			lastWhole = whole
+			pushRound()
+		end
+	end
+	state.timeLeft = 0
+	pushRound()
+end
+
+function RoundService.start(classroom, teacher)
+	state.classroom = classroom
+	state.teacher = teacher
+
+	task.spawn(function()
+		while true do
+			-- ── Preparacion ─────────────────────────────
+			state.results = {}
+			for _, player in Players:GetPlayers() do
+				PhoneService.reset(player)
+				SuspicionService.reset(player)
+			end
+			runPhase("Preparacion", E.IntermissionDuration)
+
+			-- ── Prueba ──────────────────────────────────
+			state.roundNumber += 1
+			ExamService.newRound(os.time() + state.roundNumber * 977)
+			for _, player in Players:GetPlayers() do
+				ExamService.resetPlayer(player)
+				task.spawn(ExamService.seatPlayer, player)
+			end
+			if teacher then
+				teacher:say("Guarden todo. Empieza la prueba.", 4)
+			end
+
+			local syncAccumulator = 0
+			runPhase("Prueba", E.RoundDuration, function(dt)
+				syncAccumulator += dt
+				if syncAccumulator >= 1 then
+					syncAccumulator = 0
+					for _, player in Players:GetPlayers() do
+						syncStats(player)
+					end
+				end
+			end)
+
+			-- ── Resultados ──────────────────────────────
+			for _, player in Players:GetPlayers() do
+				PhoneService.setOut(player, false)
+				SuspicionService.reset(player)
+				syncStats(player)
+				local grade = ExamService.getGrade(player)
+				if grade >= E.PassingGrade then
+					RoundService.notify(player, string.format("Aprobaste con %.1f.", grade), "success")
+				else
+					RoundService.notify(player, string.format("Te sacaste %.1f. La proxima estudia (o copiate mejor).", grade), "warn")
+				end
+			end
+			state.results = buildResults()
+			if teacher then
+				teacher:say("Entreguen las hojas. Corrijo para la proxima clase.", 5)
+			end
+			runPhase("Resultados", 15)
+		end
+	end)
+end
+
+function RoundService.getPhase(): string
+	return state.phase
+end
+
+function RoundService.pushTo(player: Player)
+	pushRound(player)
+end
+
+return RoundService
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX5">
+      <Properties>
+        <string name="Name">SuspicionService</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	SuspicionService
+	------------------------------------------------------------------
+	El termometro del juego. Cada tick mira, para cada alumno:
+
+		* tiene el celu afuera?
+		* el profe lo tiene dentro del cono de vision (con raycast real)?
+		* ademas le esta revisando la prueba de cerca?
+
+	Y mueve la barra de riesgo. Si llega a 1 -> el profe lo confronta.
+	El riesgo se replica al cliente para dibujar el medidor y decidir
+	si el boton de "sacar foto" se puede apretar tranquilo.
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+
+local T = Config.Teacher
+
+local SuspicionService = {}
+
+type Entry = {
+	risk: number,
+	phoneOut: boolean,
+	seen: boolean,
+	factor: number,
+	lastPush: number,
+	immuneUntil: number,
+}
+
+local entries: { [Player]: Entry } = {}
+local teacher: any = nil
+local onCaught: ((Player) -> ())? = nil
+local active = false
+
+local function ensure(player: Player): Entry
+	local entry = entries[player]
+	if not entry then
+		entry = {
+			risk = 0,
+			phoneOut = false,
+			seen = false,
+			factor = 0,
+			lastPush = 0,
+			immuneUntil = 0,
+		}
+		entries[player] = entry
+	end
+	return entry
+end
+
+function SuspicionService.init(teacherRef: any, caughtCallback: (Player) -> ())
+	teacher = teacherRef
+	onCaught = caughtCallback
+end
+
+function SuspicionService.setPhoneOut(player: Player, out: boolean)
+	ensure(player).phoneOut = out
+end
+
+function SuspicionService.isPhoneOut(player: Player): boolean
+	return ensure(player).phoneOut
+end
+
+function SuspicionService.getRisk(player: Player): number
+	return ensure(player).risk
+end
+
+--- Ventana de gracia (por ejemplo justo despues de que te pillan).
+function SuspicionService.pardon(player: Player, seconds: number)
+	local entry = ensure(player)
+	entry.risk = 0
+	entry.immuneUntil = os.clock() + seconds
+end
+
+function SuspicionService.reset(player: Player)
+	local entry = ensure(player)
+	entry.risk = 0
+	entry.phoneOut = false
+	entry.seen = false
+	entry.factor = 0
+end
+
+local function targetPosition(player: Player): (Vector3?, Instance?)
+	local character = player.Character
+	if not character then
+		return nil, nil
+	end
+	local head = character:FindFirstChild("Head") :: BasePart?
+	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local reference = head or root
+	if not reference then
+		return nil, nil
+	end
+	-- El celu se mira a la altura del pecho, apenas sobre la tabla del banco.
+	return reference.Position - Vector3.new(0, 0.6, 0), character
+end
+
+local function push(player: Player, entry: Entry, force: boolean?)
+	local now = os.clock()
+	if not force and now - entry.lastPush < 0.12 then
+		return
+	end
+	entry.lastPush = now
+	Net.event(Net.Events.RiskUpdate):FireClient(player, {
+		risk = entry.risk,
+		seen = entry.seen,
+		inspecting = teacher ~= nil and teacher:isInspecting(player),
+		teacherState = teacher and teacher:getState() or "Patrullando",
+	})
+end
+
+function SuspicionService.start()
+	if active then
+		return
+	end
+	active = true
+
+	local accumulator = 0
+	RunService.Heartbeat:Connect(function(dt)
+		if not teacher or not active then
+			return
+		end
+		accumulator += dt
+		if accumulator < 0.1 then
+			return
+		end
+		local step = accumulator
+		accumulator = 0
+
+		local now = os.clock()
+
+		for _, player in Players:GetPlayers() do
+			local entry = ensure(player)
+			local position, character = targetPosition(player)
+
+			local seen, factor = false, 0
+			if position and teacher.canSee then
+				seen, factor = teacher:canSee(position, character and { character } or nil)
+			end
+			entry.seen = seen
+			entry.factor = factor
+
+			if now < entry.immuneUntil then
+				entry.risk = 0
+			elseif entry.phoneOut then
+				local inspecting = teacher:isInspecting(player)
+				local gain
+				if seen and inspecting then
+					gain = T.RiskGainInspect * factor
+				elseif seen then
+					gain = T.RiskGainSeen * factor
+				else
+					gain = T.RiskGainHidden
+				end
+				entry.risk = math.clamp(entry.risk + gain * step, 0, 1)
+				if not seen then
+					-- Nervios, sí; pero si nadie te vio, nadie te puede pillar.
+					entry.risk = math.min(entry.risk, 0.85)
+				end
+			else
+				-- Guardado: baja mas rapido si el profe ni te mira.
+				local decay = T.RiskDecay * (seen and 0.55 or 1.6)
+				entry.risk = math.clamp(entry.risk - decay * step, 0, 1)
+			end
+
+			if entry.risk >= T.RiskCaught and onCaught then
+				entry.risk = 0
+				entry.immuneUntil = now + 3
+				push(player, entry, true)
+				onCaught(player)
+			else
+				push(player, entry)
+			end
+		end
+	end)
+end
+
+Players.PlayerRemoving:Connect(function(player)
+	entries[player] = nil
+end)
+
+return SuspicionService
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX6">
+      <Properties>
+        <string name="Name">TeacherAI</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	TeacherAI
+	------------------------------------------------------------------
+	El profesor. Es lo unico que separa al alumno de un 10 facil.
+
+	Ciclo de comportamiento:
+		Patrullando  -> recorre pasillo por pasillo entre los bancos
+		Revisando    -> frena en un banco, se planta y mira la prueba
+		Pizarron     -> se da vuelta a escribir (ventana segura para copiarse)
+		Confrontando -> te vio con el celu y viene derecho a tu banco
+
+	Vision:
+		cono de FOV configurable + raycast real (los bancos y las paredes
+		tapan). La cabeza gira (Motor6D del cuello), asi que el cono que
+		ve el jugador en pantalla coincide con lo que "ve" el profe.
+--]]
+
+local PathfindingService = game:GetService("PathfindingService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local T = Config.Teacher
+
+local TeacherAI = {}
+TeacherAI.__index = TeacherAI
+
+export type Teacher = typeof(setmetatable({} :: any, TeacherAI))
+
+local PHRASES = {
+	patrol = {
+		"Sin hablar, por favor.",
+		"Tienen que justificar todos los pasos.",
+		"Les quedan pocos minutos.",
+		"El que copia se lleva un uno.",
+	},
+	board = {
+		"Ojo con el signo del segundo termino.",
+		"Anoto la formula en el pizarron.",
+		"Ejercicio 5, presten atencion.",
+	},
+	inspect = {
+		"A ver esa hoja...",
+		"Mmm. Ese planteo no cierra.",
+		"Muy bien ese desarrollo.",
+	},
+	caught = {
+		"Dame ese telefono. Ahora.",
+		"Te vi. Guardalo o te llevas un uno.",
+		"En serio? Con el celular en la prueba?",
+	},
+}
+
+local function pick(list: { string }): string
+	return list[math.random(1, #list)]
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Rig
+-- ─────────────────────────────────────────────────────────────
+
+local function buildFallbackRig(): Model
+	-- Rig estilizado por si no se puede crear un avatar real
+	-- (Studio sin acceso a la API de avatares).
+	local model = Instance.new("Model")
+	model.Name = "Profesor"
+
+	local root = Util.part({
+		Name = "HumanoidRootPart",
+		Size = Vector3.new(2, 2, 1),
+		CFrame = CFrame.new(0, 3, 0),
+		Transparency = 1,
+		Anchored = false,
+		CanCollide = true,
+		Parent = model,
+	})
+
+	local function bodyPart(name: string, size: Vector3, offset: Vector3, color: Color3, material: Enum.Material)
+		local part = Util.part({
+			Name = name,
+			Size = size,
+			CFrame = root.CFrame * CFrame.new(offset),
+			Color = color,
+			Material = material,
+			Anchored = false,
+			CanCollide = false,
+			Parent = model,
+		})
+		Util.weld(root, part)
+		return part
+	end
+
+	local suit = Color3.fromRGB(58, 62, 76)
+	local torso = bodyPart("Torso", Vector3.new(2.2, 2.4, 1.1), Vector3.new(0, 0.2, 0), suit, Enum.Material.Fabric)
+	bodyPart("Camisa", Vector3.new(0.9, 2.2, 1.2), Vector3.new(0, 0.25, -0.02), Color3.fromRGB(232, 236, 242), Enum.Material.Fabric)
+	bodyPart("Corbata", Vector3.new(0.35, 1.6, 1.3), Vector3.new(0, 0.1, -0.02), Color3.fromRGB(122, 38, 44), Enum.Material.Fabric)
+	local head = bodyPart("Head", Vector3.new(1.5, 1.5, 1.5), Vector3.new(0, 2.1, 0), Color3.fromRGB(226, 190, 156), Enum.Material.SmoothPlastic)
+	local hair = bodyPart("Pelo", Vector3.new(1.6, 0.5, 1.6), Vector3.new(0, 2.9, 0), Color3.fromRGB(120, 118, 116), Enum.Material.SmoothPlastic)
+
+	-- La cabeza cuelga de un Motor6D "Neck": asi tambien gira en el rig
+	-- de respaldo y el cono de vision coincide con lo que se ve.
+	for _, weld in root:GetChildren() do
+		if weld:IsA("WeldConstraint") then
+			local part1 = (weld :: WeldConstraint).Part1
+			if part1 == head or part1 == hair then
+				weld:Destroy()
+			end
+		end
+	end
+	local neck = Instance.new("Motor6D")
+	neck.Name = "Neck"
+	neck.Part0 = torso
+	neck.Part1 = head
+	neck.C0 = CFrame.new(0, 1.2, 0)
+	neck.C1 = CFrame.new(0, -0.7, 0)
+	neck.Parent = torso
+	Util.weld(head, hair)
+	bodyPart("BrazoIzq", Vector3.new(0.9, 2.2, 0.9), Vector3.new(-1.6, 0.2, 0), suit, Enum.Material.Fabric)
+	bodyPart("BrazoDer", Vector3.new(0.9, 2.2, 0.9), Vector3.new(1.6, 0.2, 0), suit, Enum.Material.Fabric)
+	bodyPart("PiernaIzq", Vector3.new(0.9, 2.4, 0.9), Vector3.new(-0.55, -2.2, 0), Color3.fromRGB(42, 46, 58), Enum.Material.Fabric)
+	bodyPart("PiernaDer", Vector3.new(0.9, 2.4, 0.9), Vector3.new(0.55, -2.2, 0), Color3.fromRGB(42, 46, 58), Enum.Material.Fabric)
+
+	local humanoid = Instance.new("Humanoid")
+	humanoid.RigType = Enum.HumanoidRigType.R15
+	humanoid.HipHeight = 3.4
+	humanoid.Parent = model
+
+	model.PrimaryPart = root
+	head.Name = "Head"
+	return model
+end
+
+local function buildAvatarRig(): Model?
+	local description = Instance.new("HumanoidDescription")
+	description.HeightScale = 1.05
+	description.BodyTypeScale = 0.4
+	description.ProportionScale = 0.6
+	description.HeadColor = Color3.fromRGB(226, 190, 156)
+	description.TorsoColor = Color3.fromRGB(58, 62, 76)
+	description.LeftArmColor = Color3.fromRGB(226, 190, 156)
+	description.RightArmColor = Color3.fromRGB(226, 190, 156)
+	description.LeftLegColor = Color3.fromRGB(42, 46, 58)
+	description.RightLegColor = Color3.fromRGB(42, 46, 58)
+
+	local ok, model = pcall(function()
+		return Players:CreateHumanoidModelFromDescription(description, Enum.HumanoidRigType.R15)
+	end)
+	if ok and model then
+		return model
+	end
+	return nil
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Constructor
+-- ─────────────────────────────────────────────────────────────
+
+function TeacherAI.new(classroom, onCatch: (Player) -> ())
+	local self = setmetatable({}, TeacherAI)
+
+	self.classroom = classroom
+	self.onCatch = onCatch
+	self.state = "Patrullando"
+	self.gazeYaw = 0
+	self.targetGazeYaw = 0
+	self.inspectTarget = nil :: Player?
+	self.confrontTarget = nil :: Player?
+	self.running = false
+	self.rng = Random.new(os.clock() * 1000)
+	self.nodeIndex = 1
+
+	local model = buildAvatarRig() or buildFallbackRig()
+	model.Name = "Profesor"
+
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	assert(humanoid, "El rig del profesor no tiene Humanoid")
+	humanoid.WalkSpeed = T.WalkSpeed
+	humanoid.DisplayName = T.DisplayName
+	humanoid.NameDisplayDistance = 60
+	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	humanoid.BreakJointsOnDeath = false
+
+	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart?
+	assert(root, "El rig del profesor no tiene HumanoidRootPart")
+
+	self.model = model
+	self.humanoid = humanoid
+	self.root = root
+	self.head = (model:FindFirstChild("Head") :: BasePart?) or root
+	self.neck = model:FindFirstChild("Neck", true)
+	self.neckBase = if self.neck and self.neck:IsA("Motor6D") then self.neck.C0 else nil
+
+	model.Parent = workspace
+	model:PivotTo(classroom.teacherSpawn)
+
+	self:_setupAnimations()
+	self:_buildBubble()
+
+	return self
+end
+
+function TeacherAI:_setupAnimations()
+	local animator = self.humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator", self.humanoid)
+	local function load(id: string): AnimationTrack?
+		local animation = Instance.new("Animation")
+		animation.AnimationId = id
+		local ok, track = pcall(function()
+			return animator:LoadAnimation(animation)
+		end)
+		return ok and track or nil
+	end
+
+	self.animations = {
+		idle = load("rbxassetid://507766666"),
+		walk = load("rbxassetid://507777826"),
+		write = load("rbxassetid://507770239"),
+	}
+	if self.animations.idle then
+		self.animations.idle:Play(0.3)
+	end
+end
+
+function TeacherAI:_playAnim(name: string)
+	if self.currentAnim == name then
+		return
+	end
+	self.currentAnim = name
+	for key, track in self.animations do
+		if track then
+			if key == name then
+				track:Play(0.25)
+			else
+				track:Stop(0.25)
+			end
+		end
+	end
+end
+
+function TeacherAI:_buildBubble()
+	local billboard = Util.billboard(self.head, UDim2.fromScale(9, 2.4), Vector3.new(0, 3.2, 0))
+	billboard.Name = "Dialogo"
+	billboard.AlwaysOnTop = true
+	billboard.Enabled = false
+	billboard.MaxDistance = 90
+	billboard.Parent = self.head
+
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.fromScale(1, 1)
+	frame.BackgroundColor3 = Color3.fromRGB(20, 22, 28)
+	frame.BackgroundTransparency = 0.12
+	frame.Parent = billboard
+	Util.roundify(frame, 14, Color3.fromRGB(90, 96, 112), 2)
+
+	local label = Instance.new("TextLabel")
+	label.Name = "Texto"
+	label.Size = UDim2.fromScale(0.9, 0.7)
+	label.Position = UDim2.fromScale(0.05, 0.15)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.GothamMedium
+	label.TextColor3 = Color3.fromRGB(240, 242, 248)
+	label.TextScaled = true
+	label.Text = ""
+	label.Parent = frame
+
+	self.bubble = billboard
+	self.bubbleLabel = label
+end
+
+function TeacherAI:say(text: string, duration: number?)
+	self.bubbleLabel.Text = text
+	self.bubble.Enabled = true
+	self.speechToken = (self.speechToken or 0) + 1
+	local token = self.speechToken
+	task.delay(duration or 3.2, function()
+		if self.speechToken == token and self.bubble then
+			self.bubble.Enabled = false
+		end
+	end)
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Movimiento
+-- ─────────────────────────────────────────────────────────────
+
+function TeacherAI:_moveTo(goal: Vector3, timeout: number?): boolean
+	local humanoid: Humanoid = self.humanoid
+	local root: BasePart = self.root
+	local deadline = os.clock() + (timeout or 14)
+
+	local path = PathfindingService:CreatePath({
+		AgentRadius = 2.6,
+		AgentHeight = 6,
+		AgentCanJump = false,
+		WaypointSpacing = 4,
+	})
+
+	local ok = pcall(function()
+		path:ComputeAsync(root.Position, goal)
+	end)
+
+	local waypoints: { Vector3 } = {}
+	if ok and path.Status == Enum.PathStatus.Success then
+		for i, waypoint in path:GetWaypoints() do
+			if i > 1 then
+				table.insert(waypoints, waypoint.Position)
+			end
+		end
+	end
+	if #waypoints == 0 then
+		waypoints = { goal }
+	end
+
+	for _, point in waypoints do
+		humanoid:MoveTo(point)
+		local lastDistance = math.huge
+		local stuckFor = 0
+		while self.running do
+			local distance = (Vector3.new(root.Position.X, 0, root.Position.Z) - Vector3.new(point.X, 0, point.Z)).Magnitude
+			if distance < 2.2 then
+				break
+			end
+			if os.clock() > deadline then
+				return false
+			end
+			if distance > lastDistance - 0.05 then
+				stuckFor += 0.1
+				if stuckFor > 2 then
+					return false
+				end
+			else
+				stuckFor = 0
+			end
+			lastDistance = distance
+			humanoid:MoveTo(point)
+			task.wait(0.1)
+		end
+	end
+	return true
+end
+
+function TeacherAI:_faceTowards(position: Vector3, duration: number?)
+	local root: BasePart = self.root
+	local elapsed = 0
+	local total = duration or 0.45
+	local start = root.CFrame
+	local flat = Vector3.new(position.X, root.Position.Y, position.Z)
+	if (flat - root.Position).Magnitude < 0.1 then
+		return
+	end
+	local goal = CFrame.lookAt(root.Position, flat)
+	while elapsed < total and self.running do
+		local dt = task.wait()
+		elapsed += dt
+		local alpha = math.clamp(elapsed / total, 0, 1)
+		root.CFrame = start:Lerp(goal, alpha)
+	end
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Vision
+-- ─────────────────────────────────────────────────────────────
+
+function TeacherAI:getGazeCFrame(): CFrame
+	local head: BasePart = self.head
+	local root: BasePart = self.root
+	local origin = head.Position
+	local look = (root.CFrame * CFrame.Angles(0, self.gazeYaw, 0)).LookVector
+	return CFrame.lookAt(origin, origin + look)
+end
+
+--- Devuelve visible (bool) y factor 0..1 (1 = de frente y cerca).
+function TeacherAI:canSee(position: Vector3, ignore: { Instance }?): (boolean, number)
+	if self.state == "Pizarron" then
+		-- De espaldas: literalmente no puede ver nada del aula.
+		return false, 0
+	end
+
+	local gaze = self:getGazeCFrame()
+	local delta = position - gaze.Position
+	local distance = delta.Magnitude
+	if distance > T.ViewDistance or distance < 0.05 then
+		return false, 0
+	end
+
+	local direction = delta.Unit
+	local dot = direction:Dot(gaze.LookVector)
+	local halfFov = math.rad(T.FieldOfView / 2)
+	local angle = math.acos(math.clamp(dot, -1, 1))
+	if angle > halfFov then
+		return false, 0
+	end
+
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	local filter: { Instance } = { self.model }
+	if ignore then
+		for _, instance in ignore do
+			table.insert(filter, instance)
+		end
+	end
+	params.FilterDescendantsInstances = filter
+	params.IgnoreWater = true
+
+	local result = workspace:Raycast(gaze.Position, direction * distance, params)
+	if result then
+		return false, 0
+	end
+
+	-- Centro del cono = 1, borde = PeripheralFactor. Lejos = menos.
+	local focus = 1 - (angle / halfFov)
+	local proximity = 1 - (distance / T.ViewDistance) * 0.65
+	local factor = math.clamp((T.PeripheralFactor + (1 - T.PeripheralFactor) * focus) * proximity, 0, 1)
+	return true, factor
+end
+
+function TeacherAI:isInspecting(player: Player): boolean
+	return self.inspectTarget == player
+end
+
+function TeacherAI:getState(): string
+	return self.state
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Comportamiento
+-- ─────────────────────────────────────────────────────────────
+
+function TeacherAI:_nearestDeskWithStudent(position: Vector3, maxDistance: number)
+	local best, bestDistance = nil, maxDistance
+	for _, desk in self.classroom.desks do
+		local occupant = desk.seat.Occupant
+		if occupant then
+			local distance = (desk.seat.Position - position).Magnitude
+			if distance < bestDistance then
+				best, bestDistance = desk, distance
+			end
+		end
+	end
+	return best
+end
+
+function TeacherAI:_inspect(desk)
+	local occupant = desk.seat.Occupant
+	local character = occupant and occupant.Parent
+	local player = character and Players:GetPlayerFromCharacter(character)
+	if not player then
+		return
+	end
+
+	self.state = "Revisando"
+	self.inspectTarget = player
+	self:_playAnim("idle")
+	self:_faceTowards(desk.seat.Position, 0.4)
+	self.targetGazeYaw = 0
+	if self.rng:NextNumber() < 0.5 then
+		self:say(pick(PHRASES.inspect), 2.6)
+	end
+
+	local duration = Util.randomInRange(T.InspectDuration, self.rng)
+	local elapsed = 0
+	while elapsed < duration and self.running and self.state == "Revisando" do
+		elapsed += task.wait(0.1)
+	end
+
+	self.inspectTarget = nil
+	if self.state == "Revisando" then
+		self.state = "Patrullando"
+	end
+end
+
+function TeacherAI:_goToBoard()
+	self.state = "Pizarron"
+	self.inspectTarget = nil
+	self:_playAnim("walk")
+	self:_moveTo(self.classroom.boardStand.Position, 12)
+	self:_faceTowards(self.classroom.boardStand.Position + self.classroom.boardStand.LookVector * 6, 0.5)
+	self.targetGazeYaw = 0
+	self:_playAnim("write")
+	self:say(pick(PHRASES.board), 3)
+
+	local duration = Util.randomInRange(T.BoardDuration, self.rng)
+	local elapsed = 0
+	while elapsed < duration and self.running and self.state == "Pizarron" do
+		elapsed += task.wait(0.1)
+	end
+
+	if self.state == "Pizarron" then
+		self.state = "Patrullando"
+	end
+end
+
+function TeacherAI:_patrolStep()
+	local nodes = self.classroom.patrolNodes
+	if #nodes == 0 then
+		task.wait(1)
+		return
+	end
+
+	self.nodeIndex = self.nodeIndex % #nodes + 1
+	local node = nodes[self.nodeIndex]
+
+	self.state = "Patrullando"
+	self:_playAnim("walk")
+	self:_moveTo(node.Position, 12)
+	self:_playAnim("idle")
+
+	if not self.running or self.state == "Confrontando" then
+		return
+	end
+
+	-- Frena a mirar un banco cercano
+	if self.rng:NextNumber() < T.InspectChance then
+		local desk = self:_nearestDeskWithStudent(self.root.Position, 12)
+		if desk then
+			self:_inspect(desk)
+			return
+		end
+	end
+
+	if self.rng:NextNumber() < 0.12 then
+		self:say(pick(PHRASES.patrol), 3)
+	end
+
+	task.wait(Util.randomInRange(T.IdleAtWaypoint, self.rng))
+end
+
+--- Interrumpe todo y va derecho al banco del jugador.
+function TeacherAI:confront(player: Player)
+	if self.state == "Confrontando" then
+		return
+	end
+	self.confrontTarget = player
+	self.state = "Confrontando"
+	self.inspectTarget = nil
+
+	task.spawn(function()
+		local character = player.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+		self.humanoid.WalkSpeed = T.ChaseSpeed
+		self:_playAnim("walk")
+		self:say(pick(PHRASES.caught), 3.4)
+
+		if root then
+			local approach = root.Position + (self.root.Position - root.Position).Unit * 4
+			self:_moveTo(Vector3.new(approach.X, root.Position.Y, approach.Z), 10)
+			self:_faceTowards(root.Position, 0.35)
+		end
+
+		self:_playAnim("idle")
+		self.humanoid.WalkSpeed = T.WalkSpeed
+		self.onCatch(player)
+
+		task.wait(1.6)
+		self.confrontTarget = nil
+		if self.state == "Confrontando" then
+			self.state = "Patrullando"
+		end
+	end)
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Loop
+-- ─────────────────────────────────────────────────────────────
+
+function TeacherAI:start()
+	if self.running then
+		return
+	end
+	self.running = true
+
+	-- Cerebro
+	task.spawn(function()
+		while self.running do
+			if self.state == "Confrontando" then
+				task.wait(0.2)
+			elseif os.clock() - (self.lastBoardAt or 0) > 28 and self.rng:NextNumber() < T.BoardChance then
+				self.lastBoardAt = os.clock()
+				self:_goToBoard()
+			else
+				self:_patrolStep()
+			end
+		end
+	end)
+
+	-- Cabeza: barrido lateral mientras camina, fija cuando revisa.
+	self.gazeConnection = RunService.Heartbeat:Connect(function(dt)
+		if self.state == "Patrullando" then
+			self.targetGazeYaw = math.sin(os.clock() * 0.85) * math.rad(38)
+		elseif self.state == "Revisando" or self.state == "Confrontando" then
+			self.targetGazeYaw = 0
+		elseif self.state == "Pizarron" then
+			self.targetGazeYaw = 0
+		end
+
+		self.gazeYaw = Util.lerpAngle(self.gazeYaw, self.targetGazeYaw, math.clamp(dt * T.HeadTurnSpeed, 0, 1))
+
+		if self.neck and self.neckBase then
+			(self.neck :: Motor6D).C0 = self.neckBase * CFrame.Angles(0, self.gazeYaw, 0)
+		end
+	end)
+end
+
+function TeacherAI:destroy()
+	self.running = false
+	if self.gazeConnection then
+		self.gazeConnection:Disconnect()
+	end
+	if self.model then
+		self.model:Destroy()
+	end
+end
+
+return TeacherAI
+]]></ProtectedString>
+      </Properties>
+    </Item>
+  </Item>
+</roblox>

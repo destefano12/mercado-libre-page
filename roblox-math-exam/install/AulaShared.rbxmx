@@ -1,0 +1,1026 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
+  <Item class="Folder" referent="RBX7">
+    <Properties>
+      <string name="Name">Shared</string>
+    </Properties>
+    <Item class="ModuleScript" referent="RBX1">
+      <Properties>
+        <string name="Name">Config</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Config
+	------------------------------------------------------------------
+	Todos los numeros que definen el "feeling" del juego viven aca.
+	Si queres que el profe sea mas duro, que la prueba sea mas larga o
+	que el celu tarde mas en responder, tocas SOLO este archivo.
+--]]
+
+export type RiskState = {
+	risk: number,      -- 0..1
+	seen: boolean,     -- el profe te tiene en su cono de vision
+	inspecting: boolean,
+	teacherState: string,
+}
+
+local Config = {}
+
+-- ─────────────────────────────────────────────────────────────
+-- AULA (todo se construye por codigo, en 3D, a escala real)
+-- ─────────────────────────────────────────────────────────────
+Config.Classroom = {
+	Origin = CFrame.new(0, 0, 0),
+
+	Rows = 4,              -- filas de bancos (de adelante hacia atras)
+	Columns = 3,           -- bancos por fila
+	DeskSpacingX = 9,      -- separacion entre columnas (pasillos)
+	DeskSpacingZ = 8,      -- separacion entre filas
+	FirstRowOffsetZ = 14,  -- distancia del pizarron a la primera fila
+
+	WallHeight = 16,
+	WallThickness = 1,
+	Padding = 12,          -- aire entre el ultimo banco y la pared del fondo
+
+	FloorMaterial = Enum.Material.WoodPlanks,
+	FloorColor = Color3.fromRGB(150, 118, 84),
+	WallMaterial = Enum.Material.Concrete,
+	WallColor = Color3.fromRGB(226, 222, 210),
+	TrimColor = Color3.fromRGB(72, 92, 110),
+}
+
+-- ─────────────────────────────────────────────────────────────
+-- PRUEBA
+-- ─────────────────────────────────────────────────────────────
+Config.Exam = {
+	QuestionCount = 8,
+	RoundDuration = 300,        -- segundos de prueba
+	IntermissionDuration = 20,  -- entre rondas
+	MaxGrade = 10,              -- escala 1..10
+	PassingGrade = 6,
+
+	-- Progresion de dificultad a lo largo de la prueba (indice -> dificultad)
+	DifficultyCurve = { 1, 1, 2, 2, 3, 3, 4, 4, 5, 5 },
+
+	PointsCorrect = 100,
+	PointsCorrectSolo = 160,    -- responder sin usar el celu vale mas
+	PointsWrong = -40,
+}
+
+-- ─────────────────────────────────────────────────────────────
+-- PROFESOR
+-- ─────────────────────────────────────────────────────────────
+Config.Teacher = {
+	DisplayName = "Prof. Battaglia",
+
+	WalkSpeed = 7.5,
+	ChaseSpeed = 13,
+
+	-- Vision
+	FieldOfView = 105,          -- grados totales del cono
+	ViewDistance = 46,
+	PeripheralFactor = 0.55,    -- cuanto "cuenta" lo que ve de reojo
+
+	-- Comportamiento
+	InspectChance = 0.55,       -- prob. de frenar en un banco al pasar
+	InspectDuration = NumberRange.new(2.5, 5.0),
+	BoardChance = 0.30,         -- prob. de irse al pizarron (ventana segura)
+	BoardDuration = NumberRange.new(6.0, 11.0),
+	IdleAtWaypoint = NumberRange.new(0.4, 1.6),
+	HeadTurnSpeed = 4.0,
+
+	-- Sospecha (0..1 por jugador)
+	RiskGainSeen = 0.42,        -- por segundo, celu visible y a la vista
+	RiskGainInspect = 0.85,     -- por segundo, ademas te esta revisando la prueba
+	RiskGainHidden = 0.05,      -- por segundo, celu afuera pero no te ve
+	RiskDecay = 0.22,           -- por segundo, celu guardado
+	RiskCaught = 1.0,
+	RiskWarning = 0.55,         -- desde aca el HUD se pone rojo
+}
+
+-- ─────────────────────────────────────────────────────────────
+-- CELULAR / RoGPT
+-- ─────────────────────────────────────────────────────────────
+Config.Phone = {
+	RaiseTime = 0.35,           -- tween de sacar el celu
+	PhotoCooldown = 2.0,
+	BatteryMax = 100,
+	BatteryPerPhoto = 8,
+	BatteryDrainPerSecond = 0.6,
+	BatteryRechargePerSecond = 1.4, -- se recarga guardado (bolsillo con powerbank, cero realismo)
+
+	ConfiscationTime = 35,      -- segundos sin celu despues de que te pillan
+
+	-- RoGPT "pensando"
+	UploadTime = NumberRange.new(0.6, 1.2),
+	ThinkTime = NumberRange.new(1.4, 2.8),
+	TypeSpeed = 55,             -- caracteres por segundo al escribir la respuesta
+	ModelName = "RoGPT-4o",
+	Greeting = "Hola. Mandame la foto del ejercicio y te lo resuelvo paso a paso.",
+}
+
+-- ─────────────────────────────────────────────────────────────
+-- CAMARA (todo el juego es 3D: la camara acompaña, no hay pantallas planas)
+-- ─────────────────────────────────────────────────────────────
+Config.Camera = {
+	DeskOffset = Vector3.new(0, 3.2, 5.4),   -- sobre el hombro, mirando la prueba
+	DeskLookOffset = Vector3.new(0, 1.1, 0),
+	PhoneOffset = Vector3.new(0.9, 2.4, 2.6),-- acercada al celu
+	BlendTime = 0.45,
+	FieldOfView = 68,
+	PhoneFieldOfView = 52,
+}
+
+-- Sonidos: dejalos vacios y no suena nada (sin warnings en consola).
+-- Pone tus propios rbxassetid cuando tengas los efectos subidos.
+Config.Sounds = {
+	Shutter = "",       -- click de la camara
+	Send = "",          -- mensaje enviado
+	Reply = "",         -- RoGPT contesta
+	Correct = "",       -- respuesta correcta
+	Wrong = "",         -- respuesta incorrecta
+	Caught = "",        -- te pillaron
+	PhoneOut = "",      -- roce de sacar el celular
+}
+
+Config.Penalty = {
+	GradePerCatch = 1.5,        -- puntos de nota que te descuenta cada vez que te pillan
+	MaxCatches = 3,             -- a la tercera te saca de la prueba
+}
+
+table.freeze(Config)
+return Config
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX2">
+      <Properties>
+        <string name="Name">MathEngine</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	MathEngine
+	------------------------------------------------------------------
+	Genera los ejercicios de la prueba y, para cada uno, la resolucion
+	paso a paso que despues escupe RoGPT en la pantalla del celular.
+
+	Cada generador devuelve:
+		prompt      : el enunciado tal cual va impreso en la hoja
+		answer      : la respuesta correcta (texto)
+		distractors : errores tipicos (para las opciones)
+		steps       : { {title, body}, ... }  resolucion del "modelo"
+		topic       : etiqueta para el chat
+--]]
+
+export type Step = { title: string, body: string }
+
+export type Question = {
+	id: number,
+	topic: string,
+	prompt: string,
+	choices: { string },
+	answerIndex: number,
+	steps: { Step },
+	difficulty: number,
+}
+
+local MathEngine = {}
+
+-- ─────────────────────────────────────────────────────────────
+-- Helpers
+-- ─────────────────────────────────────────────────────────────
+
+local function gcd(a: number, b: number): number
+	a, b = math.abs(a), math.abs(b)
+	while b > 0 do
+		a, b = b, a % b
+	end
+	return a == 0 and 1 or a
+end
+
+local function frac(n: number, d: number): string
+	if d < 0 then
+		n, d = -n, -d
+	end
+	local g = gcd(n, d)
+	n, d = n // g, d // g
+	if d == 1 then
+		return tostring(n)
+	end
+	return string.format("%d/%d", n, d)
+end
+
+local function num(value: number): string
+	if math.abs(value - math.round(value)) < 1e-9 then
+		return tostring(math.round(value))
+	end
+	return (string.format("%.2f", value):gsub("%.?0+$", ""))
+end
+
+local function signed(value: number): string
+	return value >= 0 and ("+ " .. num(value)) or ("- " .. num(-value))
+end
+
+-- "+ 3x" / "- 3x" para escribir polinomios prolijos
+local function signedTerm(value: number, variable: string): string
+	local coefficient = math.abs(value)
+	local body = if coefficient == 1 then variable else num(coefficient) .. variable
+	return (value >= 0 and "+ " or "- ") .. body
+end
+
+-- "3x" / "-x" / "x": coeficiente al frente de una variable, sin el 1 de mas.
+local function term(value: number, variable: string): string
+	if value == 1 then
+		return variable
+	elseif value == -1 then
+		return "-" .. variable
+	end
+	return num(value) .. variable
+end
+
+local function shuffle(list: { any }, rng: Random)
+	for i = #list, 2, -1 do
+		local j = rng:NextInteger(1, i)
+		list[i], list[j] = list[j], list[i]
+	end
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Generadores por dificultad
+-- ─────────────────────────────────────────────────────────────
+
+type Raw = {
+	topic: string,
+	prompt: string,
+	answer: string,
+	distractors: { string },
+	steps: { Step },
+}
+
+local generators: { { (Random) -> Raw } } = {}
+
+-- Dificultad 1 ─ jerarquia de operaciones
+generators[1] = {
+	function(rng: Random): Raw
+		local a, b, c, d = rng:NextInteger(3, 12), rng:NextInteger(2, 9), rng:NextInteger(2, 9), rng:NextInteger(2, 12)
+		local result = a + b * c - d
+		return {
+			topic = "Jerarquia de operaciones",
+			prompt = string.format("Resolve: %d + %d x %d - %d", a, b, c, d),
+			answer = num(result),
+			distractors = { num((a + b) * c - d), num(a + b * (c - d)), num(result + b) },
+			steps = {
+				{ title = "1. Primero la multiplicacion",
+				  body = string.format("%d x %d = %d", b, c, b * c) },
+				{ title = "2. Ahora sumas y restas de izquierda a derecha",
+				  body = string.format("%d + %d - %d = %d", a, b * c, d, result) },
+				{ title = "3. Resultado",
+				  body = string.format("= %d", result) },
+			},
+		}
+	end,
+	function(rng: Random): Raw
+		local a, b, c = rng:NextInteger(2, 9), rng:NextInteger(2, 9), rng:NextInteger(2, 12)
+		local result = a * (b + c)
+		return {
+			topic = "Propiedad distributiva",
+			prompt = string.format("Resolve: %d x (%d + %d)", a, b, c),
+			answer = num(result),
+			distractors = { num(a * b + c), num(a + b * c), num(result - a) },
+			steps = {
+				{ title = "1. Resolves el parentesis",
+				  body = string.format("%d + %d = %d", b, c, b + c) },
+				{ title = "2. Multiplicas",
+				  body = string.format("%d x %d = %d", a, b + c, result) },
+				{ title = "3. Verificacion (distributiva)",
+				  body = string.format("%d x %d + %d x %d = %d + %d = %d", a, b, a, c, a * b, a * c, result) },
+			},
+		}
+	end,
+}
+
+-- Dificultad 2 ─ ecuacion lineal simple
+generators[2] = {
+	function(rng: Random): Raw
+		local a = rng:NextInteger(2, 9)
+		local x = rng:NextInteger(-8, 12)
+		local b = rng:NextInteger(-15, 15)
+		if b == 0 then
+			b = rng:NextInteger(3, 15)
+		end
+		local c = a * x + b
+		return {
+			topic = "Ecuacion de primer grado",
+			prompt = string.format("Despeja x:   %dx %s = %d", a, signed(b), c),
+			answer = string.format("x = %d", x),
+			distractors = {
+				string.format("x = %s", num((c + b) / a)),
+				string.format("x = %s", num(c - b)),
+				string.format("x = %s", num((c - b) / (a + 1))),
+			},
+			steps = {
+				{ title = "1. Pasas el termino independiente",
+				  body = string.format("%dx = %d %s", a, c, signed(-b)) },
+				{ title = "2. Te queda",
+				  body = string.format("%dx = %d", a, c - b) },
+				{ title = "3. Dividis por el coeficiente",
+				  body = string.format("x = %d / %d = %d", c - b, a, x) },
+				{ title = "4. Verificacion",
+				  body = string.format("%d x (%d) %s = %d ✓", a, x, signed(b), c) },
+			},
+		}
+	end,
+	function(rng: Random): Raw
+		local total = rng:NextInteger(4, 40) * 10
+		local pct = ({ 5, 10, 15, 20, 25, 30, 40, 50, 75 })[rng:NextInteger(1, 9)]
+		local result = total * pct / 100
+		return {
+			topic = "Porcentaje",
+			prompt = string.format("Cuanto es el %d%% de %d?", pct, total),
+			answer = num(result),
+			distractors = { num(total * pct / 10), num(total / pct), num(result + pct) },
+			steps = {
+				{ title = "1. El porcentaje es una fraccion sobre 100",
+				  body = string.format("%d%% = %d/100 = %s", pct, pct, num(pct / 100)) },
+				{ title = "2. Multiplicas por el total",
+				  body = string.format("%s x %d = %s", num(pct / 100), total, num(result)) },
+				{ title = "3. Resultado",
+				  body = string.format("El %d%% de %d es %s", pct, total, num(result)) },
+			},
+		}
+	end,
+}
+
+-- Dificultad 3 ─ fracciones y proporciones
+generators[3] = {
+	function(rng: Random): Raw
+		-- Fracciones propias: se leen mejor en la hoja.
+		local b, d = rng:NextInteger(2, 9), rng:NextInteger(2, 9)
+		local a, c = rng:NextInteger(1, b - 1), rng:NextInteger(1, d - 1)
+		local n, den = a * d + c * b, b * d
+		return {
+			topic = "Suma de fracciones",
+			prompt = string.format("Resolve:   %d/%d + %d/%d", a, b, c, d),
+			answer = frac(n, den),
+			distractors = { frac(a + c, b + d), frac(n + 1, den), frac(a * c, b * d) },
+			steps = {
+				{ title = "1. Denominador comun",
+				  body = string.format("%d x %d = %d", b, d, den) },
+				{ title = "2. Amplificas cada fraccion",
+				  body = string.format("%d/%d = %d/%d   y   %d/%d = %d/%d", a, b, a * d, den, c, d, c * b, den) },
+				{ title = "3. Sumas los numeradores",
+				  body = string.format("(%d + %d)/%d = %d/%d", a * d, c * b, den, n, den) },
+				{ title = "4. Simplificas",
+				  body = string.format("= %s", frac(n, den)) },
+			},
+		}
+	end,
+	function(rng: Random): Raw
+		local k = rng:NextInteger(2, 9)
+		local a = rng:NextInteger(2, 9)
+		local b = a * k
+		local c = rng:NextInteger(2, 12)
+		if c == a then
+			c += 1
+		end
+		local x = c * k
+		return {
+			topic = "Proporcionalidad",
+			prompt = string.format("Si %d/%d = %d/x, cuanto vale x?", a, b, c),
+			answer = string.format("x = %d", x),
+			distractors = {
+				string.format("x = %d", math.max(1, c - k)),
+				string.format("x = %d", a * c),
+				string.format("x = %d", b - c),
+			},
+			steps = {
+				{ title = "1. Multiplicacion cruzada",
+				  body = string.format("%d x x = %d x %d", a, b, c) },
+				{ title = "2. Te queda",
+				  body = string.format("%dx = %d", a, b * c) },
+				{ title = "3. Despejas",
+				  body = string.format("x = %d / %d = %d", b * c, a, x) },
+			},
+		}
+	end,
+}
+
+-- Dificultad 4 ─ ecuaciones con parentesis / sistemas 2x2
+generators[4] = {
+	function(rng: Random): Raw
+		local a, b = rng:NextInteger(2, 6), rng:NextInteger(1, 8)
+		local c = rng:NextInteger(2, 6)
+		if a == c then
+			c += 1
+		end
+		local x = rng:NextInteger(-6, 9)
+		-- a(x + b) = cx + k  ->  k = a*x + a*b - c*x
+		local k = a * x + a * b - c * x
+		local right = if k == 0 then string.format("%dx", c) else string.format("%dx %s", c, signed(k))
+		return {
+			topic = "Ecuacion con parentesis",
+			prompt = string.format("Despeja x:   %d(x + %d) = %s", a, b, right),
+			answer = string.format("x = %d", x),
+			distractors = {
+				string.format("x = %s", num((k + a * b) / (a - c))),
+				string.format("x = %s", num((k - a * b) / (a + c))),
+				string.format("x = %d", x + 2),
+			},
+			steps = {
+				{ title = "1. Distribuis el parentesis",
+				  body = string.format("%dx + %d = %s", a, a * b, right) },
+				{ title = "2. Agrupas las x de un lado",
+				  body = string.format("%dx - %dx = %d - %d", a, c, k, a * b) },
+				{ title = "3. Operas",
+				  body = string.format("%s = %d", term(a - c, "x"), k - a * b) },
+				{ title = "4. Despejas",
+				  body = string.format("x = %d / %d = %d", k - a * b, a - c, x) },
+			},
+		}
+	end,
+	function(rng: Random): Raw
+		local x, y = rng:NextInteger(1, 9), rng:NextInteger(1, 9)
+		local s = x + y
+		local a = rng:NextInteger(2, 5)
+		local d = a * x - y
+		return {
+			topic = "Sistema de ecuaciones 2x2",
+			prompt = string.format("x + y = %d ;  %dx - y = %d.  Cuanto vale x?", s, a, d),
+			answer = string.format("x = %d", x),
+			distractors = {
+				string.format("x = %d", y),
+				string.format("x = %d", math.max(1, s - a)),
+				string.format("x = %s", num(s / 2)),
+			},
+			steps = {
+				{ title = "1. Sumas las dos ecuaciones (se cancela y)",
+				  body = string.format("(x + y) + (%dx - y) = %d + %d", a, s, d) },
+				{ title = "2. Queda solo x",
+				  body = string.format("%dx = %d", 1 + a, s + d) },
+				{ title = "3. Despejas x",
+				  body = string.format("x = %d / %d = %d", s + d, 1 + a, x) },
+				{ title = "4. Y de yapa, y",
+				  body = string.format("y = %d - %d = %d", s, x, y) },
+			},
+		}
+	end,
+}
+
+-- Dificultad 5 ─ cuadraticas y Pitagoras
+generators[5] = {
+	function(rng: Random): Raw
+		local r1 = rng:NextInteger(-7, 7)
+		local r2 = rng:NextInteger(-7, 7)
+		if r2 == r1 then
+			r2 += 1
+		end
+		local b, c = -(r1 + r2), r1 * r2
+		local big = math.max(r1, r2)
+		return {
+			topic = "Ecuacion cuadratica",
+			prompt = string.format("x² %s %s = 0.  Cual es la raiz mayor?", signedTerm(b, "x"), signed(c)),
+			answer = string.format("x = %d", big),
+			distractors = {
+				string.format("x = %d", math.min(r1, r2)),
+				string.format("x = %d", -big),
+				string.format("x = %s", num(b / 2)),
+			},
+			steps = {
+				{ title = "1. Formula resolvente",
+				  body = string.format("x = (-b ± √(b² - 4ac)) / 2a,  con a = 1, b = %d, c = %d", b, c) },
+				{ title = "2. Discriminante",
+				  body = string.format("Δ = (%d)² - 4·1·(%d) = %d - %d = %d", b, c, b * b, 4 * c, b * b - 4 * c) },
+				{ title = "3. Raices",
+				  body = string.format("x = (%d ± %s) / 2  →  x₁ = %d,  x₂ = %d", -b, num(math.sqrt(b * b - 4 * c)), math.max(r1, r2), math.min(r1, r2)) },
+				{ title = "4. Te pide la mayor",
+				  body = string.format("x = %d", big) },
+			},
+		}
+	end,
+	function(rng: Random): Raw
+		local triples = { { 3, 4, 5 }, { 6, 8, 10 }, { 5, 12, 13 }, { 8, 15, 17 }, { 9, 12, 15 }, { 7, 24, 25 } }
+		local t = triples[rng:NextInteger(1, #triples)]
+		local a, b, c = t[1], t[2], t[3]
+		return {
+			topic = "Teorema de Pitagoras",
+			prompt = string.format("Un triangulo rectangulo tiene catetos de %d y %d cm. Cuanto mide la hipotenusa?", a, b),
+			answer = string.format("%d cm", c),
+			distractors = {
+				string.format("%d cm", a + b),
+				string.format("%d cm", c + 1),
+				string.format("%s cm", num(math.sqrt(math.abs(b * b - a * a)))),
+			},
+			steps = {
+				{ title = "1. Planteo",
+				  body = "h² = cateto₁² + cateto₂²" },
+				{ title = "2. Reemplazas",
+				  body = string.format("h² = %d² + %d² = %d + %d = %d", a, b, a * a, b * b, a * a + b * b) },
+				{ title = "3. Raiz cuadrada",
+				  body = string.format("h = √%d = %d", a * a + b * b, c) },
+				{ title = "4. Respuesta",
+				  body = string.format("La hipotenusa mide %d cm", c) },
+			},
+		}
+	end,
+}
+
+-- ─────────────────────────────────────────────────────────────
+-- API
+-- ─────────────────────────────────────────────────────────────
+
+--- Arma una pregunta unica y reproducible para una dificultad dada.
+function MathEngine.buildQuestion(id: number, difficulty: number, rng: Random): Question
+	difficulty = math.clamp(difficulty, 1, #generators)
+	local pool = generators[difficulty]
+	local raw = pool[rng:NextInteger(1, #pool)](rng)
+
+	-- Opciones: la correcta + 3 distractores unicos.
+	local choices = { raw.answer }
+	local used = { [raw.answer] = true }
+	for _, option in raw.distractors do
+		if not used[option] and #choices < 4 then
+			used[option] = true
+			table.insert(choices, option)
+		end
+	end
+	-- Relleno por si algun distractor colisiono con la respuesta correcta.
+	local fillers = { "Ninguna de las anteriores", "No se puede determinar", "Faltan datos" }
+	for _, option in fillers do
+		if #choices >= 4 then
+			break
+		end
+		if not used[option] then
+			used[option] = true
+			table.insert(choices, option)
+		end
+	end
+
+	shuffle(choices, rng)
+	local answerIndex = table.find(choices, raw.answer) or 1
+
+	return {
+		id = id,
+		topic = raw.topic,
+		prompt = raw.prompt,
+		choices = choices,
+		answerIndex = answerIndex,
+		steps = raw.steps,
+		difficulty = difficulty,
+	}
+end
+
+--- Prueba completa. El seed hace que la prueba sea igual para todos
+--- los alumnos de la ronda (asi tiene sentido copiarse, ojo).
+function MathEngine.buildExam(seed: number, count: number, curve: { number }): { Question }
+	local rng = Random.new(seed)
+	local exam = table.create(count)
+	for i = 1, count do
+		local difficulty = curve[math.min(i, #curve)] or 1
+		exam[i] = MathEngine.buildQuestion(i, difficulty, rng)
+	end
+	return exam
+end
+
+--- Version "publica" de una pregunta: sin la respuesta ni los pasos.
+function MathEngine.sanitize(question: Question)
+	return {
+		id = question.id,
+		topic = question.topic,
+		prompt = question.prompt,
+		choices = question.choices,
+		difficulty = question.difficulty,
+	}
+end
+
+return MathEngine
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX3">
+      <Properties>
+        <string name="Name">Net</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Net
+	------------------------------------------------------------------
+	Creacion / acceso tipado a los remotes. El servidor llama Net.build()
+	una sola vez; el cliente usa Net.event() / Net.func() y espera solo.
+--]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Net = {}
+
+local FOLDER_NAME = "Net"
+
+Net.Events = {
+	RiskUpdate = "RiskUpdate",       -- S->C  estado de riesgo del jugador
+	ExamUpdate = "ExamUpdate",       -- S->C  estado completo de la prueba
+	RoundUpdate = "RoundUpdate",     -- S->C  fase / tiempo / nota
+	PhoneState = "PhoneState",       -- C->S  el jugador saco o guardo el celu
+	Notify = "Notify",               -- S->C  toast 3D ("te pillo", "aprobaste", ...)
+	Caught = "Caught",               -- S->C  el profe te agarro
+	TeacherSay = "TeacherSay",       -- S->C  dialogo del profe (burbuja 3D)
+}
+
+Net.Functions = {
+	SubmitAnswer = "SubmitAnswer",   -- C->S  responder una pregunta
+	TakePhoto = "TakePhoto",         -- C->S  sacar foto a la prueba
+	AskRoGPT = "AskRoGPT",           -- C->S  mandar la foto al chat
+	GetExam = "GetExam",             -- C->S  pedir el estado inicial
+}
+
+local function getFolder(): Folder
+	local existing = ReplicatedStorage:FindFirstChild(FOLDER_NAME)
+	if existing then
+		return existing :: Folder
+	end
+	if RunService:IsServer() then
+		local folder = Instance.new("Folder")
+		folder.Name = FOLDER_NAME
+		folder.Parent = ReplicatedStorage
+		return folder
+	end
+	return ReplicatedStorage:WaitForChild(FOLDER_NAME, 30) :: Folder
+end
+
+-- Solo servidor: crea todos los remotes declarados arriba.
+function Net.build()
+	assert(RunService:IsServer(), "Net.build() es solo del servidor")
+	local folder = getFolder()
+
+	for _, name in Net.Events do
+		if not folder:FindFirstChild(name) then
+			local remote = Instance.new("RemoteEvent")
+			remote.Name = name
+			remote.Parent = folder
+		end
+	end
+
+	for _, name in Net.Functions do
+		if not folder:FindFirstChild(name) then
+			local remote = Instance.new("RemoteFunction")
+			remote.Name = name
+			remote.Parent = folder
+		end
+	end
+end
+
+-- Cache: RiskUpdate se dispara ~10 veces por segundo por jugador,
+-- no tiene sentido buscar el remote en el arbol cada vez.
+local cache: { [string]: Instance } = {}
+
+local function lookup(name: string, className: string): Instance
+	local cached = cache[name]
+	if cached and cached.Parent then
+		return cached
+	end
+	local folder = getFolder()
+	local remote = folder:WaitForChild(name, 30)
+	assert(remote and remote:IsA(className), ("%s %q no existe"):format(className, name))
+	cache[name] = remote
+	return remote
+end
+
+function Net.event(name: string): RemoteEvent
+	return lookup(name, "RemoteEvent") :: RemoteEvent
+end
+
+function Net.func(name: string): RemoteFunction
+	return lookup(name, "RemoteFunction") :: RemoteFunction
+end
+
+return Net
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX4">
+      <Properties>
+        <string name="Name">PhoneModel</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	PhoneModel
+	------------------------------------------------------------------
+	El celular, en 3D, soldado al cuerpo del alumno. Lo crea el servidor
+	(asi lo ven todos, incluido el que se copia al lado) y el cliente le
+	monta encima la interfaz de RoGPT sobre la parte "Pantalla".
+
+	El Weld tiene C0 animable: guardado va abajo del banco, "afuera"
+	sube a la altura del pecho. Ese tween es literalmente el gesto de
+	sacar el celular.
+--]]
+
+local TweenService = game:GetService("TweenService")
+
+local Util = require(script.Parent:WaitForChild("Util"))
+local Config = require(script.Parent:WaitForChild("Config"))
+
+local PhoneModel = {}
+
+-- Escondido abajo del banco, sobre las piernas.
+PhoneModel.HIDDEN_C0 = CFrame.new(0.75, -1.9, -0.75)
+	* CFrame.Angles(0, math.pi, 0)
+	* CFrame.Angles(math.rad(-70), 0, 0)
+
+-- Levantado a la altura del pecho, pantalla mirando al alumno.
+PhoneModel.RAISED_C0 = CFrame.new(0.55, 0.15, -1.35)
+	* CFrame.Angles(0, math.pi, 0)
+	* CFrame.Angles(math.rad(-22), 0, 0)
+
+local function findHold(character: Model): BasePart?
+	return (character:FindFirstChild("HumanoidRootPart") :: BasePart?)
+		or (character:FindFirstChild("UpperTorso") :: BasePart?)
+		or (character:FindFirstChild("Torso") :: BasePart?)
+end
+
+--- Construye el celular y lo suelda al personaje. Devuelve model, weld, pantalla.
+function PhoneModel.attach(character: Model): (Model?, Weld?, BasePart?)
+	local hold = findHold(character)
+	if not hold then
+		return nil, nil, nil
+	end
+
+	local existing = character:FindFirstChild("Celular")
+	if existing then
+		existing:Destroy()
+	end
+
+	local model = Instance.new("Model")
+	model.Name = "Celular"
+
+	local body = Util.part({
+		Name = "Cuerpo",
+		Size = Vector3.new(0.78, 1.58, 0.09),
+		Color = Color3.fromRGB(28, 30, 36),
+		Material = Enum.Material.Metal,
+		Anchored = false,
+		CanCollide = false,
+		CastShadow = false,
+		Parent = model,
+	})
+	body.CFrame = hold.CFrame * PhoneModel.HIDDEN_C0
+	body.Massless = true
+	model.PrimaryPart = body
+
+	local function piece(name: string, size: Vector3, offset: CFrame, color: Color3, material: Enum.Material, transparency: number?): BasePart
+		local part = Util.part({
+			Name = name,
+			Size = size,
+			CFrame = body.CFrame * offset,
+			Color = color,
+			Material = material,
+			Anchored = false,
+			CanCollide = false,
+			CastShadow = false,
+			Transparency = transparency or 0,
+			Parent = model,
+		})
+		part.Massless = true
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = body
+		weld.Part1 = part
+		weld.Parent = body
+		return part
+	end
+
+	-- Pantalla (la cara -Z del celular es la que mira al alumno)
+	local screen = piece("Pantalla", Vector3.new(0.72, 1.46, 0.02),
+		CFrame.new(0, 0.02, -0.05), Color3.fromRGB(10, 11, 14), Enum.Material.SmoothPlastic)
+
+	-- Marco, camara y detalles
+	piece("Marco", Vector3.new(0.82, 1.62, 0.06), CFrame.new(0, 0, 0.01),
+		Color3.fromRGB(52, 56, 66), Enum.Material.Metal)
+	local lens = piece("Camara", Vector3.new(0.16, 0.16, 0.04), CFrame.new(-0.22, 0.62, 0.06),
+		Color3.fromRGB(16, 18, 24), Enum.Material.Glass)
+	lens.Shape = Enum.PartType.Cylinder
+	lens.Orientation = Vector3.new(0, 90, 0)
+	piece("Flash", Vector3.new(0.09, 0.09, 0.03), CFrame.new(-0.02, 0.62, 0.06),
+		Color3.fromRGB(240, 236, 210), Enum.Material.Neon)
+	piece("BotonVolumen", Vector3.new(0.04, 0.34, 0.05), CFrame.new(0.42, 0.35, 0),
+		Color3.fromRGB(64, 68, 78), Enum.Material.Metal)
+
+	model.Parent = character
+
+	local weld = Instance.new("Weld")
+	weld.Name = "Sujecion"
+	weld.Part0 = hold
+	weld.Part1 = body
+	weld.C0 = PhoneModel.HIDDEN_C0
+	weld.Parent = body
+
+	return model, weld, screen
+end
+
+--- Anima el gesto de sacar / guardar el celular.
+function PhoneModel.setRaised(weld: Weld, raised: boolean)
+	local goal = raised and PhoneModel.RAISED_C0 or PhoneModel.HIDDEN_C0
+	TweenService:Create(weld, TweenInfo.new(Config.Phone.RaiseTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		C0 = goal,
+	}):Play()
+end
+
+return PhoneModel
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX5">
+      <Properties>
+        <string name="Name">Theme</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Theme
+	------------------------------------------------------------------
+	Paleta unica para todo lo que se dibuja sobre superficies 3D
+	(hoja de la prueba, pantalla del celular, HUD de accion).
+--]]
+
+local Theme = {}
+
+Theme.Font = Enum.Font.GothamMedium
+Theme.FontBold = Enum.Font.GothamBold
+Theme.FontMono = Enum.Font.Code
+
+Theme.Paper = {
+	Background = Color3.fromRGB(250, 249, 244),
+	Ink = Color3.fromRGB(38, 42, 52),
+	InkSoft = Color3.fromRGB(108, 116, 130),
+	Line = Color3.fromRGB(206, 210, 219),
+	Accent = Color3.fromRGB(28, 96, 190),
+	Correct = Color3.fromRGB(31, 145, 84),
+	Wrong = Color3.fromRGB(196, 54, 54),
+}
+
+-- Pantalla del celular: interfaz de RoGPT (oscura, tipo app de chat)
+Theme.Phone = {
+	Background = Color3.fromRGB(16, 17, 21),
+	Surface = Color3.fromRGB(28, 30, 36),
+	SurfaceAlt = Color3.fromRGB(38, 41, 48),
+	Text = Color3.fromRGB(238, 240, 245),
+	TextSoft = Color3.fromRGB(150, 156, 168),
+	Accent = Color3.fromRGB(16, 163, 127),   -- verde "asistente"
+	User = Color3.fromRGB(45, 95, 210),
+	Danger = Color3.fromRGB(220, 66, 66),
+	Battery = Color3.fromRGB(94, 216, 130),
+}
+
+Theme.Hud = {
+	Safe = Color3.fromRGB(52, 199, 123),
+	Warn = Color3.fromRGB(240, 178, 52),
+	Danger = Color3.fromRGB(232, 62, 62),
+	Panel = Color3.fromRGB(18, 19, 24),
+	Text = Color3.fromRGB(240, 242, 247),
+}
+
+function Theme.riskColor(risk: number): Color3
+	if risk < 0.35 then
+		return Theme.Hud.Safe:Lerp(Theme.Hud.Warn, risk / 0.35)
+	end
+	return Theme.Hud.Warn:Lerp(Theme.Hud.Danger, math.clamp((risk - 0.35) / 0.65, 0, 1))
+end
+
+table.freeze(Theme)
+return Theme
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX6">
+      <Properties>
+        <string name="Name">Util</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Util
+	------------------------------------------------------------------
+	Azucar para construir cosas en 3D y animarlas sin repetir 40 lineas
+	de Instance.new por cada mueble del aula.
+--]]
+
+local TweenService = game:GetService("TweenService")
+
+local Util = {}
+
+--- Instance.new + props + hijos, en una sola expresion.
+function Util.new(className: string, props: { [string]: any }?, children: { Instance }?): Instance
+	local instance = Instance.new(className)
+	if props then
+		local parent = props.Parent
+		for key, value in props do
+			if key ~= "Parent" then
+				(instance :: any)[key] = value
+			end
+		end
+		if children then
+			for _, child in children do
+				child.Parent = instance
+			end
+		end
+		if parent then
+			instance.Parent = parent
+		end
+	elseif children then
+		for _, child in children do
+			child.Parent = instance
+		end
+	end
+	return instance
+end
+
+--- Bloque solido estandar del aula: anclado, sin colisiones raras.
+function Util.part(props: { [string]: any }): BasePart
+	local part = Instance.new("Part")
+	part.Anchored = true
+	part.CanCollide = true
+	part.CastShadow = true
+	part.TopSurface = Enum.SurfaceType.Smooth
+	part.BottomSurface = Enum.SurfaceType.Smooth
+	part.Material = Enum.Material.SmoothPlastic
+	for key, value in props do
+		if key ~= "Parent" then
+			(part :: any)[key] = value
+		end
+	end
+	part.Parent = props.Parent
+	return part
+end
+
+--- Suelda una parte a otra manteniendo la posicion actual.
+function Util.weld(part0: BasePart, part1: BasePart): WeldConstraint
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = part0
+	weld.Part1 = part1
+	weld.Parent = part0
+	return weld
+end
+
+function Util.tween(instance: Instance, info: TweenInfo, goal: { [string]: any }): Tween
+	local tween = TweenService:Create(instance, info, goal)
+	tween:Play()
+	return tween
+end
+
+Util.ease = function(time: number, style: Enum.EasingStyle?, direction: Enum.EasingDirection?): TweenInfo
+	return TweenInfo.new(time, style or Enum.EasingStyle.Quint, direction or Enum.EasingDirection.Out)
+end
+
+--- Redondea esquinas + borde, para las UI que van sobre superficies 3D.
+function Util.roundify(gui: GuiObject, radius: number, strokeColor: Color3?, strokeThickness: number?)
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, radius)
+	corner.Parent = gui
+	if strokeColor then
+		local stroke = Instance.new("UIStroke")
+		stroke.Color = strokeColor
+		stroke.Thickness = strokeThickness or 2
+		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		stroke.Parent = gui
+	end
+end
+
+--- Etiqueta 3D flotante (BillboardGui) — usado para nombres y burbujas.
+function Util.billboard(adornee: BasePart, size: UDim2, offset: Vector3): BillboardGui
+	local billboard = Instance.new("BillboardGui")
+	billboard.Adornee = adornee
+	billboard.Size = size
+	billboard.StudsOffsetWorldSpace = offset
+	billboard.AlwaysOnTop = false
+	billboard.MaxDistance = 60
+	billboard.LightInfluence = 0
+	return billboard
+end
+
+--- Interpola angulos evitando el salto en ±180.
+function Util.lerpAngle(from: number, to: number, alpha: number): number
+	local delta = (to - from + math.pi) % (math.pi * 2) - math.pi
+	return from + delta * alpha
+end
+
+function Util.randomInRange(range: NumberRange, rng: Random?): number
+	local generator = rng or Random.new()
+	return generator:NextNumber(range.Min, range.Max)
+end
+
+--- Toca un sonido posicional y lo limpia solo.
+function Util.playSound(soundId: string, parent: Instance, volume: number?, speed: number?)
+	if soundId == "" then
+		return
+	end
+	local sound = Instance.new("Sound")
+	sound.SoundId = soundId
+	sound.Volume = volume or 0.5
+	sound.PlaybackSpeed = speed or 1
+	sound.RollOffMaxDistance = 80
+	sound.Parent = parent
+	sound:Play()
+	sound.Ended:Once(function()
+		sound:Destroy()
+	end)
+	task.delay(10, function()
+		if sound.Parent then
+			sound:Destroy()
+		end
+	end)
+end
+
+return Util
+]]></ProtectedString>
+      </Properties>
+    </Item>
+  </Item>
+</roblox>

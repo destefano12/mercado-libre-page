@@ -14,6 +14,7 @@
 		5. ronda
 --]]
 
+local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
@@ -30,6 +31,43 @@ local PhoneService = require(script:WaitForChild("PhoneService"))
 local SuspicionService = require(script:WaitForChild("SuspicionService"))
 local RoundService = require(script:WaitForChild("RoundService"))
 local TeacherAI = require(script:WaitForChild("TeacherAI"))
+
+-- ─────────────────────────────────────────────────────────────
+-- 0. Escenario base
+-- ─────────────────────────────────────────────────────────────
+
+-- Iluminacion de interior. Se aplica por codigo para que el juego se
+-- vea igual venga de Rojo, del .rbxmx o de copiar y pegar a mano.
+local function applyLighting()
+	Lighting.Technology = Enum.Technology.ShadowMap
+	Lighting.Ambient = Color3.fromRGB(90, 92, 102)
+	Lighting.OutdoorAmbient = Color3.fromRGB(115, 120, 132)
+	Lighting.Brightness = 2.2
+	Lighting.ClockTime = 10.5
+	Lighting.GeographicLatitude = -34.6
+	Lighting.EnvironmentDiffuseScale = 0.6
+	Lighting.EnvironmentSpecularScale = 0.4
+	Lighting.GlobalShadows = true
+	Lighting.FogEnd = 400
+
+	if not Lighting:FindFirstChildOfClass("Atmosphere") then
+		local atmosphere = Instance.new("Atmosphere")
+		atmosphere.Density = 0.28
+		atmosphere.Haze = 1.2
+		atmosphere.Glare = 0.15
+		atmosphere.Color = Color3.fromRGB(215, 220, 232)
+		atmosphere.Parent = Lighting
+	end
+end
+
+applyLighting()
+
+-- El baseplate del lugar vacio queda a la misma altura que el piso del
+-- aula y pelean por el mismo pixel. El aula trae su propio piso.
+local baseplate = Workspace:FindFirstChild("Baseplate")
+if baseplate and baseplate:IsA("BasePart") then
+	baseplate:Destroy()
+end
 
 -- ─────────────────────────────────────────────────────────────
 -- 1. Aula

@@ -1,0 +1,2032 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
+  <Item class="LocalScript" referent="RBX5">
+    <Properties>
+      <string name="Name">Client</string>
+      <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	CLIENTE — punto de entrada
+	------------------------------------------------------------------
+	Une las tres piezas: la hoja 3D del banco, el celular 3D con RoGPT
+	y el HUD de acciones. Toda la logica sensible (respuestas correctas,
+	bateria, riesgo) vive en el servidor; aca solo se presenta y se pide.
+
+	Controles:
+		E  -> acercar la camara a la hoja
+		F  -> sacar / usar el celular  (mismo boton grande de abajo)
+		Q  -> guardar el celular
+--]]
+
+local ContextActionService = game:GetService("ContextActionService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local CameraRig = require(script:WaitForChild("CameraRig"))
+local Hud = require(script:WaitForChild("Hud"))
+local PaperUI = require(script:WaitForChild("PaperUI"))
+local PhoneUI = require(script:WaitForChild("PhoneUI"))
+
+local player = Players.LocalPlayer
+
+local state = {
+	phoneOut = false,
+	busy = false,
+	phase = "Preparacion",
+	paper = nil :: BasePart?,
+	screen = nil :: BasePart?,
+	phoneState = { battery = 100, out = false, confiscated = false, confiscatedFor = 0 },
+}
+
+-- ─────────────────────────────────────────────────────────────
+-- Encontrar mi banco y mi celular
+-- ─────────────────────────────────────────────────────────────
+
+local function findMyPaper(): BasePart?
+	local classroom = workspace:FindFirstChild("Aula")
+	local desks = classroom and classroom:FindFirstChild("Bancos")
+	if not desks then
+		return nil
+	end
+	for _, desk in desks:GetChildren() do
+		local paper = desk:FindFirstChild("HojaDePrueba") :: BasePart?
+		if paper and paper:GetAttribute("OwnerUserId") == player.UserId then
+			return paper
+		end
+	end
+	return nil
+end
+
+local function bindPaper()
+	local paper = findMyPaper()
+	if not paper or paper == state.paper then
+		return
+	end
+	state.paper = paper
+	CameraRig.setPaper(paper)
+	PaperUI.mount(paper)
+	if PaperUI.snapshot then
+		PaperUI.render()
+	end
+end
+
+local function bindPhone(character: Model)
+	local phone = character:FindFirstChild("Celular")
+	local screen = phone and phone:FindFirstChild("Pantalla") :: BasePart?
+	if not screen or screen == state.screen then
+		return
+	end
+	state.screen = screen
+	CameraRig.setScreen(screen)
+	PhoneUI.mount(screen)
+	PhoneUI.setPhoneState(state.phoneState)
+end
+
+local function watchCharacter(character: Model)
+	bindPhone(character)
+	character.ChildAdded:Connect(function(child)
+		if child.Name == "Celular" then
+			task.wait(0.1)
+			bindPhone(character)
+		end
+	end)
+	character.ChildRemoved:Connect(function(child)
+		if child.Name == "Celular" then
+			state.screen = nil
+			CameraRig.setScreen(nil)
+			PhoneUI.destroy()
+			if state.phoneOut then
+				state.phoneOut = false
+				Hud.setPhoneOut(false)
+				CameraRig.setMode("libre")
+			end
+		end
+	end)
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Acciones
+-- ─────────────────────────────────────────────────────────────
+
+local function setPhoneOut(out: boolean)
+	if state.phoneOut == out then
+		return
+	end
+	state.phoneOut = out
+	Net.event(Net.Events.PhoneState):FireServer(out)
+	Hud.setPhoneOut(out)
+
+	if out then
+		PhoneUI.reset()
+		CameraRig.setMode("celu")
+		Util.playSound(Config.Sounds.PhoneOut, workspace, 0.4)
+	else
+		CameraRig.setMode("libre")
+	end
+end
+
+local function takePhoto()
+	if state.busy or not state.phoneOut then
+		return
+	end
+	local questionId = PaperUI.current
+	state.busy = true
+	PhoneUI.setBusy(true)
+
+	-- Gesto completo: apuntás el celu a la hoja, flash, y volvés a la pantalla.
+	CameraRig.setMode("hoja")
+	task.wait(0.28)
+	Hud.flash("", Color3.fromRGB(255, 255, 255))
+	Util.playSound(Config.Sounds.Shutter, workspace, 0.5)
+	task.wait(0.18)
+	CameraRig.setMode("celu")
+
+	local response = Net.func(Net.Functions.TakePhoto):InvokeServer(questionId)
+	state.busy = false
+	PhoneUI.setBusy(false)
+
+	if not response or not response.ok then
+		PhoneUI.system(response and response.reason or "No se pudo sacar la foto.")
+		return
+	end
+
+	PhoneUI.photo(response)
+	PhoneUI.setPendingPhoto(response)
+	Hud.refreshPrimary()
+end
+
+local function sendToRoGPT()
+	local photo = PhoneUI.getPendingPhoto()
+	if state.busy or not photo then
+		return
+	end
+	state.busy = true
+	PhoneUI.setBusy(true)
+	PhoneUI.setPendingPhoto(nil)
+
+	PhoneUI.system(string.format("Subiendo %s ...", photo.photoId))
+	Util.playSound(Config.Sounds.Send, workspace, 0.4)
+	task.wait(photo.uploadTime or 0.8)
+
+	local _, dismiss = PhoneUI.typing()
+	local response = Net.func(Net.Functions.AskRoGPT):InvokeServer(photo.photoId)
+
+	if not response or not response.ok then
+		dismiss()
+		PhoneUI.system(response and response.reason or "RoGPT no contesta.")
+		state.busy = false
+		PhoneUI.setBusy(false)
+		return
+	end
+
+	task.wait(response.thinkTime or 1.5)
+	dismiss()
+	Util.playSound(Config.Sounds.Reply, workspace, 0.4)
+	PhoneUI.answer(response)
+
+	state.busy = false
+	PhoneUI.setBusy(false)
+	Hud.refreshPrimary()
+end
+
+--- El boton grande de abajo cambia segun el momento.
+local function primaryAction()
+	if state.phoneState.confiscated then
+		Hud.notify("El profe te lo saco. Bancá un poco.", "warn")
+		return
+	end
+	if state.phase ~= "Prueba" then
+		Hud.notify("Todavia no empezo la prueba.", "info")
+		return
+	end
+	if not state.phoneOut then
+		setPhoneOut(true)
+		return
+	end
+	if PhoneUI.getPendingPhoto() then
+		task.spawn(sendToRoGPT)
+		return
+	end
+	task.spawn(takePhoto)
+end
+
+local function stashPhone()
+	if state.phoneOut then
+		setPhoneOut(false)
+	end
+end
+
+local function togglePaper()
+	CameraRig.toggle("hoja")
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Montaje
+-- ─────────────────────────────────────────────────────────────
+
+Hud.mount()
+CameraRig.start()
+
+Hud.onPrimary = primaryAction
+Hud.onStash = stashPhone
+Hud.onPaper = togglePaper
+
+PhoneUI.onTakePhoto = function()
+	task.spawn(takePhoto)
+end
+PhoneUI.onSend = function()
+	task.spawn(sendToRoGPT)
+end
+PhoneUI.onClose = stashPhone
+
+PaperUI.onAnswer = function(questionId: number, choice: number)
+	if state.phase ~= "Prueba" then
+		Hud.notify("La prueba no esta en curso.", "info")
+		return
+	end
+	task.spawn(function()
+		local response = Net.func(Net.Functions.SubmitAnswer):InvokeServer(questionId, choice)
+		if not response or not response.ok then
+			Hud.notify(response and response.reason or "No se pudo responder.", "warn")
+			return
+		end
+		if response.correct then
+			Util.playSound(Config.Sounds.Correct, workspace, 0.45)
+			Hud.notify("Correcto.", "success")
+		else
+			Util.playSound(Config.Sounds.Wrong, workspace, 0.45)
+			Hud.notify("Ese estaba mal.", "warn")
+		end
+		if response.finished then
+			Hud.notify(string.format("Entregaste la prueba. Nota: %.1f", response.grade), "info")
+		end
+	end)
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Remotes
+-- ─────────────────────────────────────────────────────────────
+
+Net.event(Net.Events.ExamUpdate).OnClientEvent:Connect(function(snapshot)
+	bindPaper()
+	PaperUI.setSnapshot(snapshot)
+	Hud.setExam(snapshot)
+end)
+
+Net.event(Net.Events.RiskUpdate).OnClientEvent:Connect(function(data)
+	Hud.setRisk(data)
+end)
+
+Net.event(Net.Events.RoundUpdate).OnClientEvent:Connect(function(data)
+	state.phase = data.phase
+	Hud.setRound(data)
+	if data.phase ~= "Prueba" and state.phoneOut then
+		setPhoneOut(false)
+	end
+	if data.phase == "Prueba" then
+		task.delay(1, bindPaper)
+	end
+end)
+
+Net.event(Net.Events.PhoneState).OnClientEvent:Connect(function(data)
+	state.phoneState = data
+	PhoneUI.setPhoneState(data)
+	Hud.setPhoneState(data)
+	if not data.out and state.phoneOut then
+		-- El servidor lo guardo por su cuenta (bateria, confiscacion, ronda).
+		state.phoneOut = false
+		Hud.setPhoneOut(false)
+		CameraRig.setMode("libre")
+	end
+end)
+
+Net.event(Net.Events.Notify).OnClientEvent:Connect(function(data)
+	Hud.notify(data.text, data.kind)
+end)
+
+Net.event(Net.Events.Caught).OnClientEvent:Connect(function(data)
+	state.phoneOut = false
+	Hud.setPhoneOut(false)
+	CameraRig.setMode("libre")
+	PhoneUI.reset()
+	Util.playSound(Config.Sounds.Caught, workspace, 0.6)
+	Hud.flash(data.expelled and "TE SACARON DE LA PRUEBA" or "TE PILLARON")
+end)
+
+-- ─────────────────────────────────────────────────────────────
+-- Teclado / gamepad
+-- ─────────────────────────────────────────────────────────────
+
+ContextActionService:BindAction("AulaCelular", function(_, inputState)
+	if inputState == Enum.UserInputState.Begin then
+		primaryAction()
+	end
+	return Enum.ContextActionResult.Sink
+end, false, Enum.KeyCode.F, Enum.KeyCode.ButtonX)
+
+ContextActionService:BindAction("AulaGuardar", function(_, inputState)
+	if inputState == Enum.UserInputState.Begin then
+		stashPhone()
+	end
+	return Enum.ContextActionResult.Sink
+end, false, Enum.KeyCode.Q, Enum.KeyCode.ButtonB)
+
+ContextActionService:BindAction("AulaHoja", function(_, inputState)
+	if inputState == Enum.UserInputState.Begin then
+		togglePaper()
+	end
+	return Enum.ContextActionResult.Sink
+end, false, Enum.KeyCode.E, Enum.KeyCode.ButtonY)
+
+-- ─────────────────────────────────────────────────────────────
+-- Personaje
+-- ─────────────────────────────────────────────────────────────
+
+if player.Character then
+	watchCharacter(player.Character)
+end
+player.CharacterAdded:Connect(function(character)
+	task.wait(0.5)
+	watchCharacter(character)
+	bindPaper()
+end)
+
+-- Reloj del celular, para que la barra de estado no quede muerta.
+task.spawn(function()
+	while true do
+		local now = os.date("*t")
+		PhoneUI.setClock(string.format("%02d:%02d", now.hour, now.min))
+		task.wait(20)
+	end
+end)
+
+-- Primer estado
+task.spawn(function()
+	local snapshot = Net.func(Net.Functions.GetExam):InvokeServer()
+	bindPaper()
+	if snapshot then
+		PaperUI.setSnapshot(snapshot)
+		Hud.setExam(snapshot)
+	end
+end)
+
+-- El banco puede tardar en asignarse (por ejemplo si entraste tarde).
+task.spawn(function()
+	while not state.paper do
+		bindPaper()
+		task.wait(1)
+	end
+end)
+]]></ProtectedString>
+    </Properties>
+    <Item class="ModuleScript" referent="RBX1">
+      <Properties>
+        <string name="Name">CameraRig</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	CameraRig
+	------------------------------------------------------------------
+	Tres encuadres, todos en 3D dentro del aula:
+
+		"libre"  -> camara normal de Roblox (mirás el aula, al profe, etc.)
+		"hoja"   -> plano cerrado sobre la hoja de la prueba
+		"celu"   -> plano cerrado sobre la pantalla del celular
+
+	Los cambios son con blend suave: nunca hay un corte seco.
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+
+local player = Players.LocalPlayer
+
+local CameraRig = {}
+CameraRig.mode = "libre"
+
+local camera = workspace.CurrentCamera
+local paperPart: BasePart? = nil
+local screenPart: BasePart? = nil
+local blend = 0
+local current: CFrame? = nil
+local baseFov = Config.Camera.FieldOfView
+
+function CameraRig.setPaper(part: BasePart?)
+	paperPart = part
+end
+
+function CameraRig.setScreen(part: BasePart?)
+	screenPart = part
+end
+
+function CameraRig.setMode(mode: string)
+	if CameraRig.mode == mode then
+		return
+	end
+	CameraRig.mode = mode
+	if mode == "libre" then
+		blend = 0
+	end
+end
+
+function CameraRig.toggle(mode: string)
+	CameraRig.setMode(CameraRig.mode == mode and "libre" or mode)
+end
+
+local function goalCFrame(): CFrame?
+	local character = player.Character
+	if not character then
+		return nil
+	end
+
+	if CameraRig.mode == "celu" and screenPart and screenPart.Parent then
+		-- La cara -Z de la pantalla es la que mira al alumno.
+		local origin = screenPart.CFrame * CFrame.new(0, 0, -2.15)
+		return CFrame.lookAt(origin.Position, screenPart.Position)
+	end
+
+	if CameraRig.mode == "hoja" and paperPart and paperPart.Parent then
+		local offset = Config.Camera.DeskOffset
+		local origin = paperPart.CFrame * CFrame.new(offset.X, offset.Y, offset.Z)
+		local target = paperPart.Position + Config.Camera.DeskLookOffset
+		return CFrame.lookAt(origin.Position, target)
+	end
+
+	return nil
+end
+
+function CameraRig.start()
+	camera = workspace.CurrentCamera
+
+	RunService:BindToRenderStep("AulaCamera", Enum.RenderPriority.Camera.Value + 1, function(dt)
+		camera = workspace.CurrentCamera
+		if not camera then
+			return
+		end
+
+		local goal = goalCFrame()
+		local speed = math.clamp(dt / Config.Camera.BlendTime, 0, 1)
+
+		if goal then
+			if camera.CameraType ~= Enum.CameraType.Scriptable then
+				camera.CameraType = Enum.CameraType.Scriptable
+				current = camera.CFrame
+			end
+			current = (current or camera.CFrame):Lerp(goal, speed)
+			camera.CFrame = current
+			blend = math.min(1, blend + dt * 3)
+
+			local targetFov = CameraRig.mode == "celu" and Config.Camera.PhoneFieldOfView or baseFov
+			camera.FieldOfView += (targetFov - camera.FieldOfView) * speed
+		else
+			if camera.CameraType == Enum.CameraType.Scriptable then
+				camera.CameraType = Enum.CameraType.Custom
+				camera.CameraSubject = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+				current = nil
+			end
+			camera.FieldOfView += (baseFov - camera.FieldOfView) * speed
+		end
+	end)
+end
+
+function CameraRig.stop()
+	RunService:UnbindFromRenderStep("AulaCamera")
+	if camera then
+		camera.CameraType = Enum.CameraType.Custom
+	end
+end
+
+return CameraRig
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX2">
+      <Properties>
+        <string name="Name">Hud</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Hud
+	------------------------------------------------------------------
+	Lo unico que vive pegado a la camara, y a proposito: son los
+	controles y el medidor de riesgo. Todo el resto del juego (la hoja,
+	el celular, RoGPT) pasa en objetos 3D adentro del aula.
+
+		arriba   -> estado del profe + barra de riesgo + reloj de la prueba
+		abajo    -> el boton grande de accion (sacar el celu / sacar foto)
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Theme = require(Shared:WaitForChild("Theme"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local player = Players.LocalPlayer
+
+local Hud = {}
+Hud.onPrimary = nil :: (() -> ())?
+Hud.onStash = nil :: (() -> ())?
+Hud.onPaper = nil :: (() -> ())?
+
+local refs: { [string]: any } = {}
+local phoneOut = false
+local lastRisk = 0
+local lastDanger = false
+local confiscated = false
+
+local function el(className: string, props: { [string]: any }, parent: Instance?): any
+	local instance = Instance.new(className)
+	for key, value in props do
+		(instance :: any)[key] = value
+	end
+	if parent then
+		instance.Parent = parent
+	end
+	return instance
+end
+
+local STATE_LABEL = {
+	Patrullando = "recorriendo los pasillos",
+	Revisando = "revisando una prueba",
+	Pizarron = "escribiendo en el pizarron",
+	Confrontando = "viene para tu banco",
+}
+
+-- ─────────────────────────────────────────────────────────────
+-- Construccion
+-- ─────────────────────────────────────────────────────────────
+
+function Hud.mount()
+	local playerGui = player:WaitForChild("PlayerGui")
+	local existing = playerGui:FindFirstChild("AulaHud")
+	if existing then
+		existing:Destroy()
+	end
+
+	local screen = el("ScreenGui", {
+		Name = "AulaHud",
+		ResetOnSpawn = false,
+		IgnoreGuiInset = true,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		Parent = playerGui,
+	})
+	refs.screen = screen
+
+	-- ── Panel del profesor ────────────────────────────────
+	local teacher = el("Frame", {
+		Name = "Profesor",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 18),
+		Size = UDim2.fromOffset(420, 78),
+		BackgroundColor3 = Theme.Hud.Panel,
+		BackgroundTransparency = 0.15,
+		BorderSizePixel = 0,
+	}, screen)
+	Util.roundify(teacher, 14, Color3.fromRGB(58, 62, 74), 1)
+
+	el("TextLabel", {
+		Size = UDim2.new(1, -28, 0, 20),
+		Position = UDim2.fromOffset(14, 10),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		Text = Config.Teacher.DisplayName:upper(),
+		TextColor3 = Theme.Hud.Text,
+		TextSize = 15,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, teacher)
+
+	refs.teacherState = el("TextLabel", {
+		Size = UDim2.new(1, -28, 0, 18),
+		Position = UDim2.fromOffset(14, 30),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = "recorriendo los pasillos",
+		TextColor3 = Color3.fromRGB(168, 174, 188),
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, teacher)
+
+	local track = el("Frame", {
+		Size = UDim2.new(1, -28, 0, 10),
+		Position = UDim2.new(0, 14, 1, -20),
+		BackgroundColor3 = Color3.fromRGB(42, 45, 54),
+		BorderSizePixel = 0,
+	}, teacher)
+	Util.roundify(track, 5)
+
+	refs.riskBar = el("Frame", {
+		Size = UDim2.fromScale(0, 1),
+		BackgroundColor3 = Theme.Hud.Safe,
+		BorderSizePixel = 0,
+	}, track)
+	Util.roundify(refs.riskBar, 5)
+
+	refs.riskText = el("TextLabel", {
+		AnchorPoint = Vector2.new(1, 0),
+		Size = UDim2.fromOffset(120, 20),
+		Position = UDim2.new(1, -14, 0, 10),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		Text = "SEGURO",
+		TextColor3 = Theme.Hud.Safe,
+		TextSize = 15,
+		TextXAlignment = Enum.TextXAlignment.Right,
+	}, teacher)
+
+	-- ── Reloj / progreso ──────────────────────────────────
+	local round = el("Frame", {
+		Name = "Ronda",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -18, 0, 18),
+		Size = UDim2.fromOffset(190, 78),
+		BackgroundColor3 = Theme.Hud.Panel,
+		BackgroundTransparency = 0.15,
+		BorderSizePixel = 0,
+	}, screen)
+	Util.roundify(round, 14, Color3.fromRGB(58, 62, 74), 1)
+
+	refs.phase = el("TextLabel", {
+		Size = UDim2.new(1, -24, 0, 18),
+		Position = UDim2.fromOffset(12, 10),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = "PREPARACION",
+		TextColor3 = Color3.fromRGB(168, 174, 188),
+		TextSize = 13,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, round)
+
+	refs.timer = el("TextLabel", {
+		Size = UDim2.new(1, -24, 0, 30),
+		Position = UDim2.fromOffset(12, 26),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		Text = "00:00",
+		TextColor3 = Theme.Hud.Text,
+		TextSize = 28,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, round)
+
+	refs.progress = el("TextLabel", {
+		Size = UDim2.new(1, -24, 0, 16),
+		Position = UDim2.new(0, 12, 1, -22),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = "0 / 0 respondidos",
+		TextColor3 = Color3.fromRGB(150, 156, 168),
+		TextSize = 13,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, round)
+
+	-- ── Aviso grande "te esta mirando" ────────────────────
+	refs.warning = el("TextLabel", {
+		Name = "Aviso",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 108),
+		Size = UDim2.fromOffset(460, 44),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		Text = "",
+		TextColor3 = Theme.Hud.Danger,
+		TextSize = 30,
+		TextTransparency = 1,
+	}, screen)
+
+	-- ── Barra de acciones (abajo) ─────────────────────────
+	local bottom = el("Frame", {
+		Name = "Acciones",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -26),
+		Size = UDim2.fromOffset(620, 78),
+		BackgroundTransparency = 1,
+	}, screen)
+
+	el("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 12),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+	}, bottom)
+
+	local function button(name: string, text: string, order: number, width: number, color: Color3, textSize: number): TextButton
+		local instance = el("TextButton", {
+			Name = name,
+			LayoutOrder = order,
+			Size = UDim2.fromOffset(width, 62),
+			BackgroundColor3 = color,
+			AutoButtonColor = true,
+			Font = Theme.FontBold,
+			Text = text,
+			TextColor3 = Theme.Hud.Text,
+			TextSize = textSize,
+			BorderSizePixel = 0,
+		}, bottom)
+		Util.roundify(instance, 16, Color3.fromRGB(255, 255, 255), 0)
+		local stroke = instance:FindFirstChildOfClass("UIStroke")
+		if stroke then
+			stroke.Transparency = 0.85
+		end
+		return instance
+	end
+
+	refs.paperButton = button("Hoja", "Ver la hoja  [E]", 1, 190, Color3.fromRGB(38, 42, 52), 18)
+	refs.primaryButton = button("Principal", "📷  Sacar el celular", 2, 300, Theme.Hud.Safe, 22)
+	refs.stashButton = button("Guardar", "Guardar  [Q]", 3, 170, Color3.fromRGB(38, 42, 52), 18)
+	refs.stashButton.Visible = false
+
+	refs.hint = el("TextLabel", {
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -8),
+		Size = UDim2.fromOffset(700, 18),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = "Sacá el celular cuando el profe no te vea. Con la foto, RoGPT te resuelve el ejercicio.",
+		TextColor3 = Color3.fromRGB(150, 156, 168),
+		TextSize = 14,
+	}, screen)
+
+	refs.primaryButton.MouseButton1Click:Connect(function()
+		if Hud.onPrimary then
+			Hud.onPrimary()
+		end
+	end)
+	refs.stashButton.MouseButton1Click:Connect(function()
+		if Hud.onStash then
+			Hud.onStash()
+		end
+	end)
+	refs.paperButton.MouseButton1Click:Connect(function()
+		if Hud.onPaper then
+			Hud.onPaper()
+		end
+	end)
+
+	-- ── Toasts ────────────────────────────────────────────
+	refs.toasts = el("Frame", {
+		Name = "Avisos",
+		AnchorPoint = Vector2.new(0, 0),
+		Position = UDim2.fromOffset(18, 18),
+		Size = UDim2.fromOffset(330, 300),
+		BackgroundTransparency = 1,
+	}, screen)
+	el("UIListLayout", {
+		Padding = UDim.new(0, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, refs.toasts)
+
+	-- ── Flash de "te pillaron" ────────────────────────────
+	refs.flash = el("Frame", {
+		Name = "Flash",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Theme.Hud.Danger,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ZIndex = 10,
+		Visible = true,
+	}, screen)
+
+	refs.flashText = el("TextLabel", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.42),
+		Size = UDim2.fromOffset(800, 90),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		Text = "",
+		TextColor3 = Color3.fromRGB(255, 255, 255),
+		TextSize = 54,
+		TextTransparency = 1,
+		ZIndex = 11,
+	}, screen)
+
+	return screen
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Actualizaciones
+-- ─────────────────────────────────────────────────────────────
+
+function Hud.setRisk(data: any)
+	if not refs.riskBar then
+		return
+	end
+	local risk = data.risk or 0
+	lastRisk = risk
+	local color = Theme.riskColor(risk)
+
+	TweenService:Create(refs.riskBar, TweenInfo.new(0.18), {
+		Size = UDim2.fromScale(math.clamp(risk, 0, 1), 1),
+		BackgroundColor3 = color,
+	}):Play()
+
+	refs.teacherState.Text = STATE_LABEL[data.teacherState] or "en el aula"
+	if data.inspecting then
+		refs.teacherState.Text = "esta parado en tu banco"
+	end
+
+	local label
+	if data.teacherState == "Pizarron" then
+		label = "ESTA DE ESPALDAS"
+	elseif data.seen then
+		label = "TE VE"
+	elseif risk > Config.Teacher.RiskWarning then
+		label = "SOSPECHA"
+	else
+		label = "SEGURO"
+	end
+	refs.riskText.Text = label
+	refs.riskText.TextColor3 = color
+
+	local danger = (data.seen and phoneOut) == true
+	if danger ~= lastDanger then
+		lastDanger = danger
+		refs.warning.Text = danger and "TE ESTA MIRANDO — GUARDÁ EL CELULAR" or ""
+		TweenService:Create(refs.warning, TweenInfo.new(0.2), {
+			TextTransparency = danger and 0 or 1,
+		}):Play()
+	end
+
+	Hud.refreshPrimary()
+end
+
+function Hud.setPhoneOut(out: boolean)
+	phoneOut = out
+	if refs.stashButton then
+		refs.stashButton.Visible = out
+	end
+	Hud.refreshPrimary()
+end
+
+function Hud.refreshPrimary()
+	local button = refs.primaryButton
+	if not button or confiscated then
+		return
+	end
+
+	if phoneOut then
+		button.Text = "📷  Sacar foto"
+		button.Size = UDim2.fromOffset(260, 62)
+	else
+		button.Text = "📷  Sacar el celular"
+		button.Size = UDim2.fromOffset(300, 62)
+	end
+
+	-- Verde = momento seguro; rojo = te va a ver.
+	local color = Theme.riskColor(lastRisk)
+	button.BackgroundColor3 = color:Lerp(Color3.fromRGB(20, 22, 28), 0.15)
+end
+
+function Hud.setPhoneState(state: any)
+	if not refs.hint then
+		return
+	end
+	confiscated = state.confiscated == true
+	if confiscated then
+		refs.hint.Text = string.format("El profe te confisco el celular. Te lo devuelve en %ds.", math.ceil(state.confiscatedFor))
+		refs.primaryButton.AutoButtonColor = false
+		refs.primaryButton.BackgroundColor3 = Color3.fromRGB(48, 50, 58)
+		refs.primaryButton.Text = "Sin celular"
+	else
+		refs.primaryButton.AutoButtonColor = true
+		refs.hint.Text = string.format("Bateria %d%%  ·  Sacá el celular cuando el profe no te vea.", state.battery)
+		Hud.refreshPrimary()
+	end
+end
+
+function Hud.setRound(data: any)
+	if not refs.timer then
+		return
+	end
+	local minutes = math.floor(data.timeLeft / 60)
+	local seconds = data.timeLeft % 60
+	refs.timer.Text = string.format("%02d:%02d", minutes, seconds)
+	refs.phase.Text = string.upper(data.phase)
+	refs.phase.TextColor3 = data.phase == "Prueba" and Theme.Hud.Safe or Color3.fromRGB(168, 174, 188)
+end
+
+function Hud.setExam(snapshot: any)
+	if not refs.progress then
+		return
+	end
+	refs.progress.Text = string.format("%d / %d respondidos  ·  nota %.1f",
+		snapshot.answered, #snapshot.questions, snapshot.grade)
+end
+
+function Hud.notify(text: string, kind: string?)
+	if not refs.toasts then
+		return
+	end
+	local color = Theme.Hud.Safe
+	if kind == "danger" then
+		color = Theme.Hud.Danger
+	elseif kind == "warn" then
+		color = Theme.Hud.Warn
+	elseif kind == "info" then
+		color = Color3.fromRGB(92, 148, 232)
+	end
+
+	local toast = el("Frame", {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = Theme.Hud.Panel,
+		BackgroundTransparency = 0.1,
+		BorderSizePixel = 0,
+		LayoutOrder = -os.time(),
+	}, refs.toasts)
+	Util.roundify(toast, 12, color, 2)
+	el("UIPadding", {
+		PaddingTop = UDim.new(0, 10),
+		PaddingBottom = UDim.new(0, 10),
+		PaddingLeft = UDim.new(0, 12),
+		PaddingRight = UDim.new(0, 12),
+	}, toast)
+	el("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = text,
+		TextColor3 = Theme.Hud.Text,
+		TextSize = 16,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, toast)
+
+	task.delay(5, function()
+		if toast.Parent then
+			TweenService:Create(toast, TweenInfo.new(0.35), { BackgroundTransparency = 1 }):Play()
+			task.wait(0.35)
+			toast:Destroy()
+		end
+	end)
+end
+
+--- Golpe de color a pantalla completa: rojo cuando te pillan,
+--- blanco cuando dispara el flash de la camara.
+function Hud.flash(text: string, color: Color3?)
+	if not refs.flash then
+		return
+	end
+	refs.flash.BackgroundColor3 = color or Theme.Hud.Danger
+	refs.flashText.Text = text
+	refs.flash.BackgroundTransparency = color and 0.2 or 0.45
+	refs.flashText.TextTransparency = 0
+
+	TweenService:Create(refs.flash, TweenInfo.new(1.1), { BackgroundTransparency = 1 }):Play()
+	TweenService:Create(refs.flashText, TweenInfo.new(1.6), { TextTransparency = 1 }):Play()
+end
+
+return Hud
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX3">
+      <Properties>
+        <string name="Name">PaperUI</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	PaperUI
+	------------------------------------------------------------------
+	La hoja de la prueba. No es una pantalla plana pegada a la camara:
+	es una SurfaceGui montada sobre la hoja fisica que esta apoyada en
+	el banco, con el Adornee puesto desde el PlayerGui (que es lo que
+	hace que los botones sean clickeables en el mundo 3D).
+
+	Se ve un ejercicio por vez, con sus cuatro opciones y una tira de
+	pestañas abajo para moverse entre los 8 ejercicios.
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Theme = require(Shared:WaitForChild("Theme"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local player = Players.LocalPlayer
+
+local PaperUI = {}
+PaperUI.current = 1
+PaperUI.snapshot = nil :: any
+PaperUI.onAnswer = nil :: ((number, number) -> ())?
+PaperUI.onSelect = nil :: ((number) -> ())?
+
+local LETTERS = { "A", "B", "C", "D" }
+
+local gui: SurfaceGui? = nil
+local refs: { [string]: any } = {}
+
+local function el(className: string, props: { [string]: any }, parent: Instance?): any
+	local instance = Instance.new(className)
+	for key, value in props do
+		(instance :: any)[key] = value
+	end
+	if parent then
+		instance.Parent = parent
+	end
+	return instance
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Construccion
+-- ─────────────────────────────────────────────────────────────
+
+function PaperUI.mount(paperPart: BasePart)
+	if gui then
+		gui:Destroy()
+	end
+
+	local playerGui = player:WaitForChild("PlayerGui")
+
+	gui = el("SurfaceGui", {
+		Name = "HojaDePrueba",
+		Adornee = paperPart,
+		Face = Enum.NormalId.Top,
+		SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud,
+		PixelsPerStud = 340,
+		LightInfluence = 0.25,
+		MaxDistance = 40,
+		AlwaysOnTop = false,
+		Active = true,  -- sin esto los botones no se pueden clickear en 3D
+		ResetOnSpawn = false,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		Parent = playerGui,
+	})
+
+	local sheet = el("Frame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Theme.Paper.Background,
+		BorderSizePixel = 0,
+	}, gui)
+
+	-- ── Encabezado ────────────────────────────────────────
+	local header = el("Frame", {
+		Size = UDim2.new(1, 0, 0, 92),
+		BackgroundTransparency = 1,
+	}, sheet)
+
+	el("TextLabel", {
+		Size = UDim2.new(0.62, 0, 0, 34),
+		Position = UDim2.fromOffset(28, 16),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		Text = "EVALUACION DE MATEMATICA",
+		TextColor3 = Theme.Paper.Ink,
+		TextSize = 30,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, header)
+
+	refs.student = el("TextLabel", {
+		Size = UDim2.new(0.62, 0, 0, 24),
+		Position = UDim2.fromOffset(28, 52),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = string.format("Alumno: %s   ·   Curso: 3° B   ·   Tema: unico", player.DisplayName),
+		TextColor3 = Theme.Paper.InkSoft,
+		TextSize = 20,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, header)
+
+	local gradeBox = el("Frame", {
+		Size = UDim2.fromOffset(120, 62),
+		Position = UDim2.new(1, -148, 0, 16),
+		BackgroundColor3 = Theme.Paper.Background,
+		BorderSizePixel = 0,
+	}, header)
+	Util.roundify(gradeBox, 8, Theme.Paper.Line, 2)
+
+	el("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 18),
+		Position = UDim2.fromOffset(0, 6),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = "NOTA",
+		TextColor3 = Theme.Paper.InkSoft,
+		TextSize = 14,
+	}, gradeBox)
+
+	refs.grade = el("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 34),
+		Position = UDim2.fromOffset(0, 22),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		Text = "-",
+		TextColor3 = Theme.Paper.Accent,
+		TextSize = 30,
+	}, gradeBox)
+
+	el("Frame", {
+		Size = UDim2.new(1, -56, 0, 2),
+		Position = UDim2.fromOffset(28, 88),
+		BackgroundColor3 = Theme.Paper.Line,
+		BorderSizePixel = 0,
+	}, header)
+
+	-- ── Cuerpo del ejercicio ──────────────────────────────
+	local body = el("Frame", {
+		Size = UDim2.new(1, -56, 1, -212),
+		Position = UDim2.fromOffset(28, 104),
+		BackgroundTransparency = 1,
+	}, sheet)
+
+	refs.topic = el("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 22),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = "",
+		TextColor3 = Theme.Paper.Accent,
+		TextSize = 18,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, body)
+
+	refs.prompt = el("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 84),
+		Position = UDim2.fromOffset(0, 26),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		Text = "",
+		TextColor3 = Theme.Paper.Ink,
+		TextSize = 34,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+	}, body)
+
+	local options = el("Frame", {
+		Size = UDim2.new(1, 0, 1, -118),
+		Position = UDim2.fromOffset(0, 118),
+		BackgroundTransparency = 1,
+	}, body)
+
+	el("UIGridLayout", {
+		CellSize = UDim2.new(0.5, -10, 0.5, -10),
+		CellPadding = UDim2.fromOffset(20, 16),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, options)
+
+	refs.options = {}
+	for index = 1, 4 do
+		local button = el("TextButton", {
+			Name = "Opcion" .. index,
+			LayoutOrder = index,
+			BackgroundColor3 = Theme.Paper.Background,
+			AutoButtonColor = false,
+			Font = Theme.Font,
+			Text = "",
+			TextColor3 = Theme.Paper.Ink,
+			TextSize = 26,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			BorderSizePixel = 0,
+		}, options)
+		Util.roundify(button, 10, Theme.Paper.Line, 2)
+
+		el("UIPadding", { PaddingLeft = UDim.new(0, 58), PaddingRight = UDim.new(0, 12) }, button)
+
+		local bullet = el("Frame", {
+			Name = "Bullet",
+			Size = UDim2.fromOffset(34, 34),
+			Position = UDim2.new(0, -48, 0.5, -17),
+			BackgroundColor3 = Theme.Paper.Background,
+			BorderSizePixel = 0,
+		}, button)
+		Util.roundify(bullet, 17, Theme.Paper.InkSoft, 2)
+
+		el("TextLabel", {
+			Name = "Letra",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			Font = Theme.FontBold,
+			Text = LETTERS[index],
+			TextColor3 = Theme.Paper.InkSoft,
+			TextSize = 20,
+		}, bullet)
+
+		button.MouseButton1Click:Connect(function()
+			if PaperUI.onAnswer then
+				PaperUI.onAnswer(PaperUI.current, index)
+			end
+		end)
+
+		refs.options[index] = button
+	end
+
+	-- ── Pestañas de ejercicios ────────────────────────────
+	local tabs = el("Frame", {
+		Size = UDim2.new(1, -56, 0, 64),
+		Position = UDim2.new(0, 28, 1, -84),
+		BackgroundTransparency = 1,
+	}, sheet)
+
+	el("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 10),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+	}, tabs)
+
+	refs.tabs = {}
+	refs.tabsFrame = tabs
+
+	el("Frame", {
+		Size = UDim2.new(1, -56, 0, 2),
+		Position = UDim2.new(0, 28, 1, -96),
+		BackgroundColor3 = Theme.Paper.Line,
+		BorderSizePixel = 0,
+	}, sheet)
+
+	refs.footer = el("TextLabel", {
+		Size = UDim2.new(1, -56, 0, 20),
+		Position = UDim2.new(0, 28, 1, -22),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = "Tocá una opcion para responder. El celular esta abajo del banco.",
+		TextColor3 = Theme.Paper.InkSoft,
+		TextSize = 16,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, sheet)
+
+	return gui
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Render
+-- ─────────────────────────────────────────────────────────────
+
+local function buildTabs(count: number)
+	if #refs.tabs == count then
+		return
+	end
+	for _, tab in refs.tabs do
+		tab:Destroy()
+	end
+	refs.tabs = {}
+
+	for index = 1, count do
+		local tab = el("TextButton", {
+			Name = "Tab" .. index,
+			LayoutOrder = index,
+			Size = UDim2.fromOffset(46, 46),
+			BackgroundColor3 = Theme.Paper.Background,
+			AutoButtonColor = false,
+			Font = Theme.FontBold,
+			Text = tostring(index),
+			TextColor3 = Theme.Paper.InkSoft,
+			TextSize = 20,
+			BorderSizePixel = 0,
+		}, refs.tabsFrame)
+		Util.roundify(tab, 10, Theme.Paper.Line, 2)
+
+		tab.MouseButton1Click:Connect(function()
+			PaperUI.setCurrent(index)
+		end)
+		refs.tabs[index] = tab
+	end
+end
+
+function PaperUI.setCurrent(index: number)
+	local snapshot = PaperUI.snapshot
+	if not snapshot then
+		return
+	end
+	PaperUI.current = math.clamp(index, 1, #snapshot.questions)
+	PaperUI.render()
+	if PaperUI.onSelect then
+		PaperUI.onSelect(PaperUI.current)
+	end
+end
+
+function PaperUI.firstUnanswered(): number
+	local snapshot = PaperUI.snapshot
+	if not snapshot then
+		return 1
+	end
+	for index = 1, #snapshot.questions do
+		if not snapshot.answers[index] then
+			return index
+		end
+	end
+	return #snapshot.questions
+end
+
+function PaperUI.setSnapshot(snapshot: any)
+	local first = PaperUI.snapshot == nil
+	PaperUI.snapshot = snapshot
+	if first or snapshot.answers[PaperUI.current] then
+		PaperUI.current = PaperUI.firstUnanswered()
+	end
+	PaperUI.render()
+	if PaperUI.onSelect then
+		PaperUI.onSelect(PaperUI.current)
+	end
+end
+
+function PaperUI.render()
+	local snapshot = PaperUI.snapshot
+	if not gui or not snapshot then
+		return
+	end
+
+	buildTabs(#snapshot.questions)
+
+	local question = snapshot.questions[PaperUI.current]
+	if not question then
+		return
+	end
+	local record = snapshot.answers[PaperUI.current]
+
+	refs.topic.Text = string.format("Ejercicio %d de %d  ·  %s", PaperUI.current, #snapshot.questions, question.topic)
+	refs.prompt.Text = question.prompt
+	refs.grade.Text = snapshot.answered > 0 and string.format("%.1f", snapshot.grade) or "-"
+
+	for index, button in refs.options do
+		local text = question.choices[index] or ""
+		button.Text = text
+		button.Visible = text ~= ""
+
+		local bullet = button:FindFirstChild("Bullet")
+		local letter = bullet and bullet:FindFirstChild("Letra")
+		local stroke = button:FindFirstChildOfClass("UIStroke")
+		local bulletStroke = bullet and bullet:FindFirstChildOfClass("UIStroke")
+
+		local color = Theme.Paper.Line
+		local fill = Theme.Paper.Background
+		local ink = Theme.Paper.Ink
+
+		if record then
+			if index == record.choice then
+				color = record.correct and Theme.Paper.Correct or Theme.Paper.Wrong
+				fill = color:Lerp(Theme.Paper.Background, 0.85)
+				ink = color
+			else
+				ink = Theme.Paper.InkSoft
+			end
+		end
+
+		button.BackgroundColor3 = fill
+		button.TextColor3 = ink
+		if stroke then
+			stroke.Color = color
+			stroke.Thickness = record and index == record.choice and 3 or 2
+		end
+		if bulletStroke then
+			bulletStroke.Color = color
+		end
+		if letter then
+			letter.TextColor3 = ink
+		end
+	end
+
+	for index, tab in refs.tabs do
+		local answered = snapshot.answers[index]
+		local stroke = tab:FindFirstChildOfClass("UIStroke")
+		local isCurrent = index == PaperUI.current
+
+		if answered then
+			local color = answered.correct and Theme.Paper.Correct or Theme.Paper.Wrong
+			tab.BackgroundColor3 = color:Lerp(Theme.Paper.Background, 0.82)
+			tab.TextColor3 = color
+			if stroke then
+				stroke.Color = color
+			end
+		else
+			tab.BackgroundColor3 = Theme.Paper.Background
+			tab.TextColor3 = Theme.Paper.InkSoft
+			if stroke then
+				stroke.Color = Theme.Paper.Line
+			end
+		end
+
+		if isCurrent then
+			tab.TextColor3 = Theme.Paper.Accent
+			if stroke then
+				stroke.Color = Theme.Paper.Accent
+				stroke.Thickness = 3
+			end
+		elseif stroke then
+			stroke.Thickness = 2
+		end
+	end
+
+	if record then
+		refs.footer.Text = record.correct
+			and "Bien. Pasá al siguiente ejercicio."
+			or "Ese estaba mal. Ya no se puede corregir."
+	elseif snapshot.finished then
+		refs.footer.Text = "Prueba entregada."
+	else
+		refs.footer.Text = "Tocá una opcion para responder. La foto del celular sale de este ejercicio."
+	end
+end
+
+function PaperUI.setEnabled(enabled: boolean)
+	if gui then
+		gui.Enabled = enabled
+	end
+end
+
+function PaperUI.destroy()
+	if gui then
+		gui:Destroy()
+		gui = nil
+	end
+end
+
+return PaperUI
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX4">
+      <Properties>
+        <string name="Name">PhoneUI</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	PhoneUI — la app RoGPT
+	------------------------------------------------------------------
+	Interfaz montada sobre la pantalla fisica del celular 3D que el
+	alumno tiene soldado al cuerpo. No hay ninguna pantalla pegada a la
+	camara: si el celular esta abajo del banco, la app esta abajo del
+	banco, y para leerla hay que levantarlo (y arriesgarse).
+
+	Flujo completo:
+		sacar foto  ->  se ve la miniatura de la hoja
+		enviar      ->  "Subiendo imagen..." + "RoGPT esta escribiendo"
+		respuesta   ->  resolucion paso a paso, tipeada en vivo
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Theme = require(Shared:WaitForChild("Theme"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local player = Players.LocalPlayer
+local P = Config.Phone
+
+local PhoneUI = {}
+PhoneUI.onTakePhoto = nil :: (() -> ())?
+PhoneUI.onSend = nil :: (() -> ())?
+PhoneUI.onClose = nil :: (() -> ())?
+
+local gui: SurfaceGui? = nil
+local refs: { [string]: any } = {}
+local busy = false
+local pendingPhoto: any = nil
+local typingToken = 0
+
+local function el(className: string, props: { [string]: any }, parent: Instance?): any
+	local instance = Instance.new(className)
+	for key, value in props do
+		(instance :: any)[key] = value
+	end
+	if parent then
+		instance.Parent = parent
+	end
+	return instance
+end
+
+local function scrollToBottom()
+	task.defer(function()
+		if refs.chat then
+			refs.chat.CanvasPosition = Vector2.new(0, math.max(0, refs.chat.AbsoluteCanvasSize.Y))
+		end
+	end)
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Construccion
+-- ─────────────────────────────────────────────────────────────
+
+function PhoneUI.mount(screenPart: BasePart)
+	if gui then
+		gui:Destroy()
+	end
+	local playerGui = player:WaitForChild("PlayerGui")
+
+	gui = el("SurfaceGui", {
+		Name = "RoGPT",
+		Adornee = screenPart,
+		Face = Enum.NormalId.Front,
+		SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud,
+		PixelsPerStud = 600,
+		LightInfluence = 0,
+		Brightness = 2,
+		MaxDistance = 25,
+		Active = true,
+		ResetOnSpawn = false,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		Parent = playerGui,
+	})
+
+	local screen = el("Frame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Theme.Phone.Background,
+		BorderSizePixel = 0,
+	}, gui)
+
+	-- ── Barra de estado ───────────────────────────────────
+	local status = el("Frame", {
+		Size = UDim2.new(1, 0, 0, 34),
+		BackgroundTransparency = 1,
+	}, screen)
+
+	refs.clock = el("TextLabel", {
+		Size = UDim2.new(0.4, 0, 1, 0),
+		Position = UDim2.fromOffset(16, 0),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		Text = "10:24",
+		TextColor3 = Theme.Phone.Text,
+		TextSize = 16,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, status)
+
+	refs.battery = el("TextLabel", {
+		Size = UDim2.new(0.5, -16, 1, 0),
+		Position = UDim2.new(0.5, 0, 0, 0),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = "▮▮▮  100%",
+		TextColor3 = Theme.Phone.Battery,
+		TextSize = 15,
+		TextXAlignment = Enum.TextXAlignment.Right,
+	}, status)
+
+	-- ── Header de la app ──────────────────────────────────
+	local header = el("Frame", {
+		Size = UDim2.new(1, 0, 0, 62),
+		Position = UDim2.fromOffset(0, 34),
+		BackgroundColor3 = Theme.Phone.Surface,
+		BorderSizePixel = 0,
+	}, screen)
+
+	local logo = el("Frame", {
+		Size = UDim2.fromOffset(38, 38),
+		Position = UDim2.fromOffset(14, 12),
+		BackgroundColor3 = Theme.Phone.Accent,
+		BorderSizePixel = 0,
+	}, header)
+	Util.roundify(logo, 12)
+
+	el("TextLabel", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		Text = "R",
+		TextColor3 = Color3.fromRGB(12, 14, 18),
+		TextSize = 22,
+	}, logo)
+
+	el("TextLabel", {
+		Size = UDim2.new(1, -70, 0, 22),
+		Position = UDim2.fromOffset(62, 12),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		Text = "RoGPT",
+		TextColor3 = Theme.Phone.Text,
+		TextSize = 20,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, header)
+
+	refs.subtitle = el("TextLabel", {
+		Size = UDim2.new(1, -70, 0, 18),
+		Position = UDim2.fromOffset(62, 32),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = P.ModelName .. " · en linea",
+		TextColor3 = Theme.Phone.Accent,
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, header)
+
+	-- ── Chat ──────────────────────────────────────────────
+	refs.chat = el("ScrollingFrame", {
+		Size = UDim2.new(1, 0, 1, -196),
+		Position = UDim2.fromOffset(0, 96),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 3,
+		ScrollBarImageColor3 = Theme.Phone.SurfaceAlt,
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		ElasticBehavior = Enum.ElasticBehavior.Never,
+	}, screen)
+
+	el("UIListLayout", {
+		Padding = UDim.new(0, 10),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+	}, refs.chat)
+
+	el("UIPadding", {
+		PaddingTop = UDim.new(0, 12),
+		PaddingBottom = UDim.new(0, 12),
+		PaddingLeft = UDim.new(0, 12),
+		PaddingRight = UDim.new(0, 12),
+	}, refs.chat)
+
+	-- ── Barra de acciones ─────────────────────────────────
+	local bar = el("Frame", {
+		Size = UDim2.new(1, 0, 0, 100),
+		Position = UDim2.new(0, 0, 1, -100),
+		BackgroundColor3 = Theme.Phone.Surface,
+		BorderSizePixel = 0,
+	}, screen)
+
+	local function actionButton(name: string, text: string, order: number, color: Color3): TextButton
+		local button = el("TextButton", {
+			Name = name,
+			LayoutOrder = order,
+			Size = UDim2.new(0, 0, 0, 46),
+			AutomaticSize = Enum.AutomaticSize.X,
+			BackgroundColor3 = color,
+			AutoButtonColor = true,
+			Font = Theme.FontBold,
+			Text = text,
+			TextColor3 = Theme.Phone.Text,
+			TextSize = 17,
+			BorderSizePixel = 0,
+		}, bar)
+		Util.roundify(button, 12)
+		el("UIPadding", { PaddingLeft = UDim.new(0, 16), PaddingRight = UDim.new(0, 16) }, button)
+		return button
+	end
+
+	el("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+	}, bar)
+
+	refs.photoButton = actionButton("Foto", "📷  Foto", 1, Theme.Phone.SurfaceAlt)
+	refs.sendButton = actionButton("Enviar", "Enviar ▸", 2, Theme.Phone.Accent)
+	refs.closeButton = actionButton("Guardar", "Guardar", 3, Theme.Phone.SurfaceAlt)
+
+	refs.photoButton.MouseButton1Click:Connect(function()
+		if PhoneUI.onTakePhoto then
+			PhoneUI.onTakePhoto()
+		end
+	end)
+	refs.sendButton.MouseButton1Click:Connect(function()
+		if PhoneUI.onSend then
+			PhoneUI.onSend()
+		end
+	end)
+	refs.closeButton.MouseButton1Click:Connect(function()
+		if PhoneUI.onClose then
+			PhoneUI.onClose()
+		end
+	end)
+
+	PhoneUI.reset()
+	return gui
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Mensajes
+-- ─────────────────────────────────────────────────────────────
+
+local order = 0
+
+local function bubble(side: string, color: Color3): Frame
+	order += 1
+	local holder = el("Frame", {
+		Name = "Msg",
+		LayoutOrder = order,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+	}, refs.chat)
+
+	local frame = el("Frame", {
+		Name = "Bubble",
+		Size = UDim2.new(0.88, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Position = side == "user" and UDim2.new(1, 0, 0, 0) or UDim2.new(0, 0, 0, 0),
+		AnchorPoint = side == "user" and Vector2.new(1, 0) or Vector2.new(0, 0),
+		BackgroundColor3 = color,
+		BorderSizePixel = 0,
+	}, holder)
+	Util.roundify(frame, 14)
+	el("UIPadding", {
+		PaddingTop = UDim.new(0, 10),
+		PaddingBottom = UDim.new(0, 10),
+		PaddingLeft = UDim.new(0, 12),
+		PaddingRight = UDim.new(0, 12),
+	}, frame)
+	el("UIListLayout", {
+		Padding = UDim.new(0, 6),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, frame)
+
+	return frame
+end
+
+local function line(parent: Frame, text: string, size: number, color: Color3, font: Enum.Font?, layoutOrder: number?): TextLabel
+	return el("TextLabel", {
+		LayoutOrder = layoutOrder or 1,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		Font = font or Theme.Font,
+		Text = text,
+		TextColor3 = color,
+		TextSize = size,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, parent)
+end
+
+function PhoneUI.assistant(text: string): Frame
+	local frame = bubble("assistant", Theme.Phone.Surface)
+	line(frame, text, 16, Theme.Phone.Text)
+	scrollToBottom()
+	return frame
+end
+
+function PhoneUI.user(text: string): Frame
+	local frame = bubble("user", Theme.Phone.User)
+	line(frame, text, 16, Theme.Phone.Text)
+	scrollToBottom()
+	return frame
+end
+
+function PhoneUI.system(text: string)
+	order += 1
+	el("TextLabel", {
+		LayoutOrder = order,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = text,
+		TextColor3 = Theme.Phone.TextSoft,
+		TextSize = 13,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Center,
+	}, refs.chat)
+	scrollToBottom()
+end
+
+--- Miniatura de la foto: la hoja fotografiada, con su enunciado.
+function PhoneUI.photo(photoData: any): Frame
+	local frame = bubble("user", Theme.Phone.User)
+
+	local sheet = el("Frame", {
+		LayoutOrder = 1,
+		Size = UDim2.new(1, 0, 0, 118),
+		BackgroundColor3 = Theme.Paper.Background,
+		BorderSizePixel = 0,
+		ClipsDescendants = true,
+	}, frame)
+	Util.roundify(sheet, 8)
+	el("UIGradient", {
+		Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(214, 214, 206)),
+		Rotation = 65,
+	}, sheet)
+
+	el("TextLabel", {
+		Size = UDim2.new(1, -20, 0, 14),
+		Position = UDim2.fromOffset(10, 10),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = "EVALUACION DE MATEMATICA · 3° B",
+		TextColor3 = Theme.Paper.InkSoft,
+		TextSize = 10,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, sheet)
+
+	el("TextLabel", {
+		Size = UDim2.new(1, -20, 0, 70),
+		Position = UDim2.fromOffset(10, 30),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		Text = photoData.prompt,
+		TextColor3 = Theme.Paper.Ink,
+		TextSize = 15,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+	}, sheet)
+
+	el("TextLabel", {
+		Size = UDim2.new(1, -20, 0, 12),
+		Position = UDim2.new(0, 10, 1, -20),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = photoData.photoId .. ".jpg",
+		TextColor3 = Theme.Paper.InkSoft,
+		TextSize = 9,
+		TextXAlignment = Enum.TextXAlignment.Right,
+	}, sheet)
+
+	line(frame, "Resolveme este ejercicio, paso a paso.", 15, Theme.Phone.Text, nil, 2)
+	scrollToBottom()
+	return frame
+end
+
+--- Burbuja "escribiendo..." con los tres puntitos animados.
+function PhoneUI.typing(): (Frame, () -> ())
+	local frame = bubble("assistant", Theme.Phone.Surface)
+	local label = line(frame, "escribiendo", 16, Theme.Phone.TextSoft)
+	scrollToBottom()
+
+	local alive = true
+	task.spawn(function()
+		local dots = 0
+		while alive and label.Parent do
+			dots = (dots + 1) % 4
+			label.Text = "escribiendo" .. string.rep(".", dots)
+			task.wait(0.35)
+		end
+	end)
+
+	return frame, function()
+		alive = false
+		local holder = frame.Parent
+		if holder then
+			holder:Destroy()
+		end
+	end
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Respuesta tipeada
+-- ─────────────────────────────────────────────────────────────
+
+local function typeInto(label: TextLabel, text: string, token: number)
+	local speed = P.TypeSpeed
+	local shown = 0
+	local total = #text
+	while shown < total do
+		if typingToken ~= token or not label.Parent then
+			label.Text = text
+			return
+		end
+		local dt = RunService.Heartbeat:Wait()
+		shown = math.min(total, shown + speed * dt)
+		label.Text = string.sub(text, 1, math.floor(shown))
+		scrollToBottom()
+	end
+	label.Text = text
+end
+
+--- Escribe la resolucion completa, paso por paso, como si la fuera pensando.
+function PhoneUI.answer(response: any)
+	typingToken += 1
+	local token = typingToken
+
+	local frame = bubble("assistant", Theme.Phone.Surface)
+	line(frame, response.topic, 12, Theme.Phone.Accent, Theme.FontBold, 0)
+
+	task.spawn(function()
+		local index = 1
+		for _, step in response.steps do
+			if typingToken ~= token then
+				return
+			end
+			index += 1
+			local title = line(frame, step.title, 15, Theme.Phone.Text, Theme.FontBold, index)
+			title.Text = ""
+			typeInto(title, step.title, token)
+
+			index += 1
+			local body = line(frame, step.body, 15, Theme.Phone.TextSoft, Theme.FontMono, index)
+			body.Text = ""
+			typeInto(body, step.body, token)
+			task.wait(0.12)
+		end
+
+		if typingToken ~= token then
+			return
+		end
+
+		index += 1
+		local result = el("Frame", {
+			LayoutOrder = index,
+			Size = UDim2.new(1, 0, 0, 44),
+			BackgroundColor3 = Theme.Phone.Accent,
+			BorderSizePixel = 0,
+		}, frame)
+		Util.roundify(result, 10)
+		el("TextLabel", {
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			Font = Theme.FontBold,
+			Text = "Respuesta:  " .. tostring(response.answer),
+			TextColor3 = Color3.fromRGB(10, 14, 16),
+			TextSize = 18,
+		}, result)
+
+		index += 1
+		line(frame, "Marcá esa opcion en la hoja. Y guardá el celular.", 13, Theme.Phone.TextSoft, nil, index)
+		scrollToBottom()
+	end)
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Estado
+-- ─────────────────────────────────────────────────────────────
+
+function PhoneUI.reset()
+	typingToken += 1
+	pendingPhoto = nil
+	busy = false
+	if refs.chat then
+		for _, child in refs.chat:GetChildren() do
+			if child:IsA("GuiObject") then
+				child:Destroy()
+			end
+		end
+	end
+	order = 0
+	if refs.chat then
+		PhoneUI.system("Hoy · " .. P.ModelName)
+		PhoneUI.assistant(P.Greeting)
+	end
+	PhoneUI.refreshButtons()
+end
+
+function PhoneUI.setPendingPhoto(photoData: any)
+	pendingPhoto = photoData
+	PhoneUI.refreshButtons()
+end
+
+function PhoneUI.getPendingPhoto(): any
+	return pendingPhoto
+end
+
+function PhoneUI.setBusy(value: boolean)
+	busy = value
+	PhoneUI.refreshButtons()
+end
+
+function PhoneUI.refreshButtons()
+	if not refs.sendButton then
+		return
+	end
+	local hasPhoto = pendingPhoto ~= nil
+	refs.sendButton.BackgroundColor3 = (hasPhoto and not busy) and Theme.Phone.Accent or Theme.Phone.SurfaceAlt
+	refs.sendButton.TextColor3 = (hasPhoto and not busy) and Theme.Phone.Text or Theme.Phone.TextSoft
+	refs.sendButton.Text = hasPhoto and "Enviar foto ▸" or "Enviar ▸"
+	refs.photoButton.Text = busy and "..." or "📷  Foto"
+end
+
+function PhoneUI.setPhoneState(state: any)
+	if not refs.battery then
+		return
+	end
+	local bars = math.clamp(math.ceil(state.battery / 34), 0, 3)
+	refs.battery.Text = string.format("%s%s  %d%%", string.rep("▮", bars), string.rep("▯", 3 - bars), state.battery)
+	refs.battery.TextColor3 = state.battery > 20 and Theme.Phone.Battery or Theme.Phone.Danger
+
+	if state.confiscated then
+		refs.subtitle.Text = "sin señal · te lo saco el profe"
+		refs.subtitle.TextColor3 = Theme.Phone.Danger
+	else
+		refs.subtitle.Text = P.ModelName .. " · en linea"
+		refs.subtitle.TextColor3 = Theme.Phone.Accent
+	end
+end
+
+function PhoneUI.setClock(text: string)
+	if refs.clock then
+		refs.clock.Text = text
+	end
+end
+
+function PhoneUI.setEnabled(enabled: boolean)
+	if gui then
+		gui.Enabled = enabled
+	end
+end
+
+function PhoneUI.destroy()
+	typingToken += 1
+	if gui then
+		gui:Destroy()
+		gui = nil
+	end
+	refs = {}
+end
+
+return PhoneUI
+]]></ProtectedString>
+      </Properties>
+    </Item>
+  </Item>
+</roblox>

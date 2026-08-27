@@ -49,21 +49,70 @@ copiaste y cuántas veces te pillaron.
 
 ---
 
-## Instalación
+## Cómo pasarlo a Roblox Studio
 
-### Opción A — Rojo (recomendada)
+### Opción A — los archivos `.rbxmx` (3 clics, sin instalar nada) ✅
+
+En `install/` hay tres archivos que ya traen **todo el código adentro**. Studio
+los inserta directo, no hay que copiar y pegar nada.
+
+1. Bajate los tres archivos de `install/` (en GitHub: entrás al archivo y
+   *Download raw file*, o bajás el repo entero con *Code → Download ZIP*).
+2. Abrí Roblox Studio con un lugar nuevo (Baseplate).
+3. En el panel **Explorer**, clic derecho sobre cada servicio → **Insert from
+   File…** y elegí el archivo que le corresponde:
+
+   | Clic derecho en | Insertás |
+   |---|---|
+   | `ReplicatedStorage` | `AulaShared.rbxmx` |
+   | `ServerScriptService` | `AulaServer.rbxmx` |
+   | `StarterPlayer` → `StarterPlayerScripts` | `AulaClient.rbxmx` |
+
+4. **Play** ▶.
+
+Si no ves el Explorer: pestaña *View* → *Explorer*. Y si no ves
+`StarterPlayerScripts`, abrí el triangulito de `StarterPlayer`.
+
+Tiene que quedar exactamente así:
+
+```
+ReplicatedStorage
+└── Shared                (Folder)      ← AulaShared.rbxmx
+ServerScriptService
+└── Server                (Script)      ← AulaServer.rbxmx
+StarterPlayer
+└── StarterPlayerScripts
+    └── Client            (LocalScript) ← AulaClient.rbxmx
+```
+
+Cuidado con dos cosas al insertar: que el servicio esté **seleccionado el
+correcto** (si insertás en el lugar equivocado, arrastrá el objeto al servicio
+que va, funciona igual), y que no queden **dos copias** del mismo objeto si
+insertaste dos veces — borrá la repetida.
+
+No hace falta tocar el Lighting ni borrar el Baseplate: el propio juego
+configura la iluminación de interior al arrancar y saca el baseplate, porque
+queda a la misma altura que el piso del aula.
+
+Si tocás el código y querés regenerar los `.rbxmx`:
+
+```bash
+python3 tools/build_rbxmx.py
+```
+
+### Opción B — Rojo (si vas a seguir programándolo)
 
 ```bash
 rojo serve default.project.json
 ```
 
-Y conectás desde el plugin de Rojo en Roblox Studio. El proyecto ya deja todo
-en su lugar (`ReplicatedStorage/Shared`, `ServerScriptService/Server`,
-`StarterPlayerScripts/Client`) y configura Lighting con ShadowMap.
+Y conectás desde el plugin de Rojo en Studio. Es lo más cómodo para iterar:
+guardás el archivo en tu editor y Studio se actualiza solo.
 
-### Opción B — a mano en Roblox Studio
+### Opción C — a mano
 
-Creá esta estructura y pegá el contenido de cada archivo:
+Creás la estructura de abajo y pegás el contenido de cada archivo. Los
+ModuleScripts van **adentro** del `Script` / `LocalScript`, no al lado.
 
 ```
 ReplicatedStorage
@@ -92,12 +141,21 @@ StarterPlayer/StarterPlayerScripts
     └── PhoneUI           (ModuleScript)  src/client/PhoneUI.lua
 ```
 
-Importante: los ModuleScripts van **adentro** del `Script` / `LocalScript`, no
-al lado. No hay que crear ningún RemoteEvent a mano: los crea `Net.build()`.
-Tampoco hay que construir el aula: la levanta `ClassroomBuilder` por código
-cuando arranca el servidor.
+Vayas por donde vayas: **no hay que crear ningún RemoteEvent a mano** (los crea
+`Net.build()`) ni construir el aula (la levanta `ClassroomBuilder` por código
+cuando arranca el servidor).
 
----
+### Si algo no arranca
+
+| Síntoma | Qué pasó |
+|---|---|
+| "Infinite yield possible on ReplicatedStorage:WaitForChild(\"Shared\")" | La carpeta `Shared` no quedó en `ReplicatedStorage` o quedó con otro nombre. |
+| Se ve el aula pero no la hoja ni el HUD | El `Client` no quedó en `StarterPlayerScripts`. Fijate que sea un **LocalScript**, no un Script. |
+| No pasa nada de nada | El `Server` no quedó en `ServerScriptService`, o quedó *Disabled* (propiedad `Disabled` en false). |
+| El profe no camina | Falta activar el pathfinding del lugar: normalmente no hace falta, pero revisá que el aula esté sobre terreno/piso y no flotando. |
+
+Para probar con más de un alumno: *Test* → *Clients and Servers* → 2 players →
+*Start*.
 
 ## Qué hace cada archivo
 
