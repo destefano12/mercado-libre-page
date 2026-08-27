@@ -132,6 +132,15 @@ end
 --- El cliente avisa que saco / guardo el celu. Esto es lo que mira el profe.
 function PhoneService.setOut(player: Player, out: boolean): boolean
 	local data = ensure(player)
+
+	-- Si el modelo se perdio (respawn, confiscacion, un weld roto), se
+	-- vuelve a soldar antes de intentar levantarlo. Era la causa de
+	-- "saco el celular y no aparece nada".
+	if out and (not data.model or not data.model.Parent) then
+		PhoneService.equip(player)
+		data = ensure(player)
+	end
+
 	if out then
 		local ok = PhoneService.isAvailable(player)
 		if not ok then
@@ -300,6 +309,8 @@ function PhoneService.askRoGPT(player: Player, photoId: string)
 		promptArgs = question.promptArgs,
 		steps = question.steps,
 		answer = question.choices[question.answerIndex],
+		-- La letra es lo que de verdad te sirve: marcas esa y listo.
+		answerLetter = string.sub("ABCD", question.answerIndex, question.answerIndex),
 		thinkTime = rng:NextNumber(P.ThinkTime.Min, P.ThinkTime.Max),
 	}
 end

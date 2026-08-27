@@ -29,6 +29,7 @@ local E = Config.Exam
 local RoundService = {}
 
 local state = {
+	assetFailed = false,
 	phase = "Preparacion",
 	timeLeft = 0,
 	roundNumber = 0,
@@ -125,6 +126,10 @@ function RoundService.addPlayer(player: Player)
 	pushRound(player)
 	ExamService.push(player)
 
+	if state.assetFailed then
+		RoundService.notify(player, "notify.assetFallback", "warn")
+	end
+
 	task.spawn(function()
 		task.wait(0.5)
 		ExamService.seatPlayer(player)
@@ -139,8 +144,10 @@ function RoundService.onCharacter(player: Player, character: Model)
 	if not humanoid then
 		return
 	end
+	-- Con JumpPower en 0 y sentado no hay forma de pararse: quedabas
+	-- trabado en el banco para siempre. Se salta y listo.
 	humanoid.UseJumpPower = true
-	humanoid.JumpPower = 0 -- en clase no se salta
+	humanoid.JumpPower = 48
 	humanoid.WalkSpeed = 14
 
 	-- El celular fisico se suelda al cuerpo apenas aparece el personaje,
@@ -299,6 +306,12 @@ function RoundService.start(classroom, teacher)
 			runPhase("Resultados", 15)
 		end
 	end)
+end
+
+--- El aula del catalogo no se pudo cargar: hay que avisarlo adentro del
+--- juego, no solo en el Output que nadie mira.
+function RoundService.setAssetFailed(failed: boolean)
+	state.assetFailed = failed
 end
 
 function RoundService.getPhase(): string

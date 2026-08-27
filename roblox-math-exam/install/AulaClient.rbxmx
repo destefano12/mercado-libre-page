@@ -2803,13 +2803,17 @@ function PhoneUI.answer(response: any)
 			Size = UDim2.fromScale(1, 1),
 			BackgroundTransparency = 1,
 			Font = Theme.FontBold,
-			Text = Strings.get("phone.answer", { answer = Strings.choice(tostring(response.answer)) }),
+			Text = Strings.get("phone.answer", {
+				letter = response.answerLetter or "?",
+				answer = Strings.choice(tostring(response.answer)),
+			}),
 			TextColor3 = Color3.fromRGB(10, 14, 16),
 			TextSize = 18,
 		}, result)
 
 		index += 1
-		line(frame, Strings.get("phone.markIt"), 13, Theme.Phone.TextSoft, nil, index)
+		line(frame, Strings.get("phone.markIt", { letter = response.answerLetter or "?" }),
+			13, Theme.Phone.TextSoft, nil, index)
 		scrollToBottom()
 	end)
 end

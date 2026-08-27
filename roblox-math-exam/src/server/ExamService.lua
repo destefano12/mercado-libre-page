@@ -179,9 +179,23 @@ function ExamService.seatPlayer(player: Player)
 	if not humanoid then
 		return
 	end
-	character:PivotTo(entry.desk.seat.CFrame * CFrame.new(0, 3, 0))
-	task.wait(0.1)
-	entry.desk.seat:Sit(humanoid)
+	-- A veces el personaje todavia se esta armando y el Sit no agarra:
+	-- se reintenta un par de veces antes de dejarlo pasar.
+	local seat = entry.desk.seat
+	for attempt = 1, 4 do
+		if humanoid.Parent == nil then
+			return
+		end
+		if humanoid.SeatPart == seat then
+			return
+		end
+		character:PivotTo(seat.CFrame * CFrame.new(0, 2.6, 0))
+		task.wait(0.15)
+		pcall(function()
+			seat:Sit(humanoid)
+		end)
+		task.wait(0.25)
+	end
 end
 
 -- ─────────────────────────────────────────────────────────────

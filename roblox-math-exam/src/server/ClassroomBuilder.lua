@@ -49,6 +49,7 @@ export type Classroom = {
 	roomCenter: Vector3,
 	width: number,
 	depth: number,
+	usedAsset: boolean?,
 }
 
 local C = Config.Classroom
@@ -493,7 +494,7 @@ local function buildDesk(parent: Instance, index: number, row: number, column: n
 	seat.CFrame = base * CFrame.new(0, seatY + 0.2, seatZ)
 	seat.Anchored = true
 	seat.Transparency = 1
-	seat.CanCollide = false
+	seat.CanCollide = true   -- si no, caminar hasta el banco no te sienta
 	seat.TopSurface = Enum.SurfaceType.Smooth
 	seat.Parent = model
 
@@ -501,7 +502,7 @@ local function buildDesk(parent: Instance, index: number, row: number, column: n
 	-- Vertical, como una hoja de prueba de verdad (no apaisada).
 	local paper = Util.part({
 		Name = "HojaDePrueba",
-		Size = Vector3.new(2.3, 0.04, 3.1),
+		Size = Vector3.new(2.1, 0.04, 3.3),
 		CFrame = base * CFrame.new(0, topY + 0.11, 0.25) * CFrame.Angles(0, math.rad(-2), 0),
 		Color = WHITE,
 		Material = Enum.Material.SmoothPlastic,
@@ -612,6 +613,7 @@ local function buildFromAsset(model: Model, asset: Model, size: Vector3): Classr
 		roomCenter = center,
 		width = size.X,
 		depth = size.Z,
+		usedAsset = true,
 	}
 end
 

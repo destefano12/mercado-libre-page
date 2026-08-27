@@ -75,6 +75,8 @@ if not built then
 	}
 end
 
+RoundService.setAssetFailed(Config.Classroom.UseAsset and not classroom.usedAsset)
+
 if #classroom.desks == 0 then
 	warn("[Aula] El aula quedo sin bancos: mirá las lineas de arriba en el Output.")
 else

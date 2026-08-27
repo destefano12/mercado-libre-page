@@ -79,6 +79,8 @@ if not built then
 	}
 end
 
+RoundService.setAssetFailed(Config.Classroom.UseAsset and not classroom.usedAsset)
+
 if #classroom.desks == 0 then
 	warn("[Aula] El aula quedo sin bancos: mirá las lineas de arriba en el Output.")
 else
@@ -512,6 +514,7 @@ export type Classroom = {
 	roomCenter: Vector3,
 	width: number,
 	depth: number,
+	usedAsset: boolean?,
 }
 
 local C = Config.Classroom
@@ -956,7 +959,7 @@ local function buildDesk(parent: Instance, index: number, row: number, column: n
 	seat.CFrame = base * CFrame.new(0, seatY + 0.2, seatZ)
 	seat.Anchored = true
 	seat.Transparency = 1
-	seat.CanCollide = false
+	seat.CanCollide = true   -- si no, caminar hasta el banco no te sienta
 	seat.TopSurface = Enum.SurfaceType.Smooth
 	seat.Parent = model
 
@@ -964,7 +967,7 @@ local function buildDesk(parent: Instance, index: number, row: number, column: n
 	-- Vertical, como una hoja de prueba de verdad (no apaisada).
 	local paper = Util.part({
 		Name = "HojaDePrueba",
-		Size = Vector3.new(2.3, 0.04, 3.1),
+		Size = Vector3.new(2.1, 0.04, 3.3),
 		CFrame = base * CFrame.new(0, topY + 0.11, 0.25) * CFrame.Angles(0, math.rad(-2), 0),
 		Color = WHITE,
 		Material = Enum.Material.SmoothPlastic,
@@ -1075,6 +1078,7 @@ local function buildFromAsset(model: Model, asset: Model, size: Vector3): Classr
 		roomCenter = center,
 		width = size.X,
 		depth = size.Z,
+		usedAsset = true,
 	}
 end
 
@@ -1369,9 +1373,23 @@ function ExamService.seatPlayer(player: Player)
 	if not humanoid then
 		return
 	end
-	character:PivotTo(entry.desk.seat.CFrame * CFrame.new(0, 3, 0))
-	task.wait(0.1)
-	entry.desk.seat:Sit(humanoid)
+	-- A veces el personaje todavia se esta armando y el Sit no agarra:
+	-- se reintenta un par de veces antes de dejarlo pasar.
+	local seat = entry.desk.seat
+	for attempt = 1, 4 do
+		if humanoid.Parent == nil then
+			return
+		end
+		if humanoid.SeatPart == seat then
+			return
+		end
+		character:PivotTo(seat.CFrame * CFrame.new(0, 2.6, 0))
+		task.wait(0.15)
+		pcall(function()
+			seat:Sit(humanoid)
+		end)
+		task.wait(0.25)
+	end
 end
 
 -- ─────────────────────────────────────────────────────────────
@@ -1659,6 +1677,15 @@ end
 --- El cliente avisa que saco / guardo el celu. Esto es lo que mira el profe.
 function PhoneService.setOut(player: Player, out: boolean): boolean
 	local data = ensure(player)
+
+	-- Si el modelo se perdio (respawn, confiscacion, un weld roto), se
+	-- vuelve a soldar antes de intentar levantarlo. Era la causa de
+	-- "saco el celular y no aparece nada".
+	if out and (not data.model or not data.model.Parent) then
+		PhoneService.equip(player)
+		data = ensure(player)
+	end
+
 	if out then
 		local ok = PhoneService.isAvailable(player)
 		if not ok then
@@ -1827,6 +1854,8 @@ function PhoneService.askRoGPT(player: Player, photoId: string)
 		promptArgs = question.promptArgs,
 		steps = question.steps,
 		answer = question.choices[question.answerIndex],
+		-- La letra es lo que de verdad te sirve: marcas esa y listo.
+		answerLetter = string.sub("ABCD", question.answerIndex, question.answerIndex),
 		thinkTime = rng:NextNumber(P.ThinkTime.Min, P.ThinkTime.Max),
 	}
 end
@@ -1905,6 +1934,7 @@ local E = Config.Exam
 local RoundService = {}
 
 local state = {
+	assetFailed = false,
 	phase = "Preparacion",
 	timeLeft = 0,
 	roundNumber = 0,
@@ -2001,6 +2031,10 @@ function RoundService.addPlayer(player: Player)
 	pushRound(player)
 	ExamService.push(player)
 
+	if state.assetFailed then
+		RoundService.notify(player, "notify.assetFallback", "warn")
+	end
+
 	task.spawn(function()
 		task.wait(0.5)
 		ExamService.seatPlayer(player)
@@ -2015,8 +2049,10 @@ function RoundService.onCharacter(player: Player, character: Model)
 	if not humanoid then
 		return
 	end
+	-- Con JumpPower en 0 y sentado no hay forma de pararse: quedabas
+	-- trabado en el banco para siempre. Se salta y listo.
 	humanoid.UseJumpPower = true
-	humanoid.JumpPower = 0 -- en clase no se salta
+	humanoid.JumpPower = 48
 	humanoid.WalkSpeed = 14
 
 	-- El celular fisico se suelda al cuerpo apenas aparece el personaje,
@@ -2175,6 +2211,12 @@ function RoundService.start(classroom, teacher)
 			runPhase("Resultados", 15)
 		end
 	end)
+end
+
+--- El aula del catalogo no se pudo cargar: hay que avisarlo adentro del
+--- juego, no solo en el Output que nadie mira.
+function RoundService.setAssetFailed(failed: boolean)
+	state.assetFailed = failed
 end
 
 function RoundService.getPhase(): string
