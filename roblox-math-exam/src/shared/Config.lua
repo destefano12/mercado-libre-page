@@ -47,12 +47,14 @@ Config.Classroom = {
 Config.Exam = {
 	QuestionCount = 8,
 	RoundDuration = 300,        -- segundos de prueba
-	IntermissionDuration = 20,  -- entre rondas
+	IntermissionDuration = 12,  -- entre rondas
 	MaxGrade = 10,              -- escala 1..10
 	PassingGrade = 6,
 
 	-- Progresion de dificultad a lo largo de la prueba (indice -> dificultad)
 	DifficultyCurve = { 1, 1, 2, 2, 3, 3, 4, 4, 5, 5 },
+
+	WriteDuration = 2.4,        -- cuanto dura el gesto de escribir con el lapiz
 
 	PointsCorrect = 100,
 	PointsCorrectSolo = 160,    -- responder sin usar el celu vale mas
@@ -90,6 +92,7 @@ Config.Teacher = {
 	RiskGainInspect = 1.1,      -- por segundo, ademas te esta revisando la prueba
 	RiskGainHidden = 0.05,      -- por segundo, celu afuera pero no te ve
 	RiskDecay = 0.2,            -- por segundo, celu guardado
+	RiskDecayWriting = 0.55,    -- por segundo, si ademas estas escribiendo
 	RiskCaught = 1.0,
 	RiskWarning = 0.5,          -- desde aca el HUD se pone rojo
 }
@@ -131,16 +134,18 @@ Config.Camera = {
 	MenuFieldOfView = 42,
 }
 
--- Sonidos: dejalos vacios y no suena nada (sin warnings en consola).
--- Pone tus propios rbxassetid cuando tengas los efectos subidos.
+-- Sonidos. Son los que vienen adentro del motor de Roblox
+-- (rbxasset://), asi que existen siempre y no hay nada que subir.
+-- Si tenes efectos propios, cambia estos por tus rbxassetid.
 Config.Sounds = {
-	Shutter = "",       -- click de la camara
-	Send = "",          -- mensaje enviado
-	Reply = "",         -- RoGPT contesta
-	Correct = "",       -- respuesta correcta
-	Wrong = "",         -- respuesta incorrecta
-	Caught = "",        -- te pillaron
-	PhoneOut = "",      -- roce de sacar el celular
+	Shutter = "rbxasset://sounds/switch3.wav",              -- click de la camara
+	Send = "rbxasset://sounds/button.wav",                  -- mensaje enviado
+	Reply = "rbxasset://sounds/electronicpingshort.wav",    -- RoGPT contesta
+	Correct = "rbxasset://sounds/electronicpingshort.wav",  -- respuesta correcta
+	Wrong = "rbxasset://sounds/switch.wav",                 -- respuesta incorrecta
+	Caught = "rbxasset://sounds/snap.mp3",                  -- te pillaron
+	PhoneOut = "rbxasset://sounds/switch.wav",              -- sacar el celular
+	Write = "rbxasset://sounds/switch3.wav",                -- escribir con el lapiz
 }
 
 Config.Penalty = {

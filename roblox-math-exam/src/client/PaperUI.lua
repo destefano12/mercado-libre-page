@@ -3,12 +3,13 @@
 	PaperUI
 	------------------------------------------------------------------
 	La hoja de la prueba. No es una pantalla plana pegada a la camara:
-	es una SurfaceGui montada sobre la hoja fisica que esta apoyada en
-	el banco, con el Adornee puesto desde el PlayerGui (que es lo que
-	hace que los botones sean clickeables en el mundo 3D).
+	es una SurfaceGui montada sobre la hoja fisica apoyada en el banco,
+	con el Adornee puesto desde el PlayerGui (que es lo que hace que los
+	botones sean clickeables en el mundo 3D).
 
-	Se ve un ejercicio por vez, con sus cuatro opciones y una tira de
-	pestañas abajo para moverse entre los 8 ejercicios.
+	Formato vertical, como una hoja de verdad: encabezado arriba, el
+	ejercicio, las cuatro opciones una debajo de la otra, y abajo la
+	tira de numeros para moverse entre ejercicios.
 --]]
 
 local Players = game:GetService("Players")
@@ -51,6 +52,7 @@ function PaperUI.mount(paperPart: BasePart)
 	if gui then
 		gui:Destroy()
 	end
+	refs = {}
 
 	local playerGui = player:WaitForChild("PlayerGui")
 
@@ -59,10 +61,9 @@ function PaperUI.mount(paperPart: BasePart)
 		Adornee = paperPart,
 		Face = Enum.NormalId.Top,
 		SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud,
-		PixelsPerStud = 340,
-		LightInfluence = 0.25,
+		PixelsPerStud = 300,
+		LightInfluence = 0.2,
 		MaxDistance = 40,
-		AlwaysOnTop = false,
 		Active = true,  -- sin esto los botones no se pueden clickear en 3D
 		ResetOnSpawn = false,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
@@ -75,108 +76,104 @@ function PaperUI.mount(paperPart: BasePart)
 		BorderSizePixel = 0,
 	}, gui)
 
-	-- ── Encabezado ────────────────────────────────────────
-	local header = el("Frame", {
-		Size = UDim2.new(1, 0, 0, 92),
-		BackgroundTransparency = 1,
+	el("UIPadding", {
+		PaddingTop = UDim.new(0.03, 0),
+		PaddingBottom = UDim.new(0.03, 0),
+		PaddingLeft = UDim.new(0.06, 0),
+		PaddingRight = UDim.new(0.06, 0),
 	}, sheet)
 
+	-- ── Encabezado ────────────────────────────────────────
 	refs.headerTitle = el("TextLabel", {
-		Size = UDim2.new(0.62, 0, 0, 34),
-		Position = UDim2.fromOffset(28, 16),
+		Size = UDim2.fromScale(1, 0.045),
 		BackgroundTransparency = 1,
 		Font = Theme.FontBold,
 		Text = Strings.get("paper.title"),
 		TextColor3 = Theme.Paper.Ink,
-		TextSize = 30,
+		TextScaled = true,
 		TextXAlignment = Enum.TextXAlignment.Left,
-	}, header)
+	}, sheet)
 
 	refs.student = el("TextLabel", {
-		Size = UDim2.new(0.62, 0, 0, 24),
-		Position = UDim2.fromOffset(28, 52),
+		Position = UDim2.fromScale(0, 0.052),
+		Size = UDim2.fromScale(0.72, 0.028),
 		BackgroundTransparency = 1,
 		Font = Theme.Font,
 		Text = Strings.get("paper.student", { name = player.DisplayName }),
 		TextColor3 = Theme.Paper.InkSoft,
-		TextSize = 20,
+		TextScaled = true,
 		TextXAlignment = Enum.TextXAlignment.Left,
-	}, header)
+	}, sheet)
 
 	local gradeBox = el("Frame", {
-		Size = UDim2.fromOffset(120, 62),
-		Position = UDim2.new(1, -148, 0, 16),
-		BackgroundColor3 = Theme.Paper.Background,
-		BorderSizePixel = 0,
-	}, header)
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.fromScale(1, 0),
+		Size = UDim2.fromScale(0.2, 0.075),
+		BackgroundTransparency = 1,
+	}, sheet)
 	Util.roundify(gradeBox, 8, Theme.Paper.Line, 2)
 
 	refs.gradeLabel = el("TextLabel", {
-		Size = UDim2.new(1, 0, 0, 18),
-		Position = UDim2.fromOffset(0, 6),
+		Size = UDim2.fromScale(1, 0.32),
+		Position = UDim2.fromScale(0, 0.08),
 		BackgroundTransparency = 1,
 		Font = Theme.Font,
 		Text = Strings.get("paper.grade"),
 		TextColor3 = Theme.Paper.InkSoft,
-		TextSize = 14,
+		TextScaled = true,
 	}, gradeBox)
 
 	refs.grade = el("TextLabel", {
-		Size = UDim2.new(1, 0, 0, 34),
-		Position = UDim2.fromOffset(0, 22),
+		Size = UDim2.fromScale(1, 0.5),
+		Position = UDim2.fromScale(0, 0.42),
 		BackgroundTransparency = 1,
 		Font = Theme.FontBold,
 		Text = "-",
 		TextColor3 = Theme.Paper.Accent,
-		TextSize = 30,
+		TextScaled = true,
 	}, gradeBox)
 
 	el("Frame", {
-		Size = UDim2.new(1, -56, 0, 2),
-		Position = UDim2.fromOffset(28, 88),
+		Position = UDim2.fromScale(0, 0.092),
+		Size = UDim2.new(1, 0, 0, 2),
 		BackgroundColor3 = Theme.Paper.Line,
 		BorderSizePixel = 0,
-	}, header)
-
-	-- ── Cuerpo del ejercicio ──────────────────────────────
-	local body = el("Frame", {
-		Size = UDim2.new(1, -56, 1, -212),
-		Position = UDim2.fromOffset(28, 104),
-		BackgroundTransparency = 1,
 	}, sheet)
 
+	-- ── Ejercicio ─────────────────────────────────────────
 	refs.topic = el("TextLabel", {
-		Size = UDim2.new(1, 0, 0, 22),
+		Position = UDim2.fromScale(0, 0.115),
+		Size = UDim2.fromScale(1, 0.028),
 		BackgroundTransparency = 1,
 		Font = Theme.Font,
 		Text = "",
 		TextColor3 = Theme.Paper.Accent,
-		TextSize = 18,
+		TextScaled = true,
 		TextXAlignment = Enum.TextXAlignment.Left,
-	}, body)
+	}, sheet)
 
 	refs.prompt = el("TextLabel", {
-		Size = UDim2.new(1, 0, 0, 84),
-		Position = UDim2.fromOffset(0, 26),
+		Position = UDim2.fromScale(0, 0.155),
+		Size = UDim2.fromScale(1, 0.145),
 		BackgroundTransparency = 1,
 		Font = Theme.FontBold,
 		Text = "",
 		TextColor3 = Theme.Paper.Ink,
-		TextSize = 34,
+		TextSize = 46,
 		TextWrapped = true,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
-	}, body)
+	}, sheet)
 
+	-- ── Opciones, una debajo de la otra ───────────────────
 	local options = el("Frame", {
-		Size = UDim2.new(1, 0, 1, -118),
-		Position = UDim2.fromOffset(0, 118),
+		Position = UDim2.fromScale(0, 0.32),
+		Size = UDim2.fromScale(1, 0.44),
 		BackgroundTransparency = 1,
-	}, body)
+	}, sheet)
 
-	el("UIGridLayout", {
-		CellSize = UDim2.new(0.5, -10, 0.5, -10),
-		CellPadding = UDim2.fromOffset(20, 16),
+	el("UIListLayout", {
+		Padding = UDim.new(0.03, 0),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, options)
 
@@ -185,27 +182,28 @@ function PaperUI.mount(paperPart: BasePart)
 		local button = el("TextButton", {
 			Name = "Opcion" .. index,
 			LayoutOrder = index,
+			Size = UDim2.fromScale(1, 0.2275),
 			BackgroundColor3 = Theme.Paper.Background,
 			AutoButtonColor = false,
 			Font = Theme.Font,
 			Text = "",
 			TextColor3 = Theme.Paper.Ink,
-			TextSize = 26,
+			TextSize = 38,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			BorderSizePixel = 0,
 		}, options)
 		Util.roundify(button, 10, Theme.Paper.Line, 2)
 
-		el("UIPadding", { PaddingLeft = UDim.new(0, 58), PaddingRight = UDim.new(0, 12) }, button)
+		el("UIPadding", { PaddingLeft = UDim.new(0, 78), PaddingRight = UDim.new(0, 18) }, button)
 
 		local bullet = el("Frame", {
 			Name = "Bullet",
-			Size = UDim2.fromOffset(34, 34),
-			Position = UDim2.new(0, -48, 0.5, -17),
+			Size = UDim2.fromOffset(44, 44),
+			Position = UDim2.new(0, -62, 0.5, -22),
 			BackgroundColor3 = Theme.Paper.Background,
 			BorderSizePixel = 0,
 		}, button)
-		Util.roundify(bullet, 17, Theme.Paper.InkSoft, 2)
+		Util.roundify(bullet, 22, Theme.Paper.InkSoft, 2)
 
 		el("TextLabel", {
 			Name = "Letra",
@@ -214,7 +212,7 @@ function PaperUI.mount(paperPart: BasePart)
 			Font = Theme.FontBold,
 			Text = LETTERS[index],
 			TextColor3 = Theme.Paper.InkSoft,
-			TextSize = 20,
+			TextSize = 26,
 		}, bullet)
 
 		button.MouseButton1Click:Connect(function()
@@ -226,39 +224,42 @@ function PaperUI.mount(paperPart: BasePart)
 		refs.options[index] = button
 	end
 
-	-- ── Pestañas de ejercicios ────────────────────────────
+	-- ── Tira de ejercicios ────────────────────────────────
+	el("Frame", {
+		Position = UDim2.fromScale(0, 0.79),
+		Size = UDim2.new(1, 0, 0, 2),
+		BackgroundColor3 = Theme.Paper.Line,
+		BorderSizePixel = 0,
+	}, sheet)
+
 	local tabs = el("Frame", {
-		Size = UDim2.new(1, -56, 0, 64),
-		Position = UDim2.new(0, 28, 1, -84),
+		Position = UDim2.fromScale(0, 0.815),
+		Size = UDim2.fromScale(1, 0.075),
 		BackgroundTransparency = 1,
 	}, sheet)
 
 	el("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
-		Padding = UDim.new(0, 10),
+		Padding = UDim.new(0.014, 0),
 		SortOrder = Enum.SortOrder.LayoutOrder,
+		HorizontalAlignment = Enum.HorizontalAlignment.Left,
 		VerticalAlignment = Enum.VerticalAlignment.Center,
 	}, tabs)
 
 	refs.tabs = {}
 	refs.tabsFrame = tabs
 
-	el("Frame", {
-		Size = UDim2.new(1, -56, 0, 2),
-		Position = UDim2.new(0, 28, 1, -96),
-		BackgroundColor3 = Theme.Paper.Line,
-		BorderSizePixel = 0,
-	}, sheet)
-
 	refs.footer = el("TextLabel", {
-		Size = UDim2.new(1, -56, 0, 20),
-		Position = UDim2.new(0, 28, 1, -22),
+		Position = UDim2.fromScale(0, 0.915),
+		Size = UDim2.fromScale(1, 0.06),
 		BackgroundTransparency = 1,
 		Font = Theme.Font,
 		Text = Strings.get("paper.footer.default"),
 		TextColor3 = Theme.Paper.InkSoft,
-		TextSize = 16,
+		TextSize = 26,
+		TextWrapped = true,
 		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
 	}, sheet)
 
 	return gui
@@ -281,16 +282,21 @@ local function buildTabs(count: number)
 		local tab = el("TextButton", {
 			Name = "Tab" .. index,
 			LayoutOrder = index,
-			Size = UDim2.fromOffset(46, 46),
+			Size = UDim2.fromScale(0.098, 1),
 			BackgroundColor3 = Theme.Paper.Background,
 			AutoButtonColor = false,
 			Font = Theme.FontBold,
 			Text = tostring(index),
 			TextColor3 = Theme.Paper.InkSoft,
-			TextSize = 20,
+			TextScaled = true,
 			BorderSizePixel = 0,
 		}, refs.tabsFrame)
-		Util.roundify(tab, 10, Theme.Paper.Line, 2)
+		Util.roundify(tab, 8, Theme.Paper.Line, 2)
+
+		el("UIPadding", {
+			PaddingTop = UDim.new(0.22, 0),
+			PaddingBottom = UDim.new(0.22, 0),
+		}, tab)
 
 		tab.MouseButton1Click:Connect(function()
 			PaperUI.setCurrent(index)
@@ -304,7 +310,7 @@ function PaperUI.setCurrent(index: number)
 	if not snapshot then
 		return
 	end
-	PaperUI.current = math.clamp(index, 1, #snapshot.questions)
+	PaperUI.current = math.clamp(index, 1, math.max(1, #snapshot.questions))
 	PaperUI.render()
 	if PaperUI.onSelect then
 		PaperUI.onSelect(PaperUI.current)
@@ -321,7 +327,7 @@ function PaperUI.firstUnanswered(): number
 			return index
 		end
 	end
-	return #snapshot.questions
+	return math.max(1, #snapshot.questions)
 end
 
 function PaperUI.setSnapshot(snapshot: any)
@@ -338,9 +344,13 @@ end
 
 function PaperUI.render()
 	local snapshot = PaperUI.snapshot
-	if not gui or not snapshot then
+	if not gui or not snapshot or not refs.topic then
 		return
 	end
+
+	refs.headerTitle.Text = Strings.get("paper.title")
+	refs.student.Text = Strings.get("paper.student", { name = player.DisplayName })
+	refs.gradeLabel.Text = Strings.get("paper.grade")
 
 	buildTabs(#snapshot.questions)
 
@@ -401,7 +411,6 @@ function PaperUI.render()
 	for index, tab in refs.tabs do
 		local answered = snapshot.answers[index]
 		local stroke = tab:FindFirstChildOfClass("UIStroke")
-		local isCurrent = index == PaperUI.current
 
 		if answered then
 			local color = answered.correct and Theme.Paper.Correct or Theme.Paper.Wrong
@@ -418,7 +427,7 @@ function PaperUI.render()
 			end
 		end
 
-		if isCurrent then
+		if index == PaperUI.current then
 			tab.TextColor3 = Theme.Paper.Accent
 			if stroke then
 				stroke.Color = Theme.Paper.Accent
@@ -436,10 +445,12 @@ function PaperUI.render()
 	else
 		refs.footer.Text = Strings.get("paper.footer.default")
 	end
+end
 
-	refs.headerTitle.Text = Strings.get("paper.title")
-	refs.student.Text = Strings.get("paper.student", { name = player.DisplayName })
-	refs.gradeLabel.Text = Strings.get("paper.grade")
+function PaperUI.setFooter(text: string)
+	if refs.footer then
+		refs.footer.Text = text
+	end
 end
 
 function PaperUI.setEnabled(enabled: boolean)
@@ -453,6 +464,7 @@ function PaperUI.destroy()
 		gui:Destroy()
 		gui = nil
 	end
+	refs = {}
 end
 
 return PaperUI

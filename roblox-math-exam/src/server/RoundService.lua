@@ -22,6 +22,7 @@ local Net = require(Shared:WaitForChild("Net"))
 local ExamService = require(script.Parent:WaitForChild("ExamService"))
 local PhoneService = require(script.Parent:WaitForChild("PhoneService"))
 local SuspicionService = require(script.Parent:WaitForChild("SuspicionService"))
+local ToolService = require(script.Parent:WaitForChild("ToolService"))
 
 local E = Config.Exam
 
@@ -124,13 +125,13 @@ function RoundService.addPlayer(player: Player)
 	pushRound(player)
 	ExamService.push(player)
 
-	if state.phase == "Prueba" then
-		task.spawn(function()
-			task.wait(0.5)
-			ExamService.seatPlayer(player)
+	task.spawn(function()
+		task.wait(0.5)
+		ExamService.seatPlayer(player)
+		if state.phase == "Prueba" then
 			RoundService.notify(player, "notify.lateJoin", "info")
-		end)
-	end
+		end
+	end)
 end
 
 function RoundService.onCharacter(player: Player, character: Model)
@@ -142,20 +143,21 @@ function RoundService.onCharacter(player: Player, character: Model)
 	humanoid.JumpPower = 0 -- en clase no se salta
 	humanoid.WalkSpeed = 14
 
-	-- El celular fisico se suelda al cuerpo apenas aparece el personaje.
+	-- El celular fisico se suelda al cuerpo apenas aparece el personaje,
+	-- y el lapiz y el celular entran a la mochila.
 	PhoneService.equip(player)
+	ToolService.give(player)
 
 	humanoid.Died:Connect(function()
 		SuspicionService.reset(player)
 		PhoneService.setOut(player, false)
 	end)
 
-	if state.phase == "Prueba" then
-		task.spawn(function()
-			task.wait(0.6)
-			ExamService.seatPlayer(player)
-		end)
-	end
+	-- Siempre a su banco: es una clase, no un lobby.
+	task.spawn(function()
+		task.wait(0.6)
+		ExamService.seatPlayer(player)
+	end)
 end
 
 --- Lo agarraron con el celu.
@@ -241,14 +243,20 @@ function RoundService.start(classroom, teacher)
 	state.teacher = teacher
 
 	task.spawn(function()
+		local firstRound = true
 		while true do
 			-- ── Preparacion ─────────────────────────────
-			state.results = {}
-			for _, player in Players:GetPlayers() do
-				PhoneService.reset(player)
-				SuspicionService.reset(player)
+			-- La primera ronda arranca ya: nadie quiere entrar a un
+			-- juego y mirar una hoja en blanco veinte segundos.
+			if not firstRound then
+				state.results = {}
+				for _, player in Players:GetPlayers() do
+					PhoneService.reset(player)
+					SuspicionService.reset(player)
+				end
+				runPhase("Preparacion", E.IntermissionDuration)
 			end
-			runPhase("Preparacion", E.IntermissionDuration)
+			firstRound = false
 
 			-- ── Prueba ──────────────────────────────────
 			state.roundNumber += 1

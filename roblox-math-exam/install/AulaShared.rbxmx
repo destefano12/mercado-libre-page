@@ -569,12 +569,14 @@ Config.Classroom = {
 Config.Exam = {
 	QuestionCount = 8,
 	RoundDuration = 300,        -- segundos de prueba
-	IntermissionDuration = 20,  -- entre rondas
+	IntermissionDuration = 12,  -- entre rondas
 	MaxGrade = 10,              -- escala 1..10
 	PassingGrade = 6,
 
 	-- Progresion de dificultad a lo largo de la prueba (indice -> dificultad)
 	DifficultyCurve = { 1, 1, 2, 2, 3, 3, 4, 4, 5, 5 },
+
+	WriteDuration = 2.4,        -- cuanto dura el gesto de escribir con el lapiz
 
 	PointsCorrect = 100,
 	PointsCorrectSolo = 160,    -- responder sin usar el celu vale mas
@@ -612,6 +614,7 @@ Config.Teacher = {
 	RiskGainInspect = 1.1,      -- por segundo, ademas te esta revisando la prueba
 	RiskGainHidden = 0.05,      -- por segundo, celu afuera pero no te ve
 	RiskDecay = 0.2,            -- por segundo, celu guardado
+	RiskDecayWriting = 0.55,    -- por segundo, si ademas estas escribiendo
 	RiskCaught = 1.0,
 	RiskWarning = 0.5,          -- desde aca el HUD se pone rojo
 }
@@ -653,16 +656,18 @@ Config.Camera = {
 	MenuFieldOfView = 42,
 }
 
--- Sonidos: dejalos vacios y no suena nada (sin warnings en consola).
--- Pone tus propios rbxassetid cuando tengas los efectos subidos.
+-- Sonidos. Son los que vienen adentro del motor de Roblox
+-- (rbxasset://), asi que existen siempre y no hay nada que subir.
+-- Si tenes efectos propios, cambia estos por tus rbxassetid.
 Config.Sounds = {
-	Shutter = "",       -- click de la camara
-	Send = "",          -- mensaje enviado
-	Reply = "",         -- RoGPT contesta
-	Correct = "",       -- respuesta correcta
-	Wrong = "",         -- respuesta incorrecta
-	Caught = "",        -- te pillaron
-	PhoneOut = "",      -- roce de sacar el celular
+	Shutter = "rbxasset://sounds/switch3.wav",              -- click de la camara
+	Send = "rbxasset://sounds/button.wav",                  -- mensaje enviado
+	Reply = "rbxasset://sounds/electronicpingshort.wav",    -- RoGPT contesta
+	Correct = "rbxasset://sounds/electronicpingshort.wav",  -- respuesta correcta
+	Wrong = "rbxasset://sounds/switch.wav",                 -- respuesta incorrecta
+	Caught = "rbxasset://sounds/snap.mp3",                  -- te pillaron
+	PhoneOut = "rbxasset://sounds/switch.wav",              -- sacar el celular
+	Write = "rbxasset://sounds/switch3.wav",                -- escribir con el lapiz
 }
 
 Config.Penalty = {
@@ -1239,6 +1244,12 @@ PhoneModel.RAISED_C0 = CFrame.new(0.55, 0.15, -1.35)
 	* CFrame.Angles(0, math.pi, 0)
 	* CFrame.Angles(math.rad(-22), 0, 0)
 
+-- Apuntando a la hoja: el celu baja y se inclina para que la camara
+-- mire el banco. Antes disparabas con el celu mirando al techo.
+PhoneModel.AIM_C0 = CFrame.new(0.35, -0.35, -1.5)
+	* CFrame.Angles(0, math.pi, 0)
+	* CFrame.Angles(math.rad(-72), 0, 0)
+
 local function findHold(character: Model): BasePart?
 	return (character:FindFirstChild("HumanoidRootPart") :: BasePart?)
 		or (character:FindFirstChild("UpperTorso") :: BasePart?)
@@ -1329,6 +1340,20 @@ function PhoneModel.setRaised(weld: Weld, raised: boolean)
 	TweenService:Create(weld, TweenInfo.new(Config.Phone.RaiseTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 		C0 = goal,
 	}):Play()
+end
+
+--- Baja el celu a apuntar la hoja, dispara, y lo vuelve a subir.
+function PhoneModel.aimAtPaper(weld: Weld)
+	TweenService:Create(weld, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		C0 = PhoneModel.AIM_C0,
+	}):Play()
+	task.delay(0.55, function()
+		if weld.Parent then
+			TweenService:Create(weld, TweenInfo.new(0.28, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				C0 = PhoneModel.RAISED_C0,
+			}):Play()
+		end
+	end)
 end
 
 return PhoneModel

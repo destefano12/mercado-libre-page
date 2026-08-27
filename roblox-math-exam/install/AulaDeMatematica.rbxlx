@@ -604,12 +604,14 @@ Config.Classroom = {
 Config.Exam = {
 	QuestionCount = 8,
 	RoundDuration = 300,        -- segundos de prueba
-	IntermissionDuration = 20,  -- entre rondas
+	IntermissionDuration = 12,  -- entre rondas
 	MaxGrade = 10,              -- escala 1..10
 	PassingGrade = 6,
 
 	-- Progresion de dificultad a lo largo de la prueba (indice -> dificultad)
 	DifficultyCurve = { 1, 1, 2, 2, 3, 3, 4, 4, 5, 5 },
+
+	WriteDuration = 2.4,        -- cuanto dura el gesto de escribir con el lapiz
 
 	PointsCorrect = 100,
 	PointsCorrectSolo = 160,    -- responder sin usar el celu vale mas
@@ -647,6 +649,7 @@ Config.Teacher = {
 	RiskGainInspect = 1.1,      -- por segundo, ademas te esta revisando la prueba
 	RiskGainHidden = 0.05,      -- por segundo, celu afuera pero no te ve
 	RiskDecay = 0.2,            -- por segundo, celu guardado
+	RiskDecayWriting = 0.55,    -- por segundo, si ademas estas escribiendo
 	RiskCaught = 1.0,
 	RiskWarning = 0.5,          -- desde aca el HUD se pone rojo
 }
@@ -688,16 +691,18 @@ Config.Camera = {
 	MenuFieldOfView = 42,
 }
 
--- Sonidos: dejalos vacios y no suena nada (sin warnings en consola).
--- Pone tus propios rbxassetid cuando tengas los efectos subidos.
+-- Sonidos. Son los que vienen adentro del motor de Roblox
+-- (rbxasset://), asi que existen siempre y no hay nada que subir.
+-- Si tenes efectos propios, cambia estos por tus rbxassetid.
 Config.Sounds = {
-	Shutter = "",       -- click de la camara
-	Send = "",          -- mensaje enviado
-	Reply = "",         -- RoGPT contesta
-	Correct = "",       -- respuesta correcta
-	Wrong = "",         -- respuesta incorrecta
-	Caught = "",        -- te pillaron
-	PhoneOut = "",      -- roce de sacar el celular
+	Shutter = "rbxasset://sounds/switch3.wav",              -- click de la camara
+	Send = "rbxasset://sounds/button.wav",                  -- mensaje enviado
+	Reply = "rbxasset://sounds/electronicpingshort.wav",    -- RoGPT contesta
+	Correct = "rbxasset://sounds/electronicpingshort.wav",  -- respuesta correcta
+	Wrong = "rbxasset://sounds/switch.wav",                 -- respuesta incorrecta
+	Caught = "rbxasset://sounds/snap.mp3",                  -- te pillaron
+	PhoneOut = "rbxasset://sounds/switch.wav",              -- sacar el celular
+	Write = "rbxasset://sounds/switch3.wav",                -- escribir con el lapiz
 }
 
 Config.Penalty = {
@@ -1274,6 +1279,12 @@ PhoneModel.RAISED_C0 = CFrame.new(0.55, 0.15, -1.35)
 	* CFrame.Angles(0, math.pi, 0)
 	* CFrame.Angles(math.rad(-22), 0, 0)
 
+-- Apuntando a la hoja: el celu baja y se inclina para que la camara
+-- mire el banco. Antes disparabas con el celu mirando al techo.
+PhoneModel.AIM_C0 = CFrame.new(0.35, -0.35, -1.5)
+	* CFrame.Angles(0, math.pi, 0)
+	* CFrame.Angles(math.rad(-72), 0, 0)
+
 local function findHold(character: Model): BasePart?
 	return (character:FindFirstChild("HumanoidRootPart") :: BasePart?)
 		or (character:FindFirstChild("UpperTorso") :: BasePart?)
@@ -1364,6 +1375,20 @@ function PhoneModel.setRaised(weld: Weld, raised: boolean)
 	TweenService:Create(weld, TweenInfo.new(Config.Phone.RaiseTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 		C0 = goal,
 	}):Play()
+end
+
+--- Baja el celu a apuntar la hoja, dispara, y lo vuelve a subir.
+function PhoneModel.aimAtPaper(weld: Weld)
+	TweenService:Create(weld, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		C0 = PhoneModel.AIM_C0,
+	}):Play()
+	task.delay(0.55, function()
+		if weld.Parent then
+			TweenService:Create(weld, TweenInfo.new(0.28, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				C0 = PhoneModel.RAISED_C0,
+			}):Play()
+		end
+	end)
 end
 
 return PhoneModel
@@ -2259,7 +2284,7 @@ return Util
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Script" referent="RBX23">
+    <Item class="Script" referent="RBX24">
       <Properties>
         <string name="Name">Server</string>
         <ProtectedString name="Source"><![CDATA[--!strict
@@ -2296,6 +2321,7 @@ local PhoneService = require(script:WaitForChild("PhoneService"))
 local SuspicionService = require(script:WaitForChild("SuspicionService"))
 local RoundService = require(script:WaitForChild("RoundService"))
 local StudentNPCs = require(script:WaitForChild("StudentNPCs"))
+local ToolService = require(script:WaitForChild("ToolService"))
 local TeacherAI = require(script:WaitForChild("TeacherAI"))
 
 -- ─────────────────────────────────────────────────────────────
@@ -2363,12 +2389,14 @@ spawnLocation.Neutral = true
 -- ─────────────────────────────────────────────────────────────
 
 ExamService.init(classroom)
+-- La prueba existe desde el segundo cero: la hoja nunca esta en blanco.
+ExamService.newRound(os.time())
 
 -- Cada pieza va en su propio pcall: si el rig del profe o los companeros
 -- fallan por algo del entorno, el aula y la prueba tienen que seguir
 -- funcionando igual (y el Output tiene que decir por que).
 local teacher
-local built, teacherError = pcall(function()
+local teacherBuilt, teacherError = pcall(function()
 	teacher = TeacherAI.new(classroom, function(player)
 		RoundService.handleCatch(player)
 		-- Todo el curso se da vuelta a mirar. Es media la gracia.
@@ -2376,7 +2404,7 @@ local built, teacherError = pcall(function()
 	end)
 	teacher:start()
 end)
-if built then
+if teacherBuilt then
 	print("[Aula] Profesor en el aula.")
 else
 	warn("[Aula] No se pudo crear al profesor: " .. tostring(teacherError))
@@ -2403,6 +2431,7 @@ if teacher then
 		-- Riesgo al maximo: el profe deja lo que estaba haciendo y viene.
 		teacher:confront(player)
 	end)
+	SuspicionService.setWritingCheck(ToolService.isWriting)
 	SuspicionService.start()
 end
 PhoneService.start()
@@ -2519,13 +2548,16 @@ RoundService.start(classroom, teacher)
 -- runtime. Viene puesta en ShadowMap desde el archivo del lugar, y si
 -- abris esto en un lugar tuyo la ponés a mano en Lighting > Technology.
 local ok, err = pcall(function()
-	Lighting.Ambient = Color3.fromRGB(90, 92, 102)
-	Lighting.OutdoorAmbient = Color3.fromRGB(115, 120, 132)
-	Lighting.Brightness = 2.2
-	Lighting.ClockTime = 10.5
-	Lighting.GeographicLatitude = -34.6
-	Lighting.EnvironmentDiffuseScale = 0.6
-	Lighting.EnvironmentSpecularScale = 0.4
+	-- Luz de aula, no de quirofano: el brillo fuerte de antes quemaba
+	-- todo apenas entrabas.
+	Lighting.Ambient = Color3.fromRGB(78, 80, 90)
+	Lighting.OutdoorAmbient = Color3.fromRGB(96, 100, 112)
+	Lighting.Brightness = 1.1
+	Lighting.ExposureCompensation = -0.15
+	Lighting.ClockTime = 9.5
+	Lighting.GeographicLatitude = 41
+	Lighting.EnvironmentDiffuseScale = 0.45
+	Lighting.EnvironmentSpecularScale = 0.25
 	Lighting.GlobalShadows = true
 	Lighting.FogEnd = 400
 
@@ -3047,10 +3079,11 @@ local function buildDesk(parent: Instance, index: number, row: number, column: n
 	seat.Parent = model
 
 	-- La hoja de la prueba, apoyada donde la tendrias vos
+	-- Vertical, como una hoja de prueba de verdad (no apaisada).
 	local paper = Util.part({
 		Name = "HojaDePrueba",
-		Size = Vector3.new(3.1, 0.04, 2.2),
-		CFrame = base * CFrame.new(0, topY + 0.11, 0.15) * CFrame.Angles(0, math.rad(-2), 0),
+		Size = Vector3.new(2.3, 0.04, 3.1),
+		CFrame = base * CFrame.new(0, topY + 0.11, 0.25) * CFrame.Angles(0, math.rad(-2), 0),
 		Color = WHITE,
 		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
@@ -3788,6 +3821,11 @@ function PhoneService.takePhoto(player: Player, questionId: number)
 	data.battery = math.max(0, data.battery - P.BatteryPerPhoto)
 	data.nextPhotoAt = now + P.PhotoCooldown
 
+	-- El celu se inclina hacia la hoja mientras dispara.
+	if data.weld and data.weld.Parent then
+		PhoneModel.aimAtPaper(data.weld)
+	end
+
 	local photo: Photo = {
 		id = newPhotoId(player, data),
 		questionId = questionId,
@@ -3922,6 +3960,7 @@ local Net = require(Shared:WaitForChild("Net"))
 local ExamService = require(script.Parent:WaitForChild("ExamService"))
 local PhoneService = require(script.Parent:WaitForChild("PhoneService"))
 local SuspicionService = require(script.Parent:WaitForChild("SuspicionService"))
+local ToolService = require(script.Parent:WaitForChild("ToolService"))
 
 local E = Config.Exam
 
@@ -4024,13 +4063,13 @@ function RoundService.addPlayer(player: Player)
 	pushRound(player)
 	ExamService.push(player)
 
-	if state.phase == "Prueba" then
-		task.spawn(function()
-			task.wait(0.5)
-			ExamService.seatPlayer(player)
+	task.spawn(function()
+		task.wait(0.5)
+		ExamService.seatPlayer(player)
+		if state.phase == "Prueba" then
 			RoundService.notify(player, "notify.lateJoin", "info")
-		end)
-	end
+		end
+	end)
 end
 
 function RoundService.onCharacter(player: Player, character: Model)
@@ -4042,20 +4081,21 @@ function RoundService.onCharacter(player: Player, character: Model)
 	humanoid.JumpPower = 0 -- en clase no se salta
 	humanoid.WalkSpeed = 14
 
-	-- El celular fisico se suelda al cuerpo apenas aparece el personaje.
+	-- El celular fisico se suelda al cuerpo apenas aparece el personaje,
+	-- y el lapiz y el celular entran a la mochila.
 	PhoneService.equip(player)
+	ToolService.give(player)
 
 	humanoid.Died:Connect(function()
 		SuspicionService.reset(player)
 		PhoneService.setOut(player, false)
 	end)
 
-	if state.phase == "Prueba" then
-		task.spawn(function()
-			task.wait(0.6)
-			ExamService.seatPlayer(player)
-		end)
-	end
+	-- Siempre a su banco: es una clase, no un lobby.
+	task.spawn(function()
+		task.wait(0.6)
+		ExamService.seatPlayer(player)
+	end)
 end
 
 --- Lo agarraron con el celu.
@@ -4141,14 +4181,20 @@ function RoundService.start(classroom, teacher)
 	state.teacher = teacher
 
 	task.spawn(function()
+		local firstRound = true
 		while true do
 			-- ── Preparacion ─────────────────────────────
-			state.results = {}
-			for _, player in Players:GetPlayers() do
-				PhoneService.reset(player)
-				SuspicionService.reset(player)
+			-- La primera ronda arranca ya: nadie quiere entrar a un
+			-- juego y mirar una hoja en blanco veinte segundos.
+			if not firstRound then
+				state.results = {}
+				for _, player in Players:GetPlayers() do
+					PhoneService.reset(player)
+					SuspicionService.reset(player)
+				end
+				runPhase("Preparacion", E.IntermissionDuration)
 			end
-			runPhase("Preparacion", E.IntermissionDuration)
+			firstRound = false
 
 			-- ── Prueba ──────────────────────────────────
 			state.roundNumber += 1
@@ -4222,8 +4268,10 @@ return RoundService
 	cambia de humor) desde un solo loop.
 --]]
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local ServerStorage = game:GetService("ServerStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local CharacterArt = require(Shared:WaitForChild("CharacterArt"))
@@ -4282,6 +4330,8 @@ type Student = {
 	desk: any,
 	model: Model,
 	face: any,
+	neck: Motor6D?,
+	neckBase: CFrame?,
 	head: BasePart,
 	headBase: CFrame,
 	forearm: BasePart,
@@ -4320,6 +4370,120 @@ local function piece(model: Model, name: string, size: Vector3, cf: CFrame, colo
 		CanCollide = false,
 		Parent = model,
 	})
+end
+
+-- Un solo avatar de verdad y despues clones: pedirle veinte a Roblox
+-- de a uno tarda una eternidad al arrancar.
+local template: Model? = nil
+local templateTried = false
+
+local function avatarTemplate(): Model?
+	if templateTried then
+		return template
+	end
+	templateTried = true
+
+	local ok, model = pcall(function()
+		local description = Instance.new("HumanoidDescription")
+		return Players:CreateHumanoidModelFromDescription(description, Enum.HumanoidRigType.R15)
+	end)
+	if ok and model then
+		model.Name = "PlantillaAlumno"
+		model.Parent = ServerStorage
+		template = model
+	end
+	return template
+end
+
+local SIT_ANIMATION = "rbxassetid://2506281703"
+
+--- Alumno con avatar de Roblox: cuerpo real, sentado en el banco.
+local function buildAvatarStudent(desk: any, index: number): Student?
+	local source = avatarTemplate()
+	if not source then
+		return nil
+	end
+
+	local model = source:Clone()
+	model.Name = "Alumno_" .. index
+
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	local head = model:FindFirstChild("Head") :: BasePart?
+	if not humanoid or not head then
+		model:Destroy()
+		return nil
+	end
+
+	local skin = SKINS[rng:NextInteger(1, #SKINS)]
+	local shirt = SWEATERS[rng:NextInteger(1, #SWEATERS)]
+	local pants = PANTS[rng:NextInteger(1, #PANTS)]
+	local shoes = SNEAKERS[rng:NextInteger(1, #SNEAKERS)]
+
+	local COLORS = {
+		Head = skin, LeftHand = skin, RightHand = skin, LeftLowerArm = skin, RightLowerArm = skin,
+		UpperTorso = shirt, LowerTorso = shirt, LeftUpperArm = shirt, RightUpperArm = shirt,
+		LeftUpperLeg = pants, RightUpperLeg = pants, LeftLowerLeg = pants, RightLowerLeg = pants,
+		LeftFoot = shoes, RightFoot = shoes,
+	}
+	for name, color in COLORS do
+		local part = model:FindFirstChild(name)
+		if part and part:IsA("BasePart") then
+			part.Color = color
+		end
+	end
+
+	CharacterArt.attachHair(head, CharacterArt.HairStyles[rng:NextInteger(1, #CharacterArt.HairStyles)],
+		HAIR_COLORS[rng:NextInteger(1, #HAIR_COLORS)])
+
+	humanoid.DisplayName = NAMES[((index - 1) % #NAMES) + 1]
+	humanoid.NameDisplayDistance = 32
+	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	humanoid.WalkSpeed = 0
+	humanoid.JumpPower = 0
+
+	model.Parent = classroom.model
+	model:PivotTo(desk.seat.CFrame * CFrame.new(0, 2.6, 0))
+
+	-- Sentarlo y ponerle la pose de sentado del propio Roblox
+	task.defer(function()
+		if desk.seat and humanoid.Parent then
+			desk.seat:Sit(humanoid)
+		end
+		local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator", humanoid)
+		pcall(function()
+			local animation = Instance.new("Animation")
+			animation.AnimationId = SIT_ANIMATION
+			local track = animator:LoadAnimation(animation)
+			track.Priority = Enum.AnimationPriority.Idle
+			track.Looped = true
+			track:Play()
+		end)
+	end)
+
+	local neck = model:FindFirstChild("Neck", true)
+
+	return {
+		desk = desk,
+		model = model,
+		face = nil,
+		head = head,
+		headBase = head.CFrame,
+		neck = if neck and neck:IsA("Motor6D") then neck else nil,
+		neckBase = if neck and neck:IsA("Motor6D") then neck.C0 else nil,
+		forearm = head,
+		forearmBase = head.CFrame,
+		hand = head,
+		handBase = head.CFrame,
+		torso = head,
+		torsoBase = head.CFrame,
+		phase = rng:NextNumber() * math.pi * 2,
+		writeSpeed = rng:NextNumber(2.2, 3.6),
+		mood = "concentrado",
+		moodUntil = 0,
+		glanceUntil = 0,
+		lastYaw = 0,
+		lastPitch = 0,
+	}
 end
 
 local function buildStudent(desk: any, index: number): Student
@@ -4423,6 +4587,8 @@ local function buildStudent(desk: any, index: number): Student
 		desk = desk,
 		model = model,
 		face = face,
+		neck = nil,
+		neckBase = nil,
 		head = head,
 		headBase = headCF,
 		forearm = forearm,
@@ -4455,7 +4621,7 @@ function StudentNPCs.occupy(desk: any)
 	if not classroom or students[desk] then
 		return
 	end
-	students[desk] = buildStudent(desk, desk.index)
+	students[desk] = buildAvatarStudent(desk, desk.index) or buildStudent(desk, desk.index)
 	desk.model:SetAttribute("Ocupado", true)
 end
 
@@ -4508,11 +4674,12 @@ function StudentNPCs.start()
 		local teacherState = teacher and teacher:getState() or "Patrullando"
 
 		for _, student in students do
-			-- Mano que escribe: circulitos chicos sobre la hoja. Se mueve la
-			-- mano y nada mas: veinte alumnos moviendo medio cuerpo cada
-			-- frame es plata tirada en replicacion.
-			local t = now * student.writeSpeed + student.phase
-			student.hand.CFrame = student.handBase * CFrame.new(math.sin(t) * 0.12, 0, math.cos(t * 1.7) * 0.09)
+			-- Mano que escribe: circulitos chicos sobre la hoja. Solo en
+			-- el rig propio; el avatar ya tiene su animacion de sentado.
+			if not student.neck then
+				local t = now * student.writeSpeed + student.phase
+				student.hand.CFrame = student.handBase * CFrame.new(math.sin(t) * 0.12, 0, math.cos(t * 1.7) * 0.09)
+			end
 
 			-- La cabeza: mira la hoja, salvo que el profe este cerca
 			local yaw, pitch = 0, math.rad(18)
@@ -4537,14 +4704,14 @@ function StudentNPCs.start()
 			-- Miradita de reojo al banco de al lado, que para eso estamos
 			if now > student.glanceUntil then
 				student.glanceUntil = now + rng:NextNumber(6, 16)
-				if rng:NextNumber() < 0.35 then
+				if student.face and rng:NextNumber() < 0.35 then
 					student.face.look(rng:NextInteger(0, 1) == 0 and -1 or 1, 0)
 					task.delay(1.2, function()
 						if student.model.Parent then
 							student.face.look(0, 0.2)
 						end
 					end)
-				elseif rng:NextNumber() < 0.5 then
+				elseif student.face and rng:NextNumber() < 0.5 then
 					student.face.blink()
 				end
 			end
@@ -4553,12 +4720,19 @@ function StudentNPCs.start()
 				mood = student.mood
 			end
 
-			student.face.setExpression(mood)
+			if student.face then
+				student.face.setExpression(mood)
+			end
 
 			-- La cabeza solo se reescribe si de verdad se movio.
 			if math.abs(yaw - student.lastYaw) > 0.02 or math.abs(pitch - student.lastPitch) > 0.02 then
 				student.lastYaw, student.lastPitch = yaw, pitch
-				student.head.CFrame = student.headBase * CFrame.Angles(pitch, yaw, 0)
+				if student.neck and student.neckBase then
+					-- Avatar: la cabeza cuelga del cuello, no se mueve suelta.
+					student.neck.C0 = student.neckBase * CFrame.Angles(pitch * 0.5, yaw, 0)
+				else
+					student.head.CFrame = student.headBase * CFrame.Angles(pitch, yaw, 0)
+				end
 			end
 		end
 	end)
@@ -4608,6 +4782,7 @@ type Entry = {
 }
 
 local entries: { [Player]: Entry } = {}
+local isWriting: ((Player) -> boolean)? = nil
 local teacher: any = nil
 local onCaught: ((Player) -> ())? = nil
 local active = false
@@ -4631,6 +4806,11 @@ end
 function SuspicionService.init(teacherRef: any, caughtCallback: (Player) -> ())
 	teacher = teacherRef
 	onCaught = caughtCallback
+end
+
+--- Quien esta escribiendo con el lapiz pasa por aplicado.
+function SuspicionService.setWritingCheck(check: (Player) -> boolean)
+	isWriting = check
 end
 
 function SuspicionService.setPhoneOut(player: Player, out: boolean)
@@ -4740,8 +4920,10 @@ function SuspicionService.start()
 					entry.risk = math.min(entry.risk, 0.85)
 				end
 			else
-				-- Guardado: baja mas rapido si el profe ni te mira.
-				local decay = T.RiskDecay * (seen and 0.55 or 1.6)
+				-- Guardado: baja mas rapido si el profe ni te mira, y
+				-- mas todavia si encima estas haciendo que escribís.
+				local base = (isWriting and isWriting(player)) and T.RiskDecayWriting or T.RiskDecay
+				local decay = base * (seen and 0.55 or 1.6)
 				entry.risk = math.clamp(entry.risk - decay * step, 0, 1)
 			end
 
@@ -5416,17 +5598,191 @@ return TeacherAI
 ]]></ProtectedString>
         </Properties>
       </Item>
+      <Item class="ModuleScript" referent="RBX23">
+        <Properties>
+          <string name="Name">ToolService</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	ToolService
+	------------------------------------------------------------------
+	El inventario: un lapiz y un celular en la mochila de Roblox.
+
+	Son Tools de verdad, no un boton que prende un flag. Eso importa
+	porque el "a veces sale y a veces no" del celular venia justamente
+	de manejar el estado a mano: ahora equipar y guardar es lo que
+	Roblox ya sabe hacer, y el servidor solo escucha.
+
+		Lapiz   -> equipado y con click, hacés que escribís. Mientras
+		           escribís parecés aplicado: la sospecha baja mas
+		           rapido y el profe te pasa de largo antes.
+		Celular -> equipado, sale de abajo del banco (y el profe te lo
+		           puede ver). Con click, sacás la foto.
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local PhoneService = require(script.Parent:WaitForChild("PhoneService"))
+local SuspicionService = require(script.Parent:WaitForChild("SuspicionService"))
+
+local ToolService = {}
+
+local writingUntil: { [Player]: number } = {}
+
+-- ─────────────────────────────────────────────────────────────
+-- Lapiz
+-- ─────────────────────────────────────────────────────────────
+
+local function attachPencil(character: Model): BasePart?
+	local hand = (character:FindFirstChild("RightHand") :: BasePart?)
+		or (character:FindFirstChild("Right Arm") :: BasePart?)
+		or (character:FindFirstChild("RightLowerArm") :: BasePart?)
+	if not hand then
+		return nil
+	end
+
+	local existing = character:FindFirstChild("LapizEnMano")
+	if existing then
+		existing:Destroy()
+	end
+
+	local pencil = Util.part({
+		Name = "LapizEnMano",
+		Size = Vector3.new(0.12, 0.12, 1.1),
+		CFrame = hand.CFrame * CFrame.new(0, -0.3, -0.2) * CFrame.Angles(math.rad(-40), 0, 0),
+		Color = Color3.fromRGB(226, 178, 60),
+		Material = Enum.Material.SmoothPlastic,
+		Anchored = false,
+		CanCollide = false,
+		CastShadow = false,
+		Parent = character,
+	})
+	pencil.Massless = true
+	Util.weld(hand, pencil)
+
+	local tip = Util.part({
+		Name = "Punta",
+		Size = Vector3.new(0.1, 0.1, 0.16),
+		CFrame = pencil.CFrame * CFrame.new(0, 0, -0.63),
+		Color = Color3.fromRGB(42, 40, 44),
+		Material = Enum.Material.SmoothPlastic,
+		Anchored = false,
+		CanCollide = false,
+		CastShadow = false,
+		Parent = pencil,
+	})
+	tip.Massless = true
+	Util.weld(pencil, tip)
+
+	return pencil
+end
+
+--- Mientras "escribís" pasás por alumno aplicado.
+function ToolService.isWriting(player: Player): boolean
+	return (writingUntil[player] or 0) > os.clock()
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Alta de herramientas
+-- ─────────────────────────────────────────────────────────────
+
+local function buildTool(name: string): Tool
+	local tool = Instance.new("Tool")
+	tool.Name = name
+	tool.RequiresHandle = false      -- el modelo lo ponemos nosotros
+	tool.CanBeDropped = false
+	tool.ManualActivationOnly = false
+	return tool
+end
+
+function ToolService.give(player: Player)
+	local backpack = player:FindFirstChildOfClass("Backpack")
+	if not backpack then
+		return
+	end
+
+	for _, name in { "Lapiz", "Celular" } do
+		local existing = backpack:FindFirstChild(name)
+		if existing then
+			existing:Destroy()
+		end
+		local held = player.Character and player.Character:FindFirstChild(name)
+		if held then
+			held:Destroy()
+		end
+	end
+
+	-- ── Lapiz ─────────────────────────────────────────────
+	local pencil = buildTool("Lapiz")
+	pencil.Parent = backpack
+
+	pencil.Equipped:Connect(function()
+		if player.Character then
+			attachPencil(player.Character)
+		end
+	end)
+
+	pencil.Unequipped:Connect(function()
+		local held = player.Character and player.Character:FindFirstChild("LapizEnMano")
+		if held then
+			held:Destroy()
+		end
+	end)
+
+	pencil.Activated:Connect(function()
+		writingUntil[player] = os.clock() + Config.Exam.WriteDuration
+		Util.playSound(Config.Sounds.Write, player.Character or workspace, 0.25)
+	end)
+
+	-- ── Celular ───────────────────────────────────────────
+	local phone = buildTool("Celular")
+	phone.Parent = backpack
+
+	phone.Equipped:Connect(function()
+		PhoneService.setOut(player, true)
+	end)
+
+	phone.Unequipped:Connect(function()
+		PhoneService.setOut(player, false)
+	end)
+
+	-- El click para sacar la foto lo escucha el cliente en su propia
+	-- Tool: es el unico que sabe que ejercicio estas mirando.
+end
+
+--- Guarda el celular de verdad: lo desequipa, no solo baja un flag.
+function ToolService.stashPhone(player: Player)
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid:UnequipTools()
+	end
+	PhoneService.setOut(player, false)
+end
+
+Players.PlayerRemoving:Connect(function(player)
+	writingUntil[player] = nil
+end)
+
+return ToolService
+]]></ProtectedString>
+        </Properties>
+      </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="RBX24">
+  <Item class="StarterPlayer" referent="RBX25">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="RBX25">
+    <Item class="StarterPlayerScripts" referent="RBX26">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="RBX32">
+      <Item class="LocalScript" referent="RBX33">
         <Properties>
           <string name="Name">Client</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -5468,6 +5824,10 @@ local PhoneUI = require(script:WaitForChild("PhoneUI"))
 local TeacherBubble = require(script:WaitForChild("TeacherBubble"))
 
 local player = Players.LocalPlayer
+
+-- Declarada antes de tiempo: la usa el click de la Tool, que se
+-- engancha mas arriba que su definicion.
+local takePhoto: () -> ()
 
 local state = {
 	phoneOut = false,
@@ -5554,8 +5914,29 @@ local function watchCharacter(character: Model)
 			bindPhone(character)
 		end
 	end)
+	-- El click de la Tool "Celular" es el disparador de la foto.
+	local function hookTools(container: Instance)
+		local function hook(tool: Instance)
+			if tool:IsA("Tool") and tool.Name == "Celular" then
+				tool.Activated:Connect(function()
+					task.spawn(takePhoto)
+				end)
+			end
+		end
+		for _, tool in container:GetChildren() do
+			hook(tool)
+		end
+		container.ChildAdded:Connect(hook)
+	end
+
+	local backpack = player:FindFirstChildOfClass("Backpack")
+	if backpack then
+		hookTools(backpack)
+	end
+	hookTools(character)
+
 	character.ChildRemoved:Connect(function(child)
-		if child.Name == "Celular" then
+		if child.Name == "Celular" and child:IsA("Model") then
 			state.screen = nil
 			CameraRig.setScreen(nil)
 			PhoneUI.destroy()
@@ -5579,12 +5960,41 @@ local function reasonText(reason: any, fallback: string): string
 	return Strings.get(fallback)
 end
 
+local function findTool(name: string): Tool?
+	local character = player.Character
+	local held = character and character:FindFirstChild(name)
+	if held and held:IsA("Tool") then
+		return held
+	end
+	local backpack = player:FindFirstChildOfClass("Backpack")
+	local stored = backpack and backpack:FindFirstChild(name)
+	return stored and stored:IsA("Tool") and stored or nil
+end
+
+--- Sacar y guardar el celular es equipar y desequipar la Tool. Manejarlo
+--- a mano con un flag era lo que hacia que a veces saliera y a veces no.
 local function setPhoneOut(out: boolean)
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then
+		return
+	end
+	if out then
+		local tool = findTool("Celular")
+		if tool then
+			humanoid:EquipTool(tool)
+		end
+	else
+		humanoid:UnequipTools()
+	end
+end
+
+--- Lo que manda es lo que dice el servidor, no lo que creemos aca.
+local function applyPhoneOut(out: boolean)
 	if state.phoneOut == out then
 		return
 	end
 	state.phoneOut = out
-	Net.event(Net.Events.PhoneState):FireServer(out)
 	Hud.setPhoneOut(out)
 
 	if out then
@@ -5597,7 +6007,7 @@ local function setPhoneOut(out: boolean)
 	end
 end
 
-local function takePhoto()
+function takePhoto()
 	if state.busy or not state.phoneOut then
 		return
 	end
@@ -5846,12 +6256,8 @@ Net.event(Net.Events.PhoneState).OnClientEvent:Connect(function(data)
 	state.phoneState = data
 	PhoneUI.setPhoneState(data)
 	Hud.setPhoneState(data)
-	if not data.out and state.phoneOut then
-		-- El servidor lo guardo por su cuenta (bateria, confiscacion, ronda).
-		state.phoneOut = false
-		Hud.setPhoneOut(false)
-		CameraRig.setMode("libre")
-	end
+	-- El estado del celular sale de aca y de ningun otro lado.
+	applyPhoneOut(data.out == true)
 end)
 
 Net.event(Net.Events.Notify).OnClientEvent:Connect(function(data)
@@ -5865,6 +6271,7 @@ Net.event(Net.Events.TeacherSay).OnClientEvent:Connect(function(data)
 end)
 
 Net.event(Net.Events.Caught).OnClientEvent:Connect(function(data)
+	setPhoneOut(false)
 	state.phoneOut = false
 	Hud.setPhoneOut(false)
 	Hud.setHasPhoto(false)
@@ -5947,7 +6354,7 @@ task.spawn(function()
 end)
 ]]></ProtectedString>
         </Properties>
-        <Item class="ModuleScript" referent="RBX26">
+        <Item class="ModuleScript" referent="RBX27">
           <Properties>
             <string name="Name">CameraRig</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -6097,7 +6504,7 @@ return CameraRig
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX27">
+        <Item class="ModuleScript" referent="RBX28">
           <Properties>
             <string name="Name">Hud</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -6665,7 +7072,7 @@ return Hud
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX28">
+        <Item class="ModuleScript" referent="RBX29">
           <Properties>
             <string name="Name">MainMenu</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -7216,7 +7623,7 @@ return MainMenu
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX29">
+        <Item class="ModuleScript" referent="RBX30">
           <Properties>
             <string name="Name">PaperUI</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -7224,12 +7631,13 @@ return MainMenu
 	PaperUI
 	------------------------------------------------------------------
 	La hoja de la prueba. No es una pantalla plana pegada a la camara:
-	es una SurfaceGui montada sobre la hoja fisica que esta apoyada en
-	el banco, con el Adornee puesto desde el PlayerGui (que es lo que
-	hace que los botones sean clickeables en el mundo 3D).
+	es una SurfaceGui montada sobre la hoja fisica apoyada en el banco,
+	con el Adornee puesto desde el PlayerGui (que es lo que hace que los
+	botones sean clickeables en el mundo 3D).
 
-	Se ve un ejercicio por vez, con sus cuatro opciones y una tira de
-	pestañas abajo para moverse entre los 8 ejercicios.
+	Formato vertical, como una hoja de verdad: encabezado arriba, el
+	ejercicio, las cuatro opciones una debajo de la otra, y abajo la
+	tira de numeros para moverse entre ejercicios.
 --]]
 
 local Players = game:GetService("Players")
@@ -7272,6 +7680,7 @@ function PaperUI.mount(paperPart: BasePart)
 	if gui then
 		gui:Destroy()
 	end
+	refs = {}
 
 	local playerGui = player:WaitForChild("PlayerGui")
 
@@ -7280,10 +7689,9 @@ function PaperUI.mount(paperPart: BasePart)
 		Adornee = paperPart,
 		Face = Enum.NormalId.Top,
 		SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud,
-		PixelsPerStud = 340,
-		LightInfluence = 0.25,
+		PixelsPerStud = 300,
+		LightInfluence = 0.2,
 		MaxDistance = 40,
-		AlwaysOnTop = false,
 		Active = true,  -- sin esto los botones no se pueden clickear en 3D
 		ResetOnSpawn = false,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
@@ -7296,108 +7704,104 @@ function PaperUI.mount(paperPart: BasePart)
 		BorderSizePixel = 0,
 	}, gui)
 
-	-- ── Encabezado ────────────────────────────────────────
-	local header = el("Frame", {
-		Size = UDim2.new(1, 0, 0, 92),
-		BackgroundTransparency = 1,
+	el("UIPadding", {
+		PaddingTop = UDim.new(0.03, 0),
+		PaddingBottom = UDim.new(0.03, 0),
+		PaddingLeft = UDim.new(0.06, 0),
+		PaddingRight = UDim.new(0.06, 0),
 	}, sheet)
 
+	-- ── Encabezado ────────────────────────────────────────
 	refs.headerTitle = el("TextLabel", {
-		Size = UDim2.new(0.62, 0, 0, 34),
-		Position = UDim2.fromOffset(28, 16),
+		Size = UDim2.fromScale(1, 0.045),
 		BackgroundTransparency = 1,
 		Font = Theme.FontBold,
 		Text = Strings.get("paper.title"),
 		TextColor3 = Theme.Paper.Ink,
-		TextSize = 30,
+		TextScaled = true,
 		TextXAlignment = Enum.TextXAlignment.Left,
-	}, header)
+	}, sheet)
 
 	refs.student = el("TextLabel", {
-		Size = UDim2.new(0.62, 0, 0, 24),
-		Position = UDim2.fromOffset(28, 52),
+		Position = UDim2.fromScale(0, 0.052),
+		Size = UDim2.fromScale(0.72, 0.028),
 		BackgroundTransparency = 1,
 		Font = Theme.Font,
 		Text = Strings.get("paper.student", { name = player.DisplayName }),
 		TextColor3 = Theme.Paper.InkSoft,
-		TextSize = 20,
+		TextScaled = true,
 		TextXAlignment = Enum.TextXAlignment.Left,
-	}, header)
+	}, sheet)
 
 	local gradeBox = el("Frame", {
-		Size = UDim2.fromOffset(120, 62),
-		Position = UDim2.new(1, -148, 0, 16),
-		BackgroundColor3 = Theme.Paper.Background,
-		BorderSizePixel = 0,
-	}, header)
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.fromScale(1, 0),
+		Size = UDim2.fromScale(0.2, 0.075),
+		BackgroundTransparency = 1,
+	}, sheet)
 	Util.roundify(gradeBox, 8, Theme.Paper.Line, 2)
 
 	refs.gradeLabel = el("TextLabel", {
-		Size = UDim2.new(1, 0, 0, 18),
-		Position = UDim2.fromOffset(0, 6),
+		Size = UDim2.fromScale(1, 0.32),
+		Position = UDim2.fromScale(0, 0.08),
 		BackgroundTransparency = 1,
 		Font = Theme.Font,
 		Text = Strings.get("paper.grade"),
 		TextColor3 = Theme.Paper.InkSoft,
-		TextSize = 14,
+		TextScaled = true,
 	}, gradeBox)
 
 	refs.grade = el("TextLabel", {
-		Size = UDim2.new(1, 0, 0, 34),
-		Position = UDim2.fromOffset(0, 22),
+		Size = UDim2.fromScale(1, 0.5),
+		Position = UDim2.fromScale(0, 0.42),
 		BackgroundTransparency = 1,
 		Font = Theme.FontBold,
 		Text = "-",
 		TextColor3 = Theme.Paper.Accent,
-		TextSize = 30,
+		TextScaled = true,
 	}, gradeBox)
 
 	el("Frame", {
-		Size = UDim2.new(1, -56, 0, 2),
-		Position = UDim2.fromOffset(28, 88),
+		Position = UDim2.fromScale(0, 0.092),
+		Size = UDim2.new(1, 0, 0, 2),
 		BackgroundColor3 = Theme.Paper.Line,
 		BorderSizePixel = 0,
-	}, header)
-
-	-- ── Cuerpo del ejercicio ──────────────────────────────
-	local body = el("Frame", {
-		Size = UDim2.new(1, -56, 1, -212),
-		Position = UDim2.fromOffset(28, 104),
-		BackgroundTransparency = 1,
 	}, sheet)
 
+	-- ── Ejercicio ─────────────────────────────────────────
 	refs.topic = el("TextLabel", {
-		Size = UDim2.new(1, 0, 0, 22),
+		Position = UDim2.fromScale(0, 0.115),
+		Size = UDim2.fromScale(1, 0.028),
 		BackgroundTransparency = 1,
 		Font = Theme.Font,
 		Text = "",
 		TextColor3 = Theme.Paper.Accent,
-		TextSize = 18,
+		TextScaled = true,
 		TextXAlignment = Enum.TextXAlignment.Left,
-	}, body)
+	}, sheet)
 
 	refs.prompt = el("TextLabel", {
-		Size = UDim2.new(1, 0, 0, 84),
-		Position = UDim2.fromOffset(0, 26),
+		Position = UDim2.fromScale(0, 0.155),
+		Size = UDim2.fromScale(1, 0.145),
 		BackgroundTransparency = 1,
 		Font = Theme.FontBold,
 		Text = "",
 		TextColor3 = Theme.Paper.Ink,
-		TextSize = 34,
+		TextSize = 46,
 		TextWrapped = true,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
-	}, body)
+	}, sheet)
 
+	-- ── Opciones, una debajo de la otra ───────────────────
 	local options = el("Frame", {
-		Size = UDim2.new(1, 0, 1, -118),
-		Position = UDim2.fromOffset(0, 118),
+		Position = UDim2.fromScale(0, 0.32),
+		Size = UDim2.fromScale(1, 0.44),
 		BackgroundTransparency = 1,
-	}, body)
+	}, sheet)
 
-	el("UIGridLayout", {
-		CellSize = UDim2.new(0.5, -10, 0.5, -10),
-		CellPadding = UDim2.fromOffset(20, 16),
+	el("UIListLayout", {
+		Padding = UDim.new(0.03, 0),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, options)
 
@@ -7406,27 +7810,28 @@ function PaperUI.mount(paperPart: BasePart)
 		local button = el("TextButton", {
 			Name = "Opcion" .. index,
 			LayoutOrder = index,
+			Size = UDim2.fromScale(1, 0.2275),
 			BackgroundColor3 = Theme.Paper.Background,
 			AutoButtonColor = false,
 			Font = Theme.Font,
 			Text = "",
 			TextColor3 = Theme.Paper.Ink,
-			TextSize = 26,
+			TextSize = 38,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			BorderSizePixel = 0,
 		}, options)
 		Util.roundify(button, 10, Theme.Paper.Line, 2)
 
-		el("UIPadding", { PaddingLeft = UDim.new(0, 58), PaddingRight = UDim.new(0, 12) }, button)
+		el("UIPadding", { PaddingLeft = UDim.new(0, 78), PaddingRight = UDim.new(0, 18) }, button)
 
 		local bullet = el("Frame", {
 			Name = "Bullet",
-			Size = UDim2.fromOffset(34, 34),
-			Position = UDim2.new(0, -48, 0.5, -17),
+			Size = UDim2.fromOffset(44, 44),
+			Position = UDim2.new(0, -62, 0.5, -22),
 			BackgroundColor3 = Theme.Paper.Background,
 			BorderSizePixel = 0,
 		}, button)
-		Util.roundify(bullet, 17, Theme.Paper.InkSoft, 2)
+		Util.roundify(bullet, 22, Theme.Paper.InkSoft, 2)
 
 		el("TextLabel", {
 			Name = "Letra",
@@ -7435,7 +7840,7 @@ function PaperUI.mount(paperPart: BasePart)
 			Font = Theme.FontBold,
 			Text = LETTERS[index],
 			TextColor3 = Theme.Paper.InkSoft,
-			TextSize = 20,
+			TextSize = 26,
 		}, bullet)
 
 		button.MouseButton1Click:Connect(function()
@@ -7447,39 +7852,42 @@ function PaperUI.mount(paperPart: BasePart)
 		refs.options[index] = button
 	end
 
-	-- ── Pestañas de ejercicios ────────────────────────────
+	-- ── Tira de ejercicios ────────────────────────────────
+	el("Frame", {
+		Position = UDim2.fromScale(0, 0.79),
+		Size = UDim2.new(1, 0, 0, 2),
+		BackgroundColor3 = Theme.Paper.Line,
+		BorderSizePixel = 0,
+	}, sheet)
+
 	local tabs = el("Frame", {
-		Size = UDim2.new(1, -56, 0, 64),
-		Position = UDim2.new(0, 28, 1, -84),
+		Position = UDim2.fromScale(0, 0.815),
+		Size = UDim2.fromScale(1, 0.075),
 		BackgroundTransparency = 1,
 	}, sheet)
 
 	el("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
-		Padding = UDim.new(0, 10),
+		Padding = UDim.new(0.014, 0),
 		SortOrder = Enum.SortOrder.LayoutOrder,
+		HorizontalAlignment = Enum.HorizontalAlignment.Left,
 		VerticalAlignment = Enum.VerticalAlignment.Center,
 	}, tabs)
 
 	refs.tabs = {}
 	refs.tabsFrame = tabs
 
-	el("Frame", {
-		Size = UDim2.new(1, -56, 0, 2),
-		Position = UDim2.new(0, 28, 1, -96),
-		BackgroundColor3 = Theme.Paper.Line,
-		BorderSizePixel = 0,
-	}, sheet)
-
 	refs.footer = el("TextLabel", {
-		Size = UDim2.new(1, -56, 0, 20),
-		Position = UDim2.new(0, 28, 1, -22),
+		Position = UDim2.fromScale(0, 0.915),
+		Size = UDim2.fromScale(1, 0.06),
 		BackgroundTransparency = 1,
 		Font = Theme.Font,
 		Text = Strings.get("paper.footer.default"),
 		TextColor3 = Theme.Paper.InkSoft,
-		TextSize = 16,
+		TextSize = 26,
+		TextWrapped = true,
 		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
 	}, sheet)
 
 	return gui
@@ -7502,16 +7910,21 @@ local function buildTabs(count: number)
 		local tab = el("TextButton", {
 			Name = "Tab" .. index,
 			LayoutOrder = index,
-			Size = UDim2.fromOffset(46, 46),
+			Size = UDim2.fromScale(0.098, 1),
 			BackgroundColor3 = Theme.Paper.Background,
 			AutoButtonColor = false,
 			Font = Theme.FontBold,
 			Text = tostring(index),
 			TextColor3 = Theme.Paper.InkSoft,
-			TextSize = 20,
+			TextScaled = true,
 			BorderSizePixel = 0,
 		}, refs.tabsFrame)
-		Util.roundify(tab, 10, Theme.Paper.Line, 2)
+		Util.roundify(tab, 8, Theme.Paper.Line, 2)
+
+		el("UIPadding", {
+			PaddingTop = UDim.new(0.22, 0),
+			PaddingBottom = UDim.new(0.22, 0),
+		}, tab)
 
 		tab.MouseButton1Click:Connect(function()
 			PaperUI.setCurrent(index)
@@ -7525,7 +7938,7 @@ function PaperUI.setCurrent(index: number)
 	if not snapshot then
 		return
 	end
-	PaperUI.current = math.clamp(index, 1, #snapshot.questions)
+	PaperUI.current = math.clamp(index, 1, math.max(1, #snapshot.questions))
 	PaperUI.render()
 	if PaperUI.onSelect then
 		PaperUI.onSelect(PaperUI.current)
@@ -7542,7 +7955,7 @@ function PaperUI.firstUnanswered(): number
 			return index
 		end
 	end
-	return #snapshot.questions
+	return math.max(1, #snapshot.questions)
 end
 
 function PaperUI.setSnapshot(snapshot: any)
@@ -7559,9 +7972,13 @@ end
 
 function PaperUI.render()
 	local snapshot = PaperUI.snapshot
-	if not gui or not snapshot then
+	if not gui or not snapshot or not refs.topic then
 		return
 	end
+
+	refs.headerTitle.Text = Strings.get("paper.title")
+	refs.student.Text = Strings.get("paper.student", { name = player.DisplayName })
+	refs.gradeLabel.Text = Strings.get("paper.grade")
 
 	buildTabs(#snapshot.questions)
 
@@ -7622,7 +8039,6 @@ function PaperUI.render()
 	for index, tab in refs.tabs do
 		local answered = snapshot.answers[index]
 		local stroke = tab:FindFirstChildOfClass("UIStroke")
-		local isCurrent = index == PaperUI.current
 
 		if answered then
 			local color = answered.correct and Theme.Paper.Correct or Theme.Paper.Wrong
@@ -7639,7 +8055,7 @@ function PaperUI.render()
 			end
 		end
 
-		if isCurrent then
+		if index == PaperUI.current then
 			tab.TextColor3 = Theme.Paper.Accent
 			if stroke then
 				stroke.Color = Theme.Paper.Accent
@@ -7657,10 +8073,12 @@ function PaperUI.render()
 	else
 		refs.footer.Text = Strings.get("paper.footer.default")
 	end
+end
 
-	refs.headerTitle.Text = Strings.get("paper.title")
-	refs.student.Text = Strings.get("paper.student", { name = player.DisplayName })
-	refs.gradeLabel.Text = Strings.get("paper.grade")
+function PaperUI.setFooter(text: string)
+	if refs.footer then
+		refs.footer.Text = text
+	end
 end
 
 function PaperUI.setEnabled(enabled: boolean)
@@ -7674,13 +8092,14 @@ function PaperUI.destroy()
 		gui:Destroy()
 		gui = nil
 	end
+	refs = {}
 end
 
 return PaperUI
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX30">
+        <Item class="ModuleScript" referent="RBX31">
           <Properties>
             <string name="Name">PhoneUI</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -8282,7 +8701,7 @@ return PhoneUI
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX31">
+        <Item class="ModuleScript" referent="RBX32">
           <Properties>
             <string name="Name">TeacherBubble</string>
             <ProtectedString name="Source"><![CDATA[--!strict

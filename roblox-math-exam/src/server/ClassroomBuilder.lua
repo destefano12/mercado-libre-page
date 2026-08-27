@@ -496,10 +496,11 @@ local function buildDesk(parent: Instance, index: number, row: number, column: n
 	seat.Parent = model
 
 	-- La hoja de la prueba, apoyada donde la tendrias vos
+	-- Vertical, como una hoja de prueba de verdad (no apaisada).
 	local paper = Util.part({
 		Name = "HojaDePrueba",
-		Size = Vector3.new(3.1, 0.04, 2.2),
-		CFrame = base * CFrame.new(0, topY + 0.11, 0.15) * CFrame.Angles(0, math.rad(-2), 0),
+		Size = Vector3.new(2.3, 0.04, 3.1),
+		CFrame = base * CFrame.new(0, topY + 0.11, 0.25) * CFrame.Angles(0, math.rad(-2), 0),
 		Color = WHITE,
 		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,

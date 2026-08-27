@@ -12,8 +12,10 @@
 	cambia de humor) desde un solo loop.
 --]]
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local ServerStorage = game:GetService("ServerStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local CharacterArt = require(Shared:WaitForChild("CharacterArt"))
@@ -72,6 +74,8 @@ type Student = {
 	desk: any,
 	model: Model,
 	face: any,
+	neck: Motor6D?,
+	neckBase: CFrame?,
 	head: BasePart,
 	headBase: CFrame,
 	forearm: BasePart,
@@ -110,6 +114,120 @@ local function piece(model: Model, name: string, size: Vector3, cf: CFrame, colo
 		CanCollide = false,
 		Parent = model,
 	})
+end
+
+-- Un solo avatar de verdad y despues clones: pedirle veinte a Roblox
+-- de a uno tarda una eternidad al arrancar.
+local template: Model? = nil
+local templateTried = false
+
+local function avatarTemplate(): Model?
+	if templateTried then
+		return template
+	end
+	templateTried = true
+
+	local ok, model = pcall(function()
+		local description = Instance.new("HumanoidDescription")
+		return Players:CreateHumanoidModelFromDescription(description, Enum.HumanoidRigType.R15)
+	end)
+	if ok and model then
+		model.Name = "PlantillaAlumno"
+		model.Parent = ServerStorage
+		template = model
+	end
+	return template
+end
+
+local SIT_ANIMATION = "rbxassetid://2506281703"
+
+--- Alumno con avatar de Roblox: cuerpo real, sentado en el banco.
+local function buildAvatarStudent(desk: any, index: number): Student?
+	local source = avatarTemplate()
+	if not source then
+		return nil
+	end
+
+	local model = source:Clone()
+	model.Name = "Alumno_" .. index
+
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	local head = model:FindFirstChild("Head") :: BasePart?
+	if not humanoid or not head then
+		model:Destroy()
+		return nil
+	end
+
+	local skin = SKINS[rng:NextInteger(1, #SKINS)]
+	local shirt = SWEATERS[rng:NextInteger(1, #SWEATERS)]
+	local pants = PANTS[rng:NextInteger(1, #PANTS)]
+	local shoes = SNEAKERS[rng:NextInteger(1, #SNEAKERS)]
+
+	local COLORS = {
+		Head = skin, LeftHand = skin, RightHand = skin, LeftLowerArm = skin, RightLowerArm = skin,
+		UpperTorso = shirt, LowerTorso = shirt, LeftUpperArm = shirt, RightUpperArm = shirt,
+		LeftUpperLeg = pants, RightUpperLeg = pants, LeftLowerLeg = pants, RightLowerLeg = pants,
+		LeftFoot = shoes, RightFoot = shoes,
+	}
+	for name, color in COLORS do
+		local part = model:FindFirstChild(name)
+		if part and part:IsA("BasePart") then
+			part.Color = color
+		end
+	end
+
+	CharacterArt.attachHair(head, CharacterArt.HairStyles[rng:NextInteger(1, #CharacterArt.HairStyles)],
+		HAIR_COLORS[rng:NextInteger(1, #HAIR_COLORS)])
+
+	humanoid.DisplayName = NAMES[((index - 1) % #NAMES) + 1]
+	humanoid.NameDisplayDistance = 32
+	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	humanoid.WalkSpeed = 0
+	humanoid.JumpPower = 0
+
+	model.Parent = classroom.model
+	model:PivotTo(desk.seat.CFrame * CFrame.new(0, 2.6, 0))
+
+	-- Sentarlo y ponerle la pose de sentado del propio Roblox
+	task.defer(function()
+		if desk.seat and humanoid.Parent then
+			desk.seat:Sit(humanoid)
+		end
+		local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator", humanoid)
+		pcall(function()
+			local animation = Instance.new("Animation")
+			animation.AnimationId = SIT_ANIMATION
+			local track = animator:LoadAnimation(animation)
+			track.Priority = Enum.AnimationPriority.Idle
+			track.Looped = true
+			track:Play()
+		end)
+	end)
+
+	local neck = model:FindFirstChild("Neck", true)
+
+	return {
+		desk = desk,
+		model = model,
+		face = nil,
+		head = head,
+		headBase = head.CFrame,
+		neck = if neck and neck:IsA("Motor6D") then neck else nil,
+		neckBase = if neck and neck:IsA("Motor6D") then neck.C0 else nil,
+		forearm = head,
+		forearmBase = head.CFrame,
+		hand = head,
+		handBase = head.CFrame,
+		torso = head,
+		torsoBase = head.CFrame,
+		phase = rng:NextNumber() * math.pi * 2,
+		writeSpeed = rng:NextNumber(2.2, 3.6),
+		mood = "concentrado",
+		moodUntil = 0,
+		glanceUntil = 0,
+		lastYaw = 0,
+		lastPitch = 0,
+	}
 end
 
 local function buildStudent(desk: any, index: number): Student
@@ -213,6 +331,8 @@ local function buildStudent(desk: any, index: number): Student
 		desk = desk,
 		model = model,
 		face = face,
+		neck = nil,
+		neckBase = nil,
 		head = head,
 		headBase = headCF,
 		forearm = forearm,
@@ -245,7 +365,7 @@ function StudentNPCs.occupy(desk: any)
 	if not classroom or students[desk] then
 		return
 	end
-	students[desk] = buildStudent(desk, desk.index)
+	students[desk] = buildAvatarStudent(desk, desk.index) or buildStudent(desk, desk.index)
 	desk.model:SetAttribute("Ocupado", true)
 end
 
@@ -298,11 +418,12 @@ function StudentNPCs.start()
 		local teacherState = teacher and teacher:getState() or "Patrullando"
 
 		for _, student in students do
-			-- Mano que escribe: circulitos chicos sobre la hoja. Se mueve la
-			-- mano y nada mas: veinte alumnos moviendo medio cuerpo cada
-			-- frame es plata tirada en replicacion.
-			local t = now * student.writeSpeed + student.phase
-			student.hand.CFrame = student.handBase * CFrame.new(math.sin(t) * 0.12, 0, math.cos(t * 1.7) * 0.09)
+			-- Mano que escribe: circulitos chicos sobre la hoja. Solo en
+			-- el rig propio; el avatar ya tiene su animacion de sentado.
+			if not student.neck then
+				local t = now * student.writeSpeed + student.phase
+				student.hand.CFrame = student.handBase * CFrame.new(math.sin(t) * 0.12, 0, math.cos(t * 1.7) * 0.09)
+			end
 
 			-- La cabeza: mira la hoja, salvo que el profe este cerca
 			local yaw, pitch = 0, math.rad(18)
@@ -327,14 +448,14 @@ function StudentNPCs.start()
 			-- Miradita de reojo al banco de al lado, que para eso estamos
 			if now > student.glanceUntil then
 				student.glanceUntil = now + rng:NextNumber(6, 16)
-				if rng:NextNumber() < 0.35 then
+				if student.face and rng:NextNumber() < 0.35 then
 					student.face.look(rng:NextInteger(0, 1) == 0 and -1 or 1, 0)
 					task.delay(1.2, function()
 						if student.model.Parent then
 							student.face.look(0, 0.2)
 						end
 					end)
-				elseif rng:NextNumber() < 0.5 then
+				elseif student.face and rng:NextNumber() < 0.5 then
 					student.face.blink()
 				end
 			end
@@ -343,12 +464,19 @@ function StudentNPCs.start()
 				mood = student.mood
 			end
 
-			student.face.setExpression(mood)
+			if student.face then
+				student.face.setExpression(mood)
+			end
 
 			-- La cabeza solo se reescribe si de verdad se movio.
 			if math.abs(yaw - student.lastYaw) > 0.02 or math.abs(pitch - student.lastPitch) > 0.02 then
 				student.lastYaw, student.lastPitch = yaw, pitch
-				student.head.CFrame = student.headBase * CFrame.Angles(pitch, yaw, 0)
+				if student.neck and student.neckBase then
+					-- Avatar: la cabeza cuelga del cuello, no se mueve suelta.
+					student.neck.C0 = student.neckBase * CFrame.Angles(pitch * 0.5, yaw, 0)
+				else
+					student.head.CFrame = student.headBase * CFrame.Angles(pitch, yaw, 0)
+				end
 			end
 		end
 	end)

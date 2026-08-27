@@ -1,5 +1,5 @@
 <roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
-  <Item class="Script" referent="RBX8">
+  <Item class="Script" referent="RBX9">
     <Properties>
       <string name="Name">Server</string>
       <ProtectedString name="Source"><![CDATA[--!strict
@@ -36,6 +36,7 @@ local PhoneService = require(script:WaitForChild("PhoneService"))
 local SuspicionService = require(script:WaitForChild("SuspicionService"))
 local RoundService = require(script:WaitForChild("RoundService"))
 local StudentNPCs = require(script:WaitForChild("StudentNPCs"))
+local ToolService = require(script:WaitForChild("ToolService"))
 local TeacherAI = require(script:WaitForChild("TeacherAI"))
 
 -- ─────────────────────────────────────────────────────────────
@@ -103,12 +104,14 @@ spawnLocation.Neutral = true
 -- ─────────────────────────────────────────────────────────────
 
 ExamService.init(classroom)
+-- La prueba existe desde el segundo cero: la hoja nunca esta en blanco.
+ExamService.newRound(os.time())
 
 -- Cada pieza va en su propio pcall: si el rig del profe o los companeros
 -- fallan por algo del entorno, el aula y la prueba tienen que seguir
 -- funcionando igual (y el Output tiene que decir por que).
 local teacher
-local built, teacherError = pcall(function()
+local teacherBuilt, teacherError = pcall(function()
 	teacher = TeacherAI.new(classroom, function(player)
 		RoundService.handleCatch(player)
 		-- Todo el curso se da vuelta a mirar. Es media la gracia.
@@ -116,7 +119,7 @@ local built, teacherError = pcall(function()
 	end)
 	teacher:start()
 end)
-if built then
+if teacherBuilt then
 	print("[Aula] Profesor en el aula.")
 else
 	warn("[Aula] No se pudo crear al profesor: " .. tostring(teacherError))
@@ -143,6 +146,7 @@ if teacher then
 		-- Riesgo al maximo: el profe deja lo que estaba haciendo y viene.
 		teacher:confront(player)
 	end)
+	SuspicionService.setWritingCheck(ToolService.isWriting)
 	SuspicionService.start()
 end
 PhoneService.start()
@@ -259,13 +263,16 @@ RoundService.start(classroom, teacher)
 -- runtime. Viene puesta en ShadowMap desde el archivo del lugar, y si
 -- abris esto en un lugar tuyo la ponés a mano en Lighting > Technology.
 local ok, err = pcall(function()
-	Lighting.Ambient = Color3.fromRGB(90, 92, 102)
-	Lighting.OutdoorAmbient = Color3.fromRGB(115, 120, 132)
-	Lighting.Brightness = 2.2
-	Lighting.ClockTime = 10.5
-	Lighting.GeographicLatitude = -34.6
-	Lighting.EnvironmentDiffuseScale = 0.6
-	Lighting.EnvironmentSpecularScale = 0.4
+	-- Luz de aula, no de quirofano: el brillo fuerte de antes quemaba
+	-- todo apenas entrabas.
+	Lighting.Ambient = Color3.fromRGB(78, 80, 90)
+	Lighting.OutdoorAmbient = Color3.fromRGB(96, 100, 112)
+	Lighting.Brightness = 1.1
+	Lighting.ExposureCompensation = -0.15
+	Lighting.ClockTime = 9.5
+	Lighting.GeographicLatitude = 41
+	Lighting.EnvironmentDiffuseScale = 0.45
+	Lighting.EnvironmentSpecularScale = 0.25
 	Lighting.GlobalShadows = true
 	Lighting.FogEnd = 400
 
@@ -787,10 +794,11 @@ local function buildDesk(parent: Instance, index: number, row: number, column: n
 	seat.Parent = model
 
 	-- La hoja de la prueba, apoyada donde la tendrias vos
+	-- Vertical, como una hoja de prueba de verdad (no apaisada).
 	local paper = Util.part({
 		Name = "HojaDePrueba",
-		Size = Vector3.new(3.1, 0.04, 2.2),
-		CFrame = base * CFrame.new(0, topY + 0.11, 0.15) * CFrame.Angles(0, math.rad(-2), 0),
+		Size = Vector3.new(2.3, 0.04, 3.1),
+		CFrame = base * CFrame.new(0, topY + 0.11, 0.25) * CFrame.Angles(0, math.rad(-2), 0),
 		Color = WHITE,
 		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
@@ -1528,6 +1536,11 @@ function PhoneService.takePhoto(player: Player, questionId: number)
 	data.battery = math.max(0, data.battery - P.BatteryPerPhoto)
 	data.nextPhotoAt = now + P.PhotoCooldown
 
+	-- El celu se inclina hacia la hoja mientras dispara.
+	if data.weld and data.weld.Parent then
+		PhoneModel.aimAtPaper(data.weld)
+	end
+
 	local photo: Photo = {
 		id = newPhotoId(player, data),
 		questionId = questionId,
@@ -1662,6 +1675,7 @@ local Net = require(Shared:WaitForChild("Net"))
 local ExamService = require(script.Parent:WaitForChild("ExamService"))
 local PhoneService = require(script.Parent:WaitForChild("PhoneService"))
 local SuspicionService = require(script.Parent:WaitForChild("SuspicionService"))
+local ToolService = require(script.Parent:WaitForChild("ToolService"))
 
 local E = Config.Exam
 
@@ -1764,13 +1778,13 @@ function RoundService.addPlayer(player: Player)
 	pushRound(player)
 	ExamService.push(player)
 
-	if state.phase == "Prueba" then
-		task.spawn(function()
-			task.wait(0.5)
-			ExamService.seatPlayer(player)
+	task.spawn(function()
+		task.wait(0.5)
+		ExamService.seatPlayer(player)
+		if state.phase == "Prueba" then
 			RoundService.notify(player, "notify.lateJoin", "info")
-		end)
-	end
+		end
+	end)
 end
 
 function RoundService.onCharacter(player: Player, character: Model)
@@ -1782,20 +1796,21 @@ function RoundService.onCharacter(player: Player, character: Model)
 	humanoid.JumpPower = 0 -- en clase no se salta
 	humanoid.WalkSpeed = 14
 
-	-- El celular fisico se suelda al cuerpo apenas aparece el personaje.
+	-- El celular fisico se suelda al cuerpo apenas aparece el personaje,
+	-- y el lapiz y el celular entran a la mochila.
 	PhoneService.equip(player)
+	ToolService.give(player)
 
 	humanoid.Died:Connect(function()
 		SuspicionService.reset(player)
 		PhoneService.setOut(player, false)
 	end)
 
-	if state.phase == "Prueba" then
-		task.spawn(function()
-			task.wait(0.6)
-			ExamService.seatPlayer(player)
-		end)
-	end
+	-- Siempre a su banco: es una clase, no un lobby.
+	task.spawn(function()
+		task.wait(0.6)
+		ExamService.seatPlayer(player)
+	end)
 end
 
 --- Lo agarraron con el celu.
@@ -1881,14 +1896,20 @@ function RoundService.start(classroom, teacher)
 	state.teacher = teacher
 
 	task.spawn(function()
+		local firstRound = true
 		while true do
 			-- ── Preparacion ─────────────────────────────
-			state.results = {}
-			for _, player in Players:GetPlayers() do
-				PhoneService.reset(player)
-				SuspicionService.reset(player)
+			-- La primera ronda arranca ya: nadie quiere entrar a un
+			-- juego y mirar una hoja en blanco veinte segundos.
+			if not firstRound then
+				state.results = {}
+				for _, player in Players:GetPlayers() do
+					PhoneService.reset(player)
+					SuspicionService.reset(player)
+				end
+				runPhase("Preparacion", E.IntermissionDuration)
 			end
-			runPhase("Preparacion", E.IntermissionDuration)
+			firstRound = false
 
 			-- ── Prueba ──────────────────────────────────
 			state.roundNumber += 1
@@ -1962,8 +1983,10 @@ return RoundService
 	cambia de humor) desde un solo loop.
 --]]
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local ServerStorage = game:GetService("ServerStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local CharacterArt = require(Shared:WaitForChild("CharacterArt"))
@@ -2022,6 +2045,8 @@ type Student = {
 	desk: any,
 	model: Model,
 	face: any,
+	neck: Motor6D?,
+	neckBase: CFrame?,
 	head: BasePart,
 	headBase: CFrame,
 	forearm: BasePart,
@@ -2060,6 +2085,120 @@ local function piece(model: Model, name: string, size: Vector3, cf: CFrame, colo
 		CanCollide = false,
 		Parent = model,
 	})
+end
+
+-- Un solo avatar de verdad y despues clones: pedirle veinte a Roblox
+-- de a uno tarda una eternidad al arrancar.
+local template: Model? = nil
+local templateTried = false
+
+local function avatarTemplate(): Model?
+	if templateTried then
+		return template
+	end
+	templateTried = true
+
+	local ok, model = pcall(function()
+		local description = Instance.new("HumanoidDescription")
+		return Players:CreateHumanoidModelFromDescription(description, Enum.HumanoidRigType.R15)
+	end)
+	if ok and model then
+		model.Name = "PlantillaAlumno"
+		model.Parent = ServerStorage
+		template = model
+	end
+	return template
+end
+
+local SIT_ANIMATION = "rbxassetid://2506281703"
+
+--- Alumno con avatar de Roblox: cuerpo real, sentado en el banco.
+local function buildAvatarStudent(desk: any, index: number): Student?
+	local source = avatarTemplate()
+	if not source then
+		return nil
+	end
+
+	local model = source:Clone()
+	model.Name = "Alumno_" .. index
+
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	local head = model:FindFirstChild("Head") :: BasePart?
+	if not humanoid or not head then
+		model:Destroy()
+		return nil
+	end
+
+	local skin = SKINS[rng:NextInteger(1, #SKINS)]
+	local shirt = SWEATERS[rng:NextInteger(1, #SWEATERS)]
+	local pants = PANTS[rng:NextInteger(1, #PANTS)]
+	local shoes = SNEAKERS[rng:NextInteger(1, #SNEAKERS)]
+
+	local COLORS = {
+		Head = skin, LeftHand = skin, RightHand = skin, LeftLowerArm = skin, RightLowerArm = skin,
+		UpperTorso = shirt, LowerTorso = shirt, LeftUpperArm = shirt, RightUpperArm = shirt,
+		LeftUpperLeg = pants, RightUpperLeg = pants, LeftLowerLeg = pants, RightLowerLeg = pants,
+		LeftFoot = shoes, RightFoot = shoes,
+	}
+	for name, color in COLORS do
+		local part = model:FindFirstChild(name)
+		if part and part:IsA("BasePart") then
+			part.Color = color
+		end
+	end
+
+	CharacterArt.attachHair(head, CharacterArt.HairStyles[rng:NextInteger(1, #CharacterArt.HairStyles)],
+		HAIR_COLORS[rng:NextInteger(1, #HAIR_COLORS)])
+
+	humanoid.DisplayName = NAMES[((index - 1) % #NAMES) + 1]
+	humanoid.NameDisplayDistance = 32
+	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	humanoid.WalkSpeed = 0
+	humanoid.JumpPower = 0
+
+	model.Parent = classroom.model
+	model:PivotTo(desk.seat.CFrame * CFrame.new(0, 2.6, 0))
+
+	-- Sentarlo y ponerle la pose de sentado del propio Roblox
+	task.defer(function()
+		if desk.seat and humanoid.Parent then
+			desk.seat:Sit(humanoid)
+		end
+		local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator", humanoid)
+		pcall(function()
+			local animation = Instance.new("Animation")
+			animation.AnimationId = SIT_ANIMATION
+			local track = animator:LoadAnimation(animation)
+			track.Priority = Enum.AnimationPriority.Idle
+			track.Looped = true
+			track:Play()
+		end)
+	end)
+
+	local neck = model:FindFirstChild("Neck", true)
+
+	return {
+		desk = desk,
+		model = model,
+		face = nil,
+		head = head,
+		headBase = head.CFrame,
+		neck = if neck and neck:IsA("Motor6D") then neck else nil,
+		neckBase = if neck and neck:IsA("Motor6D") then neck.C0 else nil,
+		forearm = head,
+		forearmBase = head.CFrame,
+		hand = head,
+		handBase = head.CFrame,
+		torso = head,
+		torsoBase = head.CFrame,
+		phase = rng:NextNumber() * math.pi * 2,
+		writeSpeed = rng:NextNumber(2.2, 3.6),
+		mood = "concentrado",
+		moodUntil = 0,
+		glanceUntil = 0,
+		lastYaw = 0,
+		lastPitch = 0,
+	}
 end
 
 local function buildStudent(desk: any, index: number): Student
@@ -2163,6 +2302,8 @@ local function buildStudent(desk: any, index: number): Student
 		desk = desk,
 		model = model,
 		face = face,
+		neck = nil,
+		neckBase = nil,
 		head = head,
 		headBase = headCF,
 		forearm = forearm,
@@ -2195,7 +2336,7 @@ function StudentNPCs.occupy(desk: any)
 	if not classroom or students[desk] then
 		return
 	end
-	students[desk] = buildStudent(desk, desk.index)
+	students[desk] = buildAvatarStudent(desk, desk.index) or buildStudent(desk, desk.index)
 	desk.model:SetAttribute("Ocupado", true)
 end
 
@@ -2248,11 +2389,12 @@ function StudentNPCs.start()
 		local teacherState = teacher and teacher:getState() or "Patrullando"
 
 		for _, student in students do
-			-- Mano que escribe: circulitos chicos sobre la hoja. Se mueve la
-			-- mano y nada mas: veinte alumnos moviendo medio cuerpo cada
-			-- frame es plata tirada en replicacion.
-			local t = now * student.writeSpeed + student.phase
-			student.hand.CFrame = student.handBase * CFrame.new(math.sin(t) * 0.12, 0, math.cos(t * 1.7) * 0.09)
+			-- Mano que escribe: circulitos chicos sobre la hoja. Solo en
+			-- el rig propio; el avatar ya tiene su animacion de sentado.
+			if not student.neck then
+				local t = now * student.writeSpeed + student.phase
+				student.hand.CFrame = student.handBase * CFrame.new(math.sin(t) * 0.12, 0, math.cos(t * 1.7) * 0.09)
+			end
 
 			-- La cabeza: mira la hoja, salvo que el profe este cerca
 			local yaw, pitch = 0, math.rad(18)
@@ -2277,14 +2419,14 @@ function StudentNPCs.start()
 			-- Miradita de reojo al banco de al lado, que para eso estamos
 			if now > student.glanceUntil then
 				student.glanceUntil = now + rng:NextNumber(6, 16)
-				if rng:NextNumber() < 0.35 then
+				if student.face and rng:NextNumber() < 0.35 then
 					student.face.look(rng:NextInteger(0, 1) == 0 and -1 or 1, 0)
 					task.delay(1.2, function()
 						if student.model.Parent then
 							student.face.look(0, 0.2)
 						end
 					end)
-				elseif rng:NextNumber() < 0.5 then
+				elseif student.face and rng:NextNumber() < 0.5 then
 					student.face.blink()
 				end
 			end
@@ -2293,12 +2435,19 @@ function StudentNPCs.start()
 				mood = student.mood
 			end
 
-			student.face.setExpression(mood)
+			if student.face then
+				student.face.setExpression(mood)
+			end
 
 			-- La cabeza solo se reescribe si de verdad se movio.
 			if math.abs(yaw - student.lastYaw) > 0.02 or math.abs(pitch - student.lastPitch) > 0.02 then
 				student.lastYaw, student.lastPitch = yaw, pitch
-				student.head.CFrame = student.headBase * CFrame.Angles(pitch, yaw, 0)
+				if student.neck and student.neckBase then
+					-- Avatar: la cabeza cuelga del cuello, no se mueve suelta.
+					student.neck.C0 = student.neckBase * CFrame.Angles(pitch * 0.5, yaw, 0)
+				else
+					student.head.CFrame = student.headBase * CFrame.Angles(pitch, yaw, 0)
+				end
 			end
 		end
 	end)
@@ -2348,6 +2497,7 @@ type Entry = {
 }
 
 local entries: { [Player]: Entry } = {}
+local isWriting: ((Player) -> boolean)? = nil
 local teacher: any = nil
 local onCaught: ((Player) -> ())? = nil
 local active = false
@@ -2371,6 +2521,11 @@ end
 function SuspicionService.init(teacherRef: any, caughtCallback: (Player) -> ())
 	teacher = teacherRef
 	onCaught = caughtCallback
+end
+
+--- Quien esta escribiendo con el lapiz pasa por aplicado.
+function SuspicionService.setWritingCheck(check: (Player) -> boolean)
+	isWriting = check
 end
 
 function SuspicionService.setPhoneOut(player: Player, out: boolean)
@@ -2480,8 +2635,10 @@ function SuspicionService.start()
 					entry.risk = math.min(entry.risk, 0.85)
 				end
 			else
-				-- Guardado: baja mas rapido si el profe ni te mira.
-				local decay = T.RiskDecay * (seen and 0.55 or 1.6)
+				-- Guardado: baja mas rapido si el profe ni te mira, y
+				-- mas todavia si encima estas haciendo que escribís.
+				local base = (isWriting and isWriting(player)) and T.RiskDecayWriting or T.RiskDecay
+				local decay = base * (seen and 0.55 or 1.6)
 				entry.risk = math.clamp(entry.risk - decay * step, 0, 1)
 			end
 
@@ -3153,6 +3310,180 @@ function TeacherAI:destroy()
 end
 
 return TeacherAI
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX8">
+      <Properties>
+        <string name="Name">ToolService</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	ToolService
+	------------------------------------------------------------------
+	El inventario: un lapiz y un celular en la mochila de Roblox.
+
+	Son Tools de verdad, no un boton que prende un flag. Eso importa
+	porque el "a veces sale y a veces no" del celular venia justamente
+	de manejar el estado a mano: ahora equipar y guardar es lo que
+	Roblox ya sabe hacer, y el servidor solo escucha.
+
+		Lapiz   -> equipado y con click, hacés que escribís. Mientras
+		           escribís parecés aplicado: la sospecha baja mas
+		           rapido y el profe te pasa de largo antes.
+		Celular -> equipado, sale de abajo del banco (y el profe te lo
+		           puede ver). Con click, sacás la foto.
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local PhoneService = require(script.Parent:WaitForChild("PhoneService"))
+local SuspicionService = require(script.Parent:WaitForChild("SuspicionService"))
+
+local ToolService = {}
+
+local writingUntil: { [Player]: number } = {}
+
+-- ─────────────────────────────────────────────────────────────
+-- Lapiz
+-- ─────────────────────────────────────────────────────────────
+
+local function attachPencil(character: Model): BasePart?
+	local hand = (character:FindFirstChild("RightHand") :: BasePart?)
+		or (character:FindFirstChild("Right Arm") :: BasePart?)
+		or (character:FindFirstChild("RightLowerArm") :: BasePart?)
+	if not hand then
+		return nil
+	end
+
+	local existing = character:FindFirstChild("LapizEnMano")
+	if existing then
+		existing:Destroy()
+	end
+
+	local pencil = Util.part({
+		Name = "LapizEnMano",
+		Size = Vector3.new(0.12, 0.12, 1.1),
+		CFrame = hand.CFrame * CFrame.new(0, -0.3, -0.2) * CFrame.Angles(math.rad(-40), 0, 0),
+		Color = Color3.fromRGB(226, 178, 60),
+		Material = Enum.Material.SmoothPlastic,
+		Anchored = false,
+		CanCollide = false,
+		CastShadow = false,
+		Parent = character,
+	})
+	pencil.Massless = true
+	Util.weld(hand, pencil)
+
+	local tip = Util.part({
+		Name = "Punta",
+		Size = Vector3.new(0.1, 0.1, 0.16),
+		CFrame = pencil.CFrame * CFrame.new(0, 0, -0.63),
+		Color = Color3.fromRGB(42, 40, 44),
+		Material = Enum.Material.SmoothPlastic,
+		Anchored = false,
+		CanCollide = false,
+		CastShadow = false,
+		Parent = pencil,
+	})
+	tip.Massless = true
+	Util.weld(pencil, tip)
+
+	return pencil
+end
+
+--- Mientras "escribís" pasás por alumno aplicado.
+function ToolService.isWriting(player: Player): boolean
+	return (writingUntil[player] or 0) > os.clock()
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Alta de herramientas
+-- ─────────────────────────────────────────────────────────────
+
+local function buildTool(name: string): Tool
+	local tool = Instance.new("Tool")
+	tool.Name = name
+	tool.RequiresHandle = false      -- el modelo lo ponemos nosotros
+	tool.CanBeDropped = false
+	tool.ManualActivationOnly = false
+	return tool
+end
+
+function ToolService.give(player: Player)
+	local backpack = player:FindFirstChildOfClass("Backpack")
+	if not backpack then
+		return
+	end
+
+	for _, name in { "Lapiz", "Celular" } do
+		local existing = backpack:FindFirstChild(name)
+		if existing then
+			existing:Destroy()
+		end
+		local held = player.Character and player.Character:FindFirstChild(name)
+		if held then
+			held:Destroy()
+		end
+	end
+
+	-- ── Lapiz ─────────────────────────────────────────────
+	local pencil = buildTool("Lapiz")
+	pencil.Parent = backpack
+
+	pencil.Equipped:Connect(function()
+		if player.Character then
+			attachPencil(player.Character)
+		end
+	end)
+
+	pencil.Unequipped:Connect(function()
+		local held = player.Character and player.Character:FindFirstChild("LapizEnMano")
+		if held then
+			held:Destroy()
+		end
+	end)
+
+	pencil.Activated:Connect(function()
+		writingUntil[player] = os.clock() + Config.Exam.WriteDuration
+		Util.playSound(Config.Sounds.Write, player.Character or workspace, 0.25)
+	end)
+
+	-- ── Celular ───────────────────────────────────────────
+	local phone = buildTool("Celular")
+	phone.Parent = backpack
+
+	phone.Equipped:Connect(function()
+		PhoneService.setOut(player, true)
+	end)
+
+	phone.Unequipped:Connect(function()
+		PhoneService.setOut(player, false)
+	end)
+
+	-- El click para sacar la foto lo escucha el cliente en su propia
+	-- Tool: es el unico que sabe que ejercicio estas mirando.
+end
+
+--- Guarda el celular de verdad: lo desequipa, no solo baja un flag.
+function ToolService.stashPhone(player: Player)
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid:UnequipTools()
+	end
+	PhoneService.setOut(player, false)
+end
+
+Players.PlayerRemoving:Connect(function(player)
+	writingUntil[player] = nil
+end)
+
+return ToolService
 ]]></ProtectedString>
       </Properties>
     </Item>

@@ -38,6 +38,10 @@ local TeacherBubble = require(script:WaitForChild("TeacherBubble"))
 
 local player = Players.LocalPlayer
 
+-- Declarada antes de tiempo: la usa el click de la Tool, que se
+-- engancha mas arriba que su definicion.
+local takePhoto: () -> ()
+
 local state = {
 	phoneOut = false,
 	busy = false,
@@ -123,8 +127,29 @@ local function watchCharacter(character: Model)
 			bindPhone(character)
 		end
 	end)
+	-- El click de la Tool "Celular" es el disparador de la foto.
+	local function hookTools(container: Instance)
+		local function hook(tool: Instance)
+			if tool:IsA("Tool") and tool.Name == "Celular" then
+				tool.Activated:Connect(function()
+					task.spawn(takePhoto)
+				end)
+			end
+		end
+		for _, tool in container:GetChildren() do
+			hook(tool)
+		end
+		container.ChildAdded:Connect(hook)
+	end
+
+	local backpack = player:FindFirstChildOfClass("Backpack")
+	if backpack then
+		hookTools(backpack)
+	end
+	hookTools(character)
+
 	character.ChildRemoved:Connect(function(child)
-		if child.Name == "Celular" then
+		if child.Name == "Celular" and child:IsA("Model") then
 			state.screen = nil
 			CameraRig.setScreen(nil)
 			PhoneUI.destroy()
@@ -148,12 +173,41 @@ local function reasonText(reason: any, fallback: string): string
 	return Strings.get(fallback)
 end
 
+local function findTool(name: string): Tool?
+	local character = player.Character
+	local held = character and character:FindFirstChild(name)
+	if held and held:IsA("Tool") then
+		return held
+	end
+	local backpack = player:FindFirstChildOfClass("Backpack")
+	local stored = backpack and backpack:FindFirstChild(name)
+	return stored and stored:IsA("Tool") and stored or nil
+end
+
+--- Sacar y guardar el celular es equipar y desequipar la Tool. Manejarlo
+--- a mano con un flag era lo que hacia que a veces saliera y a veces no.
 local function setPhoneOut(out: boolean)
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then
+		return
+	end
+	if out then
+		local tool = findTool("Celular")
+		if tool then
+			humanoid:EquipTool(tool)
+		end
+	else
+		humanoid:UnequipTools()
+	end
+end
+
+--- Lo que manda es lo que dice el servidor, no lo que creemos aca.
+local function applyPhoneOut(out: boolean)
 	if state.phoneOut == out then
 		return
 	end
 	state.phoneOut = out
-	Net.event(Net.Events.PhoneState):FireServer(out)
 	Hud.setPhoneOut(out)
 
 	if out then
@@ -166,7 +220,7 @@ local function setPhoneOut(out: boolean)
 	end
 end
 
-local function takePhoto()
+function takePhoto()
 	if state.busy or not state.phoneOut then
 		return
 	end
@@ -415,12 +469,8 @@ Net.event(Net.Events.PhoneState).OnClientEvent:Connect(function(data)
 	state.phoneState = data
 	PhoneUI.setPhoneState(data)
 	Hud.setPhoneState(data)
-	if not data.out and state.phoneOut then
-		-- El servidor lo guardo por su cuenta (bateria, confiscacion, ronda).
-		state.phoneOut = false
-		Hud.setPhoneOut(false)
-		CameraRig.setMode("libre")
-	end
+	-- El estado del celular sale de aca y de ningun otro lado.
+	applyPhoneOut(data.out == true)
 end)
 
 Net.event(Net.Events.Notify).OnClientEvent:Connect(function(data)
@@ -434,6 +484,7 @@ Net.event(Net.Events.TeacherSay).OnClientEvent:Connect(function(data)
 end)
 
 Net.event(Net.Events.Caught).OnClientEvent:Connect(function(data)
+	setPhoneOut(false)
 	state.phoneOut = false
 	Hud.setPhoneOut(false)
 	Hud.setHasPhoto(false)

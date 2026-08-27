@@ -32,6 +32,7 @@ local PhoneService = require(script:WaitForChild("PhoneService"))
 local SuspicionService = require(script:WaitForChild("SuspicionService"))
 local RoundService = require(script:WaitForChild("RoundService"))
 local StudentNPCs = require(script:WaitForChild("StudentNPCs"))
+local ToolService = require(script:WaitForChild("ToolService"))
 local TeacherAI = require(script:WaitForChild("TeacherAI"))
 
 -- ─────────────────────────────────────────────────────────────
@@ -99,12 +100,14 @@ spawnLocation.Neutral = true
 -- ─────────────────────────────────────────────────────────────
 
 ExamService.init(classroom)
+-- La prueba existe desde el segundo cero: la hoja nunca esta en blanco.
+ExamService.newRound(os.time())
 
 -- Cada pieza va en su propio pcall: si el rig del profe o los companeros
 -- fallan por algo del entorno, el aula y la prueba tienen que seguir
 -- funcionando igual (y el Output tiene que decir por que).
 local teacher
-local built, teacherError = pcall(function()
+local teacherBuilt, teacherError = pcall(function()
 	teacher = TeacherAI.new(classroom, function(player)
 		RoundService.handleCatch(player)
 		-- Todo el curso se da vuelta a mirar. Es media la gracia.
@@ -112,7 +115,7 @@ local built, teacherError = pcall(function()
 	end)
 	teacher:start()
 end)
-if built then
+if teacherBuilt then
 	print("[Aula] Profesor en el aula.")
 else
 	warn("[Aula] No se pudo crear al profesor: " .. tostring(teacherError))
@@ -139,6 +142,7 @@ if teacher then
 		-- Riesgo al maximo: el profe deja lo que estaba haciendo y viene.
 		teacher:confront(player)
 	end)
+	SuspicionService.setWritingCheck(ToolService.isWriting)
 	SuspicionService.start()
 end
 PhoneService.start()
@@ -255,13 +259,16 @@ RoundService.start(classroom, teacher)
 -- runtime. Viene puesta en ShadowMap desde el archivo del lugar, y si
 -- abris esto en un lugar tuyo la ponés a mano en Lighting > Technology.
 local ok, err = pcall(function()
-	Lighting.Ambient = Color3.fromRGB(90, 92, 102)
-	Lighting.OutdoorAmbient = Color3.fromRGB(115, 120, 132)
-	Lighting.Brightness = 2.2
-	Lighting.ClockTime = 10.5
-	Lighting.GeographicLatitude = -34.6
-	Lighting.EnvironmentDiffuseScale = 0.6
-	Lighting.EnvironmentSpecularScale = 0.4
+	-- Luz de aula, no de quirofano: el brillo fuerte de antes quemaba
+	-- todo apenas entrabas.
+	Lighting.Ambient = Color3.fromRGB(78, 80, 90)
+	Lighting.OutdoorAmbient = Color3.fromRGB(96, 100, 112)
+	Lighting.Brightness = 1.1
+	Lighting.ExposureCompensation = -0.15
+	Lighting.ClockTime = 9.5
+	Lighting.GeographicLatitude = 41
+	Lighting.EnvironmentDiffuseScale = 0.45
+	Lighting.EnvironmentSpecularScale = 0.25
 	Lighting.GlobalShadows = true
 	Lighting.FogEnd = 400
 

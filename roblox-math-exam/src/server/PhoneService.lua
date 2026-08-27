@@ -232,6 +232,11 @@ function PhoneService.takePhoto(player: Player, questionId: number)
 	data.battery = math.max(0, data.battery - P.BatteryPerPhoto)
 	data.nextPhotoAt = now + P.PhotoCooldown
 
+	-- El celu se inclina hacia la hoja mientras dispara.
+	if data.weld and data.weld.Parent then
+		PhoneModel.aimAtPaper(data.weld)
+	end
+
 	local photo: Photo = {
 		id = newPhotoId(player, data),
 		questionId = questionId,

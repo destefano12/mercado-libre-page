@@ -35,6 +35,7 @@ type Entry = {
 }
 
 local entries: { [Player]: Entry } = {}
+local isWriting: ((Player) -> boolean)? = nil
 local teacher: any = nil
 local onCaught: ((Player) -> ())? = nil
 local active = false
@@ -58,6 +59,11 @@ end
 function SuspicionService.init(teacherRef: any, caughtCallback: (Player) -> ())
 	teacher = teacherRef
 	onCaught = caughtCallback
+end
+
+--- Quien esta escribiendo con el lapiz pasa por aplicado.
+function SuspicionService.setWritingCheck(check: (Player) -> boolean)
+	isWriting = check
 end
 
 function SuspicionService.setPhoneOut(player: Player, out: boolean)
@@ -167,8 +173,10 @@ function SuspicionService.start()
 					entry.risk = math.min(entry.risk, 0.85)
 				end
 			else
-				-- Guardado: baja mas rapido si el profe ni te mira.
-				local decay = T.RiskDecay * (seen and 0.55 or 1.6)
+				-- Guardado: baja mas rapido si el profe ni te mira, y
+				-- mas todavia si encima estas haciendo que escribís.
+				local base = (isWriting and isWriting(player)) and T.RiskDecayWriting or T.RiskDecay
+				local decay = base * (seen and 0.55 or 1.6)
 				entry.risk = math.clamp(entry.risk - decay * step, 0, 1)
 			end
 

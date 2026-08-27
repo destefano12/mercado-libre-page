@@ -28,6 +28,12 @@ PhoneModel.RAISED_C0 = CFrame.new(0.55, 0.15, -1.35)
 	* CFrame.Angles(0, math.pi, 0)
 	* CFrame.Angles(math.rad(-22), 0, 0)
 
+-- Apuntando a la hoja: el celu baja y se inclina para que la camara
+-- mire el banco. Antes disparabas con el celu mirando al techo.
+PhoneModel.AIM_C0 = CFrame.new(0.35, -0.35, -1.5)
+	* CFrame.Angles(0, math.pi, 0)
+	* CFrame.Angles(math.rad(-72), 0, 0)
+
 local function findHold(character: Model): BasePart?
 	return (character:FindFirstChild("HumanoidRootPart") :: BasePart?)
 		or (character:FindFirstChild("UpperTorso") :: BasePart?)
@@ -118,6 +124,20 @@ function PhoneModel.setRaised(weld: Weld, raised: boolean)
 	TweenService:Create(weld, TweenInfo.new(Config.Phone.RaiseTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 		C0 = goal,
 	}):Play()
+end
+
+--- Baja el celu a apuntar la hoja, dispara, y lo vuelve a subir.
+function PhoneModel.aimAtPaper(weld: Weld)
+	TweenService:Create(weld, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		C0 = PhoneModel.AIM_C0,
+	}):Play()
+	task.delay(0.55, function()
+		if weld.Parent then
+			TweenService:Create(weld, TweenInfo.new(0.28, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				C0 = PhoneModel.RAISED_C0,
+			}):Play()
+		end
+	end)
 end
 
 return PhoneModel
