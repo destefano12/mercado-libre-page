@@ -45,12 +45,27 @@ local HAIR_COLORS = {
 }
 
 local SWEATERS = {
-	Color3.fromRGB(44, 62, 118),
-	Color3.fromRGB(126, 46, 54),
-	Color3.fromRGB(48, 96, 82),
-	Color3.fromRGB(72, 66, 88),
-	Color3.fromRGB(38, 42, 52),
-	Color3.fromRGB(158, 96, 52),
+	Color3.fromRGB(58, 74, 112),
+	Color3.fromRGB(118, 60, 62),
+	Color3.fromRGB(62, 96, 86),
+	Color3.fromRGB(78, 74, 92),
+	Color3.fromRGB(46, 50, 60),
+	Color3.fromRGB(152, 106, 68),
+	Color3.fromRGB(186, 188, 192),
+}
+
+local PANTS = {
+	Color3.fromRGB(56, 66, 88),     -- jean
+	Color3.fromRGB(42, 46, 56),     -- negro
+	Color3.fromRGB(96, 92, 84),     -- caqui
+	Color3.fromRGB(72, 82, 104),
+}
+
+local SNEAKERS = {
+	Color3.fromRGB(236, 236, 232),
+	Color3.fromRGB(44, 48, 58),
+	Color3.fromRGB(132, 56, 56),
+	Color3.fromRGB(60, 82, 118),
 }
 
 type Student = {
@@ -105,49 +120,70 @@ local function buildStudent(desk: any, index: number): Student
 	local origin = desk.seat.CFrame * CFrame.new(0, 0.18, 0)
 
 	local skin = SKINS[rng:NextInteger(1, #SKINS)]
-	local sweater = SWEATERS[rng:NextInteger(1, #SWEATERS)]
 	local hairColor = HAIR_COLORS[rng:NextInteger(1, #HAIR_COLORS)]
 	local style = CharacterArt.HairStyles[rng:NextInteger(1, #CharacterArt.HairStyles)]
-	local guardapolvo = rng:NextNumber() < 0.45
 
-	local shirtColor = guardapolvo and Color3.fromRGB(246, 246, 242) or sweater
+	-- Tres pintas: buzo con capucha, remera y camisa clara. Nada de
+	-- uniformes: en una escuela publica de Estados Unidos cada uno viene
+	-- con lo suyo, pero la paleta se mantiene corta para que no sea un
+	-- carnaval.
+	local roll = rng:NextNumber()
+	local hoodie = roll < 0.45
+	local guardapolvo = roll >= 0.45 and roll < 0.62
+	local shirtColor = guardapolvo and Color3.fromRGB(240, 240, 236) or SWEATERS[rng:NextInteger(1, #SWEATERS)]
+	local pantsColor = PANTS[rng:NextInteger(1, #PANTS)]
+	local sneakerColor = SNEAKERS[rng:NextInteger(1, #SNEAKERS)]
 
-	-- Cadera y torso (con una leve inclinacion hacia adelante, escribiendo)
-	piece(model, "Cadera", Vector3.new(1.9, 0.7, 1.1), origin * CFrame.new(0, 0.35, 0),
-		Color3.fromRGB(42, 46, 60), Enum.Material.Fabric)
+	-- Cadera y torso, con una leve inclinacion adelante (estan escribiendo)
+	piece(model, "Cadera", Vector3.new(1.7, 0.65, 1.05), origin * CFrame.new(0, 0.32, 0),
+		Color3.fromRGB(48, 52, 64), Enum.Material.Fabric)
 
-	local torsoCF = origin * CFrame.new(0, 1.7, -0.05) * CFrame.Angles(math.rad(-7), 0, 0)
-	local torso = piece(model, "Torso", Vector3.new(2.0, 2.0, 1.15), torsoCF, shirtColor, Enum.Material.Fabric)
-	if guardapolvo then
-		piece(model, "Cuello", Vector3.new(1.1, 0.3, 1.2), torsoCF * CFrame.new(0, 0.95, 0),
-			Color3.fromRGB(214, 216, 222), Enum.Material.Fabric)
+	local torsoCF = origin * CFrame.new(0, 1.65, -0.05) * CFrame.Angles(math.rad(-8), 0, 0)
+	local torso = piece(model, "Torso", Vector3.new(1.8, 1.95, 1.0), torsoCF, shirtColor, Enum.Material.Fabric)
+	piece(model, "Hombros", Vector3.new(2.05, 0.42, 1.05), torsoCF * CFrame.new(0, 0.85, 0), shirtColor, Enum.Material.Fabric)
+	piece(model, "Cuello", Vector3.new(0.65, 0.4, 0.65), torsoCF * CFrame.new(0, 1.12, 0.02), skin)
+
+	if hoodie then
+		-- Capucha caida sobre la espalda: lee "secundario" al instante
+		piece(model, "Capucha", Vector3.new(1.5, 0.75, 0.55), torsoCF * CFrame.new(0, 0.82, 0.58), shirtColor, Enum.Material.Fabric)
+		piece(model, "Bolsillo", Vector3.new(1.1, 0.5, 0.14), torsoCF * CFrame.new(0, -0.55, -0.55),
+			shirtColor:Lerp(Color3.new(0, 0, 0), 0.12), Enum.Material.Fabric)
+	elseif guardapolvo then
+		piece(model, "Cierre", Vector3.new(0.1, 1.8, 0.12), torsoCF * CFrame.new(0, 0, -0.52),
+			Color3.fromRGB(206, 208, 214), Enum.Material.Fabric)
+	else
+		piece(model, "Estampa", Vector3.new(0.85, 0.6, 0.12), torsoCF * CFrame.new(0, 0.05, -0.52),
+			shirtColor:Lerp(Color3.new(1, 1, 1), 0.55), Enum.Material.Fabric)
 	end
 
-	-- Piernas: muslo hacia adelante, pantorrilla hacia abajo, zapatilla
+	-- Piernas: muslo adelante, pantorrilla abajo, zapatilla con suela
 	for _, side in { -1, 1 } do
-		piece(model, "Muslo", Vector3.new(0.85, 0.7, 1.7), origin * CFrame.new(side * 0.55, 0.05, -0.85),
-			Color3.fromRGB(42, 46, 60), Enum.Material.Fabric)
-		piece(model, "Pantorrilla", Vector3.new(0.8, 1.7, 0.8), origin * CFrame.new(side * 0.55, -0.85, -1.6),
-			Color3.fromRGB(42, 46, 60), Enum.Material.Fabric)
-		piece(model, "Zapatilla", Vector3.new(0.9, 0.35, 1.15), origin * CFrame.new(side * 0.55, -1.85, -1.85),
-			Color3.fromRGB(30, 32, 40), Enum.Material.Fabric)
+		piece(model, "Muslo", Vector3.new(0.78, 0.65, 1.7), origin * CFrame.new(side * 0.5, 0.02, -0.85),
+			pantsColor, Enum.Material.Fabric)
+		piece(model, "Pantorrilla", Vector3.new(0.72, 1.7, 0.72), origin * CFrame.new(side * 0.5, -0.9, -1.6),
+			pantsColor, Enum.Material.Fabric)
+		piece(model, "Zapatilla", Vector3.new(0.82, 0.32, 1.15), origin * CFrame.new(side * 0.5, -1.86, -1.85),
+			sneakerColor, Enum.Material.Fabric)
+		piece(model, "Suela", Vector3.new(0.86, 0.16, 1.2), origin * CFrame.new(side * 0.5, -2.05, -1.87),
+			Color3.fromRGB(240, 240, 236), Enum.Material.SmoothPlastic)
 	end
 
-	-- Brazo izquierdo apoyado, derecho escribiendo
-	piece(model, "BrazoIzq", Vector3.new(0.7, 1.3, 0.7), origin * CFrame.new(-1.3, 1.75, -0.15), shirtColor, Enum.Material.Fabric)
-	piece(model, "AntebrazoIzq", Vector3.new(0.65, 0.65, 1.5), origin * CFrame.new(-1.15, 1.05, -1.0), shirtColor, Enum.Material.Fabric)
-	piece(model, "ManoIzq", Vector3.new(0.6, 0.42, 0.7), origin * CFrame.new(-1.05, 1.02, -1.75), skin)
+	-- Brazos: el izquierdo apoyado sujetando la hoja, el derecho escribiendo
+	local sleeve = hoodie and shirtColor or (guardapolvo and shirtColor or skin)
+	piece(model, "BrazoIzq", Vector3.new(0.62, 1.25, 0.62), origin * CFrame.new(-1.15, 1.7, -0.15), sleeve, Enum.Material.Fabric)
+	piece(model, "AntebrazoIzq", Vector3.new(0.58, 0.58, 1.45), origin * CFrame.new(-1.02, 1.05, -1.0), sleeve, Enum.Material.Fabric)
+	piece(model, "ManoIzq", Vector3.new(0.54, 0.38, 0.66), origin * CFrame.new(-0.95, 1.02, -1.72), skin)
 
-	piece(model, "BrazoDer", Vector3.new(0.7, 1.3, 0.7), origin * CFrame.new(1.3, 1.75, -0.15), shirtColor, Enum.Material.Fabric)
-	local forearm = piece(model, "AntebrazoDer", Vector3.new(0.65, 0.65, 1.5), origin * CFrame.new(1.15, 1.05, -1.0), shirtColor, Enum.Material.Fabric)
-	local hand = piece(model, "ManoDer", Vector3.new(0.6, 0.42, 0.7), origin * CFrame.new(1.0, 1.02, -1.75), skin)
-	piece(model, "Lapicera", Vector3.new(0.13, 0.13, 0.95),
-		origin * CFrame.new(0.95, 0.98, -2.05) * CFrame.Angles(math.rad(-35), 0, 0),
-		Color3.fromRGB(32, 46, 120))
+	piece(model, "BrazoDer", Vector3.new(0.62, 1.25, 0.62), origin * CFrame.new(1.15, 1.7, -0.15), sleeve, Enum.Material.Fabric)
+	local forearm = piece(model, "AntebrazoDer", Vector3.new(0.58, 0.58, 1.45), origin * CFrame.new(1.02, 1.05, -1.0), sleeve, Enum.Material.Fabric)
+	local hand = piece(model, "ManoDer", Vector3.new(0.54, 0.38, 0.66), origin * CFrame.new(0.9, 1.02, -1.72), skin)
+	piece(model, "Lapiz", Vector3.new(0.11, 0.11, 0.9),
+		origin * CFrame.new(0.86, 0.98, -2.02) * CFrame.Angles(math.rad(-35), 0, 0),
+		Color3.fromRGB(226, 178, 60))
 
 	-- Cabeza
-	local headCF = origin * CFrame.new(0, 3.3, -0.2)
-	local head = piece(model, "Head", Vector3.new(1.35, 1.35, 1.35), headCF, skin)
+	local headCF = origin * CFrame.new(0, 3.25, -0.22)
+	local head = piece(model, "Head", Vector3.new(1.25, 1.3, 1.25), headCF, skin)
 	local face = CharacterArt.attachFace(head, skin)
 	CharacterArt.attachHair(head, style, hairColor)
 	if rng:NextNumber() < 0.25 then

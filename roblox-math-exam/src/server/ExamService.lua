@@ -215,20 +215,20 @@ end
 function ExamService.submitAnswer(player: Player, questionId: number, choice: number)
 	local entry = state.players[player]
 	if not entry then
-		return { ok = false, reason = "Todavia no estas rindiendo." }
+		return { ok = false, reason = { key = "error.notSitting" } }
 	end
 	if entry.finished then
-		return { ok = false, reason = "Ya entregaste la prueba." }
+		return { ok = false, reason = { key = "error.finished" } }
 	end
 	local question = state.questions[questionId]
 	if not question then
-		return { ok = false, reason = "Ese ejercicio no existe." }
+		return { ok = false, reason = { key = "error.noQuestion" } }
 	end
 	if entry.answers[questionId] then
-		return { ok = false, reason = "Ya respondiste ese ejercicio." }
+		return { ok = false, reason = { key = "error.answered" } }
 	end
 	if typeof(choice) ~= "number" or choice < 1 or choice > #question.choices or choice % 1 ~= 0 then
-		return { ok = false, reason = "Opcion invalida." }
+		return { ok = false, reason = { key = "error.badOption" } }
 	end
 
 	local correct = choice == question.answerIndex

@@ -1,5 +1,5 @@
 <roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
-  <Item class="Folder" referent="RBX8">
+  <Item class="Folder" referent="RBX9">
     <Properties>
       <string name="Name">Shared</string>
     </Properties>
@@ -364,6 +364,155 @@ function CharacterArt.attachGlasses(head: BasePart, color: Color3?)
 		CFrame.new(w * 0.44, h * 0.06, 0), frameColor)
 end
 
+-- ─────────────────────────────────────────────────────────────
+-- Ropa
+-- ─────────────────────────────────────────────────────────────
+
+--- Busca una parte del cuerpo probando los nombres de los dos rigs
+--- posibles (avatar R15 y el rig propio de respaldo).
+local function findPart(model: Model, candidates: { string }): BasePart?
+	for _, name in candidates do
+		local part = model:FindFirstChild(name)
+		if part and part:IsA("BasePart") then
+			return part
+		end
+	end
+	return nil
+end
+
+--- Funda una parte del cuerpo con una capa de ropa apenas mas grande.
+local function shell(host: BasePart, name: string, scale: Vector3, offset: CFrame, color: Color3, material: Enum.Material): BasePart
+	local part = Util.part({
+		Name = name,
+		Size = host.Size * scale,
+		CFrame = host.CFrame * offset,
+		Color = color,
+		Material = material,
+		Anchored = false,
+		CanCollide = false,
+		CastShadow = false,
+		Parent = host,
+	})
+	part.Massless = true
+	Util.weld(host, part)
+	return part
+end
+
+--- Traje entero: saco, solapas, camisa, corbata, pantalon y zapatos.
+--- Anda igual sobre un avatar R15 que sobre el rig de respaldo.
+function CharacterArt.attachSuit(model: Model, suitColor: Color3?, tieColor: Color3?)
+	local suit = suitColor or Color3.fromRGB(52, 56, 68)
+	local tie = tieColor or Color3.fromRGB(112, 40, 46)
+	local shirt = Color3.fromRGB(238, 240, 244)
+
+	local torso = findPart(model, { "UpperTorso", "Torso" })
+	if torso then
+		local depth = torso.Size.Z
+		shell(torso, "Saco", Vector3.new(1.08, 1.04, 1.14), CFrame.new(0, 0, 0.01), suit, Enum.Material.Fabric)
+		-- Camisa y corbata asomando entre las solapas
+		shell(torso, "Camisa", Vector3.new(0.42, 0.86, 1.2), CFrame.new(0, 0.04, -0.01), shirt, Enum.Material.Fabric)
+		shell(torso, "Corbata", Vector3.new(0.16, 0.72, 1.26), CFrame.new(0, -0.04, -0.01), tie, Enum.Material.Fabric)
+		shell(torso, "Nudo", Vector3.new(0.2, 0.14, 1.28), CFrame.new(0, torso.Size.Y * 0.34, -0.01), tie, Enum.Material.Fabric)
+		-- Solapas: dos tiras inclinadas sobre el pecho
+		for _, side in { -1, 1 } do
+			local lapel = shell(torso, "Solapa", Vector3.new(0.26, 0.62, 1.18),
+				CFrame.new(side * torso.Size.X * 0.17, torso.Size.Y * 0.1, -depth * 0.01)
+					* CFrame.Angles(0, 0, math.rad(side * 9)), suit, Enum.Material.Fabric)
+			lapel.Color = suit:Lerp(Color3.new(0, 0, 0), 0.12)
+		end
+		shell(torso, "Cuello", Vector3.new(0.62, 0.12, 1.16), CFrame.new(0, torso.Size.Y * 0.44, 0), shirt, Enum.Material.Fabric)
+	end
+
+	local lowerTorso = findPart(model, { "LowerTorso" })
+	if lowerTorso then
+		shell(lowerTorso, "Cintura", Vector3.new(1.06, 1.04, 1.1), CFrame.new(), suit, Enum.Material.Fabric)
+		shell(lowerTorso, "Cinturon", Vector3.new(1.1, 0.22, 1.14), CFrame.new(0, lowerTorso.Size.Y * 0.42, 0),
+			Color3.fromRGB(38, 32, 30), Enum.Material.Fabric)
+	end
+
+	-- Mangas
+	for _, name in { "LeftUpperArm", "RightUpperArm", "LeftLowerArm", "RightLowerArm", "BrazoIzq", "BrazoDer" } do
+		local arm = model:FindFirstChild(name)
+		if arm and arm:IsA("BasePart") then
+			local cuff = string.find(name, "Lower") ~= nil
+			shell(arm, "Manga", Vector3.new(1.09, 1.02, 1.09), CFrame.new(), suit, Enum.Material.Fabric)
+			if cuff then
+				shell(arm, "Puño", Vector3.new(1.12, 0.16, 1.12), CFrame.new(0, -arm.Size.Y * 0.42, 0), shirt, Enum.Material.Fabric)
+			end
+		end
+	end
+
+	-- Pantalon
+	for _, name in { "LeftUpperLeg", "RightUpperLeg", "LeftLowerLeg", "RightLowerLeg", "PiernaIzq", "PiernaDer" } do
+		local leg = model:FindFirstChild(name)
+		if leg and leg:IsA("BasePart") then
+			shell(leg, "Pantalon", Vector3.new(1.08, 1.02, 1.08), CFrame.new(), suit:Lerp(Color3.new(0, 0, 0), 0.18), Enum.Material.Fabric)
+		end
+	end
+
+	-- Zapatos
+	for _, name in { "LeftFoot", "RightFoot" } do
+		local foot = model:FindFirstChild(name)
+		if foot and foot:IsA("BasePart") then
+			shell(foot, "Zapato", Vector3.new(1.14, 1.1, 1.2), CFrame.new(0, 0, -foot.Size.Z * 0.06),
+				Color3.fromRGB(32, 28, 28), Enum.Material.SmoothPlastic)
+		end
+	end
+end
+
+--- La tablilla con la lista de curso. Un profesor sin tablilla no
+--- asusta a nadie.
+function CharacterArt.attachClipboard(model: Model): BasePart?
+	local hand = findPart(model, { "RightHand", "RightLowerArm", "BrazoDer", "Right Arm" })
+	if not hand then
+		return nil
+	end
+
+	local board = Util.part({
+		Name = "Tablilla",
+		Size = Vector3.new(1.5, 0.12, 2),
+		CFrame = hand.CFrame * CFrame.new(0, -hand.Size.Y * 0.5 - 0.2, -0.4) * CFrame.Angles(math.rad(-15), 0, 0),
+		Color = Color3.fromRGB(150, 116, 78),
+		Material = Enum.Material.Wood,
+		Anchored = false,
+		CanCollide = false,
+		CastShadow = false,
+		Parent = hand,
+	})
+	board.Massless = true
+	Util.weld(hand, board)
+
+	local sheet = Util.part({
+		Name = "Planilla",
+		Size = Vector3.new(1.3, 0.05, 1.7),
+		CFrame = board.CFrame * CFrame.new(0, 0.09, -0.1),
+		Color = Color3.fromRGB(248, 248, 244),
+		Material = Enum.Material.SmoothPlastic,
+		Anchored = false,
+		CanCollide = false,
+		CastShadow = false,
+		Parent = board,
+	})
+	sheet.Massless = true
+	Util.weld(board, sheet)
+
+	local clip = Util.part({
+		Name = "Clip",
+		Size = Vector3.new(0.7, 0.14, 0.28),
+		CFrame = board.CFrame * CFrame.new(0, 0.14, -0.82),
+		Color = Color3.fromRGB(176, 180, 188),
+		Material = Enum.Material.Metal,
+		Anchored = false,
+		CanCollide = false,
+		CastShadow = false,
+		Parent = board,
+	})
+	clip.Massless = true
+	Util.weld(board, clip)
+
+	return board
+end
+
 return CharacterArt
 ]]></ProtectedString>
       </Properties>
@@ -397,19 +546,21 @@ Config.Classroom = {
 
 	Rows = 5,              -- filas de bancos (de adelante hacia atras)
 	Columns = 4,           -- bancos por fila
-	DeskSpacingX = 9,      -- separacion entre columnas (pasillos)
-	DeskSpacingZ = 8,      -- separacion entre filas
+	DeskSpacingX = 8,      -- separacion entre columnas (pasillos)
+	DeskSpacingZ = 7.5,    -- separacion entre filas
 	FirstRowOffsetZ = 14,  -- distancia del pizarron a la primera fila
 
-	WallHeight = 16,
+	WallHeight = 15,
 	WallThickness = 1,
-	Padding = 12,          -- aire entre el ultimo banco y la pared del fondo
+	Padding = 10,          -- aire entre el ultimo banco y la pared del fondo
 
-	FloorMaterial = Enum.Material.WoodPlanks,
-	FloorColor = Color3.fromRGB(150, 118, 84),
+	-- Paleta de aula americana: linoleo claro, bloque pintado, verde
+	-- pizarron. Corta a proposito.
+	FloorColor = Color3.fromRGB(198, 196, 188),
 	WallMaterial = Enum.Material.Concrete,
-	WallColor = Color3.fromRGB(226, 222, 210),
-	TrimColor = Color3.fromRGB(72, 92, 110),
+	WallColor = Color3.fromRGB(232, 230, 222),
+	TrimColor = Color3.fromRGB(96, 102, 112),
+	BoardColor = Color3.fromRGB(48, 104, 74),
 }
 
 -- ─────────────────────────────────────────────────────────────
@@ -434,31 +585,35 @@ Config.Exam = {
 -- PROFESOR
 -- ─────────────────────────────────────────────────────────────
 Config.Teacher = {
-	DisplayName = "Prof. Battaglia",
+	DisplayName = "Mr. Hollis",
 
-	WalkSpeed = 7.5,
-	ChaseSpeed = 13,
+	-- Camina despacio y parejo: es un tipo formal, no persigue a nadie
+	-- hasta que hace falta.
+	WalkSpeed = 6.2,
+	ChaseSpeed = 12,
 
-	-- Vision
-	FieldOfView = 105,          -- grados totales del cono
-	ViewDistance = 46,
-	PeripheralFactor = 0.55,    -- cuanto "cuenta" lo que ve de reojo
+	-- Vision. Es estricto: ve lejos y abre bastante el cono.
+	FieldOfView = 118,          -- grados totales del cono
+	ViewDistance = 54,
+	PeripheralFactor = 0.6,     -- cuanto "cuenta" lo que ve de reojo
 
 	-- Comportamiento
-	InspectChance = 0.55,       -- prob. de frenar en un banco al pasar
-	InspectDuration = NumberRange.new(2.5, 5.0),
-	BoardChance = 0.30,         -- prob. de irse al pizarron (ventana segura)
-	BoardDuration = NumberRange.new(6.0, 11.0),
-	IdleAtWaypoint = NumberRange.new(0.4, 1.6),
-	HeadTurnSpeed = 4.0,
+	InspectChance = 0.68,       -- prob. de frenar en un banco al pasar
+	InspectDuration = NumberRange.new(3.0, 6.0),
+	BoardChance = 0.22,         -- prob. de irse al pizarron (ventana segura)
+	BoardDuration = NumberRange.new(5.0, 8.5),
+	BoardCooldown = 34,         -- segundos minimos entre dos idas al pizarron
+	IdleAtWaypoint = NumberRange.new(0.8, 2.2),
+	HeadTurnSpeed = 2.6,        -- gira la cabeza despacio, con intencion
+	ScanChance = 0.3,           -- prob. de frenar a barrer el aula con la vista
 
 	-- Sospecha (0..1 por jugador)
-	RiskGainSeen = 0.42,        -- por segundo, celu visible y a la vista
-	RiskGainInspect = 0.85,     -- por segundo, ademas te esta revisando la prueba
+	RiskGainSeen = 0.55,        -- por segundo, celu visible y a la vista
+	RiskGainInspect = 1.1,      -- por segundo, ademas te esta revisando la prueba
 	RiskGainHidden = 0.05,      -- por segundo, celu afuera pero no te ve
-	RiskDecay = 0.22,           -- por segundo, celu guardado
+	RiskDecay = 0.2,            -- por segundo, celu guardado
 	RiskCaught = 1.0,
-	RiskWarning = 0.55,         -- desde aca el HUD se pone rojo
+	RiskWarning = 0.5,          -- desde aca el HUD se pone rojo
 }
 
 -- ─────────────────────────────────────────────────────────────
@@ -479,19 +634,23 @@ Config.Phone = {
 	ThinkTime = NumberRange.new(1.4, 2.8),
 	TypeSpeed = 55,             -- caracteres por segundo al escribir la respuesta
 	ModelName = "RoGPT-4o",
-	Greeting = "Hola. Mandame la foto del ejercicio y te lo resuelvo paso a paso.",
 }
 
 -- ─────────────────────────────────────────────────────────────
 -- CAMARA (todo el juego es 3D: la camara acompaña, no hay pantallas planas)
 -- ─────────────────────────────────────────────────────────────
 Config.Camera = {
-	DeskOffset = Vector3.new(0, 3.2, 5.4),   -- sobre el hombro, mirando la prueba
-	DeskLookOffset = Vector3.new(0, 1.1, 0),
-	PhoneOffset = Vector3.new(0.9, 2.4, 2.6),-- acercada al celu
-	BlendTime = 0.45,
-	FieldOfView = 68,
-	PhoneFieldOfView = 52,
+	-- La camara de "hoja" y "celu" sale de los ojos del personaje: se
+	-- planta un poco adelante de la cara y apunta al objeto. Si la
+	-- anclás al objeto y la tirás para atras, termina adentro de tu
+	-- propia cabeza y no se ve nada.
+	EyeOffset = CFrame.new(0, 0.3, -0.6),
+
+	BlendTime = 0.35,
+	FieldOfView = 70,
+	PaperFieldOfView = 60,
+	PhoneFieldOfView = 46,
+	MenuFieldOfView = 42,
 }
 
 -- Sonidos: dejalos vacios y no suena nada (sin warnings en consola).
@@ -507,8 +666,8 @@ Config.Sounds = {
 }
 
 Config.Penalty = {
-	GradePerCatch = 1.5,        -- puntos de nota que te descuenta cada vez que te pillan
-	MaxCatches = 3,             -- a la tercera te saca de la prueba
+	GradePerCatch = 2,          -- puntos de nota que te descuenta cada vez que te pillan
+	MaxCatches = 2,             -- a la segunda te saca de la prueba
 }
 
 table.freeze(Config)
@@ -526,20 +685,26 @@ return Config
 	Genera los ejercicios de la prueba y, para cada uno, la resolucion
 	paso a paso que despues escupe RoGPT en la pantalla del celular.
 
+	Nada de texto armado: cada ejercicio viaja como clave de idioma mas
+	sus datos, y el cliente lo escribe en el idioma del jugador. La parte
+	matematica (las cuentas) va tal cual, que es igual en todos lados.
+
 	Cada generador devuelve:
-		prompt      : el enunciado tal cual va impreso en la hoja
-		answer      : la respuesta correcta (texto)
+		topicKey    : clave del tema
+		promptKey   : clave del enunciado
+		promptArgs  : datos para completarlo (incluida la cuenta ya armada)
+		answer      : la respuesta correcta (texto, sin traducir)
 		distractors : errores tipicos (para las opciones)
-		steps       : { {title, body}, ... }  resolucion del "modelo"
-		topic       : etiqueta para el chat
+		steps       : { {titleKey, body}, ... }  resolucion del "modelo"
 --]]
 
-export type Step = { title: string, body: string }
+export type Step = { titleKey: string, body: string }
 
 export type Question = {
 	id: number,
-	topic: string,
-	prompt: string,
+	topicKey: string,
+	promptKey: string,
+	promptArgs: { [string]: any },
 	choices: { string },
 	answerIndex: number,
 	steps: { Step },
@@ -612,8 +777,9 @@ end
 -- ─────────────────────────────────────────────────────────────
 
 type Raw = {
-	topic: string,
-	prompt: string,
+	topicKey: string,
+	promptKey: string,
+	promptArgs: { [string]: any },
 	answer: string,
 	distractors: { string },
 	steps: { Step },
@@ -627,17 +793,15 @@ generators[1] = {
 		local a, b, c, d = rng:NextInteger(3, 12), rng:NextInteger(2, 9), rng:NextInteger(2, 9), rng:NextInteger(2, 12)
 		local result = a + b * c - d
 		return {
-			topic = "Jerarquia de operaciones",
-			prompt = string.format("Resolve: %d + %d x %d - %d", a, b, c, d),
+			topicKey = "topic.order",
+			promptKey = "q.order.prompt",
+			promptArgs = { eq = string.format("%d + %d × %d - %d", a, b, c, d) },
 			answer = num(result),
 			distractors = { num((a + b) * c - d), num(a + b * (c - d)), num(result + b) },
 			steps = {
-				{ title = "1. Primero la multiplicacion",
-				  body = string.format("%d x %d = %d", b, c, b * c) },
-				{ title = "2. Ahora sumas y restas de izquierda a derecha",
-				  body = string.format("%d + %d - %d = %d", a, b * c, d, result) },
-				{ title = "3. Resultado",
-				  body = string.format("= %d", result) },
+				{ titleKey = "step.multiplyFirst", body = string.format("%d × %d = %d", b, c, b * c) },
+				{ titleKey = "step.leftToRight", body = string.format("%d + %d - %d = %d", a, b * c, d, result) },
+				{ titleKey = "step.result", body = string.format("= %d", result) },
 			},
 		}
 	end,
@@ -645,23 +809,22 @@ generators[1] = {
 		local a, b, c = rng:NextInteger(2, 9), rng:NextInteger(2, 9), rng:NextInteger(2, 12)
 		local result = a * (b + c)
 		return {
-			topic = "Propiedad distributiva",
-			prompt = string.format("Resolve: %d x (%d + %d)", a, b, c),
+			topicKey = "topic.distributive",
+			promptKey = "q.distributive.prompt",
+			promptArgs = { eq = string.format("%d × (%d + %d)", a, b, c) },
 			answer = num(result),
 			distractors = { num(a * b + c), num(a + b * c), num(result - a) },
 			steps = {
-				{ title = "1. Resolves el parentesis",
-				  body = string.format("%d + %d = %d", b, c, b + c) },
-				{ title = "2. Multiplicas",
-				  body = string.format("%d x %d = %d", a, b + c, result) },
-				{ title = "3. Verificacion (distributiva)",
-				  body = string.format("%d x %d + %d x %d = %d + %d = %d", a, b, a, c, a * b, a * c, result) },
+				{ titleKey = "step.solveParen", body = string.format("%d + %d = %d", b, c, b + c) },
+				{ titleKey = "step.multiply", body = string.format("%d × %d = %d", a, b + c, result) },
+				{ titleKey = "step.checkDistributive",
+				  body = string.format("%d×%d + %d×%d = %d + %d = %d", a, b, a, c, a * b, a * c, result) },
 			},
 		}
 	end,
 }
 
--- Dificultad 2 ─ ecuacion lineal simple
+-- Dificultad 2 ─ ecuacion lineal simple y porcentaje
 generators[2] = {
 	function(rng: Random): Raw
 		local a = rng:NextInteger(2, 9)
@@ -672,8 +835,9 @@ generators[2] = {
 		end
 		local c = a * x + b
 		return {
-			topic = "Ecuacion de primer grado",
-			prompt = string.format("Despeja x:   %dx %s = %d", a, signed(b), c),
+			topicKey = "topic.linear",
+			promptKey = "q.linear.prompt",
+			promptArgs = { eq = string.format("%dx %s = %d", a, signed(b), c) },
 			answer = string.format("x = %d", x),
 			distractors = {
 				string.format("x = %s", num((c + b) / a)),
@@ -681,14 +845,10 @@ generators[2] = {
 				string.format("x = %s", num((c - b) / (a + 1))),
 			},
 			steps = {
-				{ title = "1. Pasas el termino independiente",
-				  body = string.format("%dx = %d %s", a, c, signed(-b)) },
-				{ title = "2. Te queda",
-				  body = string.format("%dx = %d", a, c - b) },
-				{ title = "3. Dividis por el coeficiente",
-				  body = string.format("x = %d / %d = %d", c - b, a, x) },
-				{ title = "4. Verificacion",
-				  body = string.format("%d x (%d) %s = %d ✓", a, x, signed(b), c) },
+				{ titleKey = "step.moveTerm", body = string.format("%dx = %d %s", a, c, signed(-b)) },
+				{ titleKey = "step.youGet", body = string.format("%dx = %d", a, c - b) },
+				{ titleKey = "step.divideCoef", body = string.format("x = %d ÷ %d = %d", c - b, a, x) },
+				{ titleKey = "step.check", body = string.format("%d × (%d) %s = %d ✓", a, x, signed(b), c) },
 			},
 		}
 	end,
@@ -697,17 +857,15 @@ generators[2] = {
 		local pct = ({ 5, 10, 15, 20, 25, 30, 40, 50, 75 })[rng:NextInteger(1, 9)]
 		local result = total * pct / 100
 		return {
-			topic = "Porcentaje",
-			prompt = string.format("Cuanto es el %d%% de %d?", pct, total),
+			topicKey = "topic.percent",
+			promptKey = "q.percent.prompt",
+			promptArgs = { pct = pct, total = total },
 			answer = num(result),
 			distractors = { num(total * pct / 10), num(total / pct), num(result + pct) },
 			steps = {
-				{ title = "1. El porcentaje es una fraccion sobre 100",
-				  body = string.format("%d%% = %d/100 = %s", pct, pct, num(pct / 100)) },
-				{ title = "2. Multiplicas por el total",
-				  body = string.format("%s x %d = %s", num(pct / 100), total, num(result)) },
-				{ title = "3. Resultado",
-				  body = string.format("El %d%% de %d es %s", pct, total, num(result)) },
+				{ titleKey = "step.percentFraction", body = string.format("%d%% = %d/100 = %s", pct, pct, num(pct / 100)) },
+				{ titleKey = "step.multiplyTotal", body = string.format("%s × %d = %s", num(pct / 100), total, num(result)) },
+				{ titleKey = "step.percentResult", body = string.format("%d%% → %s", pct, num(result)) },
 			},
 		}
 	end,
@@ -721,19 +879,17 @@ generators[3] = {
 		local a, c = rng:NextInteger(1, b - 1), rng:NextInteger(1, d - 1)
 		local n, den = a * d + c * b, b * d
 		return {
-			topic = "Suma de fracciones",
-			prompt = string.format("Resolve:   %d/%d + %d/%d", a, b, c, d),
+			topicKey = "topic.fractions",
+			promptKey = "q.fractions.prompt",
+			promptArgs = { eq = string.format("%d/%d + %d/%d", a, b, c, d) },
 			answer = frac(n, den),
 			distractors = { frac(a + c, b + d), frac(n + 1, den), frac(a * c, b * d) },
 			steps = {
-				{ title = "1. Denominador comun",
-				  body = string.format("%d x %d = %d", b, d, den) },
-				{ title = "2. Amplificas cada fraccion",
-				  body = string.format("%d/%d = %d/%d   y   %d/%d = %d/%d", a, b, a * d, den, c, d, c * b, den) },
-				{ title = "3. Sumas los numeradores",
-				  body = string.format("(%d + %d)/%d = %d/%d", a * d, c * b, den, n, den) },
-				{ title = "4. Simplificas",
-				  body = string.format("= %s", frac(n, den)) },
+				{ titleKey = "step.commonDenominator", body = string.format("%d × %d = %d", b, d, den) },
+				{ titleKey = "step.expandFractions",
+				  body = string.format("%d/%d = %d/%d   ·   %d/%d = %d/%d", a, b, a * d, den, c, d, c * b, den) },
+				{ titleKey = "step.addNumerators", body = string.format("(%d + %d)/%d = %d/%d", a * d, c * b, den, n, den) },
+				{ titleKey = "step.simplify", body = string.format("= %s", frac(n, den)) },
 			},
 		}
 	end,
@@ -747,8 +903,9 @@ generators[3] = {
 		end
 		local x = c * k
 		return {
-			topic = "Proporcionalidad",
-			prompt = string.format("Si %d/%d = %d/x, cuanto vale x?", a, b, c),
+			topicKey = "topic.proportion",
+			promptKey = "q.proportion.prompt",
+			promptArgs = { eq = string.format("%d/%d = %d/x", a, b, c) },
 			answer = string.format("x = %d", x),
 			distractors = {
 				string.format("x = %d", math.max(1, c - k)),
@@ -756,18 +913,15 @@ generators[3] = {
 				string.format("x = %d", b - c),
 			},
 			steps = {
-				{ title = "1. Multiplicacion cruzada",
-				  body = string.format("%d x x = %d x %d", a, b, c) },
-				{ title = "2. Te queda",
-				  body = string.format("%dx = %d", a, b * c) },
-				{ title = "3. Despejas",
-				  body = string.format("x = %d / %d = %d", b * c, a, x) },
+				{ titleKey = "step.crossMultiply", body = string.format("%d · x = %d · %d", a, b, c) },
+				{ titleKey = "step.youGet", body = string.format("%dx = %d", a, b * c) },
+				{ titleKey = "step.isolate", body = string.format("x = %d ÷ %d = %d", b * c, a, x) },
 			},
 		}
 	end,
 }
 
--- Dificultad 4 ─ ecuaciones con parentesis / sistemas 2x2
+-- Dificultad 4 ─ ecuaciones con parentesis y sistemas 2x2
 generators[4] = {
 	function(rng: Random): Raw
 		local a, b = rng:NextInteger(2, 6), rng:NextInteger(1, 8)
@@ -780,8 +934,9 @@ generators[4] = {
 		local k = a * x + a * b - c * x
 		local right = if k == 0 then string.format("%dx", c) else string.format("%dx %s", c, signed(k))
 		return {
-			topic = "Ecuacion con parentesis",
-			prompt = string.format("Despeja x:   %d(x + %d) = %s", a, b, right),
+			topicKey = "topic.parenthesis",
+			promptKey = "q.parenthesis.prompt",
+			promptArgs = { eq = string.format("%d(x + %d) = %s", a, b, right) },
 			answer = string.format("x = %d", x),
 			distractors = {
 				string.format("x = %s", num((k + a * b) / (a - c))),
@@ -789,14 +944,10 @@ generators[4] = {
 				string.format("x = %d", x + 2),
 			},
 			steps = {
-				{ title = "1. Distribuis el parentesis",
-				  body = string.format("%dx + %d = %s", a, a * b, right) },
-				{ title = "2. Agrupas las x de un lado",
-				  body = string.format("%dx - %dx = %d - %d", a, c, k, a * b) },
-				{ title = "3. Operas",
-				  body = string.format("%s = %d", term(a - c, "x"), k - a * b) },
-				{ title = "4. Despejas",
-				  body = string.format("x = %d / %d = %d", k - a * b, a - c, x) },
+				{ titleKey = "step.distribute", body = string.format("%dx + %d = %s", a, a * b, right) },
+				{ titleKey = "step.groupX", body = string.format("%dx - %dx = %d - %d", a, c, k, a * b) },
+				{ titleKey = "step.operate", body = string.format("%s = %d", term(a - c, "x"), k - a * b) },
+				{ titleKey = "step.solveForX", body = string.format("x = %d ÷ %d = %d", k - a * b, a - c, x) },
 			},
 		}
 	end,
@@ -806,8 +957,9 @@ generators[4] = {
 		local a = rng:NextInteger(2, 5)
 		local d = a * x - y
 		return {
-			topic = "Sistema de ecuaciones 2x2",
-			prompt = string.format("x + y = %d ;  %dx - y = %d.  Cuanto vale x?", s, a, d),
+			topicKey = "topic.system",
+			promptKey = "q.system.prompt",
+			promptArgs = { eq = string.format("x + y = %d ;  %dx - y = %d", s, a, d) },
 			answer = string.format("x = %d", x),
 			distractors = {
 				string.format("x = %d", y),
@@ -815,14 +967,10 @@ generators[4] = {
 				string.format("x = %s", num(s / 2)),
 			},
 			steps = {
-				{ title = "1. Sumas las dos ecuaciones (se cancela y)",
-				  body = string.format("(x + y) + (%dx - y) = %d + %d", a, s, d) },
-				{ title = "2. Queda solo x",
-				  body = string.format("%dx = %d", 1 + a, s + d) },
-				{ title = "3. Despejas x",
-				  body = string.format("x = %d / %d = %d", s + d, 1 + a, x) },
-				{ title = "4. Y de yapa, y",
-				  body = string.format("y = %d - %d = %d", s, x, y) },
+				{ titleKey = "step.addEquations", body = string.format("(x + y) + (%dx - y) = %d + %d", a, s, d) },
+				{ titleKey = "step.onlyX", body = string.format("%dx = %d", 1 + a, s + d) },
+				{ titleKey = "step.isolate", body = string.format("x = %d ÷ %d = %d", s + d, 1 + a, x) },
+				{ titleKey = "step.andY", body = string.format("y = %d - %d = %d", s, x, y) },
 			},
 		}
 	end,
@@ -839,8 +987,9 @@ generators[5] = {
 		local b, c = -(r1 + r2), r1 * r2
 		local big = math.max(r1, r2)
 		return {
-			topic = "Ecuacion cuadratica",
-			prompt = string.format("x² %s %s = 0.  Cual es la raiz mayor?", signedTerm(b, "x"), signed(c)),
+			topicKey = "topic.quadratic",
+			promptKey = "q.quadratic.prompt",
+			promptArgs = { eq = string.format("x² %s %s = 0", signedTerm(b, "x"), signed(c)) },
 			answer = string.format("x = %d", big),
 			distractors = {
 				string.format("x = %d", math.min(r1, r2)),
@@ -848,14 +997,12 @@ generators[5] = {
 				string.format("x = %s", num(b / 2)),
 			},
 			steps = {
-				{ title = "1. Formula resolvente",
-				  body = string.format("x = (-b ± √(b² - 4ac)) / 2a,  con a = 1, b = %d, c = %d", b, c) },
-				{ title = "2. Discriminante",
+				{ titleKey = "step.quadFormula", body = string.format("x = (-b ± √(b² - 4ac)) / 2a   ·   a = 1, b = %d, c = %d", b, c) },
+				{ titleKey = "step.discriminant",
 				  body = string.format("Δ = (%d)² - 4·1·(%d) = %d - %d = %d", b, c, b * b, 4 * c, b * b - 4 * c) },
-				{ title = "3. Raices",
-				  body = string.format("x = (%d ± %s) / 2  →  x₁ = %d,  x₂ = %d", -b, num(math.sqrt(b * b - 4 * c)), math.max(r1, r2), math.min(r1, r2)) },
-				{ title = "4. Te pide la mayor",
-				  body = string.format("x = %d", big) },
+				{ titleKey = "step.roots",
+				  body = string.format("x = (%d ± %s) / 2  →  %d , %d", -b, num(math.sqrt(b * b - 4 * c)), math.max(r1, r2), math.min(r1, r2)) },
+				{ titleKey = "step.takeLarger", body = string.format("x = %d", big) },
 			},
 		}
 	end,
@@ -864,8 +1011,9 @@ generators[5] = {
 		local t = triples[rng:NextInteger(1, #triples)]
 		local a, b, c = t[1], t[2], t[3]
 		return {
-			topic = "Teorema de Pitagoras",
-			prompt = string.format("Un triangulo rectangulo tiene catetos de %d y %d cm. Cuanto mide la hipotenusa?", a, b),
+			topicKey = "topic.pythagoras",
+			promptKey = "q.pythagoras.prompt",
+			promptArgs = { a = a, b = b },
 			answer = string.format("%d cm", c),
 			distractors = {
 				string.format("%d cm", a + b),
@@ -873,14 +1021,11 @@ generators[5] = {
 				string.format("%s cm", num(math.sqrt(math.abs(b * b - a * a)))),
 			},
 			steps = {
-				{ title = "1. Planteo",
-				  body = "h² = cateto₁² + cateto₂²" },
-				{ title = "2. Reemplazas",
-				  body = string.format("h² = %d² + %d² = %d + %d = %d", a, b, a * a, b * b, a * a + b * b) },
-				{ title = "3. Raiz cuadrada",
-				  body = string.format("h = √%d = %d", a * a + b * b, c) },
-				{ title = "4. Respuesta",
-				  body = string.format("La hipotenusa mide %d cm", c) },
+				{ titleKey = "step.pythagorasSetup", body = "c² = a² + b²" },
+				{ titleKey = "step.substitute",
+				  body = string.format("c² = %d² + %d² = %d + %d = %d", a, b, a * a, b * b, a * a + b * b) },
+				{ titleKey = "step.squareRoot", body = string.format("c = √%d = %d", a * a + b * b, c) },
+				{ titleKey = "step.answer", body = string.format("%d cm", c) },
 			},
 		}
 	end,
@@ -906,7 +1051,8 @@ function MathEngine.buildQuestion(id: number, difficulty: number, rng: Random): 
 		end
 	end
 	-- Relleno por si algun distractor colisiono con la respuesta correcta.
-	local fillers = { "Ninguna de las anteriores", "No se puede determinar", "Faltan datos" }
+	-- Van como "@clave" para que el cliente las traduzca.
+	local fillers = { "@choice.none", "@choice.cantTell", "@choice.missingData" }
 	for _, option in fillers do
 		if #choices >= 4 then
 			break
@@ -922,8 +1068,9 @@ function MathEngine.buildQuestion(id: number, difficulty: number, rng: Random): 
 
 	return {
 		id = id,
-		topic = raw.topic,
-		prompt = raw.prompt,
+		topicKey = raw.topicKey,
+		promptKey = raw.promptKey,
+		promptArgs = raw.promptArgs,
 		choices = choices,
 		answerIndex = answerIndex,
 		steps = raw.steps,
@@ -947,8 +1094,9 @@ end
 function MathEngine.sanitize(question: Question)
 	return {
 		id = question.id,
-		topic = question.topic,
-		prompt = question.prompt,
+		topicKey = question.topicKey,
+		promptKey = question.promptKey,
+		promptArgs = question.promptArgs,
 		choices = question.choices,
 		difficulty = question.difficulty,
 	}
@@ -991,6 +1139,7 @@ Net.Functions = {
 	TakePhoto = "TakePhoto",         -- C->S  sacar foto a la prueba
 	AskRoGPT = "AskRoGPT",           -- C->S  mandar la foto al chat
 	GetExam = "GetExam",             -- C->S  pedir el estado inicial
+	ChooseMode = "ChooseMode",       -- C->S  solo / con amigos / con todos
 }
 
 local function getFolder(): Folder
@@ -1188,6 +1337,673 @@ return PhoneModel
     </Item>
     <Item class="ModuleScript" referent="RBX6">
       <Properties>
+        <string name="Name">Strings</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Strings
+	------------------------------------------------------------------
+	Idioma. El servidor nunca manda texto armado: manda una clave y sus
+	datos, y cada cliente la escribe en el idioma que tenga puesto en su
+	Roblox. Asi dos personas en la misma partida ven la misma prueba,
+	cada una en su idioma.
+
+	Estan español, ingles y portugues. Cualquier otro idioma cae en
+	ingles, que es el que usa Roblox por defecto.
+
+	El aula en si (pizarron, laminas) queda en ingles a proposito: es
+	parte de la escenografia, no de la interfaz.
+--]]
+
+local Strings = {}
+
+Strings.Default = "en"
+Strings.Supported = { "en", "es", "pt" }
+
+local en = {
+	-- Menu
+	["menu.title"] = "MATH EXAM",
+	["menu.subtitle"] = "Third period. No phones.",
+	["menu.play"] = "Play",
+	["menu.mode"] = "Session",
+	["menu.settings"] = "Settings",
+	["menu.credits"] = "Credits",
+	["menu.back"] = "Back",
+	["menu.mode.solo"] = "Alone",
+	["menu.mode.solo.desc"] = "A private room, just you and the teacher.",
+	["menu.mode.friends"] = "With friends",
+	["menu.mode.friends.desc"] = "A private room you can invite people to.",
+	["menu.mode.public"] = "Everyone",
+	["menu.mode.public.desc"] = "Stay in this server with whoever shows up.",
+	["menu.mode.current"] = "Current session",
+	["menu.mode.unavailable"] = "Private rooms only work in the published game, not in Studio. Staying in this server.",
+	["menu.mode.moving"] = "Moving you to a private room…",
+	["menu.mode.invite"] = "Invite friends",
+	["menu.settings.brightness"] = "Brightness",
+	["menu.settings.volume"] = "Volume",
+	["menu.settings.language"] = "Language",
+	["menu.settings.language.auto"] = "Automatic",
+	["menu.settings.names"] = "Classmate names",
+	["menu.settings.on"] = "On",
+	["menu.settings.off"] = "Off",
+	["menu.credits.body"] = "A classroom, a test you did not study for, and a phone in your pocket.\n\nEverything you see is generated by code: the room, the teacher, your classmates, the exam and every worked solution.\n\nBuilt with Roblox and Luau.",
+	["menu.hint"] = "Press the big button when the teacher is not looking.",
+
+	-- HUD
+	["hud.state.patrol"] = "walking the aisles",
+	["hud.state.inspect"] = "checking a paper",
+	["hud.state.board"] = "writing on the board",
+	["hud.state.confront"] = "heading for your desk",
+	["hud.state.atYourDesk"] = "standing at your desk",
+	["hud.risk.safe"] = "CLEAR",
+	["hud.risk.seen"] = "SEES YOU",
+	["hud.risk.suspicious"] = "SUSPICIOUS",
+	["hud.risk.backTurned"] = "BACK TURNED",
+	["hud.warning"] = "HE IS LOOKING — PUT IT AWAY",
+	["hud.button.phoneOut"] = "Take out phone",
+	["hud.button.photo"] = "Take photo",
+	["hud.button.send"] = "Send to RoGPT",
+	["hud.button.stash"] = "Put away",
+	["hud.button.paper"] = "Look at paper",
+	["hud.button.noPhone"] = "No phone",
+	["hud.hint.default"] = "Take the phone out when the teacher is not looking.",
+	["hud.hint.battery"] = "Battery {battery}%  ·  Take the phone out when the teacher is not looking.",
+	["hud.hint.confiscated"] = "The teacher took your phone. You get it back in {seconds}s.",
+	["hud.progress"] = "{answered} / {total} answered  ·  grade {grade}",
+	["hud.phase.prep"] = "SETTLING IN",
+	["hud.phase.exam"] = "EXAM",
+	["hud.phase.results"] = "RESULTS",
+	["hud.flash.caught"] = "CAUGHT",
+	["hud.flash.expelled"] = "SENT OUT OF THE EXAM",
+
+	-- Hoja
+	["paper.title"] = "MATHEMATICS EXAM",
+	["paper.student"] = "Name: {name}   ·   Period 3   ·   Form A",
+	["paper.grade"] = "GRADE",
+	["paper.exercise"] = "Question {index} of {total}  ·  {topic}",
+	["paper.footer.default"] = "Tap an option to answer. The photo comes from this question.",
+	["paper.footer.correct"] = "Correct. Move on to the next one.",
+	["paper.footer.wrong"] = "That one was wrong. It cannot be changed.",
+	["paper.footer.finished"] = "Exam handed in.",
+
+	-- Celular
+	["phone.greeting"] = "Send me a photo of the question and I'll work it out step by step.",
+	["phone.online"] = "{model} · online",
+	["phone.noSignal"] = "no signal · teacher took it",
+	["phone.today"] = "Today · {model}",
+	["phone.uploading"] = "Uploading {id}…",
+	["phone.typing"] = "typing",
+	["phone.caption"] = "Solve this for me, step by step.",
+	["phone.answer"] = "Answer:  {answer}",
+	["phone.markIt"] = "Mark that option on your paper. And put the phone away.",
+	["phone.button.photo"] = "Photo",
+	["phone.button.send"] = "Send",
+	["phone.button.sendPhoto"] = "Send photo",
+	["phone.button.close"] = "Put away",
+	["phone.sheetHeader"] = "MATHEMATICS EXAM · PERIOD 3",
+	["phone.error.generic"] = "RoGPT is not answering.",
+	["phone.error.photo"] = "Could not take the photo.",
+
+	-- Avisos
+	["notify.caught"] = "Caught. -{penalty} off your grade and no phone for {seconds}s.",
+	["notify.expelled"] = "You were sent out of the exam. Wait for the next round.",
+	["notify.passed"] = "You passed with {grade}.",
+	["notify.failed"] = "You got {grade}. Study next time (or copy better).",
+	["notify.lateJoin"] = "You walked in mid-exam. Sit down and get going.",
+	["notify.roomFull"] = "The room is full. Watch from the back until a desk frees up.",
+	["notify.correct"] = "Correct.",
+	["notify.wrong"] = "That one was wrong.",
+	["notify.finished"] = "Exam handed in. Grade: {grade}",
+	["notify.notRunning"] = "The exam is not running.",
+	["notify.notStarted"] = "The exam has not started yet.",
+	["notify.confiscated"] = "The teacher has your phone. Hang on.",
+	["notify.answerFailed"] = "Could not submit that answer.",
+
+	-- Errores del servidor
+	["error.notSitting"] = "You are not taking the exam.",
+	["error.finished"] = "You already handed in your exam.",
+	["error.noQuestion"] = "That question does not exist.",
+	["error.answered"] = "You already answered that one.",
+	["error.badOption"] = "Invalid option.",
+	["error.phoneAway"] = "Take the phone out first.",
+	["error.cooldown"] = "Hold on, the last photo is still saving.",
+	["error.confiscated"] = "The teacher took it. {seconds}s to go.",
+	["error.battery"] = "Battery dead. Put it away so it charges.",
+	["error.noPhoto"] = "That photo is not in the gallery.",
+	["error.photoUsed"] = "You already sent that photo.",
+	["error.blurry"] = "The photo is blurry, I can't read it.",
+	["error.nothingToShoot"] = "Nothing to photograph yet.",
+
+	-- Profesor
+	["teacher.start"] = "Everything away. The exam starts now.",
+	["teacher.end"] = "Hand in your papers. I'll grade them for next class.",
+	["teacher.patrol.1"] = "No talking.",
+	["teacher.patrol.2"] = "Show every step of your work.",
+	["teacher.patrol.3"] = "You are running out of time.",
+	["teacher.patrol.4"] = "Anyone caught cheating gets a zero.",
+	["teacher.board.1"] = "Watch the sign on the second term.",
+	["teacher.board.2"] = "I'm putting the formula on the board.",
+	["teacher.board.3"] = "Question five, eyes up here.",
+	["teacher.inspect.1"] = "Let me see that paper.",
+	["teacher.inspect.2"] = "Hm. That setup does not work.",
+	["teacher.inspect.3"] = "Good work on that one.",
+	["teacher.caught.1"] = "Give me that phone. Now.",
+	["teacher.caught.2"] = "I saw you. Put it away or you get a zero.",
+	["teacher.caught.3"] = "Seriously? A phone, during my exam?",
+	["teacher.npc.1"] = "Good approach.",
+	["teacher.npc.2"] = "Neat work.",
+	["teacher.npc.3"] = "That calculation is wrong.",
+	["teacher.npc.4"] = "Keep going.",
+	["teacher.npc.5"] = "Fewer scribbles, please.",
+
+	-- Temas
+	["topic.order"] = "Order of operations",
+	["topic.distributive"] = "Distributive property",
+	["topic.linear"] = "Linear equation",
+	["topic.percent"] = "Percentages",
+	["topic.fractions"] = "Adding fractions",
+	["topic.proportion"] = "Proportions",
+	["topic.parenthesis"] = "Equation with parentheses",
+	["topic.system"] = "System of equations",
+	["topic.quadratic"] = "Quadratic equation",
+	["topic.pythagoras"] = "Pythagorean theorem",
+
+	-- Enunciados
+	["q.order.prompt"] = "Solve:  {eq}",
+	["q.distributive.prompt"] = "Solve:  {eq}",
+	["q.linear.prompt"] = "Solve for x:   {eq}",
+	["q.percent.prompt"] = "What is {pct}% of {total}?",
+	["q.fractions.prompt"] = "Solve:   {eq}",
+	["q.proportion.prompt"] = "If {eq}, what is x?",
+	["q.parenthesis.prompt"] = "Solve for x:   {eq}",
+	["q.system.prompt"] = "{eq}.  What is x?",
+	["q.quadratic.prompt"] = "{eq}.  What is the larger root?",
+	["q.pythagoras.prompt"] = "A right triangle has legs of {a} and {b} cm. How long is the hypotenuse?",
+
+	-- Titulos de los pasos
+	["step.multiplyFirst"] = "1. Multiplication comes first",
+	["step.leftToRight"] = "2. Then add and subtract left to right",
+	["step.result"] = "3. Result",
+	["step.solveParen"] = "1. Solve the parentheses",
+	["step.multiply"] = "2. Multiply",
+	["step.checkDistributive"] = "3. Check (distributive)",
+	["step.moveTerm"] = "1. Move the constant across",
+	["step.youGet"] = "2. That leaves you with",
+	["step.divideCoef"] = "3. Divide by the coefficient",
+	["step.check"] = "4. Check",
+	["step.percentFraction"] = "1. A percentage is a fraction over 100",
+	["step.multiplyTotal"] = "2. Multiply by the total",
+	["step.percentResult"] = "3. Result",
+	["step.commonDenominator"] = "1. Common denominator",
+	["step.expandFractions"] = "2. Rewrite each fraction",
+	["step.addNumerators"] = "3. Add the numerators",
+	["step.simplify"] = "4. Simplify",
+	["step.crossMultiply"] = "1. Cross multiply",
+	["step.isolate"] = "3. Isolate x",
+	["step.distribute"] = "1. Expand the parentheses",
+	["step.groupX"] = "2. Group the x terms on one side",
+	["step.operate"] = "3. Work it out",
+	["step.solveForX"] = "4. Solve for x",
+	["step.addEquations"] = "1. Add both equations (y cancels)",
+	["step.onlyX"] = "2. Only x is left",
+	["step.andY"] = "4. And y, while we are here",
+	["step.quadFormula"] = "1. Quadratic formula",
+	["step.discriminant"] = "2. Discriminant",
+	["step.roots"] = "3. Roots",
+	["step.takeLarger"] = "4. It asks for the larger one",
+	["step.pythagorasSetup"] = "1. Set it up",
+	["step.substitute"] = "2. Substitute",
+	["step.squareRoot"] = "3. Square root",
+	["step.answer"] = "4. Answer",
+
+	-- Opciones de relleno
+	["choice.none"] = "None of the above",
+	["choice.cantTell"] = "Cannot be determined",
+	["choice.missingData"] = "Not enough information",
+}
+
+local es = {
+	["menu.title"] = "PRUEBA DE MATEMÁTICA",
+	["menu.subtitle"] = "Tercera hora. Sin celulares.",
+	["menu.play"] = "Jugar",
+	["menu.mode"] = "Partida",
+	["menu.settings"] = "Ajustes",
+	["menu.credits"] = "Créditos",
+	["menu.back"] = "Volver",
+	["menu.mode.solo"] = "Solo",
+	["menu.mode.solo.desc"] = "Un aula privada, vos y el profesor.",
+	["menu.mode.friends"] = "Con amigos",
+	["menu.mode.friends.desc"] = "Un aula privada a la que podés invitar gente.",
+	["menu.mode.public"] = "Con todos",
+	["menu.mode.public.desc"] = "Te quedás en este servidor con quien caiga.",
+	["menu.mode.current"] = "Partida actual",
+	["menu.mode.unavailable"] = "Las aulas privadas solo andan en el juego publicado, no en Studio. Te quedás en este servidor.",
+	["menu.mode.moving"] = "Te llevo a un aula privada…",
+	["menu.mode.invite"] = "Invitar amigos",
+	["menu.settings.brightness"] = "Brillo",
+	["menu.settings.volume"] = "Volumen",
+	["menu.settings.language"] = "Idioma",
+	["menu.settings.language.auto"] = "Automático",
+	["menu.settings.names"] = "Nombres de compañeros",
+	["menu.settings.on"] = "Sí",
+	["menu.settings.off"] = "No",
+	["menu.credits.body"] = "Un aula, una prueba que no estudiaste y un celular en el bolsillo.\n\nTodo lo que ves está generado por código: el aula, el profesor, tus compañeros, la prueba y cada resolución paso a paso.\n\nHecho con Roblox y Luau.",
+	["menu.hint"] = "Apretá el botón grande cuando el profe no te vea.",
+
+	["hud.state.patrol"] = "recorriendo los pasillos",
+	["hud.state.inspect"] = "revisando una prueba",
+	["hud.state.board"] = "escribiendo en el pizarrón",
+	["hud.state.confront"] = "viene para tu banco",
+	["hud.state.atYourDesk"] = "está parado en tu banco",
+	["hud.risk.safe"] = "SEGURO",
+	["hud.risk.seen"] = "TE VE",
+	["hud.risk.suspicious"] = "SOSPECHA",
+	["hud.risk.backTurned"] = "ESTÁ DE ESPALDAS",
+	["hud.warning"] = "TE ESTÁ MIRANDO — GUARDALO",
+	["hud.button.phoneOut"] = "Sacar el celular",
+	["hud.button.photo"] = "Sacar foto",
+	["hud.button.send"] = "Enviar a RoGPT",
+	["hud.button.stash"] = "Guardar",
+	["hud.button.paper"] = "Ver la hoja",
+	["hud.button.noPhone"] = "Sin celular",
+	["hud.hint.default"] = "Sacá el celular cuando el profe no te vea.",
+	["hud.hint.battery"] = "Batería {battery}%  ·  Sacá el celular cuando el profe no te vea.",
+	["hud.hint.confiscated"] = "El profe te confiscó el celular. Te lo devuelve en {seconds}s.",
+	["hud.progress"] = "{answered} / {total} respondidos  ·  nota {grade}",
+	["hud.phase.prep"] = "PREPARACIÓN",
+	["hud.phase.exam"] = "PRUEBA",
+	["hud.phase.results"] = "RESULTADOS",
+	["hud.flash.caught"] = "TE PILLARON",
+	["hud.flash.expelled"] = "TE SACARON DE LA PRUEBA",
+
+	["paper.title"] = "EVALUACIÓN DE MATEMÁTICA",
+	["paper.student"] = "Alumno: {name}   ·   Curso 3° B   ·   Tema único",
+	["paper.grade"] = "NOTA",
+	["paper.exercise"] = "Ejercicio {index} de {total}  ·  {topic}",
+	["paper.footer.default"] = "Tocá una opción para responder. La foto sale de este ejercicio.",
+	["paper.footer.correct"] = "Bien. Pasá al siguiente ejercicio.",
+	["paper.footer.wrong"] = "Ese estaba mal. Ya no se puede corregir.",
+	["paper.footer.finished"] = "Prueba entregada.",
+
+	["phone.greeting"] = "Mandame la foto del ejercicio y te lo resuelvo paso a paso.",
+	["phone.online"] = "{model} · en línea",
+	["phone.noSignal"] = "sin señal · te lo sacó el profe",
+	["phone.today"] = "Hoy · {model}",
+	["phone.uploading"] = "Subiendo {id}…",
+	["phone.typing"] = "escribiendo",
+	["phone.caption"] = "Resolveme este ejercicio, paso a paso.",
+	["phone.answer"] = "Respuesta:  {answer}",
+	["phone.markIt"] = "Marcá esa opción en la hoja. Y guardá el celular.",
+	["phone.button.photo"] = "Foto",
+	["phone.button.send"] = "Enviar",
+	["phone.button.sendPhoto"] = "Enviar foto",
+	["phone.button.close"] = "Guardar",
+	["phone.sheetHeader"] = "EVALUACIÓN DE MATEMÁTICA · 3° B",
+	["phone.error.generic"] = "RoGPT no contesta.",
+	["phone.error.photo"] = "No se pudo sacar la foto.",
+
+	["notify.caught"] = "Te pillaron. -{penalty} de nota y sin celu {seconds}s.",
+	["notify.expelled"] = "Te sacaron de la prueba. Esperá la próxima ronda.",
+	["notify.passed"] = "Aprobaste con {grade}.",
+	["notify.failed"] = "Te sacaste {grade}. La próxima estudiá (o copiate mejor).",
+	["notify.lateJoin"] = "Entraste con la prueba empezada. Sentate y arrancá.",
+	["notify.roomFull"] = "El aula está llena. Mirá desde el fondo hasta que se libere un banco.",
+	["notify.correct"] = "Correcto.",
+	["notify.wrong"] = "Ese estaba mal.",
+	["notify.finished"] = "Entregaste la prueba. Nota: {grade}",
+	["notify.notRunning"] = "La prueba no está en curso.",
+	["notify.notStarted"] = "Todavía no empezó la prueba.",
+	["notify.confiscated"] = "El profe te lo sacó. Bancá un poco.",
+	["notify.answerFailed"] = "No se pudo responder.",
+
+	["error.notSitting"] = "No estás rindiendo.",
+	["error.finished"] = "Ya entregaste la prueba.",
+	["error.noQuestion"] = "Ese ejercicio no existe.",
+	["error.answered"] = "Ya respondiste ese ejercicio.",
+	["error.badOption"] = "Opción inválida.",
+	["error.phoneAway"] = "Primero sacá el celular.",
+	["error.cooldown"] = "Esperá un segundo, se está guardando la anterior.",
+	["error.confiscated"] = "El profe te lo sacó. Faltan {seconds}s.",
+	["error.battery"] = "Sin batería. Guardalo un rato para que cargue.",
+	["error.noPhoto"] = "Esa foto no está en la galería.",
+	["error.photoUsed"] = "Ya le mandaste esa foto.",
+	["error.blurry"] = "No se entiende la foto, está movida.",
+	["error.nothingToShoot"] = "No hay nada para fotografiar todavía.",
+
+	["teacher.start"] = "Guarden todo. Empieza la prueba.",
+	["teacher.end"] = "Entreguen las hojas. Corrijo para la próxima clase.",
+	["teacher.patrol.1"] = "Sin hablar, por favor.",
+	["teacher.patrol.2"] = "Tienen que justificar todos los pasos.",
+	["teacher.patrol.3"] = "Les quedan pocos minutos.",
+	["teacher.patrol.4"] = "El que copia se lleva un uno.",
+	["teacher.board.1"] = "Ojo con el signo del segundo término.",
+	["teacher.board.2"] = "Anoto la fórmula en el pizarrón.",
+	["teacher.board.3"] = "Ejercicio cinco, presten atención.",
+	["teacher.inspect.1"] = "A ver esa hoja...",
+	["teacher.inspect.2"] = "Mmm. Ese planteo no cierra.",
+	["teacher.inspect.3"] = "Muy bien ese desarrollo.",
+	["teacher.caught.1"] = "Dame ese teléfono. Ahora.",
+	["teacher.caught.2"] = "Te vi. Guardalo o te llevás un uno.",
+	["teacher.caught.3"] = "¿En serio? ¿Con el celular en la prueba?",
+	["teacher.npc.1"] = "Bien ese planteo.",
+	["teacher.npc.2"] = "Prolijo, me gusta.",
+	["teacher.npc.3"] = "Che, esa cuenta está mal.",
+	["teacher.npc.4"] = "Seguí así.",
+	["teacher.npc.5"] = "Menos borrones, por favor.",
+
+	["topic.order"] = "Jerarquía de operaciones",
+	["topic.distributive"] = "Propiedad distributiva",
+	["topic.linear"] = "Ecuación de primer grado",
+	["topic.percent"] = "Porcentaje",
+	["topic.fractions"] = "Suma de fracciones",
+	["topic.proportion"] = "Proporcionalidad",
+	["topic.parenthesis"] = "Ecuación con paréntesis",
+	["topic.system"] = "Sistema de ecuaciones 2x2",
+	["topic.quadratic"] = "Ecuación cuadrática",
+	["topic.pythagoras"] = "Teorema de Pitágoras",
+
+	["q.order.prompt"] = "Resolvé:  {eq}",
+	["q.distributive.prompt"] = "Resolvé:  {eq}",
+	["q.linear.prompt"] = "Despejá x:   {eq}",
+	["q.percent.prompt"] = "¿Cuánto es el {pct}% de {total}?",
+	["q.fractions.prompt"] = "Resolvé:   {eq}",
+	["q.proportion.prompt"] = "Si {eq}, ¿cuánto vale x?",
+	["q.parenthesis.prompt"] = "Despejá x:   {eq}",
+	["q.system.prompt"] = "{eq}.  ¿Cuánto vale x?",
+	["q.quadratic.prompt"] = "{eq}.  ¿Cuál es la raíz mayor?",
+	["q.pythagoras.prompt"] = "Un triángulo rectángulo tiene catetos de {a} y {b} cm. ¿Cuánto mide la hipotenusa?",
+
+	["step.multiplyFirst"] = "1. Primero la multiplicación",
+	["step.leftToRight"] = "2. Después sumás y restás de izquierda a derecha",
+	["step.result"] = "3. Resultado",
+	["step.solveParen"] = "1. Resolvés el paréntesis",
+	["step.multiply"] = "2. Multiplicás",
+	["step.checkDistributive"] = "3. Verificación (distributiva)",
+	["step.moveTerm"] = "1. Pasás el término independiente",
+	["step.youGet"] = "2. Te queda",
+	["step.divideCoef"] = "3. Dividís por el coeficiente",
+	["step.check"] = "4. Verificación",
+	["step.percentFraction"] = "1. El porcentaje es una fracción sobre 100",
+	["step.multiplyTotal"] = "2. Multiplicás por el total",
+	["step.percentResult"] = "3. Resultado",
+	["step.commonDenominator"] = "1. Denominador común",
+	["step.expandFractions"] = "2. Amplificás cada fracción",
+	["step.addNumerators"] = "3. Sumás los numeradores",
+	["step.simplify"] = "4. Simplificás",
+	["step.crossMultiply"] = "1. Multiplicación cruzada",
+	["step.isolate"] = "3. Despejás x",
+	["step.distribute"] = "1. Distribuís el paréntesis",
+	["step.groupX"] = "2. Agrupás las x de un lado",
+	["step.operate"] = "3. Operás",
+	["step.solveForX"] = "4. Despejás x",
+	["step.addEquations"] = "1. Sumás las dos ecuaciones (se cancela y)",
+	["step.onlyX"] = "2. Queda solo x",
+	["step.andY"] = "4. Y de yapa, y",
+	["step.quadFormula"] = "1. Fórmula resolvente",
+	["step.discriminant"] = "2. Discriminante",
+	["step.roots"] = "3. Raíces",
+	["step.takeLarger"] = "4. Te pide la mayor",
+	["step.pythagorasSetup"] = "1. Planteo",
+	["step.substitute"] = "2. Reemplazás",
+	["step.squareRoot"] = "3. Raíz cuadrada",
+	["step.answer"] = "4. Respuesta",
+
+	["choice.none"] = "Ninguna de las anteriores",
+	["choice.cantTell"] = "No se puede determinar",
+	["choice.missingData"] = "Faltan datos",
+}
+
+local pt = {
+	["menu.title"] = "PROVA DE MATEMÁTICA",
+	["menu.subtitle"] = "Terceiro tempo. Sem celulares.",
+	["menu.play"] = "Jogar",
+	["menu.mode"] = "Partida",
+	["menu.settings"] = "Ajustes",
+	["menu.credits"] = "Créditos",
+	["menu.back"] = "Voltar",
+	["menu.mode.solo"] = "Sozinho",
+	["menu.mode.solo.desc"] = "Uma sala privada, você e o professor.",
+	["menu.mode.friends"] = "Com amigos",
+	["menu.mode.friends.desc"] = "Uma sala privada para onde você pode convidar gente.",
+	["menu.mode.public"] = "Com todos",
+	["menu.mode.public.desc"] = "Fica neste servidor com quem aparecer.",
+	["menu.mode.current"] = "Partida atual",
+	["menu.mode.unavailable"] = "Salas privadas só funcionam no jogo publicado, não no Studio. Você fica neste servidor.",
+	["menu.mode.moving"] = "Levando você para uma sala privada…",
+	["menu.mode.invite"] = "Convidar amigos",
+	["menu.settings.brightness"] = "Brilho",
+	["menu.settings.volume"] = "Volume",
+	["menu.settings.language"] = "Idioma",
+	["menu.settings.language.auto"] = "Automático",
+	["menu.settings.names"] = "Nomes dos colegas",
+	["menu.settings.on"] = "Sim",
+	["menu.settings.off"] = "Não",
+	["menu.credits.body"] = "Uma sala de aula, uma prova que você não estudou e um celular no bolso.\n\nTudo o que você vê é gerado por código: a sala, o professor, os colegas, a prova e cada resolução passo a passo.\n\nFeito com Roblox e Luau.",
+	["menu.hint"] = "Aperte o botão grande quando o professor não estiver olhando.",
+
+	["hud.state.patrol"] = "andando pelos corredores",
+	["hud.state.inspect"] = "conferindo uma prova",
+	["hud.state.board"] = "escrevendo na lousa",
+	["hud.state.confront"] = "vindo até a sua carteira",
+	["hud.state.atYourDesk"] = "parado na sua carteira",
+	["hud.risk.safe"] = "SEGURO",
+	["hud.risk.seen"] = "ELE TE VÊ",
+	["hud.risk.suspicious"] = "DESCONFIADO",
+	["hud.risk.backTurned"] = "ESTÁ DE COSTAS",
+	["hud.warning"] = "ELE ESTÁ OLHANDO — GUARDA ISSO",
+	["hud.button.phoneOut"] = "Pegar o celular",
+	["hud.button.photo"] = "Tirar foto",
+	["hud.button.send"] = "Enviar ao RoGPT",
+	["hud.button.stash"] = "Guardar",
+	["hud.button.paper"] = "Ver a folha",
+	["hud.button.noPhone"] = "Sem celular",
+	["hud.hint.default"] = "Pega o celular quando o professor não estiver olhando.",
+	["hud.hint.battery"] = "Bateria {battery}%  ·  Pega o celular quando o professor não estiver olhando.",
+	["hud.hint.confiscated"] = "O professor tomou seu celular. Devolve em {seconds}s.",
+	["hud.progress"] = "{answered} / {total} respondidas  ·  nota {grade}",
+	["hud.phase.prep"] = "PREPARAÇÃO",
+	["hud.phase.exam"] = "PROVA",
+	["hud.phase.results"] = "RESULTADOS",
+	["hud.flash.caught"] = "TE PEGARAM",
+	["hud.flash.expelled"] = "VOCÊ FOI TIRADO DA PROVA",
+
+	["paper.title"] = "AVALIAÇÃO DE MATEMÁTICA",
+	["paper.student"] = "Aluno: {name}   ·   Turma 3° B   ·   Prova A",
+	["paper.grade"] = "NOTA",
+	["paper.exercise"] = "Questão {index} de {total}  ·  {topic}",
+	["paper.footer.default"] = "Toque numa opção para responder. A foto sai desta questão.",
+	["paper.footer.correct"] = "Boa. Vai para a próxima.",
+	["paper.footer.wrong"] = "Essa saiu errada. Não dá para corrigir.",
+	["paper.footer.finished"] = "Prova entregue.",
+
+	["phone.greeting"] = "Manda a foto da questão que eu resolvo passo a passo.",
+	["phone.online"] = "{model} · online",
+	["phone.noSignal"] = "sem sinal · o professor tomou",
+	["phone.today"] = "Hoje · {model}",
+	["phone.uploading"] = "Enviando {id}…",
+	["phone.typing"] = "digitando",
+	["phone.caption"] = "Resolve essa para mim, passo a passo.",
+	["phone.answer"] = "Resposta:  {answer}",
+	["phone.markIt"] = "Marca essa opção na folha. E guarda o celular.",
+	["phone.button.photo"] = "Foto",
+	["phone.button.send"] = "Enviar",
+	["phone.button.sendPhoto"] = "Enviar foto",
+	["phone.button.close"] = "Guardar",
+	["phone.sheetHeader"] = "AVALIAÇÃO DE MATEMÁTICA · 3° B",
+	["phone.error.generic"] = "O RoGPT não responde.",
+	["phone.error.photo"] = "Não deu para tirar a foto.",
+
+	["notify.caught"] = "Te pegaram. -{penalty} na nota e sem celular por {seconds}s.",
+	["notify.expelled"] = "Você foi tirado da prova. Espera a próxima rodada.",
+	["notify.passed"] = "Passou com {grade}.",
+	["notify.failed"] = "Tirou {grade}. Da próxima estuda (ou cola melhor).",
+	["notify.lateJoin"] = "Você entrou com a prova começada. Senta e começa.",
+	["notify.roomFull"] = "A sala está cheia. Espera liberar uma carteira.",
+	["notify.correct"] = "Certo.",
+	["notify.wrong"] = "Essa saiu errada.",
+	["notify.finished"] = "Prova entregue. Nota: {grade}",
+	["notify.notRunning"] = "A prova não está rolando.",
+	["notify.notStarted"] = "A prova ainda não começou.",
+	["notify.confiscated"] = "O professor está com seu celular. Aguenta aí.",
+	["notify.answerFailed"] = "Não deu para responder.",
+
+	["error.notSitting"] = "Você não está fazendo a prova.",
+	["error.finished"] = "Você já entregou a prova.",
+	["error.noQuestion"] = "Essa questão não existe.",
+	["error.answered"] = "Você já respondeu essa.",
+	["error.badOption"] = "Opção inválida.",
+	["error.phoneAway"] = "Primeiro pega o celular.",
+	["error.cooldown"] = "Calma, a foto anterior ainda está salvando.",
+	["error.confiscated"] = "O professor tomou. Faltam {seconds}s.",
+	["error.battery"] = "Sem bateria. Guarda um pouco para carregar.",
+	["error.noPhoto"] = "Essa foto não está na galeria.",
+	["error.photoUsed"] = "Você já mandou essa foto.",
+	["error.blurry"] = "A foto está tremida, não dá para ler.",
+	["error.nothingToShoot"] = "Ainda não tem nada para fotografar.",
+
+	["teacher.start"] = "Guardem tudo. A prova começa agora.",
+	["teacher.end"] = "Entreguem as folhas. Corrijo para a próxima aula.",
+	["teacher.patrol.1"] = "Sem conversa.",
+	["teacher.patrol.2"] = "Mostrem todas as contas.",
+	["teacher.patrol.3"] = "Está acabando o tempo.",
+	["teacher.patrol.4"] = "Quem colar leva zero.",
+	["teacher.board.1"] = "Atenção ao sinal do segundo termo.",
+	["teacher.board.2"] = "Vou anotar a fórmula na lousa.",
+	["teacher.board.3"] = "Questão cinco, olhem aqui.",
+	["teacher.inspect.1"] = "Deixa eu ver essa folha...",
+	["teacher.inspect.2"] = "Hm. Esse desenvolvimento não fecha.",
+	["teacher.inspect.3"] = "Muito bem essa parte.",
+	["teacher.caught.1"] = "Me dá esse telefone. Agora.",
+	["teacher.caught.2"] = "Eu vi. Guarda ou leva zero.",
+	["teacher.caught.3"] = "Sério? Celular na minha prova?",
+	["teacher.npc.1"] = "Boa essa conta.",
+	["teacher.npc.2"] = "Caprichado, gostei.",
+	["teacher.npc.3"] = "Essa conta está errada.",
+	["teacher.npc.4"] = "Continua assim.",
+	["teacher.npc.5"] = "Menos rabisco, por favor.",
+
+	["topic.order"] = "Ordem das operações",
+	["topic.distributive"] = "Propriedade distributiva",
+	["topic.linear"] = "Equação do primeiro grau",
+	["topic.percent"] = "Porcentagem",
+	["topic.fractions"] = "Soma de frações",
+	["topic.proportion"] = "Proporcionalidade",
+	["topic.parenthesis"] = "Equação com parênteses",
+	["topic.system"] = "Sistema de equações 2x2",
+	["topic.quadratic"] = "Equação do segundo grau",
+	["topic.pythagoras"] = "Teorema de Pitágoras",
+
+	["q.order.prompt"] = "Resolva:  {eq}",
+	["q.distributive.prompt"] = "Resolva:  {eq}",
+	["q.linear.prompt"] = "Isole x:   {eq}",
+	["q.percent.prompt"] = "Quanto é {pct}% de {total}?",
+	["q.fractions.prompt"] = "Resolva:   {eq}",
+	["q.proportion.prompt"] = "Se {eq}, quanto vale x?",
+	["q.parenthesis.prompt"] = "Isole x:   {eq}",
+	["q.system.prompt"] = "{eq}.  Quanto vale x?",
+	["q.quadratic.prompt"] = "{eq}.  Qual é a maior raiz?",
+	["q.pythagoras.prompt"] = "Um triângulo retângulo tem catetos de {a} e {b} cm. Quanto mede a hipotenusa?",
+
+	["step.multiplyFirst"] = "1. Primeiro a multiplicação",
+	["step.leftToRight"] = "2. Depois soma e subtrai da esquerda para a direita",
+	["step.result"] = "3. Resultado",
+	["step.solveParen"] = "1. Resolve o parêntese",
+	["step.multiply"] = "2. Multiplica",
+	["step.checkDistributive"] = "3. Conferência (distributiva)",
+	["step.moveTerm"] = "1. Passa o termo independente",
+	["step.youGet"] = "2. Fica assim",
+	["step.divideCoef"] = "3. Divide pelo coeficiente",
+	["step.check"] = "4. Conferência",
+	["step.percentFraction"] = "1. Porcentagem é uma fração sobre 100",
+	["step.multiplyTotal"] = "2. Multiplica pelo total",
+	["step.percentResult"] = "3. Resultado",
+	["step.commonDenominator"] = "1. Denominador comum",
+	["step.expandFractions"] = "2. Reescreve cada fração",
+	["step.addNumerators"] = "3. Soma os numeradores",
+	["step.simplify"] = "4. Simplifica",
+	["step.crossMultiply"] = "1. Multiplicação cruzada",
+	["step.isolate"] = "3. Isola x",
+	["step.distribute"] = "1. Distribui o parêntese",
+	["step.groupX"] = "2. Agrupa os x de um lado",
+	["step.operate"] = "3. Opera",
+	["step.solveForX"] = "4. Isola x",
+	["step.addEquations"] = "1. Soma as duas equações (o y cancela)",
+	["step.onlyX"] = "2. Sobra só o x",
+	["step.andY"] = "4. E o y, de brinde",
+	["step.quadFormula"] = "1. Fórmula de Bhaskara",
+	["step.discriminant"] = "2. Discriminante",
+	["step.roots"] = "3. Raízes",
+	["step.takeLarger"] = "4. Pede a maior",
+	["step.pythagorasSetup"] = "1. Montagem",
+	["step.substitute"] = "2. Substitui",
+	["step.squareRoot"] = "3. Raiz quadrada",
+	["step.answer"] = "4. Resposta",
+
+	["choice.none"] = "Nenhuma das anteriores",
+	["choice.cantTell"] = "Não dá para determinar",
+	["choice.missingData"] = "Faltam dados",
+}
+
+local tables: { [string]: { [string]: string } } = { en = en, es = es, pt = pt }
+
+local current = Strings.Default
+
+--- "es-ar" -> "es". Cualquier idioma sin traducir cae en ingles.
+function Strings.normalize(localeId: string?): string
+	if not localeId then
+		return Strings.Default
+	end
+	local base = string.lower(string.sub(localeId, 1, 2))
+	return tables[base] and base or Strings.Default
+end
+
+function Strings.setLocale(localeId: string?)
+	current = Strings.normalize(localeId)
+end
+
+function Strings.getLocale(): string
+	return current
+end
+
+local function substitute(template: string, args: { [string]: any }?): string
+	if not args then
+		return template
+	end
+	return (string.gsub(template, "{(%w+)}", function(name)
+		local value = args[name]
+		return value ~= nil and tostring(value) or ("{" .. name .. "}")
+	end))
+end
+
+--- Texto de una clave en el idioma elegido, con sus datos reemplazados.
+function Strings.get(key: string, args: { [string]: any }?): string
+	local template = tables[current][key] or en[key]
+	if not template then
+		return key
+	end
+	return substitute(template, args)
+end
+
+--- Igual, pero forzando un idioma (lo usa el selector de Ajustes).
+function Strings.forLocale(localeId: string, key: string, args: { [string]: any }?): string
+	local locale = Strings.normalize(localeId)
+	local template = tables[locale][key] or en[key] or key
+	return substitute(template, args)
+end
+
+--- Las opciones de relleno viajan como "@clave" para poder traducirse.
+function Strings.choice(text: string): string
+	if string.sub(text, 1, 1) == "@" then
+		return Strings.get(string.sub(text, 2))
+	end
+	return text
+end
+
+return Strings
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX7">
+      <Properties>
         <string name="Name">Theme</string>
         <ProtectedString name="Source"><![CDATA[--!strict
 --[[
@@ -1234,6 +2050,16 @@ Theme.Hud = {
 	Text = Color3.fromRGB(240, 242, 247),
 }
 
+-- Menu de inicio: casi monocromo, tipografia fina, mucho aire.
+Theme.Menu = {
+	Scrim = Color3.fromRGB(10, 11, 14),
+	Panel = Color3.fromRGB(16, 17, 21),
+	Line = Color3.fromRGB(58, 62, 72),
+	Text = Color3.fromRGB(240, 242, 246),
+	Muted = Color3.fromRGB(138, 144, 156),
+	Accent = Color3.fromRGB(226, 228, 234),
+}
+
 function Theme.riskColor(risk: number): Color3
 	if risk < 0.35 then
 		return Theme.Hud.Safe:Lerp(Theme.Hud.Warn, risk / 0.35)
@@ -1246,7 +2072,7 @@ return Theme
 ]]></ProtectedString>
       </Properties>
     </Item>
-    <Item class="ModuleScript" referent="RBX7">
+    <Item class="ModuleScript" referent="RBX8">
       <Properties>
         <string name="Name">Util</string>
         <ProtectedString name="Source"><![CDATA[--!strict
@@ -1371,6 +2197,11 @@ function Util.playSound(soundId: string, parent: Instance, volume: number?, spee
 	sound.Volume = volume or 0.5
 	sound.PlaybackSpeed = speed or 1
 	sound.RollOffMaxDistance = 80
+	-- Si el cliente creo el grupo "Master", el volumen de Ajustes manda.
+	local group = game:GetService("SoundService"):FindFirstChild("Master")
+	if group and group:IsA("SoundGroup") then
+		sound.SoundGroup = group
+	end
 	sound.Parent = parent
 	sound:Play()
 	sound.Ended:Once(function()

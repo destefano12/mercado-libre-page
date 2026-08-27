@@ -36,8 +36,6 @@ local PhoneService = {}
 type Photo = {
 	id: string,
 	questionId: number,
-	prompt: string,
-	topic: string,
 	takenAt: number,
 	used: boolean,
 }
@@ -94,13 +92,13 @@ local function push(player: Player)
 	data.dirty = false
 end
 
-function PhoneService.isAvailable(player: Player): (boolean, string?)
+function PhoneService.isAvailable(player: Player): (boolean, any?)
 	local data = ensure(player)
 	if os.clock() < data.confiscatedUntil then
-		return false, string.format("El profe te lo saco. Faltan %ds.", math.ceil(data.confiscatedUntil - os.clock()))
+		return false, { key = "error.confiscated", args = { seconds = math.ceil(data.confiscatedUntil - os.clock()) } }
 	end
 	if data.battery <= 1 then
-		return false, "Sin bateria. Guardalo un rato para que cargue."
+		return false, { key = "error.battery" }
 	end
 	return true, nil
 end
@@ -206,29 +204,29 @@ function PhoneService.takePhoto(player: Player, questionId: number)
 		return { ok = false, reason = reason }
 	end
 	if not data.out then
-		return { ok = false, reason = "Primero saca el celular." }
+		return { ok = false, reason = { key = "error.phoneAway" } }
 	end
 	if now < data.nextPhotoAt then
-		return { ok = false, reason = "Esperá un segundo, se esta guardando la anterior." }
+		return { ok = false, reason = { key = "error.cooldown" } }
 	end
 	if typeof(questionId) ~= "number" or questionId % 1 ~= 0 then
-		return { ok = false, reason = "Ejercicio invalido." }
+		return { ok = false, reason = { key = "error.badOption" } }
 	end
 
 	local entry = ExamService.get(player)
 	if not entry then
-		return { ok = false, reason = "No estas rindiendo." }
+		return { ok = false, reason = { key = "error.notSitting" } }
 	end
 	if entry.finished then
-		return { ok = false, reason = "Ya terminaste la prueba." }
+		return { ok = false, reason = { key = "error.finished" } }
 	end
 	if entry.answers[questionId] then
-		return { ok = false, reason = "Ese ejercicio ya lo respondiste." }
+		return { ok = false, reason = { key = "error.answered" } }
 	end
 
 	local question = ExamService.getQuestion(questionId)
 	if not question then
-		return { ok = false, reason = "Ese ejercicio no existe." }
+		return { ok = false, reason = { key = "error.noQuestion" } }
 	end
 
 	data.battery = math.max(0, data.battery - P.BatteryPerPhoto)
@@ -237,8 +235,6 @@ function PhoneService.takePhoto(player: Player, questionId: number)
 	local photo: Photo = {
 		id = newPhotoId(player, data),
 		questionId = questionId,
-		prompt = question.prompt,
-		topic = question.topic,
 		takenAt = now,
 		used = false,
 	}
@@ -249,8 +245,9 @@ function PhoneService.takePhoto(player: Player, questionId: number)
 		ok = true,
 		photoId = photo.id,
 		questionId = questionId,
-		prompt = question.prompt,
-		topic = question.topic,
+		promptKey = question.promptKey,
+		promptArgs = question.promptArgs,
+		topicKey = question.topicKey,
 		choices = question.choices,
 		uploadTime = Random.new():NextNumber(P.UploadTime.Min, P.UploadTime.Max),
 	}
@@ -268,20 +265,20 @@ function PhoneService.askRoGPT(player: Player, photoId: string)
 		return { ok = false, reason = reason }
 	end
 	if typeof(photoId) ~= "string" then
-		return { ok = false, reason = "Foto invalida." }
+		return { ok = false, reason = { key = "error.noPhoto" } }
 	end
 
 	local photo = data.photos[photoId]
 	if not photo then
-		return { ok = false, reason = "Esa foto no esta en la galeria." }
+		return { ok = false, reason = { key = "error.noPhoto" } }
 	end
 	if photo.used then
-		return { ok = false, reason = "Ya le mandaste esa foto." }
+		return { ok = false, reason = { key = "error.photoUsed" } }
 	end
 
 	local question = ExamService.getQuestion(photo.questionId)
 	if not question then
-		return { ok = false, reason = "No se entiende la foto, esta movida." }
+		return { ok = false, reason = { key = "error.blurry" } }
 	end
 
 	photo.used = true
@@ -293,8 +290,9 @@ function PhoneService.askRoGPT(player: Player, photoId: string)
 		model = P.ModelName,
 		photoId = photoId,
 		questionId = photo.questionId,
-		topic = question.topic,
-		prompt = question.prompt,
+		topicKey = question.topicKey,
+		promptKey = question.promptKey,
+		promptArgs = question.promptArgs,
 		steps = question.steps,
 		answer = question.choices[question.answerIndex],
 		thinkTime = rng:NextNumber(P.ThinkTime.Min, P.ThinkTime.Max),

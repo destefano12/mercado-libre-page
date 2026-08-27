@@ -16,6 +16,7 @@
 
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
@@ -121,20 +122,52 @@ end
 
 Net.func(Net.Functions.SubmitAnswer).OnServerInvoke = function(player, questionId, choice)
 	if RoundService.getPhase() ~= "Prueba" then
-		return { ok = false, reason = "La prueba no esta en curso." }
+		return { ok = false, reason = { key = "notify.notRunning" } }
 	end
 	return ExamService.submitAnswer(player, questionId, choice)
 end
 
 Net.func(Net.Functions.TakePhoto).OnServerInvoke = function(player, questionId)
 	if RoundService.getPhase() ~= "Prueba" then
-		return { ok = false, reason = "No hay nada para fotografiar todavia." }
+		return { ok = false, reason = { key = "error.nothingToShoot" } }
 	end
 	return PhoneService.takePhoto(player, questionId)
 end
 
 Net.func(Net.Functions.AskRoGPT).OnServerInvoke = function(player, photoId)
 	return PhoneService.askRoGPT(player, photoId)
+end
+
+-- Solo / con amigos: se reserva un servidor privado y se manda al
+-- jugador ahi. En Studio no existe (PlaceId = 0) y se avisa sin drama.
+Net.func(Net.Functions.ChooseMode).OnServerInvoke = function(player, mode)
+	if mode ~= "solo" and mode ~= "friends" then
+		return { ok = true, stay = true }
+	end
+
+	local placeId = game.PlaceId
+	if placeId == 0 then
+		return { ok = false, reason = { key = "menu.mode.unavailable" } }
+	end
+
+	local reserved, code = pcall(function()
+		return TeleportService:ReserveServer(placeId)
+	end)
+	if not reserved then
+		return { ok = false, reason = { key = "menu.mode.unavailable" } }
+	end
+
+	local options = Instance.new("TeleportOptions")
+	options.ReservedServerAccessCode = code
+
+	local sent = pcall(function()
+		TeleportService:TeleportAsync(placeId, { player }, options)
+	end)
+	if not sent then
+		return { ok = false, reason = { key = "menu.mode.unavailable" } }
+	end
+
+	return { ok = true }
 end
 
 Net.event(Net.Events.PhoneState).OnServerEvent:Connect(function(player, out)

@@ -28,6 +28,7 @@ Net.Functions = {
 	TakePhoto = "TakePhoto",         -- C->S  sacar foto a la prueba
 	AskRoGPT = "AskRoGPT",           -- C->S  mandar la foto al chat
 	GetExam = "GetExam",             -- C->S  pedir el estado inicial
+	ChooseMode = "ChooseMode",       -- C->S  solo / con amigos / con todos
 }
 
 local function getFolder(): Folder

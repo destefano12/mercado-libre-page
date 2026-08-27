@@ -356,4 +356,153 @@ function CharacterArt.attachGlasses(head: BasePart, color: Color3?)
 		CFrame.new(w * 0.44, h * 0.06, 0), frameColor)
 end
 
+-- ─────────────────────────────────────────────────────────────
+-- Ropa
+-- ─────────────────────────────────────────────────────────────
+
+--- Busca una parte del cuerpo probando los nombres de los dos rigs
+--- posibles (avatar R15 y el rig propio de respaldo).
+local function findPart(model: Model, candidates: { string }): BasePart?
+	for _, name in candidates do
+		local part = model:FindFirstChild(name)
+		if part and part:IsA("BasePart") then
+			return part
+		end
+	end
+	return nil
+end
+
+--- Funda una parte del cuerpo con una capa de ropa apenas mas grande.
+local function shell(host: BasePart, name: string, scale: Vector3, offset: CFrame, color: Color3, material: Enum.Material): BasePart
+	local part = Util.part({
+		Name = name,
+		Size = host.Size * scale,
+		CFrame = host.CFrame * offset,
+		Color = color,
+		Material = material,
+		Anchored = false,
+		CanCollide = false,
+		CastShadow = false,
+		Parent = host,
+	})
+	part.Massless = true
+	Util.weld(host, part)
+	return part
+end
+
+--- Traje entero: saco, solapas, camisa, corbata, pantalon y zapatos.
+--- Anda igual sobre un avatar R15 que sobre el rig de respaldo.
+function CharacterArt.attachSuit(model: Model, suitColor: Color3?, tieColor: Color3?)
+	local suit = suitColor or Color3.fromRGB(52, 56, 68)
+	local tie = tieColor or Color3.fromRGB(112, 40, 46)
+	local shirt = Color3.fromRGB(238, 240, 244)
+
+	local torso = findPart(model, { "UpperTorso", "Torso" })
+	if torso then
+		local depth = torso.Size.Z
+		shell(torso, "Saco", Vector3.new(1.08, 1.04, 1.14), CFrame.new(0, 0, 0.01), suit, Enum.Material.Fabric)
+		-- Camisa y corbata asomando entre las solapas
+		shell(torso, "Camisa", Vector3.new(0.42, 0.86, 1.2), CFrame.new(0, 0.04, -0.01), shirt, Enum.Material.Fabric)
+		shell(torso, "Corbata", Vector3.new(0.16, 0.72, 1.26), CFrame.new(0, -0.04, -0.01), tie, Enum.Material.Fabric)
+		shell(torso, "Nudo", Vector3.new(0.2, 0.14, 1.28), CFrame.new(0, torso.Size.Y * 0.34, -0.01), tie, Enum.Material.Fabric)
+		-- Solapas: dos tiras inclinadas sobre el pecho
+		for _, side in { -1, 1 } do
+			local lapel = shell(torso, "Solapa", Vector3.new(0.26, 0.62, 1.18),
+				CFrame.new(side * torso.Size.X * 0.17, torso.Size.Y * 0.1, -depth * 0.01)
+					* CFrame.Angles(0, 0, math.rad(side * 9)), suit, Enum.Material.Fabric)
+			lapel.Color = suit:Lerp(Color3.new(0, 0, 0), 0.12)
+		end
+		shell(torso, "Cuello", Vector3.new(0.62, 0.12, 1.16), CFrame.new(0, torso.Size.Y * 0.44, 0), shirt, Enum.Material.Fabric)
+	end
+
+	local lowerTorso = findPart(model, { "LowerTorso" })
+	if lowerTorso then
+		shell(lowerTorso, "Cintura", Vector3.new(1.06, 1.04, 1.1), CFrame.new(), suit, Enum.Material.Fabric)
+		shell(lowerTorso, "Cinturon", Vector3.new(1.1, 0.22, 1.14), CFrame.new(0, lowerTorso.Size.Y * 0.42, 0),
+			Color3.fromRGB(38, 32, 30), Enum.Material.Fabric)
+	end
+
+	-- Mangas
+	for _, name in { "LeftUpperArm", "RightUpperArm", "LeftLowerArm", "RightLowerArm", "BrazoIzq", "BrazoDer" } do
+		local arm = model:FindFirstChild(name)
+		if arm and arm:IsA("BasePart") then
+			local cuff = string.find(name, "Lower") ~= nil
+			shell(arm, "Manga", Vector3.new(1.09, 1.02, 1.09), CFrame.new(), suit, Enum.Material.Fabric)
+			if cuff then
+				shell(arm, "Puño", Vector3.new(1.12, 0.16, 1.12), CFrame.new(0, -arm.Size.Y * 0.42, 0), shirt, Enum.Material.Fabric)
+			end
+		end
+	end
+
+	-- Pantalon
+	for _, name in { "LeftUpperLeg", "RightUpperLeg", "LeftLowerLeg", "RightLowerLeg", "PiernaIzq", "PiernaDer" } do
+		local leg = model:FindFirstChild(name)
+		if leg and leg:IsA("BasePart") then
+			shell(leg, "Pantalon", Vector3.new(1.08, 1.02, 1.08), CFrame.new(), suit:Lerp(Color3.new(0, 0, 0), 0.18), Enum.Material.Fabric)
+		end
+	end
+
+	-- Zapatos
+	for _, name in { "LeftFoot", "RightFoot" } do
+		local foot = model:FindFirstChild(name)
+		if foot and foot:IsA("BasePart") then
+			shell(foot, "Zapato", Vector3.new(1.14, 1.1, 1.2), CFrame.new(0, 0, -foot.Size.Z * 0.06),
+				Color3.fromRGB(32, 28, 28), Enum.Material.SmoothPlastic)
+		end
+	end
+end
+
+--- La tablilla con la lista de curso. Un profesor sin tablilla no
+--- asusta a nadie.
+function CharacterArt.attachClipboard(model: Model): BasePart?
+	local hand = findPart(model, { "RightHand", "RightLowerArm", "BrazoDer", "Right Arm" })
+	if not hand then
+		return nil
+	end
+
+	local board = Util.part({
+		Name = "Tablilla",
+		Size = Vector3.new(1.5, 0.12, 2),
+		CFrame = hand.CFrame * CFrame.new(0, -hand.Size.Y * 0.5 - 0.2, -0.4) * CFrame.Angles(math.rad(-15), 0, 0),
+		Color = Color3.fromRGB(150, 116, 78),
+		Material = Enum.Material.Wood,
+		Anchored = false,
+		CanCollide = false,
+		CastShadow = false,
+		Parent = hand,
+	})
+	board.Massless = true
+	Util.weld(hand, board)
+
+	local sheet = Util.part({
+		Name = "Planilla",
+		Size = Vector3.new(1.3, 0.05, 1.7),
+		CFrame = board.CFrame * CFrame.new(0, 0.09, -0.1),
+		Color = Color3.fromRGB(248, 248, 244),
+		Material = Enum.Material.SmoothPlastic,
+		Anchored = false,
+		CanCollide = false,
+		CastShadow = false,
+		Parent = board,
+	})
+	sheet.Massless = true
+	Util.weld(board, sheet)
+
+	local clip = Util.part({
+		Name = "Clip",
+		Size = Vector3.new(0.7, 0.14, 0.28),
+		CFrame = board.CFrame * CFrame.new(0, 0.14, -0.82),
+		Color = Color3.fromRGB(176, 180, 188),
+		Material = Enum.Material.Metal,
+		Anchored = false,
+		CanCollide = false,
+		CastShadow = false,
+		Parent = board,
+	})
+	clip.Massless = true
+	Util.weld(board, clip)
+
+	return board
+end
+
 return CharacterArt

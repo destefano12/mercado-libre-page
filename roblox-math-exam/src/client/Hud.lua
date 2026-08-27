@@ -16,6 +16,7 @@ local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
+local Strings = require(Shared:WaitForChild("Strings"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local Util = require(Shared:WaitForChild("Util"))
 
@@ -25,9 +26,11 @@ local Hud = {}
 Hud.onPrimary = nil :: (() -> ())?
 Hud.onStash = nil :: (() -> ())?
 Hud.onPaper = nil :: (() -> ())?
+Hud.onMenu = nil :: (() -> ())?
 
 local refs: { [string]: any } = {}
 local phoneOut = false
+local hasPhoto = false
 local lastRisk = 0
 local lastDanger = false
 local confiscated = false
@@ -43,11 +46,20 @@ local function el(className: string, props: { [string]: any }, parent: Instance?
 	return instance
 end
 
-local STATE_LABEL = {
-	Patrullando = "recorriendo los pasillos",
-	Revisando = "revisando una prueba",
-	Pizarron = "escribiendo en el pizarron",
-	Confrontando = "viene para tu banco",
+local STATE_KEY = {
+	Patrullando = "hud.state.patrol",
+	Barriendo = "hud.state.patrol",
+	Revisando = "hud.state.inspect",
+	Pizarron = "hud.state.board",
+	Confrontando = "hud.state.confront",
+}
+
+-- Ultimo estado recibido, para poder reescribir todo si cambia el idioma.
+local last = {
+	risk = nil :: any,
+	round = nil :: any,
+	exam = nil :: any,
+	phone = nil :: any,
 }
 
 -- ─────────────────────────────────────────────────────────────
@@ -87,7 +99,7 @@ function Hud.mount()
 		Position = UDim2.fromOffset(14, 10),
 		BackgroundTransparency = 1,
 		Font = Theme.FontBold,
-		Text = Config.Teacher.DisplayName:upper(),
+		Text = string.upper(Config.Teacher.DisplayName),
 		TextColor3 = Theme.Hud.Text,
 		TextSize = 15,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -98,7 +110,7 @@ function Hud.mount()
 		Position = UDim2.fromOffset(14, 30),
 		BackgroundTransparency = 1,
 		Font = Theme.Font,
-		Text = "recorriendo los pasillos",
+		Text = Strings.get("hud.state.patrol"),
 		TextColor3 = Color3.fromRGB(168, 174, 188),
 		TextSize = 14,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -125,7 +137,7 @@ function Hud.mount()
 		Position = UDim2.new(1, -14, 0, 10),
 		BackgroundTransparency = 1,
 		Font = Theme.FontBold,
-		Text = "SEGURO",
+		Text = Strings.get("hud.risk.safe"),
 		TextColor3 = Theme.Hud.Safe,
 		TextSize = 15,
 		TextXAlignment = Enum.TextXAlignment.Right,
@@ -148,7 +160,7 @@ function Hud.mount()
 		Position = UDim2.fromOffset(12, 10),
 		BackgroundTransparency = 1,
 		Font = Theme.Font,
-		Text = "PREPARACION",
+		Text = Strings.get("hud.phase.prep"),
 		TextColor3 = Color3.fromRGB(168, 174, 188),
 		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -170,7 +182,7 @@ function Hud.mount()
 		Position = UDim2.new(0, 12, 1, -22),
 		BackgroundTransparency = 1,
 		Font = Theme.Font,
-		Text = "0 / 0 respondidos",
+		Text = "",
 		TextColor3 = Color3.fromRGB(150, 156, 168),
 		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -228,9 +240,9 @@ function Hud.mount()
 		return instance
 	end
 
-	refs.paperButton = button("Hoja", "Ver la hoja  [E]", 1, 190, Color3.fromRGB(38, 42, 52), 18)
-	refs.primaryButton = button("Principal", "📷  Sacar el celular", 2, 300, Theme.Hud.Safe, 22)
-	refs.stashButton = button("Guardar", "Guardar  [Q]", 3, 170, Color3.fromRGB(38, 42, 52), 18)
+	refs.paperButton = button("Hoja", Strings.get("hud.button.paper") .. "  [E]", 1, 200, Color3.fromRGB(38, 42, 52), 18)
+	refs.primaryButton = button("Principal", Strings.get("hud.button.phoneOut"), 2, 300, Theme.Hud.Safe, 22)
+	refs.stashButton = button("Guardar", Strings.get("hud.button.stash") .. "  [Q]", 3, 180, Color3.fromRGB(38, 42, 52), 18)
 	refs.stashButton.Visible = false
 
 	refs.hint = el("TextLabel", {
@@ -239,7 +251,7 @@ function Hud.mount()
 		Size = UDim2.fromOffset(700, 18),
 		BackgroundTransparency = 1,
 		Font = Theme.Font,
-		Text = "Sacá el celular cuando el profe no te vea. Con la foto, RoGPT te resuelve el ejercicio.",
+		Text = Strings.get("hud.hint.default"),
 		TextColor3 = Color3.fromRGB(150, 156, 168),
 		TextSize = 14,
 	}, screen)
@@ -260,11 +272,32 @@ function Hud.mount()
 		end
 	end)
 
+	-- ── Menu ──────────────────────────────────────────────
+	local menuButton = el("TextButton", {
+		Name = "Menu",
+		Position = UDim2.fromOffset(18, 18),
+		Size = UDim2.fromOffset(96, 34),
+		BackgroundColor3 = Theme.Hud.Panel,
+		BackgroundTransparency = 0.25,
+		AutoButtonColor = false,
+		Font = Theme.Font,
+		Text = "☰  [M]",
+		TextColor3 = Color3.fromRGB(190, 196, 208),
+		TextSize = 15,
+		BorderSizePixel = 0,
+	}, screen)
+	Util.roundify(menuButton, 10, Color3.fromRGB(58, 62, 74), 1)
+	menuButton.MouseButton1Click:Connect(function()
+		if Hud.onMenu then
+			Hud.onMenu()
+		end
+	end)
+
 	-- ── Toasts ────────────────────────────────────────────
 	refs.toasts = el("Frame", {
 		Name = "Avisos",
 		AnchorPoint = Vector2.new(0, 0),
-		Position = UDim2.fromOffset(18, 18),
+		Position = UDim2.fromOffset(18, 62),
 		Size = UDim2.fromOffset(330, 300),
 		BackgroundTransparency = 1,
 	}, screen)
@@ -305,6 +338,7 @@ end
 -- ─────────────────────────────────────────────────────────────
 
 function Hud.setRisk(data: any)
+	last.risk = data
 	if not refs.riskBar then
 		return
 	end
@@ -317,33 +351,40 @@ function Hud.setRisk(data: any)
 		BackgroundColor3 = color,
 	}):Play()
 
-	refs.teacherState.Text = STATE_LABEL[data.teacherState] or "en el aula"
+	refs.teacherState.Text = Strings.get(STATE_KEY[data.teacherState] or "hud.state.patrol")
 	if data.inspecting then
-		refs.teacherState.Text = "esta parado en tu banco"
+		refs.teacherState.Text = Strings.get("hud.state.atYourDesk")
 	end
 
-	local label
+	local key
 	if data.teacherState == "Pizarron" then
-		label = "ESTA DE ESPALDAS"
+		key = "hud.risk.backTurned"
 	elseif data.seen then
-		label = "TE VE"
+		key = "hud.risk.seen"
 	elseif risk > Config.Teacher.RiskWarning then
-		label = "SOSPECHA"
+		key = "hud.risk.suspicious"
 	else
-		label = "SEGURO"
+		key = "hud.risk.safe"
 	end
-	refs.riskText.Text = label
+	refs.riskText.Text = Strings.get(key)
 	refs.riskText.TextColor3 = color
 
 	local danger = (data.seen and phoneOut) == true
 	if danger ~= lastDanger then
 		lastDanger = danger
-		refs.warning.Text = danger and "TE ESTA MIRANDO — GUARDÁ EL CELULAR" or ""
+		refs.warning.Text = danger and Strings.get("hud.warning") or ""
 		TweenService:Create(refs.warning, TweenInfo.new(0.2), {
 			TextTransparency = danger and 0 or 1,
 		}):Play()
 	end
 
+	Hud.refreshPrimary()
+end
+
+--- El boton grande es contextual: sacar el celu, sacar la foto o
+--- mandarsela a RoGPT.
+function Hud.setHasPhoto(value: boolean)
+	hasPhoto = value
 	Hud.refreshPrimary()
 end
 
@@ -362,10 +403,10 @@ function Hud.refreshPrimary()
 	end
 
 	if phoneOut then
-		button.Text = "📷  Sacar foto"
-		button.Size = UDim2.fromOffset(260, 62)
+		button.Text = Strings.get(hasPhoto and "hud.button.send" or "hud.button.photo")
+		button.Size = UDim2.fromOffset(hasPhoto and 300 or 260, 62)
 	else
-		button.Text = "📷  Sacar el celular"
+		button.Text = Strings.get("hud.button.phoneOut")
 		button.Size = UDim2.fromOffset(300, 62)
 	end
 
@@ -375,45 +416,58 @@ function Hud.refreshPrimary()
 end
 
 function Hud.setPhoneState(state: any)
+	last.phone = state
 	if not refs.hint then
 		return
 	end
 	confiscated = state.confiscated == true
 	if confiscated then
-		refs.hint.Text = string.format("El profe te confisco el celular. Te lo devuelve en %ds.", math.ceil(state.confiscatedFor))
+		refs.hint.Text = Strings.get("hud.hint.confiscated", { seconds = math.ceil(state.confiscatedFor) })
 		refs.primaryButton.AutoButtonColor = false
 		refs.primaryButton.BackgroundColor3 = Color3.fromRGB(48, 50, 58)
-		refs.primaryButton.Text = "Sin celular"
+		refs.primaryButton.Text = Strings.get("hud.button.noPhone")
 	else
 		refs.primaryButton.AutoButtonColor = true
-		refs.hint.Text = string.format("Bateria %d%%  ·  Sacá el celular cuando el profe no te vea.", state.battery)
+		refs.hint.Text = Strings.get("hud.hint.battery", { battery = state.battery })
 		Hud.refreshPrimary()
 	end
 end
 
+local PHASE_KEY = {
+	Preparacion = "hud.phase.prep",
+	Prueba = "hud.phase.exam",
+	Resultados = "hud.phase.results",
+}
+
 function Hud.setRound(data: any)
+	last.round = data
 	if not refs.timer then
 		return
 	end
-	local minutes = math.floor(data.timeLeft / 60)
-	local seconds = data.timeLeft % 60
-	refs.timer.Text = string.format("%02d:%02d", minutes, seconds)
-	refs.phase.Text = string.upper(data.phase)
+	refs.timer.Text = string.format("%02d:%02d", math.floor(data.timeLeft / 60), data.timeLeft % 60)
+	refs.phase.Text = Strings.get(PHASE_KEY[data.phase] or "hud.phase.prep")
 	refs.phase.TextColor3 = data.phase == "Prueba" and Theme.Hud.Safe or Color3.fromRGB(168, 174, 188)
 end
 
 function Hud.setExam(snapshot: any)
+	last.exam = snapshot
 	if not refs.progress then
 		return
 	end
-	refs.progress.Text = string.format("%d / %d respondidos  ·  nota %.1f",
-		snapshot.answered, #snapshot.questions, snapshot.grade)
+	refs.progress.Text = Strings.get("hud.progress", {
+		answered = snapshot.answered,
+		total = #snapshot.questions,
+		grade = string.format("%.1f", snapshot.grade),
+	})
 end
 
-function Hud.notify(text: string, kind: string?)
+--- Los avisos llegan del servidor como clave: se escriben aca, en el
+--- idioma del jugador.
+function Hud.notify(key: string, kind: string?, args: { [string]: any }?)
 	if not refs.toasts then
 		return
 	end
+	local text = Strings.get(key, args)
 	local color = Theme.Hud.Safe
 	if kind == "danger" then
 		color = Theme.Hud.Danger
@@ -472,6 +526,37 @@ function Hud.flash(text: string, color: Color3?)
 
 	TweenService:Create(refs.flash, TweenInfo.new(1.1), { BackgroundTransparency = 1 }):Play()
 	TweenService:Create(refs.flashText, TweenInfo.new(1.6), { TextTransparency = 1 }):Play()
+end
+
+--- Se apaga entero mientras esta abierto el menu de inicio.
+function Hud.setVisible(visible: boolean)
+	if refs.screen then
+		refs.screen.Enabled = visible
+	end
+end
+
+--- Reescribe todo lo visible cuando el jugador cambia el idioma.
+function Hud.refreshTexts()
+	if not refs.screen then
+		return
+	end
+	refs.paperButton.Text = Strings.get("hud.button.paper") .. "  [E]"
+	refs.stashButton.Text = Strings.get("hud.button.stash") .. "  [Q]"
+	if last.risk then
+		Hud.setRisk(last.risk)
+	end
+	if last.round then
+		Hud.setRound(last.round)
+	end
+	if last.exam then
+		Hud.setExam(last.exam)
+	end
+	if last.phone then
+		Hud.setPhoneState(last.phone)
+	else
+		refs.hint.Text = Strings.get("hud.hint.default")
+	end
+	Hud.refreshPrimary()
 end
 
 return Hud

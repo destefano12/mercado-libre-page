@@ -2,13 +2,20 @@
 --[[
 	ClassroomBuilder
 	------------------------------------------------------------------
-	Construye el aula entera por codigo: piso, paredes, ventanas,
-	luminarias, pizarron, escritorio del profe, y la grilla de bancos
-	con su silla, su hoja de prueba y su lugar para el celular.
+	Un aula de secundaria estadounidense, construida por codigo y con
+	criterio minimalista: pocos materiales, paleta corta, nada de
+	adornos que no estarian de verdad en un aula.
 
-	Todo es 3D real y a escala de personaje (nada de planos ni sprites).
-	Devuelve las referencias que necesitan los demas servicios:
-	bancos, nodos de patrullaje, posicion del pizarron y spawn del profe.
+	Lo que la hace leerse como aula de Estados Unidos:
+		· pupitres combo (silla y tabla en un mismo caño cromado)
+		· cesto de alambre abajo de la tabla
+		· pizarron verde con marco de madera y bandeja de tizas
+		· cielorraso de placas con luminarias empotradas
+		· piso de linoleo claro y paredes de bloque pintado
+		· puerta con ventanita vertical y reloj de pared
+
+	Devuelve las referencias que usan los demas servicios: bancos,
+	nodos de patrullaje, posicion del pizarron y spawns.
 --]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -44,6 +51,13 @@ export type Classroom = {
 
 local C = Config.Classroom
 
+-- Paleta corta: cinco colores y se terminó.
+local CHROME = Color3.fromRGB(188, 192, 200)
+local LAMINATE = Color3.fromRGB(212, 190, 156)
+local SEAT = Color3.fromRGB(196, 186, 170)
+local DARK = Color3.fromRGB(62, 66, 74)
+local WHITE = Color3.fromRGB(246, 245, 241)
+
 -- ─────────────────────────────────────────────────────────────
 -- Piezas basicas
 -- ─────────────────────────────────────────────────────────────
@@ -59,40 +73,84 @@ local function block(parent: Instance, name: string, size: Vector3, cf: CFrame, 
 	})
 end
 
-local function buildFloorAndCeiling(model: Model, width: number, depth: number, center: Vector3)
-	local floor = block(model, "Piso", Vector3.new(width, 1, depth),
-		CFrame.new(center.X, -0.5, center.Z), C.FloorColor, C.FloorMaterial)
-	floor.TopSurface = Enum.SurfaceType.Smooth
-
-	-- Zocalo de goma alrededor del piso
-	block(model, "Ceiling", Vector3.new(width, 1, depth),
-		CFrame.new(center.X, C.WallHeight + 0.5, center.Z), Color3.fromRGB(240, 240, 236), Enum.Material.Plaster)
+--- Caño cromado. El eje del cilindro es X, asi que la rotacion viene
+--- puesta en el CFrame y no se pisa despues con Orientation.
+local function tube(parent: Instance, name: string, length: number, diameter: number, cf: CFrame, color: Color3?): BasePart
+	local part = block(parent, name, Vector3.new(length, diameter, diameter), cf, color or CHROME, Enum.Material.Metal)
+	part.Shape = Enum.PartType.Cylinder
+	part.Reflectance = 0.12
+	part.CanCollide = false
+	part.CastShadow = false
+	return part
 end
 
-local function buildWall(model: Model, name: string, size: Vector3, cf: CFrame)
-	local wall = block(model, name, size, cf, C.WallColor, C.WallMaterial)
-	wall.CastShadow = true
+local VERTICAL = CFrame.Angles(0, 0, math.rad(90))   -- eje X -> Y
+local ALONG_Z = CFrame.Angles(0, math.rad(90), 0)    -- eje X -> Z
+
+-- ─────────────────────────────────────────────────────────────
+-- Envolvente: piso, cielorraso de placas, paredes
+-- ─────────────────────────────────────────────────────────────
+
+local function buildShell(model: Model, width: number, depth: number, center: Vector3, frontZ: number, backZ: number, halfWidth: number)
+	local h = C.WallHeight
+	local t = C.WallThickness
+
+	-- Piso de linoleo
+	local floor = block(model, "Piso", Vector3.new(width, 1, depth),
+		CFrame.new(center.X, -0.5, center.Z), C.FloorColor, Enum.Material.Pebble)
+	floor.TopSurface = Enum.SurfaceType.Smooth
+
+	-- Cielorraso de placas: grilla clara con perfiles finos
+	local tile = 6
+	local cols = math.ceil(width / tile)
+	local rows = math.ceil(depth / tile)
+	for row = 1, rows do
+		for col = 1, cols do
+			local x = center.X - width / 2 + (col - 0.5) * tile
+			local z = center.Z - depth / 2 + (row - 0.5) * tile
+			local plate = block(model, "Placa", Vector3.new(tile - 0.12, 0.3, tile - 0.12),
+				CFrame.new(x, h + 0.15, z), Color3.fromRGB(238, 237, 231), Enum.Material.Concrete)
+			plate.CastShadow = false
+		end
+	end
+	block(model, "Losa", Vector3.new(width, 0.6, depth),
+		CFrame.new(center.X, h + 0.6, center.Z), DARK, Enum.Material.Concrete)
+
+	-- Paredes de bloque pintado + zocalo
+	local function wall(name: string, size: Vector3, cf: CFrame)
+		return block(model, name, size, cf, C.WallColor, C.WallMaterial)
+	end
+	wall("ParedFrente", Vector3.new(width, h, t), CFrame.new(0, h / 2, frontZ))
+	wall("ParedFondo", Vector3.new(width, h, t), CFrame.new(0, h / 2, backZ))
+	wall("ParedIzq", Vector3.new(t, h, depth), CFrame.new(-halfWidth, h / 2, center.Z))
+
+	for _, spec in {
+		{ Vector3.new(width, 0.9, t + 0.25), CFrame.new(0, 0.45, frontZ) },
+		{ Vector3.new(width, 0.9, t + 0.25), CFrame.new(0, 0.45, backZ) },
+		{ Vector3.new(t + 0.25, 0.9, depth), CFrame.new(-halfWidth, 0.45, center.Z) },
+		{ Vector3.new(t + 0.25, 0.9, depth), CFrame.new(halfWidth, 0.45, center.Z) },
+	} do
+		block(model, "Zocalo", spec[1] :: Vector3, spec[2] :: CFrame, C.TrimColor, Enum.Material.SmoothPlastic)
+	end
+
 	return wall
 end
 
-local function buildWindowWall(model: Model, wallX: number, zStart: number, zEnd: number, height: number, thickness: number, facingSign: number)
-	-- Ventanal lateral: la pared se construye por segmentos para que los
-	-- huecos sean huecos de verdad (y entre luz natural al aula).
-	local windowWidth = 8
+--- Pared del ventanal: se arma por segmentos para que los huecos sean
+--- huecos de verdad y entre luz.
+local function buildWindowWall(model: Model, wallX: number, zStart: number, zEnd: number, height: number, thickness: number)
+	local windowWidth = 9
 	local windowHeight = 7
-	local sillHeight = 5
+	local sillHeight = 4.5
 	local count = 3
-	local span = zEnd - zStart
-	local step = span / (count + 1)
-	local frameColor = C.TrimColor
+	local step = (zEnd - zStart) / (count + 1)
 
-	local centers: { number } = {}
+	local centers = {}
 	for i = 1, count do
 		table.insert(centers, zStart + step * i)
 	end
 
-	-- Segmentos macizos entre ventanas (y en los extremos del muro)
-	local edges: { number } = { zStart }
+	local edges = { zStart }
 	for _, z in centers do
 		table.insert(edges, z - windowWidth / 2)
 		table.insert(edges, z + windowWidth / 2)
@@ -102,95 +160,103 @@ local function buildWindowWall(model: Model, wallX: number, zStart: number, zEnd
 	for i = 1, #edges - 1, 2 do
 		local a, b = edges[i], edges[i + 1]
 		if b - a > 0.05 then
-			buildWall(model, "ParedVentanal", Vector3.new(thickness, height, b - a),
-				CFrame.new(wallX, height / 2, (a + b) / 2))
+			block(model, "ParedVentanal", Vector3.new(thickness, height, b - a),
+				CFrame.new(wallX, height / 2, (a + b) / 2), C.WallColor, C.WallMaterial)
 		end
 	end
 
 	for _, z in centers do
-		-- Antepecho y dintel del hueco
-		buildWall(model, "Antepecho", Vector3.new(thickness, sillHeight, windowWidth),
-			CFrame.new(wallX, sillHeight / 2, z))
-		local lintelHeight = height - (sillHeight + windowHeight)
-		if lintelHeight > 0.05 then
-			buildWall(model, "Dintel", Vector3.new(thickness, lintelHeight, windowWidth),
-				CFrame.new(wallX, height - lintelHeight / 2, z))
+		block(model, "Antepecho", Vector3.new(thickness, sillHeight, windowWidth),
+			CFrame.new(wallX, sillHeight / 2, z), C.WallColor, C.WallMaterial)
+		local lintel = height - (sillHeight + windowHeight)
+		if lintel > 0.05 then
+			block(model, "Dintel", Vector3.new(thickness, lintel, windowWidth),
+				CFrame.new(wallX, height - lintel / 2, z), C.WallColor, C.WallMaterial)
 		end
 
 		local frameCF = CFrame.new(wallX, sillHeight + windowHeight / 2, z)
-
-		local glass = block(model, "Vidrio", Vector3.new(0.35, windowHeight, windowWidth), frameCF,
-			Color3.fromRGB(198, 226, 240), Enum.Material.Glass)
-		glass.Transparency = 0.72
-		glass.Reflectance = 0.08
+		local glass = block(model, "Vidrio", Vector3.new(0.3, windowHeight, windowWidth), frameCF,
+			Color3.fromRGB(206, 226, 236), Enum.Material.Glass)
+		glass.Transparency = 0.78
+		glass.Reflectance = 0.06
 		glass.CastShadow = false
 
-		block(model, "Marco", Vector3.new(0.6, 0.5, windowWidth + 0.6), frameCF * CFrame.new(0, windowHeight / 2, 0), frameColor, Enum.Material.Metal)
-		block(model, "Marco", Vector3.new(0.6, 0.5, windowWidth + 0.6), frameCF * CFrame.new(0, -windowHeight / 2, 0), frameColor, Enum.Material.Metal)
-		block(model, "Marco", Vector3.new(0.6, windowHeight, 0.5), frameCF * CFrame.new(0, 0, windowWidth / 2), frameColor, Enum.Material.Metal)
-		block(model, "Marco", Vector3.new(0.6, windowHeight, 0.5), frameCF * CFrame.new(0, 0, -windowWidth / 2), frameColor, Enum.Material.Metal)
-		block(model, "Cruceta", Vector3.new(0.45, windowHeight, 0.3), frameCF, frameColor, Enum.Material.Metal)
+		-- Carpinteria de aluminio, dos hojas
+		for _, piece in {
+			{ Vector3.new(0.5, 0.35, windowWidth), CFrame.new(0, windowHeight / 2, 0) },
+			{ Vector3.new(0.5, 0.35, windowWidth), CFrame.new(0, -windowHeight / 2, 0) },
+			{ Vector3.new(0.5, windowHeight, 0.35), CFrame.new(0, 0, windowWidth / 2) },
+			{ Vector3.new(0.5, windowHeight, 0.35), CFrame.new(0, 0, -windowWidth / 2) },
+			{ Vector3.new(0.5, windowHeight, 0.25), CFrame.new(0, 0, 0) },
+		} do
+			block(model, "Carpinteria", piece[1] :: Vector3, frameCF * (piece[2] :: CFrame),
+				Color3.fromRGB(168, 172, 178), Enum.Material.Metal)
+		end
 
-		block(model, "Alfeizar", Vector3.new(1.8, 0.4, windowWidth + 1.4),
-			CFrame.new(wallX - facingSign * 0.7, sillHeight - 0.15, z), Color3.fromRGB(236, 234, 228), Enum.Material.Marble)
+		block(model, "Alfeizar", Vector3.new(1.5, 0.3, windowWidth + 1),
+			CFrame.new(wallX - 0.6, sillHeight - 0.1, z), WHITE, Enum.Material.SmoothPlastic)
 
 		local light = Instance.new("SurfaceLight")
-		light.Face = facingSign > 0 and Enum.NormalId.Left or Enum.NormalId.Right
-		light.Brightness = 1.6
-		light.Range = 32
-		light.Angle = 120
-		light.Color = Color3.fromRGB(255, 246, 224)
+		light.Face = Enum.NormalId.Left
+		light.Brightness = 1.5
+		light.Range = 30
+		light.Angle = 130
+		light.Color = Color3.fromRGB(255, 248, 232)
 		light.Parent = glass
 	end
 end
 
+-- ─────────────────────────────────────────────────────────────
+-- Frente del aula
+-- ─────────────────────────────────────────────────────────────
+
 local function buildBoard(model: Model, wallZ: number, width: number): CFrame
-	local boardWidth = math.min(width - 12, 26)
-	-- Rotado 180°: la cara Front del pizarron mira a los alumnos (+Z global).
+	local boardWidth = math.min(width - 14, 26)
 	local boardCF = CFrame.new(0, 8, wallZ + 0.7) * CFrame.Angles(0, math.pi, 0)
 
-	block(model, "MarcoPizarron", Vector3.new(boardWidth + 1.2, 9.2, 0.5), boardCF,
-		Color3.fromRGB(96, 74, 52), Enum.Material.Wood)
-	local board = block(model, "Pizarron", Vector3.new(boardWidth, 8, 0.35), boardCF * CFrame.new(0, 0, -0.2),
-		Color3.fromRGB(46, 104, 72), Enum.Material.Slate)
-	board.Name = "Pizarron"
+	block(model, "MarcoPizarron", Vector3.new(boardWidth + 0.9, 8.9, 0.45), boardCF,
+		Color3.fromRGB(122, 96, 68), Enum.Material.Wood)
+	local board = block(model, "Pizarron", Vector3.new(boardWidth, 8, 0.3), boardCF * CFrame.new(0, 0, -0.2),
+		C.BoardColor, Enum.Material.Slate)
 
-	-- Bandeja de tizas
-	block(model, "BandejaTizas", Vector3.new(boardWidth, 0.35, 1),
-		boardCF * CFrame.new(0, -4.4, -0.5), Color3.fromRGB(120, 96, 68), Enum.Material.Wood)
-	for i = -2, 2 do
-		local chalk = block(model, "Tiza", Vector3.new(0.9, 0.22, 0.22),
-			boardCF * CFrame.new(i * 2.2, -4.05, -0.6), Color3.fromRGB(248, 248, 240), Enum.Material.Sand)
+	block(model, "BandejaTizas", Vector3.new(boardWidth, 0.3, 0.9),
+		boardCF * CFrame.new(0, -4.5, -0.55), Color3.fromRGB(142, 112, 80), Enum.Material.Wood)
+	for i = -1, 1 do
+		local chalk = block(model, "Tiza", Vector3.new(0.85, 0.2, 0.2),
+			boardCF * CFrame.new(i * 3.2, -4.2, -0.65), WHITE, Enum.Material.Sand)
 		chalk.CanCollide = false
-		chalk.Shape = Enum.PartType.Cylinder
-		chalk.Orientation = Vector3.new(0, 0, 0)
+		chalk.CastShadow = false
 	end
+	local eraser = block(model, "Borrador", Vector3.new(1.6, 0.5, 0.7),
+		boardCF * CFrame.new(boardWidth / 2 - 2, -4.15, -0.65), DARK, Enum.Material.Fabric)
+	eraser.CanCollide = false
 
-	-- Texto tizado: el enunciado general de la prueba
+	-- Lo escrito en el pizarron es escenografia: queda en ingles.
 	local surface = Instance.new("SurfaceGui")
 	surface.Name = "TextoPizarron"
 	surface.Face = Enum.NormalId.Front
-	surface.CanvasSize = Vector2.new(1000, 320)
-	surface.LightInfluence = 0.35
+	surface.CanvasSize = Vector2.new(1200, 380)
+	surface.LightInfluence = 0.4
 	surface.Adornee = board
 	surface.Parent = board
 
 	local title = Instance.new("TextLabel")
-	title.Size = UDim2.fromScale(1, 0.42)
+	title.Size = UDim2.fromScale(1, 0.4)
+	title.Position = UDim2.fromScale(0, 0.1)
 	title.BackgroundTransparency = 1
 	title.Font = Enum.Font.PermanentMarker
-	title.Text = "EVALUACION DE MATEMATICA"
-	title.TextColor3 = Color3.fromRGB(238, 240, 232)
+	title.Text = "MATH  ·  PERIOD 3"
+	title.TextColor3 = Color3.fromRGB(236, 238, 232)
 	title.TextScaled = true
 	title.Parent = surface
 
 	local subtitle = Instance.new("TextLabel")
-	subtitle.Position = UDim2.fromScale(0, 0.44)
-	subtitle.Size = UDim2.fromScale(1, 0.3)
+	subtitle.Position = UDim2.fromScale(0, 0.52)
+	subtitle.Size = UDim2.fromScale(1, 0.26)
 	subtitle.BackgroundTransparency = 1
 	subtitle.Font = Enum.Font.PermanentMarker
-	subtitle.Text = "Prohibido el uso de celulares"
-	subtitle.TextColor3 = Color3.fromRGB(196, 214, 200)
+	subtitle.Text = "Phones off. Show your work."
+	subtitle.TextColor3 = Color3.fromRGB(190, 208, 194)
 	subtitle.TextScaled = true
 	subtitle.Parent = surface
 
@@ -198,343 +264,174 @@ local function buildBoard(model: Model, wallZ: number, width: number): CFrame
 end
 
 local function buildTeacherDesk(model: Model, wallZ: number): CFrame
-	local deskCF = CFrame.new(-9, 0, wallZ + 5)
-	local topCF = deskCF * CFrame.new(0, 3.1, 0)
+	local deskCF = CFrame.new(-11, 0, wallZ + 5.5)
+	local topCF = deskCF * CFrame.new(0, 2.9, 0)
 
-	block(model, "EscritorioProfe", Vector3.new(8, 0.35, 3.4), topCF, Color3.fromRGB(118, 88, 60), Enum.Material.Wood)
-	block(model, "FrenteEscritorio", Vector3.new(8, 2.6, 0.3), deskCF * CFrame.new(0, 1.6, -1.5),
-		Color3.fromRGB(104, 78, 54), Enum.Material.Wood)
-	for _, offset in { Vector3.new(-3.6, 0, 0), Vector3.new(3.6, 0, 0) } do
-		block(model, "PataEscritorio", Vector3.new(0.4, 3, 3.2), deskCF * CFrame.new(offset.X, 1.5, 0),
-			Color3.fromRGB(88, 66, 46), Enum.Material.Wood)
+	block(model, "EscritorioProfe", Vector3.new(8.5, 0.3, 3.6), topCF, LAMINATE, Enum.Material.Wood)
+	block(model, "CuerpoEscritorio", Vector3.new(8.2, 2.6, 3.3), deskCF * CFrame.new(0, 1.45, 0), DARK, Enum.Material.Metal)
+	for _, x in { -3.4, 3.4 } do
+		block(model, "Cajonera", Vector3.new(0.12, 2, 3), deskCF * CFrame.new(x, 1.6, 0),
+			Color3.fromRGB(150, 154, 162), Enum.Material.Metal)
 	end
 
-	-- Pila de pruebas corregidas + mate del profe
-	for i = 1, 4 do
-		local sheet = block(model, "Pruebas", Vector3.new(2.4, 0.06, 1.8),
-			topCF * CFrame.new(2.2 + math.random() * 0.1, 0.2 + i * 0.07, math.random() * 0.1),
-			Color3.fromRGB(250, 248, 240), Enum.Material.SmoothPlastic)
-		sheet.CanCollide = false
-	end
-	local mate = block(model, "Mate", Vector3.new(1, 1.1, 1), topCF * CFrame.new(-2.6, 0.75, 0),
-		Color3.fromRGB(86, 62, 42), Enum.Material.Wood)
-	mate.Shape = Enum.PartType.Cylinder
-	mate.Orientation = Vector3.new(0, 0, 90)
-	mate.CanCollide = false
+	local stack = block(model, "Pruebas", Vector3.new(2.6, 0.4, 2), topCF * CFrame.new(2.4, 0.35, 0), WHITE, Enum.Material.SmoothPlastic)
+	stack.CanCollide = false
+	local mug = block(model, "Taza", Vector3.new(0.9, 1, 0.9), topCF * CFrame.new(-2.8, 0.65, 0.4), Color3.fromRGB(158, 62, 58), Enum.Material.Ceramic)
+	mug.Shape = Enum.PartType.Cylinder
+	mug.CFrame = topCF * CFrame.new(-2.8, 0.65, 0.4) * VERTICAL
+	mug.CanCollide = false
 
 	return deskCF
 end
 
-local function buildLighting(model: Model, width: number, depth: number, center: Vector3)
+local function buildDoor(model: Model, wallZ: number, width: number)
+	local doorCF = CFrame.new(width / 2 - 7, 0, wallZ - 0.45)
+	block(model, "MarcoPuerta", Vector3.new(6, 10.2, 0.5), doorCF * CFrame.new(0, 5.1, 0), C.TrimColor, Enum.Material.Metal)
+	block(model, "Puerta", Vector3.new(5.2, 9.4, 0.28), doorCF * CFrame.new(0, 4.7, -0.2),
+		Color3.fromRGB(158, 124, 86), Enum.Material.Wood)
+	-- Ventanita vertical, muy de escuela americana
+	local pane = block(model, "VentanaPuerta", Vector3.new(0.9, 4.4, 0.34), doorCF * CFrame.new(-1.4, 5.8, -0.2),
+		Color3.fromRGB(206, 226, 236), Enum.Material.Glass)
+	pane.Transparency = 0.72
+	pane.CastShadow = false
+	local handle = block(model, "Picaporte", Vector3.new(0.9, 0.22, 0.22), doorCF * CFrame.new(1.9, 4.6, -0.42), CHROME, Enum.Material.Metal)
+	handle.Shape = Enum.PartType.Cylinder
+	handle.CFrame = doorCF * CFrame.new(1.9, 4.6, -0.42) * ALONG_Z
+	handle.CanCollide = false
+end
+
+local function buildCeilingLights(model: Model, width: number, depth: number, center: Vector3)
 	local rows, cols = 3, 2
 	for r = 1, rows do
 		for c = 1, cols do
-			local x = center.X + (c - (cols + 1) / 2) * (width / cols) * 0.7
-			local z = center.Z + (r - (rows + 1) / 2) * (depth / rows) * 0.72
-			local fixture = block(model, "Luminaria", Vector3.new(6, 0.4, 1.4),
-				CFrame.new(x, C.WallHeight - 0.6, z), Color3.fromRGB(238, 240, 245), Enum.Material.Metal)
-			fixture.CanCollide = false
+			local x = center.X + (c - (cols + 1) / 2) * (width / cols) * 0.62
+			local z = center.Z + (r - (rows + 1) / 2) * (depth / rows) * 0.74
+			local troffer = block(model, "Luminaria", Vector3.new(5.8, 0.28, 2.4),
+				CFrame.new(x, C.WallHeight - 0.18, z), Color3.fromRGB(226, 228, 232), Enum.Material.Metal)
+			troffer.CanCollide = false
+			troffer.CastShadow = false
 
-			local tube = block(model, "Tubo", Vector3.new(5.6, 0.25, 1),
-				CFrame.new(x, C.WallHeight - 0.9, z), Color3.fromRGB(255, 252, 240), Enum.Material.Neon)
-			tube.CanCollide = false
-			tube.CastShadow = false
+			local diffuser = block(model, "Difusor", Vector3.new(5.4, 0.16, 2), CFrame.new(x, C.WallHeight - 0.36, z),
+				Color3.fromRGB(255, 253, 246), Enum.Material.Neon)
+			diffuser.CanCollide = false
+			diffuser.CastShadow = false
 
 			local light = Instance.new("SurfaceLight")
 			light.Face = Enum.NormalId.Bottom
-			light.Brightness = 3
+			light.Brightness = 2.6
 			light.Range = 34
-			light.Angle = 150
-			light.Color = Color3.fromRGB(255, 250, 235)
-			light.Parent = tube
+			light.Angle = 160
+			light.Color = Color3.fromRGB(255, 251, 238)
+			light.Parent = diffuser
 		end
 	end
 end
 
-local function buildDoor(model: Model, wallZ: number, width: number): CFrame
-	local doorCF = CFrame.new(width / 2 - 6, 0, wallZ - 0.4)
-	block(model, "MarcoPuerta", Vector3.new(6.4, 10.4, 0.6), doorCF * CFrame.new(0, 5.2, 0),
-		C.TrimColor, Enum.Material.Wood)
-	local door = block(model, "Puerta", Vector3.new(5.6, 9.6, 0.3), doorCF * CFrame.new(0, 4.8, -0.2),
-		Color3.fromRGB(142, 104, 68), Enum.Material.Wood)
-	local knob = block(model, "Picaporte", Vector3.new(0.5, 0.5, 0.5), doorCF * CFrame.new(2.2, 4.6, -0.5),
-		Color3.fromRGB(205, 178, 96), Enum.Material.Metal)
-	knob.Shape = Enum.PartType.Ball
-	knob.CanCollide = false
-	door.CanCollide = true
-	return doorCF
-end
-
-
 -- ─────────────────────────────────────────────────────────────
--- Decoracion del aula
+-- Laminas y reloj (lo justo, sin saturar la pared)
 -- ─────────────────────────────────────────────────────────────
 
-type PosterSpec = {
-	title: string,
-	lines: { string },
-	accent: Color3,
-	width: number?,
-	height: number?,
+local POSTERS = {
+	{ title = "ORDER OF OPERATIONS", accent = Color3.fromRGB(46, 92, 158),
+	  lines = { "P E M D A S", "Parentheses · Exponents", "Multiply · Divide", "Add · Subtract" } },
+	{ title = "THE QUADRATIC FORMULA", accent = Color3.fromRGB(52, 116, 96),
+	  lines = { "x = (-b ± √(b² - 4ac)) / 2a", "Δ = b² - 4ac", "Δ > 0  two roots", "Δ = 0  one   ·   Δ < 0  none" } },
+	{ title = "PYTHAGOREAN THEOREM", accent = Color3.fromRGB(158, 88, 44),
+	  lines = { "a² + b² = c²", "c is the hypotenuse", "3 · 4 · 5      5 · 12 · 13", "8 · 15 · 17    7 · 24 · 25" } },
 }
 
---- Lamina enmarcada colgada de la pared, con su contenido escrito.
-local function buildPoster(model: Model, cf: CFrame, spec: PosterSpec)
-	local width = spec.width or 7
-	local height = spec.height or 5.4
-
-	block(model, "MarcoLamina", Vector3.new(width + 0.4, height + 0.4, 0.16), cf,
-		Color3.fromRGB(64, 52, 42), Enum.Material.Wood)
-	local sheet = block(model, "Lamina", Vector3.new(width, height, 0.08), cf * CFrame.new(0, 0, -0.09),
-		Color3.fromRGB(250, 249, 243), Enum.Material.SmoothPlastic)
+local function buildPoster(model: Model, cf: CFrame, spec: any)
+	local width, height = 7, 5
+	local sheet = block(model, "Lamina", Vector3.new(width, height, 0.08), cf, WHITE, Enum.Material.SmoothPlastic)
 	sheet.CastShadow = false
 
 	local gui = Instance.new("SurfaceGui")
 	gui.Face = Enum.NormalId.Front
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	gui.PixelsPerStud = 90
-	gui.LightInfluence = 0.5
+	gui.LightInfluence = 0.55
 	gui.MaxDistance = 70
 	gui.Adornee = sheet
 	gui.Parent = sheet
 
-	local header = Instance.new("Frame")
-	header.Size = UDim2.new(1, 0, 0, 62)
-	header.BackgroundColor3 = spec.accent
-	header.BorderSizePixel = 0
-	header.Parent = gui
+	local pad = Instance.new("Frame")
+	pad.Size = UDim2.fromScale(1, 1)
+	pad.BackgroundColor3 = WHITE
+	pad.BorderSizePixel = 0
+	pad.Parent = gui
+
+	local rule = Instance.new("Frame")
+	rule.Size = UDim2.new(0, 60, 0, 5)
+	rule.Position = UDim2.fromOffset(34, 52)
+	rule.BackgroundColor3 = spec.accent
+	rule.BorderSizePixel = 0
+	rule.Parent = pad
 
 	local title = Instance.new("TextLabel")
-	title.Size = UDim2.new(1, -24, 1, 0)
-	title.Position = UDim2.fromOffset(12, 0)
+	title.Size = UDim2.new(1, -68, 0, 30)
+	title.Position = UDim2.fromOffset(34, 16)
 	title.BackgroundTransparency = 1
 	title.Font = Enum.Font.GothamBold
 	title.Text = spec.title
-	title.TextColor3 = Color3.fromRGB(252, 252, 250)
+	title.TextColor3 = Color3.fromRGB(38, 42, 52)
 	title.TextScaled = true
 	title.TextXAlignment = Enum.TextXAlignment.Left
-	title.Parent = header
+	title.Parent = pad
 
 	local body = Instance.new("Frame")
-	body.Size = UDim2.new(1, -36, 1, -86)
-	body.Position = UDim2.fromOffset(18, 74)
+	body.Size = UDim2.new(1, -68, 1, -110)
+	body.Position = UDim2.fromOffset(34, 82)
 	body.BackgroundTransparency = 1
-	body.Parent = gui
+	body.Parent = pad
 
 	local layout = Instance.new("UIListLayout")
-	layout.Padding = UDim.new(0, 8)
-	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Padding = UDim.new(0, 14)
 	layout.Parent = body
 
 	for index, text in spec.lines do
 		local line = Instance.new("TextLabel")
 		line.LayoutOrder = index
-		line.Size = UDim2.new(1, 0, 0, 34)
+		line.Size = UDim2.new(1, 0, 0, 32)
 		line.BackgroundTransparency = 1
 		line.Font = index == 1 and Enum.Font.GothamBold or Enum.Font.Gotham
 		line.Text = text
-		line.TextColor3 = index == 1 and spec.accent or Color3.fromRGB(52, 56, 66)
+		line.TextColor3 = index == 1 and spec.accent or Color3.fromRGB(84, 90, 102)
 		line.TextScaled = true
 		line.TextXAlignment = Enum.TextXAlignment.Left
 		line.Parent = body
 	end
 end
 
-local MATH_POSTERS: { PosterSpec } = {
-	{
-		title = "TEOREMA DE PITAGORAS",
-		accent = Color3.fromRGB(28, 96, 190),
-		lines = { "a² + b² = c²", "c es la hipotenusa", "3 - 4 - 5   ·   5 - 12 - 13", "8 - 15 - 17   ·   7 - 24 - 25" },
-	},
-	{
-		title = "FORMULA RESOLVENTE",
-		accent = Color3.fromRGB(158, 62, 148),
-		lines = { "x = (-b ± √(b² - 4ac)) / 2a", "Δ = b² - 4ac", "Δ > 0  dos raices", "Δ = 0  una   ·   Δ < 0  ninguna" },
-	},
-	{
-		title = "AREAS Y PERIMETROS",
-		accent = Color3.fromRGB(196, 118, 32),
-		lines = { "Rectangulo:  b x h", "Triangulo:  b x h / 2", "Circulo:  π r²", "Perimetro del circulo:  2 π r" },
-	},
-	{
-		title = "TABLA DEL 7",
-		accent = Color3.fromRGB(31, 145, 84),
-		lines = { "7 x 4 = 28      7 x 8 = 56", "7 x 5 = 35      7 x 9 = 63", "7 x 6 = 42      7 x 10 = 70", "7 x 7 = 49      7 x 11 = 77" },
-	},
-	{
-		title = "NUMERO π",
-		accent = Color3.fromRGB(46, 122, 162),
-		lines = { "π = 3,14159 26535 89793...", "Vuelta / diametro", "No termina y no se repite", "Es irracional" },
-	},
-}
-
-local LANGUAGE_POSTERS: { PosterSpec } = {
-	{
-		title = "REGLAS DE ACENTUACION",
-		accent = Color3.fromRGB(176, 58, 62),
-		lines = { "AGUDAS: llevan tilde en n, s o vocal", "GRAVES: llevan tilde si NO terminan en n, s o vocal", "ESDRUJULAS: siempre llevan tilde", "cancion · arbol · matematica" },
-	},
-	{
-		title = "SUJETO Y PREDICADO",
-		accent = Color3.fromRGB(96, 62, 156),
-		lines = { "El alumno / resolvio la prueba", "Sujeto: de quien se habla", "Predicado: que se dice de el", "Nucleo del sujeto: sustantivo" },
-	},
-	{
-		title = "CONECTORES",
-		accent = Color3.fromRGB(52, 116, 96),
-		lines = { "Causa: porque, ya que, debido a", "Consecuencia: por lo tanto, asi que", "Oposicion: pero, sin embargo", "Orden: primero, luego, finalmente" },
-	},
-}
-
---- Reloj de pared con agujas que se mueven de verdad.
 local function buildClock(model: Model, cf: CFrame)
-	block(model, "CajaReloj", Vector3.new(3.6, 3.6, 0.4), cf, Color3.fromRGB(56, 60, 70), Enum.Material.Metal)
-	local dial = block(model, "Esfera", Vector3.new(3.2, 3.2, 0.12), cf * CFrame.new(0, 0, -0.22),
-		Color3.fromRGB(250, 250, 246), Enum.Material.SmoothPlastic)
+	block(model, "AroReloj", Vector3.new(3.4, 3.4, 0.35), cf, DARK, Enum.Material.Metal)
+	local dial = block(model, "Esfera", Vector3.new(3, 3, 0.1), cf * CFrame.new(0, 0, -0.2), WHITE, Enum.Material.SmoothPlastic)
 	dial.CastShadow = false
 
-	-- Ojo con el sentido de giro: la esfera se mira desde el aula, asi que
-	-- un angulo positivo sobre Z local se ve como sentido horario.
+	-- Angulo positivo sobre Z local = sentido horario visto desde el aula.
 	for hour = 1, 12 do
 		local angle = math.rad(hour * 30)
-		local marker = block(model, "Marca", Vector3.new(0.12, hour % 3 == 0 and 0.44 or 0.26, 0.06),
-			cf * CFrame.Angles(0, 0, angle) * CFrame.new(0, 1.28, -0.3),
-			Color3.fromRGB(48, 52, 62), Enum.Material.SmoothPlastic)
+		local marker = block(model, "Marca", Vector3.new(0.1, hour % 3 == 0 and 0.4 or 0.22, 0.05),
+			cf * CFrame.Angles(0, 0, angle) * CFrame.new(0, 1.2, -0.27), DARK, Enum.Material.SmoothPlastic)
 		marker.CastShadow = false
 	end
 
-	local hourHand = block(model, "AgujaHora", Vector3.new(0.14, 0.9, 0.05), cf * CFrame.new(0, 0, -0.34),
-		Color3.fromRGB(40, 44, 54), Enum.Material.SmoothPlastic)
-	local minuteHand = block(model, "AgujaMinuto", Vector3.new(0.1, 1.3, 0.05), cf * CFrame.new(0, 0, -0.38),
-		Color3.fromRGB(40, 44, 54), Enum.Material.SmoothPlastic)
-	local center = block(model, "Centro", Vector3.new(0.24, 0.24, 0.1), cf * CFrame.new(0, 0, -0.42),
-		Color3.fromRGB(176, 54, 54), Enum.Material.SmoothPlastic)
-	center.Shape = Enum.PartType.Ball
+	local hourHand = block(model, "AgujaHora", Vector3.new(0.12, 0.85, 0.04), cf * CFrame.new(0, 0, -0.3), DARK, Enum.Material.SmoothPlastic)
+	local minuteHand = block(model, "AgujaMinuto", Vector3.new(0.09, 1.2, 0.04), cf * CFrame.new(0, 0, -0.34), DARK, Enum.Material.SmoothPlastic)
 	hourHand.CastShadow = false
 	minuteHand.CastShadow = false
 
 	task.spawn(function()
 		while hourHand.Parent do
 			local now = os.date("*t")
-			local minuteAngle = math.rad(now.min * 6)
-			local hourAngle = math.rad((now.hour % 12) * 30 + now.min * 0.5)
-			-- Las agujas nacen apuntando a las 12 y giran desde el centro.
-			minuteHand.CFrame = cf * CFrame.Angles(0, 0, minuteAngle) * CFrame.new(0, 0.65, -0.38)
-			hourHand.CFrame = cf * CFrame.Angles(0, 0, hourAngle) * CFrame.new(0, 0.45, -0.34)
+			minuteHand.CFrame = cf * CFrame.Angles(0, 0, math.rad(now.min * 6)) * CFrame.new(0, 0.6, -0.34)
+			hourHand.CFrame = cf * CFrame.Angles(0, 0, math.rad((now.hour % 12) * 30 + now.min * 0.5)) * CFrame.new(0, 0.42, -0.3)
 			task.wait(5)
 		end
 	end)
 end
 
---- Biblioteca del fondo, con libros de colores.
-local function buildBookshelf(model: Model, cf: CFrame)
-	block(model, "Biblioteca", Vector3.new(7, 8, 1.6), cf * CFrame.new(0, 4, 0),
-		Color3.fromRGB(122, 90, 62), Enum.Material.Wood)
-	local colors = {
-		Color3.fromRGB(176, 58, 62), Color3.fromRGB(46, 92, 158), Color3.fromRGB(52, 128, 88),
-		Color3.fromRGB(206, 152, 48), Color3.fromRGB(122, 68, 148), Color3.fromRGB(48, 54, 68),
-	}
-	for shelf = 1, 3 do
-		local y = 1.6 + (shelf - 1) * 2.4
-		block(model, "Estante", Vector3.new(6.6, 0.18, 1.5), cf * CFrame.new(0, y + 1.1, 0),
-			Color3.fromRGB(146, 110, 76), Enum.Material.Wood)
-		local x = -2.9
-		while x < 2.6 do
-			local width = 0.28 + math.random() * 0.22
-			local height = 1.5 + math.random() * 0.5
-			local book = block(model, "Libro", Vector3.new(width, height, 1.1),
-				cf * CFrame.new(x + width / 2, y + height / 2, -0.1),
-				colors[math.random(1, #colors)], Enum.Material.SmoothPlastic)
-			book.CastShadow = false
-			x += width + 0.04
-		end
-	end
-end
-
---- Los detalles que hacen que parezca un aula usada y no una maqueta.
-local function buildProps(model: Model, halfWidth: number, frontZ: number, backZ: number)
-	-- Bandera de ceremonia al lado del pizarron
-	local flagBase = CFrame.new(halfWidth - 5, 0, frontZ + 3)
-	local pole = block(model, "Mastil", Vector3.new(0.24, 11, 0.24), flagBase * CFrame.new(0, 5.5, 0),
-		Color3.fromRGB(146, 112, 78), Enum.Material.Wood)
-	pole.Shape = Enum.PartType.Cylinder
-	pole.Orientation = Vector3.new(0, 0, 90)
-	block(model, "Base", Vector3.new(1.6, 0.5, 1.6), flagBase * CFrame.new(0, 0.25, 0),
-		Color3.fromRGB(86, 66, 48), Enum.Material.Wood)
-	block(model, "FranjaSup", Vector3.new(0.12, 1.1, 4), flagBase * CFrame.new(0, 9.4, 2.1),
-		Color3.fromRGB(116, 176, 216), Enum.Material.Fabric)
-	block(model, "FranjaMed", Vector3.new(0.12, 1.1, 4), flagBase * CFrame.new(0, 8.3, 2.1),
-		Color3.fromRGB(248, 248, 244), Enum.Material.Fabric)
-	block(model, "FranjaInf", Vector3.new(0.12, 1.1, 4), flagBase * CFrame.new(0, 7.2, 2.1),
-		Color3.fromRGB(116, 176, 216), Enum.Material.Fabric)
-
-	-- Cesto de papeles, con papeles adentro
-	local binCF = CFrame.new(-halfWidth + 3.5, 0, frontZ + 4)
-	local bin = block(model, "Cesto", Vector3.new(2, 2.6, 2), binCF * CFrame.new(0, 1.3, 0),
-		Color3.fromRGB(58, 70, 84), Enum.Material.Metal)
-	bin.Shape = Enum.PartType.Cylinder
-	bin.Orientation = Vector3.new(0, 0, 90)
-	for index = 1, 4 do
-		local ball = block(model, "Bollo", Vector3.new(0.6, 0.6, 0.6),
-			binCF * CFrame.new((math.random() - 0.5) * 1.1, 2.4 + index * 0.2, (math.random() - 0.5) * 1.1),
-			Color3.fromRGB(246, 244, 236), Enum.Material.SmoothPlastic)
-		ball.Shape = Enum.PartType.Ball
-		ball.CastShadow = false
-	end
-
-	-- Plantas en las esquinas del fondo
-	for _, x in { -halfWidth + 3.5, halfWidth - 3.5 } do
-		local potCF = CFrame.new(x, 0, backZ - 4)
-		local pot = block(model, "Maceta", Vector3.new(2.2, 2.2, 2.2), potCF * CFrame.new(0, 1.1, 0),
-			Color3.fromRGB(150, 92, 66), Enum.Material.Concrete)
-		pot.Shape = Enum.PartType.Cylinder
-		pot.Orientation = Vector3.new(0, 0, 90)
-		for leaf = 1, 5 do
-			local angle = (leaf / 5) * math.pi * 2
-			block(model, "Hoja", Vector3.new(0.8, 3.4, 0.3),
-				potCF * CFrame.new(math.cos(angle) * 0.7, 3.4, math.sin(angle) * 0.7)
-					* CFrame.Angles(math.rad(math.cos(angle) * 18), 0, math.rad(math.sin(angle) * 18)),
-				Color3.fromRGB(58, 122, 68), Enum.Material.Grass)
-		end
-	end
-
-	-- Cartel de "prohibido el celular" al lado de la puerta
-	local signCF = CFrame.new(halfWidth - 12, 8, backZ - 0.7)
-	block(model, "CartelMarco", Vector3.new(5.4, 3.4, 0.2), signCF, Color3.fromRGB(176, 54, 54), Enum.Material.SmoothPlastic)
-	local sign = block(model, "Cartel", Vector3.new(5, 3, 0.1), signCF * CFrame.new(0, 0, -0.12),
-		Color3.fromRGB(250, 250, 246), Enum.Material.SmoothPlastic)
-	sign.CastShadow = false
-
-	local gui = Instance.new("SurfaceGui")
-	gui.Face = Enum.NormalId.Front
-	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	gui.PixelsPerStud = 100
-	gui.LightInfluence = 0.5
-	gui.Adornee = sign
-	gui.Parent = sign
-
-	local icon = Instance.new("TextLabel")
-	icon.Size = UDim2.fromScale(1, 0.55)
-	icon.BackgroundTransparency = 1
-	icon.Font = Enum.Font.GothamBold
-	icon.Text = "📵"
-	icon.TextColor3 = Color3.fromRGB(176, 54, 54)
-	icon.TextScaled = true
-	icon.Parent = gui
-
-	local caption = Instance.new("TextLabel")
-	caption.Position = UDim2.fromScale(0, 0.58)
-	caption.Size = UDim2.fromScale(1, 0.3)
-	caption.BackgroundTransparency = 1
-	caption.Font = Enum.Font.GothamBold
-	caption.Text = "PROHIBIDO EL CELULAR"
-	caption.TextColor3 = Color3.fromRGB(176, 54, 54)
-	caption.TextScaled = true
-	caption.Parent = gui
-end
-
 -- ─────────────────────────────────────────────────────────────
--- Banco del alumno
+-- Pupitre combo estilo americano
 -- ─────────────────────────────────────────────────────────────
 
 local function buildDesk(parent: Instance, index: number, row: number, column: number, position: Vector3): Desk
@@ -543,99 +440,76 @@ local function buildDesk(parent: Instance, index: number, row: number, column: n
 	model.Parent = parent
 
 	local base = CFrame.new(position)
-	local topHeight = 3.0
+	local topY = 3.0     -- altura de la tabla
+	local seatY = 1.95   -- altura del asiento
+	local seatZ = 2.25   -- el asiento va detras de la tabla
 
-	local deskTop = block(model, "Tabla", Vector3.new(4.6, 0.28, 2.8), base * CFrame.new(0, topHeight, 0),
-		Color3.fromRGB(196, 158, 108), Enum.Material.WoodPlanks)
-	block(model, "BordeTabla", Vector3.new(4.7, 0.12, 2.9), base * CFrame.new(0, topHeight - 0.2, 0),
-		Color3.fromRGB(70, 74, 82), Enum.Material.Metal)
+	-- Tabla con canto oscuro
+	local deskTop = block(model, "Tabla", Vector3.new(4.4, 0.16, 2.5), base * CFrame.new(0, topY, 0), LAMINATE, Enum.Material.Wood)
+	block(model, "Canto", Vector3.new(4.5, 0.1, 2.6), base * CFrame.new(0, topY - 0.11, 0), DARK, Enum.Material.SmoothPlastic)
 
-	for _, offset in { Vector3.new(-2, 0, -1.1), Vector3.new(2, 0, -1.1), Vector3.new(-2, 0, 1.1), Vector3.new(2, 0, 1.1) } do
-		local leg = block(model, "Pata", Vector3.new(0.22, topHeight, 0.22),
-			base * CFrame.new(offset.X, topHeight / 2, offset.Z), Color3.fromRGB(74, 78, 86), Enum.Material.Metal)
-		leg.CanCollide = false
+	-- Estructura de caño: dos patas adelante, dos atras y los largueros
+	for _, x in { -1.75, 1.75 } do
+		tube(model, "PataFrente", topY, 0.22, base * CFrame.new(x, topY / 2, -0.95) * VERTICAL)
+		tube(model, "PataAtras", seatY, 0.22, base * CFrame.new(x * 0.62, seatY / 2, seatZ + 0.85) * VERTICAL)
+		tube(model, "Larguero", seatZ + 1.9, 0.2, base * CFrame.new(x * 0.8, 0.22, seatZ * 0.5 - 0.2) * ALONG_Z)
+		tube(model, "Columna", topY - seatY + 0.6, 0.22, base * CFrame.new(x * 0.72, seatY + 0.3, seatZ - 0.9) * VERTICAL)
 	end
-	-- Estante bajo la tabla (mochilas, y el celu escondido)
-	local shelf = block(model, "Estante", Vector3.new(4, 0.15, 2), base * CFrame.new(0, 1.2, 0.1),
-		Color3.fromRGB(150, 120, 84), Enum.Material.Wood)
-	shelf.CanCollide = false
+	tube(model, "TravesanoFrente", 3.5, 0.2, base * CFrame.new(0, 0.22, -0.95))
 
-	-- Silla + Seat (el Seat es lo que engancha al jugador a su banco)
-	local chairBase = base * CFrame.new(0, 0, 2.6)
+	-- Asiento y respaldo de plastico moldeado
+	block(model, "Asiento", Vector3.new(2.6, 0.26, 2.2), base * CFrame.new(0, seatY, seatZ), SEAT, Enum.Material.Plastic)
+	block(model, "BordeAsiento", Vector3.new(2.7, 0.14, 2.3), base * CFrame.new(0, seatY - 0.14, seatZ), SEAT, Enum.Material.Plastic)
+	block(model, "Respaldo", Vector3.new(2.6, 1.5, 0.24),
+		base * CFrame.new(0, seatY + 1.25, seatZ + 1.2) * CFrame.Angles(math.rad(9), 0, 0), SEAT, Enum.Material.Plastic)
+
+	-- Cesto de alambre abajo de la tabla
+	local basketY = 1.55
+	block(model, "CestoBase", Vector3.new(3.4, 0.1, 1.9), base * CFrame.new(0, basketY, 0), DARK, Enum.Material.DiamondPlate).CanCollide = false
+	for _, spec in {
+		{ Vector3.new(3.4, 0.7, 0.08), CFrame.new(0, basketY + 0.35, -0.9) },
+		{ Vector3.new(3.4, 0.7, 0.08), CFrame.new(0, basketY + 0.35, 0.9) },
+		{ Vector3.new(0.08, 0.7, 1.9), CFrame.new(-1.7, basketY + 0.35, 0) },
+		{ Vector3.new(0.08, 0.7, 1.9), CFrame.new(1.7, basketY + 0.35, 0) },
+	} do
+		local side = block(model, "CestoLado", spec[1] :: Vector3, base * (spec[2] :: CFrame), DARK, Enum.Material.DiamondPlate)
+		side.CanCollide = false
+		side.CastShadow = false
+	end
+
+	-- Mochila apoyada al costado
+	local backpack = block(model, "Mochila", Vector3.new(1.7, 1.8, 1),
+		base * CFrame.new(-2.5, 0.9, 1.4) * CFrame.Angles(0, math.rad(14), 0),
+		({ Color3.fromRGB(52, 66, 96), Color3.fromRGB(102, 54, 58), Color3.fromRGB(58, 74, 68), DARK })[(index - 1) % 4 + 1],
+		Enum.Material.Fabric)
+	backpack.CanCollide = false
+
+	-- El Seat es lo que engancha al jugador a su banco
 	local seat = Instance.new("Seat")
 	seat.Name = "Asiento"
-	seat.Size = Vector3.new(2.6, 0.35, 2.4)
-	seat.CFrame = chairBase * CFrame.new(0, 2.1, 0)
+	seat.Size = Vector3.new(2.4, 0.3, 2)
+	seat.CFrame = base * CFrame.new(0, seatY + 0.2, seatZ)
 	seat.Anchored = true
-	seat.Color = Color3.fromRGB(58, 96, 156)
-	seat.Material = Enum.Material.Fabric
+	seat.Transparency = 1
+	seat.CanCollide = false
 	seat.TopSurface = Enum.SurfaceType.Smooth
 	seat.Parent = model
 
-	block(model, "Respaldo", Vector3.new(2.6, 2.4, 0.28), chairBase * CFrame.new(0, 3.3, 1.1),
-		Color3.fromRGB(58, 96, 156), Enum.Material.Fabric)
-	for _, offset in { Vector3.new(-1.1, 0, -1), Vector3.new(1.1, 0, -1), Vector3.new(-1.1, 0, 1), Vector3.new(1.1, 0, 1) } do
-		local leg = block(model, "PataSilla", Vector3.new(0.18, 2.1, 0.18),
-			chairBase * CFrame.new(offset.X, 1.05, offset.Z), Color3.fromRGB(74, 78, 86), Enum.Material.Metal)
-		leg.CanCollide = false
-	end
-
-	-- La hoja de la prueba: parte fisica sobre la tabla, con la UI
-	-- montada en su cara superior (la arma el cliente sobre este Adornee).
+	-- La hoja de la prueba, apoyada donde la tendrias vos
 	local paper = Util.part({
 		Name = "HojaDePrueba",
-		Size = Vector3.new(3.2, 0.05, 2.3),
-		CFrame = base * CFrame.new(0, topHeight + 0.17, 0.1) * CFrame.Angles(0, math.rad(-2), 0),
-		Color = Color3.fromRGB(250, 249, 244),
+		Size = Vector3.new(3.1, 0.04, 2.2),
+		CFrame = base * CFrame.new(0, topY + 0.11, 0.15) * CFrame.Angles(0, math.rad(-2), 0),
+		Color = WHITE,
 		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
 		Parent = model,
 	})
 
-	-- Mochila abajo del banco y cartuchera arriba: el celu sale de ahi.
-	local backpack = Util.part({
-		Name = "Mochila",
-		Size = Vector3.new(1.8, 1.9, 1.1),
-		CFrame = base * CFrame.new(-1.4, 0.95, 0.9) * CFrame.Angles(0, math.rad(12), 0),
-		Color = ({
-			Color3.fromRGB(44, 62, 118), Color3.fromRGB(126, 46, 54),
-			Color3.fromRGB(48, 96, 82), Color3.fromRGB(38, 42, 52),
-		})[(index - 1) % 4 + 1],
-		Material = Enum.Material.Fabric,
-		CanCollide = false,
-		Parent = model,
-	})
-	Util.part({
-		Name = "Bolsillo",
-		Size = Vector3.new(1.3, 0.9, 0.35),
-		CFrame = backpack.CFrame * CFrame.new(0, -0.35, -0.6),
-		Color = backpack.Color,
-		Material = Enum.Material.Fabric,
-		CanCollide = false,
-		Parent = model,
-	})
-
-	Util.part({
-		Name = "Cartuchera",
-		Size = Vector3.new(1.5, 0.42, 0.6),
-		CFrame = base * CFrame.new(-1.5, topHeight + 0.35, -0.6) * CFrame.Angles(0, math.rad(-8), 0),
-		Color = Color3.fromRGB(198, 84, 68),
-		Material = Enum.Material.Fabric,
-		CanCollide = false,
-		Parent = model,
-	})
-
-	-- Lapicera al costado, puro detalle
-	local pen = Util.part({
-		Name = "Lapicera",
-		Size = Vector3.new(0.16, 0.16, 1.4),
-		CFrame = base * CFrame.new(1.75, topHeight + 0.22, -0.4) * CFrame.Angles(0, math.rad(18), math.rad(90)),
-		Color = Color3.fromRGB(32, 46, 120),
-		Material = Enum.Material.Plastic,
-		CanCollide = false,
-		Parent = model,
-	})
-	pen.Shape = Enum.PartType.Cylinder
+	local pencil = block(model, "Lapiz", Vector3.new(0.12, 0.12, 1.2),
+		base * CFrame.new(1.65, topY + 0.14, -0.55) * CFrame.Angles(0, math.rad(16), 0),
+		Color3.fromRGB(226, 178, 60), Enum.Material.SmoothPlastic)
+	pencil.CanCollide = false
 
 	model.PrimaryPart = deskTop
 
@@ -672,48 +546,26 @@ function ClassroomBuilder.build(parent: Instance): Classroom
 	local depth = backZ - frontZ
 	local center = Vector3.new(0, 0, (frontZ + backZ) / 2)
 
-	buildFloorAndCeiling(model, width, depth, center)
-
-	local h = C.WallHeight
-	local t = C.WallThickness
-	buildWall(model, "ParedFrente", Vector3.new(width, h, t), CFrame.new(0, h / 2, frontZ))
-	buildWall(model, "ParedFondo", Vector3.new(width, h, t), CFrame.new(0, h / 2, backZ))
-	buildWall(model, "ParedIzq", Vector3.new(t, h, depth), CFrame.new(-halfWidth, h / 2, center.Z))
-	buildWindowWall(model, halfWidth, frontZ, backZ, h, t, 1)
-
-	-- Zocalos
-	for _, spec in {
-		{ Vector3.new(width, 1.2, t + 0.3), CFrame.new(0, 0.6, frontZ) },
-		{ Vector3.new(width, 1.2, t + 0.3), CFrame.new(0, 0.6, backZ) },
-		{ Vector3.new(t + 0.3, 1.2, depth), CFrame.new(-halfWidth, 0.6, center.Z) },
-		{ Vector3.new(t + 0.3, 1.2, depth), CFrame.new(halfWidth, 0.6, center.Z) },
-	} do
-		block(model, "Zocalo", spec[1] :: Vector3, spec[2] :: CFrame, C.TrimColor, Enum.Material.Wood)
-	end
+	buildShell(model, width, depth, center, frontZ, backZ, halfWidth)
+	buildWindowWall(model, halfWidth, frontZ, backZ, C.WallHeight, C.WallThickness)
 
 	local boardCF = buildBoard(model, frontZ, width)
 	buildTeacherDesk(model, frontZ)
-	buildLighting(model, width, depth, center)
+	buildCeilingLights(model, width, depth, center)
 	buildDoor(model, backZ, width)
 
-	-- Laminas: matematica en la pared ciega, lengua en la del fondo.
-	local posterZStart = frontZ + 11
-	local posterZEnd = backZ - 11
-	for index, spec in MATH_POSTERS do
-		local alpha = (index - 1) / math.max(1, #MATH_POSTERS - 1)
-		local z = posterZStart + (posterZEnd - posterZStart) * alpha
-		buildPoster(model, CFrame.new(-halfWidth + 0.62, 9, z) * CFrame.Angles(0, math.rad(-90), 0), spec)
+	-- Tres laminas sobre la pared ciega y nada mas. Menos es mas.
+	for index, spec in POSTERS do
+		local z = frontZ + 12 + (index - 1) * ((depth - 24) / math.max(1, #POSTERS - 1))
+		buildPoster(model, CFrame.new(-halfWidth + 0.58, 9, z) * CFrame.Angles(0, math.rad(-90), 0), spec)
 	end
-	for index, spec in LANGUAGE_POSTERS do
-		local x = -8 + (index - 1) * 10
-		buildPoster(model, CFrame.new(x, 9, backZ - 0.62), spec)
-	end
+	buildClock(model, CFrame.new(0, 13.2, frontZ + 0.72) * CFrame.Angles(0, math.pi, 0))
 
-	buildClock(model, CFrame.new(0, 13.6, frontZ + 0.72) * CFrame.Angles(0, math.pi, 0))
-	buildBookshelf(model, CFrame.new(-halfWidth + 5.5, 0, backZ - 1.4))
-	buildProps(model, halfWidth, frontZ, backZ)
+	-- Sacapuntas al lado de la puerta, detalle de aula real
+	block(model, "Sacapuntas", Vector3.new(0.8, 1, 0.7),
+		CFrame.new(width / 2 - 11, 6.5, backZ - 0.9), Color3.fromRGB(120, 124, 132), Enum.Material.Metal)
 
-	-- Grilla de bancos
+	-- Grilla de pupitres
 	local desksFolder = Instance.new("Folder")
 	desksFolder.Name = "Bancos"
 	desksFolder.Parent = model
@@ -729,14 +581,13 @@ function ClassroomBuilder.build(parent: Instance): Classroom
 		end
 	end
 
-	-- Nodos de patrullaje: el profe recorre pasillo por pasillo.
-	-- Pasillos entre columnas + los dos laterales.
+	-- Nodos de patrullaje: un pasillo entre cada par de columnas, mas los laterales.
 	local aisleX: { number } = {}
 	for column = 1, C.Columns - 1 do
 		table.insert(aisleX, (column - (C.Columns + 1) / 2 + 0.5) * C.DeskSpacingX)
 	end
-	table.insert(aisleX, -halfWidth + 4.5)
-	table.insert(aisleX, halfWidth - 4.5)
+	table.insert(aisleX, -halfWidth + 4)
+	table.insert(aisleX, halfWidth - 4)
 	table.sort(aisleX)
 
 	local patrolNodes: { CFrame } = {}
@@ -748,11 +599,8 @@ function ClassroomBuilder.build(parent: Instance): Classroom
 		local endZ = goingBack and backLane or frontLane
 		local steps = C.Rows + 1
 		for s = 0, steps do
-			local alpha = s / steps
-			local z = startZ + (endZ - startZ) * alpha
-			-- Mira hacia donde camina: +Z (hacia el fondo) o -Z (hacia el pizarron).
-			local facing = goingBack and math.pi or 0
-			table.insert(patrolNodes, CFrame.new(x, 0, z) * CFrame.Angles(0, facing, 0))
+			local z = startZ + (endZ - startZ) * (s / steps)
+			table.insert(patrolNodes, CFrame.new(x, 0, z) * CFrame.Angles(0, goingBack and math.pi or 0, 0))
 		end
 	end
 
@@ -763,7 +611,7 @@ function ClassroomBuilder.build(parent: Instance): Classroom
 		desks = desks,
 		patrolNodes = patrolNodes,
 		boardStand = CFrame.new(boardCF.Position.X, 0, boardCF.Position.Z + 4),
-		teacherSpawn = CFrame.new(-9, 3, frontZ + 9) * CFrame.Angles(0, math.pi, 0),
+		teacherSpawn = CFrame.new(-11, 3, frontZ + 10) * CFrame.Angles(0, math.pi, 0),
 		studentSpawn = CFrame.new(0, 3, backZ - 6),
 		roomCenter = center,
 		width = width,

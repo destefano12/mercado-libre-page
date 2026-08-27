@@ -24,19 +24,21 @@ Config.Classroom = {
 
 	Rows = 5,              -- filas de bancos (de adelante hacia atras)
 	Columns = 4,           -- bancos por fila
-	DeskSpacingX = 9,      -- separacion entre columnas (pasillos)
-	DeskSpacingZ = 8,      -- separacion entre filas
+	DeskSpacingX = 8,      -- separacion entre columnas (pasillos)
+	DeskSpacingZ = 7.5,    -- separacion entre filas
 	FirstRowOffsetZ = 14,  -- distancia del pizarron a la primera fila
 
-	WallHeight = 16,
+	WallHeight = 15,
 	WallThickness = 1,
-	Padding = 12,          -- aire entre el ultimo banco y la pared del fondo
+	Padding = 10,          -- aire entre el ultimo banco y la pared del fondo
 
-	FloorMaterial = Enum.Material.WoodPlanks,
-	FloorColor = Color3.fromRGB(150, 118, 84),
+	-- Paleta de aula americana: linoleo claro, bloque pintado, verde
+	-- pizarron. Corta a proposito.
+	FloorColor = Color3.fromRGB(198, 196, 188),
 	WallMaterial = Enum.Material.Concrete,
-	WallColor = Color3.fromRGB(226, 222, 210),
-	TrimColor = Color3.fromRGB(72, 92, 110),
+	WallColor = Color3.fromRGB(232, 230, 222),
+	TrimColor = Color3.fromRGB(96, 102, 112),
+	BoardColor = Color3.fromRGB(48, 104, 74),
 }
 
 -- ─────────────────────────────────────────────────────────────
@@ -61,31 +63,35 @@ Config.Exam = {
 -- PROFESOR
 -- ─────────────────────────────────────────────────────────────
 Config.Teacher = {
-	DisplayName = "Prof. Battaglia",
+	DisplayName = "Mr. Hollis",
 
-	WalkSpeed = 7.5,
-	ChaseSpeed = 13,
+	-- Camina despacio y parejo: es un tipo formal, no persigue a nadie
+	-- hasta que hace falta.
+	WalkSpeed = 6.2,
+	ChaseSpeed = 12,
 
-	-- Vision
-	FieldOfView = 105,          -- grados totales del cono
-	ViewDistance = 46,
-	PeripheralFactor = 0.55,    -- cuanto "cuenta" lo que ve de reojo
+	-- Vision. Es estricto: ve lejos y abre bastante el cono.
+	FieldOfView = 118,          -- grados totales del cono
+	ViewDistance = 54,
+	PeripheralFactor = 0.6,     -- cuanto "cuenta" lo que ve de reojo
 
 	-- Comportamiento
-	InspectChance = 0.55,       -- prob. de frenar en un banco al pasar
-	InspectDuration = NumberRange.new(2.5, 5.0),
-	BoardChance = 0.30,         -- prob. de irse al pizarron (ventana segura)
-	BoardDuration = NumberRange.new(6.0, 11.0),
-	IdleAtWaypoint = NumberRange.new(0.4, 1.6),
-	HeadTurnSpeed = 4.0,
+	InspectChance = 0.68,       -- prob. de frenar en un banco al pasar
+	InspectDuration = NumberRange.new(3.0, 6.0),
+	BoardChance = 0.22,         -- prob. de irse al pizarron (ventana segura)
+	BoardDuration = NumberRange.new(5.0, 8.5),
+	BoardCooldown = 34,         -- segundos minimos entre dos idas al pizarron
+	IdleAtWaypoint = NumberRange.new(0.8, 2.2),
+	HeadTurnSpeed = 2.6,        -- gira la cabeza despacio, con intencion
+	ScanChance = 0.3,           -- prob. de frenar a barrer el aula con la vista
 
 	-- Sospecha (0..1 por jugador)
-	RiskGainSeen = 0.42,        -- por segundo, celu visible y a la vista
-	RiskGainInspect = 0.85,     -- por segundo, ademas te esta revisando la prueba
+	RiskGainSeen = 0.55,        -- por segundo, celu visible y a la vista
+	RiskGainInspect = 1.1,      -- por segundo, ademas te esta revisando la prueba
 	RiskGainHidden = 0.05,      -- por segundo, celu afuera pero no te ve
-	RiskDecay = 0.22,           -- por segundo, celu guardado
+	RiskDecay = 0.2,            -- por segundo, celu guardado
 	RiskCaught = 1.0,
-	RiskWarning = 0.55,         -- desde aca el HUD se pone rojo
+	RiskWarning = 0.5,          -- desde aca el HUD se pone rojo
 }
 
 -- ─────────────────────────────────────────────────────────────
@@ -106,19 +112,23 @@ Config.Phone = {
 	ThinkTime = NumberRange.new(1.4, 2.8),
 	TypeSpeed = 55,             -- caracteres por segundo al escribir la respuesta
 	ModelName = "RoGPT-4o",
-	Greeting = "Hola. Mandame la foto del ejercicio y te lo resuelvo paso a paso.",
 }
 
 -- ─────────────────────────────────────────────────────────────
 -- CAMARA (todo el juego es 3D: la camara acompaña, no hay pantallas planas)
 -- ─────────────────────────────────────────────────────────────
 Config.Camera = {
-	DeskOffset = Vector3.new(0, 3.2, 5.4),   -- sobre el hombro, mirando la prueba
-	DeskLookOffset = Vector3.new(0, 1.1, 0),
-	PhoneOffset = Vector3.new(0.9, 2.4, 2.6),-- acercada al celu
-	BlendTime = 0.45,
-	FieldOfView = 68,
-	PhoneFieldOfView = 52,
+	-- La camara de "hoja" y "celu" sale de los ojos del personaje: se
+	-- planta un poco adelante de la cara y apunta al objeto. Si la
+	-- anclás al objeto y la tirás para atras, termina adentro de tu
+	-- propia cabeza y no se ve nada.
+	EyeOffset = CFrame.new(0, 0.3, -0.6),
+
+	BlendTime = 0.35,
+	FieldOfView = 70,
+	PaperFieldOfView = 60,
+	PhoneFieldOfView = 46,
+	MenuFieldOfView = 42,
 }
 
 -- Sonidos: dejalos vacios y no suena nada (sin warnings en consola).
@@ -134,8 +144,8 @@ Config.Sounds = {
 }
 
 Config.Penalty = {
-	GradePerCatch = 1.5,        -- puntos de nota que te descuenta cada vez que te pillan
-	MaxCatches = 3,             -- a la tercera te saca de la prueba
+	GradePerCatch = 2,          -- puntos de nota que te descuenta cada vez que te pillan
+	MaxCatches = 2,             -- a la segunda te saca de la prueba
 }
 
 table.freeze(Config)

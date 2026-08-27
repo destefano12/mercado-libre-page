@@ -43,6 +43,16 @@ Theme.Hud = {
 	Text = Color3.fromRGB(240, 242, 247),
 }
 
+-- Menu de inicio: casi monocromo, tipografia fina, mucho aire.
+Theme.Menu = {
+	Scrim = Color3.fromRGB(10, 11, 14),
+	Panel = Color3.fromRGB(16, 17, 21),
+	Line = Color3.fromRGB(58, 62, 72),
+	Text = Color3.fromRGB(240, 242, 246),
+	Muted = Color3.fromRGB(138, 144, 156),
+	Accent = Color3.fromRGB(226, 228, 234),
+}
+
 function Theme.riskColor(risk: number): Color3
 	if risk < 0.35 then
 		return Theme.Hud.Safe:Lerp(Theme.Hud.Warn, risk / 0.35)

@@ -5,20 +5,26 @@
 	Genera los ejercicios de la prueba y, para cada uno, la resolucion
 	paso a paso que despues escupe RoGPT en la pantalla del celular.
 
+	Nada de texto armado: cada ejercicio viaja como clave de idioma mas
+	sus datos, y el cliente lo escribe en el idioma del jugador. La parte
+	matematica (las cuentas) va tal cual, que es igual en todos lados.
+
 	Cada generador devuelve:
-		prompt      : el enunciado tal cual va impreso en la hoja
-		answer      : la respuesta correcta (texto)
+		topicKey    : clave del tema
+		promptKey   : clave del enunciado
+		promptArgs  : datos para completarlo (incluida la cuenta ya armada)
+		answer      : la respuesta correcta (texto, sin traducir)
 		distractors : errores tipicos (para las opciones)
-		steps       : { {title, body}, ... }  resolucion del "modelo"
-		topic       : etiqueta para el chat
+		steps       : { {titleKey, body}, ... }  resolucion del "modelo"
 --]]
 
-export type Step = { title: string, body: string }
+export type Step = { titleKey: string, body: string }
 
 export type Question = {
 	id: number,
-	topic: string,
-	prompt: string,
+	topicKey: string,
+	promptKey: string,
+	promptArgs: { [string]: any },
 	choices: { string },
 	answerIndex: number,
 	steps: { Step },
@@ -91,8 +97,9 @@ end
 -- ─────────────────────────────────────────────────────────────
 
 type Raw = {
-	topic: string,
-	prompt: string,
+	topicKey: string,
+	promptKey: string,
+	promptArgs: { [string]: any },
 	answer: string,
 	distractors: { string },
 	steps: { Step },
@@ -106,17 +113,15 @@ generators[1] = {
 		local a, b, c, d = rng:NextInteger(3, 12), rng:NextInteger(2, 9), rng:NextInteger(2, 9), rng:NextInteger(2, 12)
 		local result = a + b * c - d
 		return {
-			topic = "Jerarquia de operaciones",
-			prompt = string.format("Resolve: %d + %d x %d - %d", a, b, c, d),
+			topicKey = "topic.order",
+			promptKey = "q.order.prompt",
+			promptArgs = { eq = string.format("%d + %d × %d - %d", a, b, c, d) },
 			answer = num(result),
 			distractors = { num((a + b) * c - d), num(a + b * (c - d)), num(result + b) },
 			steps = {
-				{ title = "1. Primero la multiplicacion",
-				  body = string.format("%d x %d = %d", b, c, b * c) },
-				{ title = "2. Ahora sumas y restas de izquierda a derecha",
-				  body = string.format("%d + %d - %d = %d", a, b * c, d, result) },
-				{ title = "3. Resultado",
-				  body = string.format("= %d", result) },
+				{ titleKey = "step.multiplyFirst", body = string.format("%d × %d = %d", b, c, b * c) },
+				{ titleKey = "step.leftToRight", body = string.format("%d + %d - %d = %d", a, b * c, d, result) },
+				{ titleKey = "step.result", body = string.format("= %d", result) },
 			},
 		}
 	end,
@@ -124,23 +129,22 @@ generators[1] = {
 		local a, b, c = rng:NextInteger(2, 9), rng:NextInteger(2, 9), rng:NextInteger(2, 12)
 		local result = a * (b + c)
 		return {
-			topic = "Propiedad distributiva",
-			prompt = string.format("Resolve: %d x (%d + %d)", a, b, c),
+			topicKey = "topic.distributive",
+			promptKey = "q.distributive.prompt",
+			promptArgs = { eq = string.format("%d × (%d + %d)", a, b, c) },
 			answer = num(result),
 			distractors = { num(a * b + c), num(a + b * c), num(result - a) },
 			steps = {
-				{ title = "1. Resolves el parentesis",
-				  body = string.format("%d + %d = %d", b, c, b + c) },
-				{ title = "2. Multiplicas",
-				  body = string.format("%d x %d = %d", a, b + c, result) },
-				{ title = "3. Verificacion (distributiva)",
-				  body = string.format("%d x %d + %d x %d = %d + %d = %d", a, b, a, c, a * b, a * c, result) },
+				{ titleKey = "step.solveParen", body = string.format("%d + %d = %d", b, c, b + c) },
+				{ titleKey = "step.multiply", body = string.format("%d × %d = %d", a, b + c, result) },
+				{ titleKey = "step.checkDistributive",
+				  body = string.format("%d×%d + %d×%d = %d + %d = %d", a, b, a, c, a * b, a * c, result) },
 			},
 		}
 	end,
 }
 
--- Dificultad 2 ─ ecuacion lineal simple
+-- Dificultad 2 ─ ecuacion lineal simple y porcentaje
 generators[2] = {
 	function(rng: Random): Raw
 		local a = rng:NextInteger(2, 9)
@@ -151,8 +155,9 @@ generators[2] = {
 		end
 		local c = a * x + b
 		return {
-			topic = "Ecuacion de primer grado",
-			prompt = string.format("Despeja x:   %dx %s = %d", a, signed(b), c),
+			topicKey = "topic.linear",
+			promptKey = "q.linear.prompt",
+			promptArgs = { eq = string.format("%dx %s = %d", a, signed(b), c) },
 			answer = string.format("x = %d", x),
 			distractors = {
 				string.format("x = %s", num((c + b) / a)),
@@ -160,14 +165,10 @@ generators[2] = {
 				string.format("x = %s", num((c - b) / (a + 1))),
 			},
 			steps = {
-				{ title = "1. Pasas el termino independiente",
-				  body = string.format("%dx = %d %s", a, c, signed(-b)) },
-				{ title = "2. Te queda",
-				  body = string.format("%dx = %d", a, c - b) },
-				{ title = "3. Dividis por el coeficiente",
-				  body = string.format("x = %d / %d = %d", c - b, a, x) },
-				{ title = "4. Verificacion",
-				  body = string.format("%d x (%d) %s = %d ✓", a, x, signed(b), c) },
+				{ titleKey = "step.moveTerm", body = string.format("%dx = %d %s", a, c, signed(-b)) },
+				{ titleKey = "step.youGet", body = string.format("%dx = %d", a, c - b) },
+				{ titleKey = "step.divideCoef", body = string.format("x = %d ÷ %d = %d", c - b, a, x) },
+				{ titleKey = "step.check", body = string.format("%d × (%d) %s = %d ✓", a, x, signed(b), c) },
 			},
 		}
 	end,
@@ -176,17 +177,15 @@ generators[2] = {
 		local pct = ({ 5, 10, 15, 20, 25, 30, 40, 50, 75 })[rng:NextInteger(1, 9)]
 		local result = total * pct / 100
 		return {
-			topic = "Porcentaje",
-			prompt = string.format("Cuanto es el %d%% de %d?", pct, total),
+			topicKey = "topic.percent",
+			promptKey = "q.percent.prompt",
+			promptArgs = { pct = pct, total = total },
 			answer = num(result),
 			distractors = { num(total * pct / 10), num(total / pct), num(result + pct) },
 			steps = {
-				{ title = "1. El porcentaje es una fraccion sobre 100",
-				  body = string.format("%d%% = %d/100 = %s", pct, pct, num(pct / 100)) },
-				{ title = "2. Multiplicas por el total",
-				  body = string.format("%s x %d = %s", num(pct / 100), total, num(result)) },
-				{ title = "3. Resultado",
-				  body = string.format("El %d%% de %d es %s", pct, total, num(result)) },
+				{ titleKey = "step.percentFraction", body = string.format("%d%% = %d/100 = %s", pct, pct, num(pct / 100)) },
+				{ titleKey = "step.multiplyTotal", body = string.format("%s × %d = %s", num(pct / 100), total, num(result)) },
+				{ titleKey = "step.percentResult", body = string.format("%d%% → %s", pct, num(result)) },
 			},
 		}
 	end,
@@ -200,19 +199,17 @@ generators[3] = {
 		local a, c = rng:NextInteger(1, b - 1), rng:NextInteger(1, d - 1)
 		local n, den = a * d + c * b, b * d
 		return {
-			topic = "Suma de fracciones",
-			prompt = string.format("Resolve:   %d/%d + %d/%d", a, b, c, d),
+			topicKey = "topic.fractions",
+			promptKey = "q.fractions.prompt",
+			promptArgs = { eq = string.format("%d/%d + %d/%d", a, b, c, d) },
 			answer = frac(n, den),
 			distractors = { frac(a + c, b + d), frac(n + 1, den), frac(a * c, b * d) },
 			steps = {
-				{ title = "1. Denominador comun",
-				  body = string.format("%d x %d = %d", b, d, den) },
-				{ title = "2. Amplificas cada fraccion",
-				  body = string.format("%d/%d = %d/%d   y   %d/%d = %d/%d", a, b, a * d, den, c, d, c * b, den) },
-				{ title = "3. Sumas los numeradores",
-				  body = string.format("(%d + %d)/%d = %d/%d", a * d, c * b, den, n, den) },
-				{ title = "4. Simplificas",
-				  body = string.format("= %s", frac(n, den)) },
+				{ titleKey = "step.commonDenominator", body = string.format("%d × %d = %d", b, d, den) },
+				{ titleKey = "step.expandFractions",
+				  body = string.format("%d/%d = %d/%d   ·   %d/%d = %d/%d", a, b, a * d, den, c, d, c * b, den) },
+				{ titleKey = "step.addNumerators", body = string.format("(%d + %d)/%d = %d/%d", a * d, c * b, den, n, den) },
+				{ titleKey = "step.simplify", body = string.format("= %s", frac(n, den)) },
 			},
 		}
 	end,
@@ -226,8 +223,9 @@ generators[3] = {
 		end
 		local x = c * k
 		return {
-			topic = "Proporcionalidad",
-			prompt = string.format("Si %d/%d = %d/x, cuanto vale x?", a, b, c),
+			topicKey = "topic.proportion",
+			promptKey = "q.proportion.prompt",
+			promptArgs = { eq = string.format("%d/%d = %d/x", a, b, c) },
 			answer = string.format("x = %d", x),
 			distractors = {
 				string.format("x = %d", math.max(1, c - k)),
@@ -235,18 +233,15 @@ generators[3] = {
 				string.format("x = %d", b - c),
 			},
 			steps = {
-				{ title = "1. Multiplicacion cruzada",
-				  body = string.format("%d x x = %d x %d", a, b, c) },
-				{ title = "2. Te queda",
-				  body = string.format("%dx = %d", a, b * c) },
-				{ title = "3. Despejas",
-				  body = string.format("x = %d / %d = %d", b * c, a, x) },
+				{ titleKey = "step.crossMultiply", body = string.format("%d · x = %d · %d", a, b, c) },
+				{ titleKey = "step.youGet", body = string.format("%dx = %d", a, b * c) },
+				{ titleKey = "step.isolate", body = string.format("x = %d ÷ %d = %d", b * c, a, x) },
 			},
 		}
 	end,
 }
 
--- Dificultad 4 ─ ecuaciones con parentesis / sistemas 2x2
+-- Dificultad 4 ─ ecuaciones con parentesis y sistemas 2x2
 generators[4] = {
 	function(rng: Random): Raw
 		local a, b = rng:NextInteger(2, 6), rng:NextInteger(1, 8)
@@ -259,8 +254,9 @@ generators[4] = {
 		local k = a * x + a * b - c * x
 		local right = if k == 0 then string.format("%dx", c) else string.format("%dx %s", c, signed(k))
 		return {
-			topic = "Ecuacion con parentesis",
-			prompt = string.format("Despeja x:   %d(x + %d) = %s", a, b, right),
+			topicKey = "topic.parenthesis",
+			promptKey = "q.parenthesis.prompt",
+			promptArgs = { eq = string.format("%d(x + %d) = %s", a, b, right) },
 			answer = string.format("x = %d", x),
 			distractors = {
 				string.format("x = %s", num((k + a * b) / (a - c))),
@@ -268,14 +264,10 @@ generators[4] = {
 				string.format("x = %d", x + 2),
 			},
 			steps = {
-				{ title = "1. Distribuis el parentesis",
-				  body = string.format("%dx + %d = %s", a, a * b, right) },
-				{ title = "2. Agrupas las x de un lado",
-				  body = string.format("%dx - %dx = %d - %d", a, c, k, a * b) },
-				{ title = "3. Operas",
-				  body = string.format("%s = %d", term(a - c, "x"), k - a * b) },
-				{ title = "4. Despejas",
-				  body = string.format("x = %d / %d = %d", k - a * b, a - c, x) },
+				{ titleKey = "step.distribute", body = string.format("%dx + %d = %s", a, a * b, right) },
+				{ titleKey = "step.groupX", body = string.format("%dx - %dx = %d - %d", a, c, k, a * b) },
+				{ titleKey = "step.operate", body = string.format("%s = %d", term(a - c, "x"), k - a * b) },
+				{ titleKey = "step.solveForX", body = string.format("x = %d ÷ %d = %d", k - a * b, a - c, x) },
 			},
 		}
 	end,
@@ -285,8 +277,9 @@ generators[4] = {
 		local a = rng:NextInteger(2, 5)
 		local d = a * x - y
 		return {
-			topic = "Sistema de ecuaciones 2x2",
-			prompt = string.format("x + y = %d ;  %dx - y = %d.  Cuanto vale x?", s, a, d),
+			topicKey = "topic.system",
+			promptKey = "q.system.prompt",
+			promptArgs = { eq = string.format("x + y = %d ;  %dx - y = %d", s, a, d) },
 			answer = string.format("x = %d", x),
 			distractors = {
 				string.format("x = %d", y),
@@ -294,14 +287,10 @@ generators[4] = {
 				string.format("x = %s", num(s / 2)),
 			},
 			steps = {
-				{ title = "1. Sumas las dos ecuaciones (se cancela y)",
-				  body = string.format("(x + y) + (%dx - y) = %d + %d", a, s, d) },
-				{ title = "2. Queda solo x",
-				  body = string.format("%dx = %d", 1 + a, s + d) },
-				{ title = "3. Despejas x",
-				  body = string.format("x = %d / %d = %d", s + d, 1 + a, x) },
-				{ title = "4. Y de yapa, y",
-				  body = string.format("y = %d - %d = %d", s, x, y) },
+				{ titleKey = "step.addEquations", body = string.format("(x + y) + (%dx - y) = %d + %d", a, s, d) },
+				{ titleKey = "step.onlyX", body = string.format("%dx = %d", 1 + a, s + d) },
+				{ titleKey = "step.isolate", body = string.format("x = %d ÷ %d = %d", s + d, 1 + a, x) },
+				{ titleKey = "step.andY", body = string.format("y = %d - %d = %d", s, x, y) },
 			},
 		}
 	end,
@@ -318,8 +307,9 @@ generators[5] = {
 		local b, c = -(r1 + r2), r1 * r2
 		local big = math.max(r1, r2)
 		return {
-			topic = "Ecuacion cuadratica",
-			prompt = string.format("x² %s %s = 0.  Cual es la raiz mayor?", signedTerm(b, "x"), signed(c)),
+			topicKey = "topic.quadratic",
+			promptKey = "q.quadratic.prompt",
+			promptArgs = { eq = string.format("x² %s %s = 0", signedTerm(b, "x"), signed(c)) },
 			answer = string.format("x = %d", big),
 			distractors = {
 				string.format("x = %d", math.min(r1, r2)),
@@ -327,14 +317,12 @@ generators[5] = {
 				string.format("x = %s", num(b / 2)),
 			},
 			steps = {
-				{ title = "1. Formula resolvente",
-				  body = string.format("x = (-b ± √(b² - 4ac)) / 2a,  con a = 1, b = %d, c = %d", b, c) },
-				{ title = "2. Discriminante",
+				{ titleKey = "step.quadFormula", body = string.format("x = (-b ± √(b² - 4ac)) / 2a   ·   a = 1, b = %d, c = %d", b, c) },
+				{ titleKey = "step.discriminant",
 				  body = string.format("Δ = (%d)² - 4·1·(%d) = %d - %d = %d", b, c, b * b, 4 * c, b * b - 4 * c) },
-				{ title = "3. Raices",
-				  body = string.format("x = (%d ± %s) / 2  →  x₁ = %d,  x₂ = %d", -b, num(math.sqrt(b * b - 4 * c)), math.max(r1, r2), math.min(r1, r2)) },
-				{ title = "4. Te pide la mayor",
-				  body = string.format("x = %d", big) },
+				{ titleKey = "step.roots",
+				  body = string.format("x = (%d ± %s) / 2  →  %d , %d", -b, num(math.sqrt(b * b - 4 * c)), math.max(r1, r2), math.min(r1, r2)) },
+				{ titleKey = "step.takeLarger", body = string.format("x = %d", big) },
 			},
 		}
 	end,
@@ -343,8 +331,9 @@ generators[5] = {
 		local t = triples[rng:NextInteger(1, #triples)]
 		local a, b, c = t[1], t[2], t[3]
 		return {
-			topic = "Teorema de Pitagoras",
-			prompt = string.format("Un triangulo rectangulo tiene catetos de %d y %d cm. Cuanto mide la hipotenusa?", a, b),
+			topicKey = "topic.pythagoras",
+			promptKey = "q.pythagoras.prompt",
+			promptArgs = { a = a, b = b },
 			answer = string.format("%d cm", c),
 			distractors = {
 				string.format("%d cm", a + b),
@@ -352,14 +341,11 @@ generators[5] = {
 				string.format("%s cm", num(math.sqrt(math.abs(b * b - a * a)))),
 			},
 			steps = {
-				{ title = "1. Planteo",
-				  body = "h² = cateto₁² + cateto₂²" },
-				{ title = "2. Reemplazas",
-				  body = string.format("h² = %d² + %d² = %d + %d = %d", a, b, a * a, b * b, a * a + b * b) },
-				{ title = "3. Raiz cuadrada",
-				  body = string.format("h = √%d = %d", a * a + b * b, c) },
-				{ title = "4. Respuesta",
-				  body = string.format("La hipotenusa mide %d cm", c) },
+				{ titleKey = "step.pythagorasSetup", body = "c² = a² + b²" },
+				{ titleKey = "step.substitute",
+				  body = string.format("c² = %d² + %d² = %d + %d = %d", a, b, a * a, b * b, a * a + b * b) },
+				{ titleKey = "step.squareRoot", body = string.format("c = √%d = %d", a * a + b * b, c) },
+				{ titleKey = "step.answer", body = string.format("%d cm", c) },
 			},
 		}
 	end,
@@ -385,7 +371,8 @@ function MathEngine.buildQuestion(id: number, difficulty: number, rng: Random): 
 		end
 	end
 	-- Relleno por si algun distractor colisiono con la respuesta correcta.
-	local fillers = { "Ninguna de las anteriores", "No se puede determinar", "Faltan datos" }
+	-- Van como "@clave" para que el cliente las traduzca.
+	local fillers = { "@choice.none", "@choice.cantTell", "@choice.missingData" }
 	for _, option in fillers do
 		if #choices >= 4 then
 			break
@@ -401,8 +388,9 @@ function MathEngine.buildQuestion(id: number, difficulty: number, rng: Random): 
 
 	return {
 		id = id,
-		topic = raw.topic,
-		prompt = raw.prompt,
+		topicKey = raw.topicKey,
+		promptKey = raw.promptKey,
+		promptArgs = raw.promptArgs,
 		choices = choices,
 		answerIndex = answerIndex,
 		steps = raw.steps,
@@ -426,8 +414,9 @@ end
 function MathEngine.sanitize(question: Question)
 	return {
 		id = question.id,
-		topic = question.topic,
-		prompt = question.prompt,
+		topicKey = question.topicKey,
+		promptKey = question.promptKey,
+		promptArgs = question.promptArgs,
 		choices = question.choices,
 		difficulty = question.difficulty,
 	}

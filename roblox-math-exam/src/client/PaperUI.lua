@@ -15,6 +15,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Strings = require(Shared:WaitForChild("Strings"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local Util = require(Shared:WaitForChild("Util"))
 
@@ -80,12 +81,12 @@ function PaperUI.mount(paperPart: BasePart)
 		BackgroundTransparency = 1,
 	}, sheet)
 
-	el("TextLabel", {
+	refs.headerTitle = el("TextLabel", {
 		Size = UDim2.new(0.62, 0, 0, 34),
 		Position = UDim2.fromOffset(28, 16),
 		BackgroundTransparency = 1,
 		Font = Theme.FontBold,
-		Text = "EVALUACION DE MATEMATICA",
+		Text = Strings.get("paper.title"),
 		TextColor3 = Theme.Paper.Ink,
 		TextSize = 30,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -96,7 +97,7 @@ function PaperUI.mount(paperPart: BasePart)
 		Position = UDim2.fromOffset(28, 52),
 		BackgroundTransparency = 1,
 		Font = Theme.Font,
-		Text = string.format("Alumno: %s   ·   Curso: 3° B   ·   Tema: unico", player.DisplayName),
+		Text = Strings.get("paper.student", { name = player.DisplayName }),
 		TextColor3 = Theme.Paper.InkSoft,
 		TextSize = 20,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -110,12 +111,12 @@ function PaperUI.mount(paperPart: BasePart)
 	}, header)
 	Util.roundify(gradeBox, 8, Theme.Paper.Line, 2)
 
-	el("TextLabel", {
+	refs.gradeLabel = el("TextLabel", {
 		Size = UDim2.new(1, 0, 0, 18),
 		Position = UDim2.fromOffset(0, 6),
 		BackgroundTransparency = 1,
 		Font = Theme.Font,
-		Text = "NOTA",
+		Text = Strings.get("paper.grade"),
 		TextColor3 = Theme.Paper.InkSoft,
 		TextSize = 14,
 	}, gradeBox)
@@ -254,7 +255,7 @@ function PaperUI.mount(paperPart: BasePart)
 		Position = UDim2.new(0, 28, 1, -22),
 		BackgroundTransparency = 1,
 		Font = Theme.Font,
-		Text = "Tocá una opcion para responder. El celular esta abajo del banco.",
+		Text = Strings.get("paper.footer.default"),
 		TextColor3 = Theme.Paper.InkSoft,
 		TextSize = 16,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -349,12 +350,18 @@ function PaperUI.render()
 	end
 	local record = snapshot.answers[PaperUI.current]
 
-	refs.topic.Text = string.format("Ejercicio %d de %d  ·  %s", PaperUI.current, #snapshot.questions, question.topic)
-	refs.prompt.Text = question.prompt
+	refs.topic.Text = Strings.get("paper.exercise", {
+		index = PaperUI.current,
+		total = #snapshot.questions,
+		topic = Strings.get(question.topicKey),
+	})
+	refs.prompt.Text = Strings.get(question.promptKey, question.promptArgs)
 	refs.grade.Text = snapshot.answered > 0 and string.format("%.1f", snapshot.grade) or "-"
 
 	for index, button in refs.options do
-		local text = question.choices[index] or ""
+		-- Las opciones son numeros (iguales en todo idioma) salvo las de
+		-- relleno, que viajan como "@clave".
+		local text = question.choices[index] and Strings.choice(question.choices[index]) or ""
 		button.Text = text
 		button.Visible = text ~= ""
 
@@ -423,14 +430,16 @@ function PaperUI.render()
 	end
 
 	if record then
-		refs.footer.Text = record.correct
-			and "Bien. Pasá al siguiente ejercicio."
-			or "Ese estaba mal. Ya no se puede corregir."
+		refs.footer.Text = Strings.get(record.correct and "paper.footer.correct" or "paper.footer.wrong")
 	elseif snapshot.finished then
-		refs.footer.Text = "Prueba entregada."
+		refs.footer.Text = Strings.get("paper.footer.finished")
 	else
-		refs.footer.Text = "Tocá una opcion para responder. La foto del celular sale de este ejercicio."
+		refs.footer.Text = Strings.get("paper.footer.default")
 	end
+
+	refs.headerTitle.Text = Strings.get("paper.title")
+	refs.student.Text = Strings.get("paper.student", { name = player.DisplayName })
+	refs.gradeLabel.Text = Strings.get("paper.grade")
 end
 
 function PaperUI.setEnabled(enabled: boolean)

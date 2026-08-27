@@ -12,19 +12,44 @@ personaje: la app de RoGPT se dibuja sobre su pantalla, no sobre la cámara.
 Lo único pegado a la pantalla es el HUD de controles (el botón grande de abajo
 y el medidor de riesgo), que es lo que hace falta para poder jugar en celular.
 
-El aula está llena: **20 bancos con compañeros** que escriben, se miran de
-reojo y se ponen nerviosos cuando el profe pasa cerca. El profe tiene canas,
-anteojos y **cara**: se pone contento cuando ve una prueba bien hecha y hecho
-una furia cuando te agarra con el celular. Las paredes tienen láminas de
-matemática y de lengua, hay pizarrón verde, reloj con agujas que andan,
-biblioteca, bandera y mochilas abajo de los bancos.
+El aula es una secundaria estadounidense, con criterio minimalista: pupitres
+combo de caño cromado, pizarrón verde, cielorraso de placas, ventanal de
+aluminio y tres láminas de matemática. Nada de adornos que no estarían de
+verdad en un aula.
+
+Hay **20 compañeros sentados** que escriben, parpadean, se miran de reojo y se
+ponen nerviosos cuando el profe pasa cerca. **Mr. Hollis** usa traje, anteojos,
+tiene canas y lleva una tablilla; camina despacio y parejo, frena a revisar
+cualquier banco (no solo el tuyo) y cada tanto se planta en el pasillo a barrer
+el aula con la mirada. Tiene **cara**: contento con una prueba prolija,
+desconfiado apenas ve algo raro, furioso cuando te viene a buscar.
+
+El juego **se adapta al idioma que cada jugador tiene en su Roblox**: español,
+inglés y portugués, con inglés de respaldo para el resto. Dos personas en la
+misma partida ven la misma prueba, cada una en su idioma.
 
 ---
+
+## Menú
+
+Al entrar arranca el menú, con el aula girando despacio de fondo:
+
+- **Jugar** — entra al aula.
+- **Partida** — *Solo* y *Con amigos* reservan un aula privada y te llevan ahí
+  (más el botón de invitar); *Con todos* te deja en el servidor actual. Las
+  salas privadas solo funcionan en el juego publicado: en Studio te avisa y te
+  deja donde estás.
+- **Ajustes** — brillo, volumen, idioma (automático / ES / EN / PT) y nombres de
+  los compañeros. El brillo y el volumen son de cada jugador, no del servidor.
+- **Créditos**
+
+Con `M` se abre y se cierra en cualquier momento.
 
 ## Cómo se juega
 
 | Acción | Teclado | Gamepad | Botón |
 |---|---|---|---|
+| Menú | `M` | `Start` | ☰ |
 | Sacar el celular / sacar foto / enviar a RoGPT | `F` | `X` | botón grande de abajo |
 | Guardar el celular | `Q` | `B` | *Guardar* |
 | Acercar la cámara a la hoja | `E` | `Y` | *Ver la hoja* |
@@ -240,7 +265,12 @@ Para probar con más de un alumno: *Test* → *Clients and Servers* → 2 player
 - `Net.lua` — creación y acceso cacheado a los remotes.
 - `PhoneModel.lua` — el celular 3D soldado al alumno, con el `Weld` animable que
   es literalmente el gesto de sacarlo y guardarlo.
-- `CharacterArt.lua` — caras, pelo y anteojos hechos con partes y una
+- `Strings.lua` — el idioma. El servidor nunca manda texto armado: manda una
+  clave y sus datos, y cada cliente la escribe en el suyo. Están español,
+  inglés y portugués (178 claves cada uno, verificadas una a una); cualquier
+  otro idioma cae en inglés. El aula en sí (pizarrón, láminas) queda en inglés
+  a propósito: es escenografía, no interfaz.
+- `CharacterArt.lua` — caras, pelo, anteojos y **traje** hechos con partes y una
   SurfaceGui, sin depender de ningún asset subido. Las expresiones no son
   imágenes: mueven cejas, ojos y una boca de nueve segmentos sobre una
   parábola, así que el profe pasa de contento a furioso de verdad.
@@ -287,7 +317,14 @@ Para probar con más de un alumno: *Test* → *Clients and Servers* → 2 player
 - `PhoneUI.lua` — la app de RoGPT sobre la pantalla del celu: barra de estado
   con batería, chat, miniatura de la foto, "escribiendo…" y la respuesta
   tipeada paso a paso.
-- `CameraRig.lua` — tres encuadres con blend suave: libre, hoja y celu.
+- `MainMenu.lua` — el menú: partida, ajustes y créditos, en una columna sobria
+  con el aula girando atrás.
+- `TeacherBubble.lua` — el globo de diálogo del profe, dibujado del lado del
+  cliente para que cada uno lo lea en su idioma.
+- `CameraRig.lua` — cuatro encuadres con blend suave: libre, hoja, celu y menú.
+  Ojo con hoja y celu: la cámara se planta un poco **adelante de la cara** y
+  apunta al objeto. Anclarla al objeto y tirarla para atrás (que fue el primer
+  intento) la mete adentro de tu propia cabeza y no se ve nada.
 - `Hud.lua` — panel del profe con la barra de riesgo, reloj de la prueba,
   avisos y el botón grande de abajo.
 
@@ -301,6 +338,7 @@ Todo en `src/shared/Config.lua`:
 |---|---|
 | Un aula más grande (y más compañeros) | `Classroom.Rows`, `Classroom.Columns` |
 | Un profe más duro | `Teacher.FieldOfView`, `Teacher.ViewDistance`, `Teacher.RiskGainSeen` |
+| Que frene más seguido | `Teacher.InspectChance`, `Teacher.ScanChance` |
 | Más ventanas seguras | `Teacher.BoardChance`, `Teacher.BoardDuration` |
 | Prueba más larga | `Exam.QuestionCount`, `Exam.RoundDuration` |
 | Que copiarse cueste más | `Phone.BatteryPerPhoto`, `Phone.ConfiscationTime`, `Penalty.GradePerCatch` |

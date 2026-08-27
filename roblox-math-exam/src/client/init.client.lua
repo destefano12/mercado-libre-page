@@ -2,29 +2,39 @@
 --[[
 	CLIENTE — punto de entrada
 	------------------------------------------------------------------
-	Une las tres piezas: la hoja 3D del banco, el celular 3D con RoGPT
-	y el HUD de acciones. Toda la logica sensible (respuestas correctas,
-	bateria, riesgo) vive en el servidor; aca solo se presenta y se pide.
+	Une las piezas: menu de inicio, la hoja 3D del banco, el celular 3D
+	con RoGPT y el HUD de acciones. Toda la logica sensible (respuestas
+	correctas, bateria, riesgo) vive en el servidor; aca solo se
+	presenta y se pide.
+
+	El idioma sale del Roblox de cada jugador y se puede forzar desde
+	Ajustes. Nada de texto del servidor llega ya escrito: llegan claves.
 
 	Controles:
 		E  -> acercar la camara a la hoja
 		F  -> sacar / usar el celular  (mismo boton grande de abajo)
 		Q  -> guardar el celular
+		M  -> abrir el menu
 --]]
 
 local ContextActionService = game:GetService("ContextActionService")
+local LocalizationService = game:GetService("LocalizationService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SocialService = game:GetService("SocialService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Net = require(Shared:WaitForChild("Net"))
+local Strings = require(Shared:WaitForChild("Strings"))
 local Util = require(Shared:WaitForChild("Util"))
 
 local CameraRig = require(script:WaitForChild("CameraRig"))
 local Hud = require(script:WaitForChild("Hud"))
+local MainMenu = require(script:WaitForChild("MainMenu"))
 local PaperUI = require(script:WaitForChild("PaperUI"))
 local PhoneUI = require(script:WaitForChild("PhoneUI"))
+local TeacherBubble = require(script:WaitForChild("TeacherBubble"))
 
 local player = Players.LocalPlayer
 
@@ -32,10 +42,34 @@ local state = {
 	phoneOut = false,
 	busy = false,
 	phase = "Preparacion",
+	started = false,
 	paper = nil :: BasePart?,
 	screen = nil :: BasePart?,
 	phoneState = { battery = 100, out = false, confiscated = false, confiscatedFor = 0 },
 }
+
+-- ─────────────────────────────────────────────────────────────
+-- Idioma
+-- ─────────────────────────────────────────────────────────────
+
+local function resolveLocale()
+	local choice = MainMenu.settings.locale
+	if choice == "auto" then
+		local ok, id = pcall(function()
+			return LocalizationService.RobloxLocaleId
+		end)
+		Strings.setLocale(ok and id or nil)
+	else
+		Strings.setLocale(choice)
+	end
+end
+
+local function refreshAllTexts()
+	Hud.refreshTexts()
+	MainMenu.refreshTexts()
+	PaperUI.render()
+	PhoneUI.refreshTexts()
+end
 
 -- ─────────────────────────────────────────────────────────────
 -- Encontrar mi banco y mi celular
@@ -107,6 +141,13 @@ end
 -- Acciones
 -- ─────────────────────────────────────────────────────────────
 
+local function reasonText(reason: any, fallback: string): string
+	if typeof(reason) == "table" and reason.key then
+		return Strings.get(reason.key, reason.args)
+	end
+	return Strings.get(fallback)
+end
+
 local function setPhoneOut(out: boolean)
 	if state.phoneOut == out then
 		return
@@ -117,6 +158,7 @@ local function setPhoneOut(out: boolean)
 
 	if out then
 		PhoneUI.reset()
+		Hud.setHasPhoto(false)
 		CameraRig.setMode("celu")
 		Util.playSound(Config.Sounds.PhoneOut, workspace, 0.4)
 	else
@@ -145,13 +187,13 @@ local function takePhoto()
 	PhoneUI.setBusy(false)
 
 	if not response or not response.ok then
-		PhoneUI.system(response and response.reason or "No se pudo sacar la foto.")
+		PhoneUI.system(reasonText(response and response.reason, "phone.error.photo"))
 		return
 	end
 
 	PhoneUI.photo(response)
 	PhoneUI.setPendingPhoto(response)
-	Hud.refreshPrimary()
+	Hud.setHasPhoto(true)
 end
 
 local function sendToRoGPT()
@@ -162,8 +204,9 @@ local function sendToRoGPT()
 	state.busy = true
 	PhoneUI.setBusy(true)
 	PhoneUI.setPendingPhoto(nil)
+	Hud.setHasPhoto(false)
 
-	PhoneUI.system(string.format("Subiendo %s ...", photo.photoId))
+	PhoneUI.system(Strings.get("phone.uploading", { id = photo.photoId }))
 	Util.playSound(Config.Sounds.Send, workspace, 0.4)
 	task.wait(photo.uploadTime or 0.8)
 
@@ -172,7 +215,7 @@ local function sendToRoGPT()
 
 	if not response or not response.ok then
 		dismiss()
-		PhoneUI.system(response and response.reason or "RoGPT no contesta.")
+		PhoneUI.system(reasonText(response and response.reason, "phone.error.generic"))
 		state.busy = false
 		PhoneUI.setBusy(false)
 		return
@@ -185,17 +228,19 @@ local function sendToRoGPT()
 
 	state.busy = false
 	PhoneUI.setBusy(false)
-	Hud.refreshPrimary()
 end
 
 --- El boton grande de abajo cambia segun el momento.
 local function primaryAction()
+	if MainMenu.open then
+		return
+	end
 	if state.phoneState.confiscated then
-		Hud.notify("El profe te lo saco. Bancá un poco.", "warn")
+		Hud.notify("notify.confiscated", "warn")
 		return
 	end
 	if state.phase ~= "Prueba" then
-		Hud.notify("Todavia no empezo la prueba.", "info")
+		Hud.notify("notify.notStarted", "info")
 		return
 	end
 	if not state.phoneOut then
@@ -216,19 +261,82 @@ local function stashPhone()
 end
 
 local function togglePaper()
+	if MainMenu.open then
+		return
+	end
 	CameraRig.toggle("hoja")
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Menu
+-- ─────────────────────────────────────────────────────────────
+
+local function openMenu()
+	MainMenu.show()
+	stashPhone()
+	CameraRig.setMode("menu")
+	Hud.setVisible(false)
+	TeacherBubble.hide()
+end
+
+local function closeMenu()
+	MainMenu.hide()
+	CameraRig.setMode("libre")
+	Hud.setVisible(true)
+	state.started = true
 end
 
 -- ─────────────────────────────────────────────────────────────
 -- Montaje
 -- ─────────────────────────────────────────────────────────────
 
+resolveLocale()
+
 Hud.mount()
+Hud.setVisible(false)
 CameraRig.start()
+MainMenu.mount()
 
 Hud.onPrimary = primaryAction
 Hud.onStash = stashPhone
 Hud.onPaper = togglePaper
+Hud.onMenu = openMenu
+
+MainMenu.onPlay = closeMenu
+MainMenu.onLocaleChanged = function()
+	resolveLocale()
+	refreshAllTexts()
+end
+
+MainMenu.onMode = function(mode: string)
+	if mode == "public" then
+		MainMenu.setModeStatus(Strings.get("menu.mode.current"))
+		return
+	end
+	MainMenu.setModeStatus(Strings.get("menu.mode.moving"))
+	task.spawn(function()
+		local response = Net.func(Net.Functions.ChooseMode):InvokeServer(mode)
+		if not response or not response.ok then
+			MainMenu.setModeStatus(reasonText(response and response.reason, "menu.mode.unavailable"))
+		end
+	end)
+end
+
+MainMenu.onInvite = function()
+	task.spawn(function()
+		local can = false
+		pcall(function()
+			can = SocialService:CanSendGameInviteAsync(player)
+		end)
+		if can then
+			pcall(function()
+				SocialService:PromptGameInvite(player)
+			end)
+		else
+			MainMenu.setModeStatus(Strings.get("menu.mode.unavailable"))
+		end
+	end)
+end
 
 PhoneUI.onTakePhoto = function()
 	task.spawn(takePhoto)
@@ -240,24 +348,24 @@ PhoneUI.onClose = stashPhone
 
 PaperUI.onAnswer = function(questionId: number, choice: number)
 	if state.phase ~= "Prueba" then
-		Hud.notify("La prueba no esta en curso.", "info")
+		Hud.notify("notify.notRunning", "info")
 		return
 	end
 	task.spawn(function()
 		local response = Net.func(Net.Functions.SubmitAnswer):InvokeServer(questionId, choice)
 		if not response or not response.ok then
-			Hud.notify(response and response.reason or "No se pudo responder.", "warn")
+			Hud.notify("notify.answerFailed", "warn")
 			return
 		end
 		if response.correct then
 			Util.playSound(Config.Sounds.Correct, workspace, 0.45)
-			Hud.notify("Correcto.", "success")
+			Hud.notify("notify.correct", "success")
 		else
 			Util.playSound(Config.Sounds.Wrong, workspace, 0.45)
-			Hud.notify("Ese estaba mal.", "warn")
+			Hud.notify("notify.wrong", "warn")
 		end
 		if response.finished then
-			Hud.notify(string.format("Entregaste la prueba. Nota: %.1f", response.grade), "info")
+			Hud.notify("notify.finished", "info", { grade = string.format("%.1f", response.grade) })
 		end
 	end)
 end
@@ -300,42 +408,48 @@ Net.event(Net.Events.PhoneState).OnClientEvent:Connect(function(data)
 end)
 
 Net.event(Net.Events.Notify).OnClientEvent:Connect(function(data)
-	Hud.notify(data.text, data.kind)
+	Hud.notify(data.key, data.kind, data.args)
+end)
+
+Net.event(Net.Events.TeacherSay).OnClientEvent:Connect(function(data)
+	if not MainMenu.open then
+		TeacherBubble.say(data.key, data.duration)
+	end
 end)
 
 Net.event(Net.Events.Caught).OnClientEvent:Connect(function(data)
 	state.phoneOut = false
 	Hud.setPhoneOut(false)
+	Hud.setHasPhoto(false)
 	CameraRig.setMode("libre")
 	PhoneUI.reset()
 	Util.playSound(Config.Sounds.Caught, workspace, 0.6)
-	Hud.flash(data.expelled and "TE SACARON DE LA PRUEBA" or "TE PILLARON")
+	Hud.flash(Strings.get(data.expelled and "hud.flash.expelled" or "hud.flash.caught"))
 end)
 
 -- ─────────────────────────────────────────────────────────────
 -- Teclado / gamepad
 -- ─────────────────────────────────────────────────────────────
 
-ContextActionService:BindAction("AulaCelular", function(_, inputState)
-	if inputState == Enum.UserInputState.Begin then
-		primaryAction()
-	end
-	return Enum.ContextActionResult.Sink
-end, false, Enum.KeyCode.F, Enum.KeyCode.ButtonX)
+local function bind(name: string, callback: () -> (), ...)
+	ContextActionService:BindAction(name, function(_, inputState)
+		if inputState == Enum.UserInputState.Begin then
+			callback()
+		end
+		return Enum.ContextActionResult.Sink
+	end, false, ...)
+end
 
-ContextActionService:BindAction("AulaGuardar", function(_, inputState)
-	if inputState == Enum.UserInputState.Begin then
-		stashPhone()
+bind("AulaCelular", primaryAction, Enum.KeyCode.F, Enum.KeyCode.ButtonX)
+bind("AulaGuardar", stashPhone, Enum.KeyCode.Q, Enum.KeyCode.ButtonB)
+bind("AulaHoja", togglePaper, Enum.KeyCode.E, Enum.KeyCode.ButtonY)
+bind("AulaMenu", function()
+	if MainMenu.open then
+		closeMenu()
+	else
+		openMenu()
 	end
-	return Enum.ContextActionResult.Sink
-end, false, Enum.KeyCode.Q, Enum.KeyCode.ButtonB)
-
-ContextActionService:BindAction("AulaHoja", function(_, inputState)
-	if inputState == Enum.UserInputState.Begin then
-		togglePaper()
-	end
-	return Enum.ContextActionResult.Sink
-end, false, Enum.KeyCode.E, Enum.KeyCode.ButtonY)
+end, Enum.KeyCode.M, Enum.KeyCode.ButtonStart)
 
 -- ─────────────────────────────────────────────────────────────
 -- Personaje
@@ -369,10 +483,18 @@ task.spawn(function()
 	end
 end)
 
--- El banco puede tardar en asignarse (por ejemplo si entraste tarde).
+-- El banco puede tardar en asignarse (por ejemplo si entraste tarde), y
+-- el menu necesita saber a donde apuntar la camara.
 task.spawn(function()
 	while not state.paper do
 		bindPaper()
+		local classroom = workspace:FindFirstChild("Aula")
+		if classroom then
+			local board = classroom:FindFirstChild("Pizarron")
+			if board and board:IsA("BasePart") then
+				CameraRig.setMenuFocus(board.Position + Vector3.new(0, -2, 18))
+			end
+		end
 		task.wait(1)
 	end
 end)

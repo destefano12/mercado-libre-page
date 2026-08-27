@@ -120,6 +120,11 @@ function Util.playSound(soundId: string, parent: Instance, volume: number?, spee
 	sound.Volume = volume or 0.5
 	sound.PlaybackSpeed = speed or 1
 	sound.RollOffMaxDistance = 80
+	-- Si el cliente creo el grupo "Master", el volumen de Ajustes manda.
+	local group = game:GetService("SoundService"):FindFirstChild("Master")
+	if group and group:IsA("SoundGroup") then
+		sound.SoundGroup = group
+	end
 	sound.Parent = parent
 	sound:Play()
 	sound.Ended:Once(function()

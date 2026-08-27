@@ -19,6 +19,7 @@ local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
+local Strings = require(Shared:WaitForChild("Strings"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local Util = require(Shared:WaitForChild("Util"))
 
@@ -34,6 +35,7 @@ local gui: SurfaceGui? = nil
 local refs: { [string]: any } = {}
 local busy = false
 local pendingPhoto: any = nil
+local lastPhoneState: any = nil
 local typingToken = 0
 
 local function el(className: string, props: { [string]: any }, parent: Instance?): any
@@ -155,7 +157,7 @@ function PhoneUI.mount(screenPart: BasePart)
 		Position = UDim2.fromOffset(62, 32),
 		BackgroundTransparency = 1,
 		Font = Theme.Font,
-		Text = P.ModelName .. " · en linea",
+		Text = Strings.get("phone.online", { model = P.ModelName }),
 		TextColor3 = Theme.Phone.Accent,
 		TextSize = 14,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -223,9 +225,9 @@ function PhoneUI.mount(screenPart: BasePart)
 		VerticalAlignment = Enum.VerticalAlignment.Center,
 	}, bar)
 
-	refs.photoButton = actionButton("Foto", "📷  Foto", 1, Theme.Phone.SurfaceAlt)
-	refs.sendButton = actionButton("Enviar", "Enviar ▸", 2, Theme.Phone.Accent)
-	refs.closeButton = actionButton("Guardar", "Guardar", 3, Theme.Phone.SurfaceAlt)
+	refs.photoButton = actionButton("Foto", Strings.get("phone.button.photo"), 1, Theme.Phone.SurfaceAlt)
+	refs.sendButton = actionButton("Enviar", Strings.get("phone.button.send"), 2, Theme.Phone.Accent)
+	refs.closeButton = actionButton("Guardar", Strings.get("phone.button.close"), 3, Theme.Phone.SurfaceAlt)
 
 	refs.photoButton.MouseButton1Click:Connect(function()
 		if PhoneUI.onTakePhoto then
@@ -355,7 +357,7 @@ function PhoneUI.photo(photoData: any): Frame
 		Position = UDim2.fromOffset(10, 10),
 		BackgroundTransparency = 1,
 		Font = Theme.Font,
-		Text = "EVALUACION DE MATEMATICA · 3° B",
+		Text = Strings.get("phone.sheetHeader"),
 		TextColor3 = Theme.Paper.InkSoft,
 		TextSize = 10,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -366,7 +368,7 @@ function PhoneUI.photo(photoData: any): Frame
 		Position = UDim2.fromOffset(10, 30),
 		BackgroundTransparency = 1,
 		Font = Theme.FontBold,
-		Text = photoData.prompt,
+		Text = Strings.get(photoData.promptKey, photoData.promptArgs),
 		TextColor3 = Theme.Paper.Ink,
 		TextSize = 15,
 		TextWrapped = true,
@@ -385,7 +387,7 @@ function PhoneUI.photo(photoData: any): Frame
 		TextXAlignment = Enum.TextXAlignment.Right,
 	}, sheet)
 
-	line(frame, "Resolveme este ejercicio, paso a paso.", 15, Theme.Phone.Text, nil, 2)
+	line(frame, Strings.get("phone.caption"), 15, Theme.Phone.Text, nil, 2)
 	scrollToBottom()
 	return frame
 end
@@ -393,7 +395,8 @@ end
 --- Burbuja "escribiendo..." con los tres puntitos animados.
 function PhoneUI.typing(): (Frame, () -> ())
 	local frame = bubble("assistant", Theme.Phone.Surface)
-	local label = line(frame, "escribiendo", 16, Theme.Phone.TextSoft)
+	local typingText = Strings.get("phone.typing")
+	local label = line(frame, typingText, 16, Theme.Phone.TextSoft)
 	scrollToBottom()
 
 	local alive = true
@@ -401,7 +404,7 @@ function PhoneUI.typing(): (Frame, () -> ())
 		local dots = 0
 		while alive and label.Parent do
 			dots = (dots + 1) % 4
-			label.Text = "escribiendo" .. string.rep(".", dots)
+			label.Text = typingText .. string.rep(".", dots)
 			task.wait(0.35)
 		end
 	end)
@@ -442,7 +445,7 @@ function PhoneUI.answer(response: any)
 	local token = typingToken
 
 	local frame = bubble("assistant", Theme.Phone.Surface)
-	line(frame, response.topic, 12, Theme.Phone.Accent, Theme.FontBold, 0)
+	line(frame, Strings.get(response.topicKey), 12, Theme.Phone.Accent, Theme.FontBold, 0)
 
 	task.spawn(function()
 		local index = 1
@@ -451,9 +454,10 @@ function PhoneUI.answer(response: any)
 				return
 			end
 			index += 1
-			local title = line(frame, step.title, 15, Theme.Phone.Text, Theme.FontBold, index)
+			local stepTitle = Strings.get(step.titleKey)
+			local title = line(frame, stepTitle, 15, Theme.Phone.Text, Theme.FontBold, index)
 			title.Text = ""
-			typeInto(title, step.title, token)
+			typeInto(title, stepTitle, token)
 
 			index += 1
 			local body = line(frame, step.body, 15, Theme.Phone.TextSoft, Theme.FontMono, index)
@@ -478,13 +482,13 @@ function PhoneUI.answer(response: any)
 			Size = UDim2.fromScale(1, 1),
 			BackgroundTransparency = 1,
 			Font = Theme.FontBold,
-			Text = "Respuesta:  " .. tostring(response.answer),
+			Text = Strings.get("phone.answer", { answer = Strings.choice(tostring(response.answer)) }),
 			TextColor3 = Color3.fromRGB(10, 14, 16),
 			TextSize = 18,
 		}, result)
 
 		index += 1
-		line(frame, "Marcá esa opcion en la hoja. Y guardá el celular.", 13, Theme.Phone.TextSoft, nil, index)
+		line(frame, Strings.get("phone.markIt"), 13, Theme.Phone.TextSoft, nil, index)
 		scrollToBottom()
 	end)
 end
@@ -506,8 +510,8 @@ function PhoneUI.reset()
 	end
 	order = 0
 	if refs.chat then
-		PhoneUI.system("Hoy · " .. P.ModelName)
-		PhoneUI.assistant(P.Greeting)
+		PhoneUI.system(Strings.get("phone.today", { model = P.ModelName }))
+		PhoneUI.assistant(Strings.get("phone.greeting"))
 	end
 	PhoneUI.refreshButtons()
 end
@@ -533,11 +537,12 @@ function PhoneUI.refreshButtons()
 	local hasPhoto = pendingPhoto ~= nil
 	refs.sendButton.BackgroundColor3 = (hasPhoto and not busy) and Theme.Phone.Accent or Theme.Phone.SurfaceAlt
 	refs.sendButton.TextColor3 = (hasPhoto and not busy) and Theme.Phone.Text or Theme.Phone.TextSoft
-	refs.sendButton.Text = hasPhoto and "Enviar foto ▸" or "Enviar ▸"
-	refs.photoButton.Text = busy and "..." or "📷  Foto"
+	refs.sendButton.Text = Strings.get(hasPhoto and "phone.button.sendPhoto" or "phone.button.send")
+	refs.photoButton.Text = busy and "···" or Strings.get("phone.button.photo")
 end
 
 function PhoneUI.setPhoneState(state: any)
+	lastPhoneState = state
 	if not refs.battery then
 		return
 	end
@@ -546,10 +551,10 @@ function PhoneUI.setPhoneState(state: any)
 	refs.battery.TextColor3 = state.battery > 20 and Theme.Phone.Battery or Theme.Phone.Danger
 
 	if state.confiscated then
-		refs.subtitle.Text = "sin señal · te lo saco el profe"
+		refs.subtitle.Text = Strings.get("phone.noSignal")
 		refs.subtitle.TextColor3 = Theme.Phone.Danger
 	else
-		refs.subtitle.Text = P.ModelName .. " · en linea"
+		refs.subtitle.Text = Strings.get("phone.online", { model = P.ModelName })
 		refs.subtitle.TextColor3 = Theme.Phone.Accent
 	end
 end
@@ -563,6 +568,19 @@ end
 function PhoneUI.setEnabled(enabled: boolean)
 	if gui then
 		gui.Enabled = enabled
+	end
+end
+
+--- Reescribe lo fijo de la pantalla cuando cambia el idioma. El chat
+--- ya escrito se queda como estaba: es una conversacion pasada.
+function PhoneUI.refreshTexts()
+	if not refs.sendButton then
+		return
+	end
+	refs.closeButton.Text = Strings.get("phone.button.close")
+	PhoneUI.refreshButtons()
+	if lastPhoneState then
+		PhoneUI.setPhoneState(lastPhoneState)
 	end
 end
 

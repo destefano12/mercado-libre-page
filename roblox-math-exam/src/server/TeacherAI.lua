@@ -24,6 +24,7 @@ local RunService = game:GetService("RunService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local CharacterArt = require(Shared:WaitForChild("CharacterArt"))
 local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
 local Util = require(Shared:WaitForChild("Util"))
 
 local T = Config.Teacher
@@ -33,41 +34,26 @@ TeacherAI.__index = TeacherAI
 
 export type Teacher = typeof(setmetatable({} :: any, TeacherAI))
 
+-- El profe no habla en ningun idioma en particular: manda claves, y
+-- cada cliente las escribe en el suyo.
 local PHRASES = {
-	patrol = {
-		"Sin hablar, por favor.",
-		"Tienen que justificar todos los pasos.",
-		"Les quedan pocos minutos.",
-		"El que copia se lleva un uno.",
-	},
-	board = {
-		"Ojo con el signo del segundo termino.",
-		"Anoto la formula en el pizarron.",
-		"Ejercicio 5, presten atencion.",
-	},
-	inspect = {
-		"A ver esa hoja...",
-		"Mmm. Ese planteo no cierra.",
-		"Muy bien ese desarrollo.",
-	},
-	caught = {
-		"Dame ese telefono. Ahora.",
-		"Te vi. Guardalo o te llevas un uno.",
-		"En serio? Con el celular en la prueba?",
-	},
+	patrol = { "teacher.patrol.1", "teacher.patrol.2", "teacher.patrol.3", "teacher.patrol.4" },
+	board = { "teacher.board.1", "teacher.board.2", "teacher.board.3" },
+	inspect = { "teacher.inspect.1", "teacher.inspect.2", "teacher.inspect.3" },
+	caught = { "teacher.caught.1", "teacher.caught.2", "teacher.caught.3" },
+	npc = { "teacher.npc.1", "teacher.npc.2", "teacher.npc.3", "teacher.npc.4", "teacher.npc.5" },
+}
+
+-- Las que suenan a reto: le ponen cara de pocos amigos.
+local NEGATIVE = {
+	["teacher.inspect.2"] = true,
+	["teacher.npc.3"] = true,
+	["teacher.npc.5"] = true,
 }
 
 local function pick(list: { string }): string
 	return list[math.random(1, #list)]
 end
-
-local INSPECT_NPC = {
-	"Bien ese planteo.",
-	"Prolijo, me gusta.",
-	"Che, esa cuenta esta mal.",
-	"Seguí asi.",
-	"Menos borrones, por favor.",
-}
 
 -- ─────────────────────────────────────────────────────────────
 -- Rig
@@ -210,6 +196,8 @@ function TeacherAI.new(classroom, onCatch: (Player) -> ())
 	self.face = CharacterArt.attachFace(self.head, skin)
 	CharacterArt.attachOldHair(self.head)
 	CharacterArt.attachGlasses(self.head)
+	CharacterArt.attachSuit(model)
+	CharacterArt.attachClipboard(model)
 
 	self.mood = "neutral"
 	self.moodUntil = 0
@@ -217,7 +205,6 @@ function TeacherAI.new(classroom, onCatch: (Player) -> ())
 	self.nextBlink = os.clock() + 3
 
 	self:_setupAnimations()
-	self:_buildBubble()
 
 	return self
 end
@@ -259,77 +246,13 @@ function TeacherAI:_playAnim(name: string)
 	end
 end
 
-function TeacherAI:_buildBubble()
-	local billboard = Util.billboard(self.head, UDim2.fromScale(9, 2.4), Vector3.new(0, 3.2, 0))
-	billboard.Name = "Dialogo"
-	billboard.AlwaysOnTop = true
-	billboard.Enabled = false
-	billboard.MaxDistance = 90
-	billboard.Parent = self.head
-
-	local frame = Instance.new("Frame")
-	frame.Size = UDim2.fromScale(1, 1)
-	frame.BackgroundColor3 = Color3.fromRGB(20, 22, 28)
-	frame.BackgroundTransparency = 0.12
-	frame.Parent = billboard
-	Util.roundify(frame, 14, Color3.fromRGB(90, 96, 112), 2)
-
-	local label = Instance.new("TextLabel")
-	label.Name = "Texto"
-	label.Size = UDim2.fromScale(0.9, 0.7)
-	label.Position = UDim2.fromScale(0.05, 0.15)
-	label.BackgroundTransparency = 1
-	label.Font = Enum.Font.GothamMedium
-	label.TextColor3 = Color3.fromRGB(240, 242, 248)
-	label.TextScaled = true
-	label.Text = ""
-	label.Parent = frame
-
-	self.bubble = billboard
-	self.bubbleLabel = label
-end
-
-function TeacherAI:say(text: string, duration: number?)
-	self.bubbleLabel.Text = text
-	self.bubble.Enabled = true
-	self.speechToken = (self.speechToken or 0) + 1
-	local token = self.speechToken
-	task.delay(duration or 3.2, function()
-		if self.speechToken == token and self.bubble then
-			self.bubble.Enabled = false
-		end
-	end)
-end
-
---- Le fuerza una expresion por unos segundos (por ejemplo al retar a alguien).
-function TeacherAI:setMood(name: string, duration: number?)
-	self.mood = name
-	self.moodUntil = os.clock() + (duration or 2.5)
-end
-
---- "Algo raro vi": lo pone en cara de sospecha un ratito.
-function TeacherAI:alert(duration: number?)
-	self.alertUntil = math.max(self.alertUntil, os.clock() + (duration or 0.8))
-end
-
---- Expresion que corresponde a lo que esta haciendo y viendo.
-function TeacherAI:_currentExpression(now: number): string
-	if now < self.moodUntil then
-		return self.mood
-	end
-	if self.state == "Confrontando" then
-		return "enojado"
-	end
-	if now < self.alertUntil then
-		return "sospecha"
-	end
-	if self.state == "Pizarron" then
-		return "contento"
-	end
-	if self.state == "Revisando" then
-		return self.inspectMood or "contento"
-	end
-	return "neutral"
+--- Dice algo. Viaja como clave: el globo de dialogo lo dibuja cada
+--- cliente sobre su cabeza, en su idioma.
+function TeacherAI:say(key: string, duration: number?)
+	Net.event(Net.Events.TeacherSay):FireAllClients({
+		key = key,
+		duration = duration or 3.2,
+	})
 end
 
 -- ─────────────────────────────────────────────────────────────
@@ -507,7 +430,9 @@ function TeacherAI:_inspect(desk)
 		self:_faceTowards(desk.seat.Position, 0.4)
 		self.targetGazeYaw = 0
 		if self.rng:NextNumber() < 0.6 then
-			self:say(INSPECT_NPC[self.rng:NextInteger(1, #INSPECT_NPC)], 2.4)
+			local phrase = pick(PHRASES.npc)
+			self:say(phrase, 2.4)
+			self.inspectMood = NEGATIVE[phrase] and "sospecha" or "contento"
 		end
 		local wait = Util.randomInRange(T.InspectDuration, self.rng) * 0.7
 		local spent = 0
@@ -526,10 +451,10 @@ function TeacherAI:_inspect(desk)
 	self:_playAnim("idle")
 	self:_faceTowards(desk.seat.Position, 0.4)
 	self.targetGazeYaw = 0
-	if self.rng:NextNumber() < 0.5 then
+	if self.rng:NextNumber() < 0.6 then
 		local phrase = pick(PHRASES.inspect)
 		self:say(phrase, 2.6)
-		self.inspectMood = phrase:find("no cierra") and "sospecha" or "contento"
+		self.inspectMood = NEGATIVE[phrase] and "sospecha" or "contento"
 	end
 
 	local duration = Util.randomInRange(T.InspectDuration, self.rng)
@@ -593,8 +518,26 @@ function TeacherAI:_patrolStep()
 		end
 	end
 
-	if self.rng:NextNumber() < 0.12 then
+	if self.rng:NextNumber() < 0.14 then
 		self:say(pick(PHRASES.patrol), 3)
+	end
+
+	-- Cada tanto frena en el pasillo y barre el aula con la mirada.
+	-- Es el momento mas peligroso: no esta mirando a nadie en particular.
+	if self.rng:NextNumber() < T.ScanChance then
+		self.state = "Barriendo"
+		local sweep = self.rng:NextNumber() < 0.5 and 1 or -1
+		for _, target in { sweep * math.rad(62), -sweep * math.rad(62), 0 } do
+			self.targetGazeYaw = target
+			local elapsed = 0
+			while elapsed < 1.3 and self.running and self.state == "Barriendo" do
+				elapsed += task.wait(0.1)
+			end
+		end
+		if self.state == "Barriendo" then
+			self.state = "Patrullando"
+		end
+		return
 	end
 
 	task.wait(Util.randomInRange(T.IdleAtWaypoint, self.rng))
@@ -650,7 +593,7 @@ function TeacherAI:start()
 		while self.running do
 			if self.state == "Confrontando" then
 				task.wait(0.2)
-			elseif os.clock() - (self.lastBoardAt or 0) > 28 and self.rng:NextNumber() < T.BoardChance then
+			elseif os.clock() - (self.lastBoardAt or 0) > T.BoardCooldown and self.rng:NextNumber() < T.BoardChance then
 				self.lastBoardAt = os.clock()
 				self:_goToBoard()
 			else
@@ -662,7 +605,8 @@ function TeacherAI:start()
 	-- Cabeza: barrido lateral mientras camina, fija cuando revisa.
 	self.gazeConnection = RunService.Heartbeat:Connect(function(dt)
 		if self.state == "Patrullando" then
-			self.targetGazeYaw = math.sin(os.clock() * 0.85) * math.rad(38)
+			-- Barrido lento y parejo mientras camina.
+			self.targetGazeYaw = math.sin(os.clock() * 0.55) * math.rad(34)
 		elseif self.state == "Revisando" or self.state == "Confrontando" then
 			self.targetGazeYaw = 0
 		elseif self.state == "Pizarron" then

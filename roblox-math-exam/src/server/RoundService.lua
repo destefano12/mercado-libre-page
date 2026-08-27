@@ -104,8 +104,9 @@ local function pushRound(target: Player?)
 	end
 end
 
-function RoundService.notify(player: Player, text: string, kind: string?)
-	Net.event(Net.Events.Notify):FireClient(player, { text = text, kind = kind or "info" })
+--- Manda un aviso como clave de idioma: el cliente lo escribe en el suyo.
+function RoundService.notify(player: Player, key: string, kind: string?, args: { [string]: any }?)
+	Net.event(Net.Events.Notify):FireClient(player, { key = key, args = args, kind = kind or "info" })
 end
 
 -- ─────────────────────────────────────────────────────────────
@@ -116,7 +117,7 @@ function RoundService.addPlayer(player: Player)
 	setupStats(player)
 	local entry = ExamService.addPlayer(player)
 	if not entry.desk then
-		RoundService.notify(player, "El aula esta llena. Mirá desde el fondo hasta que se libere un banco.", "warn")
+		RoundService.notify(player, "notify.roomFull", "warn")
 	end
 	PhoneService.reset(player)
 	SuspicionService.reset(player)
@@ -127,7 +128,7 @@ function RoundService.addPlayer(player: Player)
 		task.spawn(function()
 			task.wait(0.5)
 			ExamService.seatPlayer(player)
-			RoundService.notify(player, "Entraste con la prueba empezada. Sentate y arrancá.", "info")
+			RoundService.notify(player, "notify.lateJoin", "info")
 		end)
 	end
 end
@@ -177,10 +178,12 @@ function RoundService.handleCatch(player: Player)
 	})
 
 	if expelled then
-		RoundService.notify(player, "Te sacaron de la prueba. Esperá la proxima ronda.", "danger")
+		RoundService.notify(player, "notify.expelled", "danger")
 	else
-		RoundService.notify(player, string.format("Te pillaron. -%.1f de nota y sin celu %ds.",
-			Config.Penalty.GradePerCatch, Config.Phone.ConfiscationTime), "danger")
+		RoundService.notify(player, "notify.caught", "danger", {
+			penalty = string.format("%.1f", Config.Penalty.GradePerCatch),
+			seconds = Config.Phone.ConfiscationTime,
+		})
 	end
 end
 
@@ -255,7 +258,7 @@ function RoundService.start(classroom, teacher)
 				task.spawn(ExamService.seatPlayer, player)
 			end
 			if teacher then
-				teacher:say("Guarden todo. Empieza la prueba.", 4)
+				teacher:say("teacher.start", 4)
 			end
 
 			local syncAccumulator = 0
@@ -276,14 +279,14 @@ function RoundService.start(classroom, teacher)
 				syncStats(player)
 				local grade = ExamService.getGrade(player)
 				if grade >= E.PassingGrade then
-					RoundService.notify(player, string.format("Aprobaste con %.1f.", grade), "success")
+					RoundService.notify(player, "notify.passed", "success", { grade = string.format("%.1f", grade) })
 				else
-					RoundService.notify(player, string.format("Te sacaste %.1f. La proxima estudia (o copiate mejor).", grade), "warn")
+					RoundService.notify(player, "notify.failed", "warn", { grade = string.format("%.1f", grade) })
 				end
 			end
 			state.results = buildResults()
 			if teacher then
-				teacher:say("Entreguen las hojas. Corrijo para la proxima clase.", 5)
+				teacher:say("teacher.end", 5)
 			end
 			runPhase("Resultados", 15)
 		end
