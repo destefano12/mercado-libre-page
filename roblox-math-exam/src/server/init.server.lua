@@ -46,7 +46,11 @@ if baseplate and baseplate:IsA("BasePart") then
 end
 
 local classroom = ClassroomBuilder.build(Workspace)
-print("[Aula] Aula construida.")
+
+-- Chequeo basico: si esto no se cumple, el aula no se construyo y no
+-- tiene sentido seguir en silencio.
+assert(classroom and #classroom.desks > 0, "[Aula] El aula se construyo sin bancos")
+print(string.format("[Aula] Aula construida: %d bancos.", #classroom.desks))
 
 -- Spawn de los alumnos: adentro del aula, no en el vacio.
 local spawnLocation = Workspace:FindFirstChildOfClass("SpawnLocation")

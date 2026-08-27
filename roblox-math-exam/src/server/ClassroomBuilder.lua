@@ -276,7 +276,7 @@ local function buildTeacherDesk(model: Model, wallZ: number): CFrame
 
 	local stack = block(model, "Pruebas", Vector3.new(2.6, 0.4, 2), topCF * CFrame.new(2.4, 0.35, 0), WHITE, Enum.Material.SmoothPlastic)
 	stack.CanCollide = false
-	local mug = block(model, "Taza", Vector3.new(0.9, 1, 0.9), topCF * CFrame.new(-2.8, 0.65, 0.4), Color3.fromRGB(158, 62, 58), Enum.Material.Ceramic)
+	local mug = block(model, "Taza", Vector3.new(0.9, 1, 0.9), topCF * CFrame.new(-2.8, 0.65, 0.4), Color3.fromRGB(158, 62, 58), Enum.Material.SmoothPlastic)
 	mug.Shape = Enum.PartType.Cylinder
 	mug.CFrame = topCF * CFrame.new(-2.8, 0.65, 0.4) * VERTICAL
 	mug.CanCollide = false
@@ -546,24 +546,45 @@ function ClassroomBuilder.build(parent: Instance): Classroom
 	local depth = backZ - frontZ
 	local center = Vector3.new(0, 0, (frontZ + backZ) / 2)
 
+	-- La envolvente y el pizarron son la base: si algo falla aca, falla
+	-- el aula y hay que enterarse.
 	buildShell(model, width, depth, center, frontZ, backZ, halfWidth)
 	buildWindowWall(model, halfWidth, frontZ, backZ, C.WallHeight, C.WallThickness)
-
 	local boardCF = buildBoard(model, frontZ, width)
-	buildTeacherDesk(model, frontZ)
-	buildCeilingLights(model, width, depth, center)
-	buildDoor(model, backZ, width)
 
-	-- Tres laminas sobre la pared ciega y nada mas. Menos es mas.
-	for index, spec in POSTERS do
-		local z = frontZ + 12 + (index - 1) * ((depth - 24) / math.max(1, #POSTERS - 1))
-		buildPoster(model, CFrame.new(-halfWidth + 0.58, 9, z) * CFrame.Angles(0, math.rad(-90), 0), spec)
+	-- De aca para abajo es decoracion. Cada pieza va en su propio pcall:
+	-- un mueble mal puesto no puede dejarte sin aula (ya paso una vez,
+	-- con un material que no existia).
+	local function decorate(name: string, build: () -> ())
+		local ok, err = pcall(build)
+		if not ok then
+			warn(string.format("[Aula] No se pudo construir %s: %s", name, tostring(err)))
+		end
 	end
-	buildClock(model, CFrame.new(0, 13.2, frontZ + 0.72) * CFrame.Angles(0, math.pi, 0))
 
-	-- Sacapuntas al lado de la puerta, detalle de aula real
-	block(model, "Sacapuntas", Vector3.new(0.8, 1, 0.7),
-		CFrame.new(width / 2 - 11, 6.5, backZ - 0.9), Color3.fromRGB(120, 124, 132), Enum.Material.Metal)
+	decorate("el escritorio del profesor", function()
+		buildTeacherDesk(model, frontZ)
+	end)
+	decorate("las luminarias", function()
+		buildCeilingLights(model, width, depth, center)
+	end)
+	decorate("la puerta", function()
+		buildDoor(model, backZ, width)
+	end)
+	decorate("las laminas", function()
+		-- Tres laminas sobre la pared ciega y nada mas. Menos es mas.
+		for index, spec in POSTERS do
+			local z = frontZ + 12 + (index - 1) * ((depth - 24) / math.max(1, #POSTERS - 1))
+			buildPoster(model, CFrame.new(-halfWidth + 0.58, 9, z) * CFrame.Angles(0, math.rad(-90), 0), spec)
+		end
+	end)
+	decorate("el reloj", function()
+		buildClock(model, CFrame.new(0, 13.2, frontZ + 0.72) * CFrame.Angles(0, math.pi, 0))
+	end)
+	decorate("el sacapuntas", function()
+		block(model, "Sacapuntas", Vector3.new(0.8, 1, 0.7),
+			CFrame.new(width / 2 - 11, 6.5, backZ - 0.9), Color3.fromRGB(120, 124, 132), Enum.Material.Metal)
+	end)
 
 	-- Grilla de pupitres
 	local desksFolder = Instance.new("Folder")

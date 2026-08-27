@@ -407,13 +407,28 @@ function MainMenu.mount()
 	})
 	refs.screen = screen
 
+	-- El aula tiene que verse atras: el velo es suave y solo se oscurece
+	-- del lado donde va el texto.
 	local scrim = el("Frame", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = Theme.Menu.Scrim,
-		BackgroundTransparency = 0.25,
+		BackgroundTransparency = 0.45,
 		BorderSizePixel = 0,
 	}, screen)
 	refs.scrim = scrim
+
+	local shade = el("Frame", {
+		Size = UDim2.fromScale(0.55, 1),
+		BackgroundColor3 = Theme.Menu.Scrim,
+		BorderSizePixel = 0,
+	}, scrim)
+	el("UIGradient", {
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.15),
+			NumberSequenceKeypoint.new(0.6, 0.55),
+			NumberSequenceKeypoint.new(1, 1),
+		}),
+	}, shade)
 
 	-- Columna izquierda: titulo y opciones
 	local left = el("Frame", {

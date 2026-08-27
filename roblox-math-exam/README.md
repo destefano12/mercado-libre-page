@@ -193,6 +193,22 @@ Si tocás el código y querés regenerar el lugar y los bundles:
 python3 tools/build_studio.py
 ```
 
+Antes de empaquetar corre `tools/check.py`, que atrapa lo que el compilador
+no ve (y que en Roblox se paga caro, porque revienta recién en runtime y te
+deja sin aula):
+
+```bash
+python3 tools/check.py
+```
+
+- Toda referencia a `Config` apunta a una clave que existe.
+- Todo `Enum.X.Y` es un valor real de Roblox — así se encontró un
+  `Enum.Material.Ceramic` que no existe (es `CeramicTiles`) y que tiraba abajo
+  el aula entera.
+- Ninguna propiedad de solo lectura se escribe desde un script (`Lighting.Technology`).
+- Toda clave de idioma usada está definida, y los tres idiomas tienen
+  exactamente las mismas claves.
+
 ### Opción C — Rojo (si vas a seguir programándolo)
 
 ```bash
@@ -245,7 +261,7 @@ cuando arranca el servidor).
 | "Infinite yield possible on ReplicatedStorage:WaitForChild(\"Shared\")" | La carpeta `Shared` no quedó en `ReplicatedStorage` o quedó con otro nombre. |
 | Se ve el aula pero no la hoja ni el HUD | El `Client` no quedó en `StarterPlayerScripts`. Fijate que sea un **LocalScript**, no un Script. |
 | No pasa nada de nada | El `Server` no quedó en `ServerScriptService`, o quedó *Disabled* (propiedad `Disabled` en false). |
-| **Aparezco en la nada, sin aula, y solo se ve el HUD** | El script del servidor se cortó con un error. Abrí **View → Output** en Studio y dale Play: la primera línea roja te dice en qué se cayó. Si arrancó bien vas a leer `[Aula] Aula construida.`, `[Aula] Profesor en el aula.` y `[Aula] Companeros sentados.` |
+| **Aparezco en la nada, sin aula, y solo se ve el HUD** | El script del servidor se cortó con un error. Abrí **View → Output** en Studio y dale Play: la primera línea roja te dice en qué se cayó. Si arrancó bien vas a leer `[Aula] Aula construida: 20 bancos.`, `[Aula] Profesor en el aula.` y `[Aula] Companeros sentados.` |
 | El profe no camina | Falta activar el pathfinding del lugar: normalmente no hace falta, pero revisá que el aula esté sobre terreno/piso y no flotando. |
 
 Para probar con más de un alumno: *Test* → *Clients and Servers* → 2 players →
@@ -358,7 +374,10 @@ mensaje enviado, respuesta y "te pillaron" y suenan solos.
   `Lighting → Technology`.
 - El arranque del servidor está por etapas y las partes cosméticas (profesor,
   compañeros, iluminación) van cada una en su `pcall`: si una falla, avisa por
-  el Output pero el aula y la prueba siguen en pie.
+  el Output pero el aula y la prueba siguen en pie. Adentro del aula pasa lo
+  mismo: la envolvente y el pizarrón son la base, y de ahí para abajo cada
+  mueble se construye aislado, así un adorno mal puesto no deja a nadie
+  flotando en el vacío.
 
 - El servidor es autoritativo en todo lo que importa: respuestas correctas,
   batería, sospecha y confiscación. El cliente sólo dibuja y pide.

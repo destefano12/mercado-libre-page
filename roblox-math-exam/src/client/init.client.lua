@@ -296,6 +296,9 @@ Hud.mount()
 Hud.setVisible(false)
 CameraRig.start()
 MainMenu.mount()
+-- El menu arranca con el aula girando de fondo, no con la camara del
+-- personaje detras de un panel oscuro.
+CameraRig.setMode("menu")
 
 Hud.onPrimary = primaryAction
 Hud.onStash = stashPhone

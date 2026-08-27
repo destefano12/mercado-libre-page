@@ -13,7 +13,10 @@ embebido (no hay que copiar y pegar nada a mano ni instalar Rojo):
     install/AulaClient.rbxmx         /
 """
 
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "src"
@@ -174,6 +177,15 @@ def build_place() -> Path:
 
 
 def main() -> None:
+    # Nada de empaquetar algo que no pasa los chequeos: un enum
+    # inventado o una clave de Config que no existe se ve recien en
+    # Roblox, y ahi te deja sin aula.
+    import check
+
+    if check.main() != 0:
+        raise SystemExit("hay problemas: no se empaqueta nada")
+
+    print()
     for target in [build_place()] + build_models():
         size = target.stat().st_size / 1024
         print(f"{target.relative_to(ROOT)}  ({size:.0f} KB)")
