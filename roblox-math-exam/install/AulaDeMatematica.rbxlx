@@ -579,6 +579,22 @@ local Config = {}
 Config.Classroom = {
 	Origin = CFrame.new(0, 0, 0),
 
+	-- ── Aula importada del catalogo ───────────────────────────
+	-- Si UseAsset esta en true, el juego usa este modelo de escenario
+	-- en vez de construir el aula por codigo. Si no lo puede bajar,
+	-- busca uno ya insertado en Workspace que se llame "AulaImportada"
+	-- (o que tenga "classroom" en el nombre). Si tampoco, construye la
+	-- suya y no pasa nada.
+	--
+	-- Los bancos se ubican por codigo adentro del modelo. Si quedan
+	-- mirando para el lado equivocado, girá AssetRotation de a 90.
+	UseAsset = true,
+	AssetId = 14664582891,
+	AssetRotation = 0,              -- grados: 0, 90, 180 o 270
+	AssetOffset = CFrame.new(0, 0, 20),
+	AssetGridInset = 0.62,          -- cuanto del aula ocupa la grilla de bancos
+	HideAssetFurniture = true,      -- saca los bancos que traiga el modelo
+
 	Rows = 5,              -- filas de bancos (de adelante hacia atras)
 	Columns = 4,           -- bancos por fila
 	DeskSpacingX = 8,      -- separacion entre columnas (pasillos)
@@ -2284,7 +2300,7 @@ return Util
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Script" referent="RBX24">
+    <Item class="Script" referent="RBX25">
       <Properties>
         <string name="Name">Server</string>
         <ProtectedString name="Source"><![CDATA[--!strict
@@ -2580,6 +2596,171 @@ print(string.format("[Aula] Listo: %d bancos, %d nodos de patrullaje, prueba de 
       </Properties>
       <Item class="ModuleScript" referent="RBX16">
         <Properties>
+          <string name="Name">ClassroomAsset</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	ClassroomAsset
+	------------------------------------------------------------------
+	Trae un aula del catalogo de Roblox y la usa de escenario, en lugar
+	de la que construye ClassroomBuilder por codigo.
+
+	Dos caminos, en este orden:
+
+		1. Si ya hay un modelo insertado en Workspace (por vos, desde el
+		   Toolbox), lo usa. Alcanza con que se llame "AulaImportada" o
+		   que tenga "classroom" o "aula" en el nombre.
+		2. Si no, lo pide con InsertService:LoadAsset(AssetId).
+
+	Si los dos fallan, devuelve nil y el juego construye el aula de
+	siempre. Nunca se queda sin aula.
+
+	Lo que no puede adivinar: donde estan el pizarron y el frente del
+	aula del modelo. Por eso los bancos se ubican con los numeros de
+	Config.Classroom (AssetRotation y AssetOffset): si quedan mirando
+	para el lado equivocado, se corrigen ahi y listo.
+--]]
+
+local InsertService = game:GetService("InsertService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+
+local ClassroomAsset = {}
+
+local C = Config.Classroom
+
+local function looksLikeClassroom(instance: Instance): boolean
+	if not instance:IsA("Model") or instance.Name == "Aula" then
+		return false
+	end
+	local name = string.lower(instance.Name)
+	return name == "aulaimportada"
+		or string.find(name, "classroom") ~= nil
+		or string.find(name, "aula") ~= nil
+end
+
+local function findInserted(): Model?
+	for _, instance in workspace:GetChildren() do
+		if looksLikeClassroom(instance) then
+			return instance :: Model
+		end
+	end
+	return nil
+end
+
+local function loadFromCatalog(): Model?
+	if C.AssetId == 0 then
+		return nil
+	end
+
+	local ok, result = pcall(function()
+		return InsertService:LoadAsset(C.AssetId)
+	end)
+	if not ok or not result then
+		warn(string.format(
+			"[Aula] No se pudo bajar el modelo %d: %s\n"
+				.. "       Insertalo a mano desde el Toolbox y llamalo \"AulaImportada\": "
+				.. "el juego lo va a usar igual.",
+			C.AssetId, tostring(result)))
+		return nil
+	end
+
+	-- LoadAsset devuelve un contenedor con el modelo adentro.
+	local model = result:FindFirstChildOfClass("Model")
+	if not model then
+		result:Destroy()
+		return nil
+	end
+	model.Parent = workspace
+	result:Destroy()
+	return model
+end
+
+--- Deja el modelo apoyado en el piso, centrado donde queremos y anclado.
+local function place(model: Model): Vector3
+	-- Todo anclado: un aula del catalogo puede venir con partes sueltas
+	-- que se desarman apenas arranca la fisica.
+	for _, descendant in model:GetDescendants() do
+		if descendant:IsA("BasePart") then
+			descendant.Anchored = true
+		end
+	end
+
+	-- Primero se gira, despues se mueve: al reves el giro corre la caja.
+	if C.AssetRotation ~= 0 then
+		model:PivotTo(model:GetPivot() * CFrame.Angles(0, math.rad(C.AssetRotation), 0))
+	end
+
+	local box, size = model:GetBoundingBox()
+	local goal = Vector3.new(C.AssetOffset.Position.X, size.Y / 2, C.AssetOffset.Position.Z)
+	model:PivotTo(model:GetPivot() + (goal - box.Position))
+
+	return size
+end
+
+--- Saca los bancos y sillas que traiga el modelo: los nuestros son los
+--- que tienen hoja, asiento y logica.
+local function clearFurniture(model: Model)
+	if not C.HideAssetFurniture then
+		return
+	end
+	local patterns = { "desk", "chair", "table", "stool", "seat", "banco", "silla", "pupitre", "mesa" }
+	for _, descendant in model:GetDescendants() do
+		local name = string.lower(descendant.Name)
+		for _, pattern in patterns do
+			if string.find(name, pattern) then
+				if descendant:IsA("Model") or descendant:IsA("BasePart") then
+					descendant:Destroy()
+				end
+				break
+			end
+		end
+	end
+end
+
+--- Devuelve el modelo ya puesto y su tamaño, o nil si no hay ninguno.
+function ClassroomAsset.load(): (Model?, Vector3?)
+	if not C.UseAsset then
+		return nil, nil
+	end
+
+	local model = findInserted()
+	local fromCatalog = false
+	if not model then
+		model = loadFromCatalog()
+		fromCatalog = true
+	end
+	if not model then
+		return nil, nil
+	end
+
+	model.Name = "AulaImportada"
+
+	local ok, size = pcall(function()
+		clearFurniture(model)
+		local dimensions = place(model)
+		return dimensions
+	end)
+	if not ok then
+		warn("[Aula] El modelo importado no se pudo acomodar: " .. tostring(size))
+		model:Destroy()
+		return nil, nil
+	end
+
+	print(string.format("[Aula] Usando el aula importada (%s), %.0f x %.0f studs.",
+		fromCatalog and "del catalogo" or "ya insertada",
+		(size :: Vector3).X, (size :: Vector3).Z))
+
+	return model, size :: Vector3
+end
+
+return ClassroomAsset
+]]></ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX17">
+        <Properties>
           <string name="Name">ClassroomBuilder</string>
           <ProtectedString name="Source"><![CDATA[--!strict
 --[[
@@ -2606,6 +2787,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Util = require(Shared:WaitForChild("Util"))
+
+local ClassroomAsset = require(script.Parent:WaitForChild("ClassroomAsset"))
 
 local ClassroomBuilder = {}
 
@@ -3113,6 +3296,89 @@ end
 -- Build
 -- ─────────────────────────────────────────────────────────────
 
+--- Reparte los bancos en una grilla y arma los nodos de patrullaje.
+--- Sirve igual para el aula construida por codigo que para una
+--- importada: lo unico que cambia es el rectangulo disponible.
+local function layoutDesks(model: Model, center: Vector3, spacingX: number, spacingZ: number)
+	local desksFolder = Instance.new("Folder")
+	desksFolder.Name = "Bancos"
+	desksFolder.Parent = model
+
+	local desks: { Desk } = {}
+	local index = 0
+	local firstRowZ = center.Z - (C.Rows - 1) / 2 * spacingZ
+
+	for row = 1, C.Rows do
+		for column = 1, C.Columns do
+			index += 1
+			local x = center.X + (column - (C.Columns + 1) / 2) * spacingX
+			local z = firstRowZ + (row - 1) * spacingZ
+			-- Un banco roto es un banco menos, no un aula menos.
+			local ok, desk = pcall(buildDesk, desksFolder, index, row, column, Vector3.new(x, 0, z))
+			if ok then
+				table.insert(desks, desk)
+			else
+				warn(string.format("[Aula] No se pudo construir el banco %d: %s", index, tostring(desk)))
+			end
+		end
+	end
+
+	-- Un pasillo entre cada par de columnas, mas los dos laterales.
+	local aisleX: { number } = {}
+	for column = 1, C.Columns - 1 do
+		table.insert(aisleX, center.X + (column - (C.Columns + 1) / 2 + 0.5) * spacingX)
+	end
+	table.insert(aisleX, center.X - C.Columns / 2 * spacingX)
+	table.insert(aisleX, center.X + C.Columns / 2 * spacingX)
+	table.sort(aisleX)
+
+	local patrolNodes: { CFrame } = {}
+	local frontLane = firstRowZ - spacingZ * 0.8
+	local backLane = firstRowZ + (C.Rows - 1) * spacingZ + spacingZ * 0.7
+	for i, x in aisleX do
+		local goingBack = i % 2 == 1
+		local startZ = goingBack and frontLane or backLane
+		local endZ = goingBack and backLane or frontLane
+		local steps = C.Rows + 1
+		for s = 0, steps do
+			local z = startZ + (endZ - startZ) * (s / steps)
+			table.insert(patrolNodes, CFrame.new(x, 0, z) * CFrame.Angles(0, goingBack and math.pi or 0, 0))
+		end
+	end
+
+	return desks, patrolNodes, frontLane
+end
+
+--- Aula importada del catalogo: el modelo pone el escenario y nosotros
+--- ponemos adentro los bancos, las hojas y el recorrido del profesor.
+local function buildFromAsset(model: Model, asset: Model, size: Vector3): Classroom?
+	local center = Vector3.new(C.AssetOffset.Position.X, 0, C.AssetOffset.Position.Z)
+	local usableX = size.X * C.AssetGridInset
+	local usableZ = size.Z * C.AssetGridInset
+
+	local spacingX = math.max(6.5, usableX / C.Columns)
+	local spacingZ = math.max(6.5, usableZ / C.Rows)
+
+	local desks, patrolNodes, frontLane = layoutDesks(model, center, spacingX, spacingZ)
+	if #desks == 0 then
+		return nil
+	end
+
+	model.Parent = workspace
+
+	return {
+		model = model,
+		desks = desks,
+		patrolNodes = patrolNodes,
+		boardStand = CFrame.new(center.X, 0, frontLane - 4),
+		teacherSpawn = CFrame.new(center.X - 6, 3, frontLane - 3) * CFrame.Angles(0, math.pi, 0),
+		studentSpawn = CFrame.new(center.X, 3, center.Z + usableZ / 2 + 4),
+		roomCenter = center,
+		width = size.X,
+		depth = size.Z,
+	}
+end
+
 function ClassroomBuilder.build(parent: Instance): Classroom
 	local existing = parent:FindFirstChild("Aula")
 	if existing then
@@ -3121,6 +3387,18 @@ function ClassroomBuilder.build(parent: Instance): Classroom
 
 	local model = Instance.new("Model")
 	model.Name = "Aula"
+
+	-- Si hay un aula del catalogo, ese es el escenario y nosotros solo
+	-- ponemos los bancos adentro.
+	local asset, assetSize = ClassroomAsset.load()
+	if asset and assetSize then
+		local ok, imported = pcall(buildFromAsset, model, asset, assetSize)
+		if ok and imported then
+			return imported
+		end
+		warn("[Aula] El aula importada no se pudo amueblar, se construye la de siempre: " .. tostring(imported))
+		asset:Destroy()
+	end
 
 	local lastRowZ = C.FirstRowOffsetZ + (C.Rows - 1) * C.DeskSpacingZ
 	local halfWidth = (C.Columns - 1) / 2 * C.DeskSpacingX + C.Padding
@@ -3183,50 +3461,11 @@ function ClassroomBuilder.build(parent: Instance): Classroom
 			CFrame.new(width / 2 - 11, 6.5, backZ - 0.9), Color3.fromRGB(120, 124, 132), Enum.Material.Metal)
 	end)
 
-	-- Grilla de pupitres
-	local desksFolder = Instance.new("Folder")
-	desksFolder.Name = "Bancos"
-	desksFolder.Parent = model
-
-	local desks: { Desk } = {}
-	local index = 0
-	for row = 1, C.Rows do
-		for column = 1, C.Columns do
-			index += 1
-			local x = (column - (C.Columns + 1) / 2) * C.DeskSpacingX
-			local z = C.FirstRowOffsetZ + (row - 1) * C.DeskSpacingZ
-			-- Un banco roto es un banco menos, no un aula menos.
-			local ok, desk = pcall(buildDesk, desksFolder, index, row, column, Vector3.new(x, 0, z))
-			if ok then
-				table.insert(desks, desk)
-			else
-				warn(string.format("[Aula] No se pudo construir el banco %d: %s", index, tostring(desk)))
-			end
-		end
-	end
-
-	-- Nodos de patrullaje: un pasillo entre cada par de columnas, mas los laterales.
-	local aisleX: { number } = {}
-	for column = 1, C.Columns - 1 do
-		table.insert(aisleX, (column - (C.Columns + 1) / 2 + 0.5) * C.DeskSpacingX)
-	end
-	table.insert(aisleX, -halfWidth + 4)
-	table.insert(aisleX, halfWidth - 4)
-	table.sort(aisleX)
-
-	local patrolNodes: { CFrame } = {}
-	local frontLane = C.FirstRowOffsetZ - 6
-	local backLane = lastRowZ + 5
-	for i, x in aisleX do
-		local goingBack = i % 2 == 1
-		local startZ = goingBack and frontLane or backLane
-		local endZ = goingBack and backLane or frontLane
-		local steps = C.Rows + 1
-		for s = 0, steps do
-			local z = startZ + (endZ - startZ) * (s / steps)
-			table.insert(patrolNodes, CFrame.new(x, 0, z) * CFrame.Angles(0, goingBack and math.pi or 0, 0))
-		end
-	end
+	-- Grilla de pupitres y recorrido del profesor: el mismo codigo que
+	-- usa el aula importada, para que los bancos se comporten igual
+	-- vengan de donde vengan.
+	local gridCenter = Vector3.new(0, 0, (C.FirstRowOffsetZ + lastRowZ) / 2)
+	local desks, patrolNodes = layoutDesks(model, gridCenter, C.DeskSpacingX, C.DeskSpacingZ)
 
 	model.Parent = parent
 
@@ -3247,7 +3486,7 @@ return ClassroomBuilder
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX17">
+      <Item class="ModuleScript" referent="RBX18">
         <Properties>
           <string name="Name">ExamService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -3584,7 +3823,7 @@ return ExamService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX18">
+      <Item class="ModuleScript" referent="RBX19">
         <Properties>
           <string name="Name">PhoneService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -3933,7 +4172,7 @@ return PhoneService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX19">
+      <Item class="ModuleScript" referent="RBX20">
         <Properties>
           <string name="Name">RoundService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -4251,7 +4490,7 @@ return RoundService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX20">
+      <Item class="ModuleScript" referent="RBX21">
         <Properties>
           <string name="Name">StudentNPCs</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -4742,7 +4981,7 @@ return StudentNPCs
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX21">
+      <Item class="ModuleScript" referent="RBX22">
         <Properties>
           <string name="Name">SuspicionService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -4947,7 +5186,7 @@ return SuspicionService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX22">
+      <Item class="ModuleScript" referent="RBX23">
         <Properties>
           <string name="Name">TeacherAI</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -5598,7 +5837,7 @@ return TeacherAI
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX23">
+      <Item class="ModuleScript" referent="RBX24">
         <Properties>
           <string name="Name">ToolService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -5774,15 +6013,15 @@ return ToolService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="RBX25">
+  <Item class="StarterPlayer" referent="RBX26">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="RBX26">
+    <Item class="StarterPlayerScripts" referent="RBX27">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="RBX33">
+      <Item class="LocalScript" referent="RBX34">
         <Properties>
           <string name="Name">Client</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -6354,7 +6593,7 @@ task.spawn(function()
 end)
 ]]></ProtectedString>
         </Properties>
-        <Item class="ModuleScript" referent="RBX27">
+        <Item class="ModuleScript" referent="RBX28">
           <Properties>
             <string name="Name">CameraRig</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -6504,7 +6743,7 @@ return CameraRig
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX28">
+        <Item class="ModuleScript" referent="RBX29">
           <Properties>
             <string name="Name">Hud</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -7072,7 +7311,7 @@ return Hud
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX29">
+        <Item class="ModuleScript" referent="RBX30">
           <Properties>
             <string name="Name">MainMenu</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -7623,7 +7862,7 @@ return MainMenu
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX30">
+        <Item class="ModuleScript" referent="RBX31">
           <Properties>
             <string name="Name">PaperUI</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -8099,7 +8338,7 @@ return PaperUI
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX31">
+        <Item class="ModuleScript" referent="RBX32">
           <Properties>
             <string name="Name">PhoneUI</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -8701,7 +8940,7 @@ return PhoneUI
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX32">
+        <Item class="ModuleScript" referent="RBX33">
           <Properties>
             <string name="Name">TeacherBubble</string>
             <ProtectedString name="Source"><![CDATA[--!strict

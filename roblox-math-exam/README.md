@@ -346,6 +346,33 @@ Para probar con más de un alumno: *Test* → *Clients and Servers* → 2 player
 
 ---
 
+## El aula importada del catálogo
+
+Por defecto el juego usa el aula `14664582891` del catálogo de Roblox como
+escenario y le pone adentro sus propios bancos, hojas y el recorrido del
+profesor. Va por dos caminos, en este orden:
+
+1. **Un modelo ya insertado**: si en `Workspace` hay un modelo llamado
+   `AulaImportada` (o con "classroom" en el nombre), usa ese. Es el camino
+   confiable: insertás el modelo desde el Toolbox de Studio, lo renombrás y
+   listo.
+2. **Bajarlo por código** con `InsertService:LoadAsset`. Funciona si el modelo
+   es libre; si Roblox no lo deja, avisa por el Output y sigue.
+
+Si los dos fallan, construye el aula de siempre. Nunca te quedás sin aula.
+
+Lo que el código **no puede adivinar** es dónde están el pizarrón y el frente
+del aula importada. Si los bancos quedan mirando para el lado equivocado, se
+arregla con un número en `Config.Classroom`:
+
+| Ajuste | Para qué |
+|---|---|
+| `AssetRotation` | girar el aula: 0, 90, 180 o 270 |
+| `AssetOffset` | moverla si quedó corrida |
+| `AssetGridInset` | cuánto del aula ocupan los bancos (0.62 = 62%) |
+| `HideAssetFurniture` | saca los bancos que traiga el modelo |
+| `UseAsset` | ponelo en `false` y vuelve el aula construida por código |
+
 ## Ajustes rápidos
 
 Todo en `src/shared/Config.lua`:

@@ -544,6 +544,22 @@ local Config = {}
 Config.Classroom = {
 	Origin = CFrame.new(0, 0, 0),
 
+	-- ── Aula importada del catalogo ───────────────────────────
+	-- Si UseAsset esta en true, el juego usa este modelo de escenario
+	-- en vez de construir el aula por codigo. Si no lo puede bajar,
+	-- busca uno ya insertado en Workspace que se llame "AulaImportada"
+	-- (o que tenga "classroom" en el nombre). Si tampoco, construye la
+	-- suya y no pasa nada.
+	--
+	-- Los bancos se ubican por codigo adentro del modelo. Si quedan
+	-- mirando para el lado equivocado, girá AssetRotation de a 90.
+	UseAsset = true,
+	AssetId = 14664582891,
+	AssetRotation = 0,              -- grados: 0, 90, 180 o 270
+	AssetOffset = CFrame.new(0, 0, 20),
+	AssetGridInset = 0.62,          -- cuanto del aula ocupa la grilla de bancos
+	HideAssetFurniture = true,      -- saca los bancos que traiga el modelo
+
 	Rows = 5,              -- filas de bancos (de adelante hacia atras)
 	Columns = 4,           -- bancos por fila
 	DeskSpacingX = 8,      -- separacion entre columnas (pasillos)

@@ -24,6 +24,8 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Util = require(Shared:WaitForChild("Util"))
 
+local ClassroomAsset = require(script.Parent:WaitForChild("ClassroomAsset"))
+
 local ClassroomBuilder = {}
 
 export type Desk = {
@@ -530,6 +532,89 @@ end
 -- Build
 -- ─────────────────────────────────────────────────────────────
 
+--- Reparte los bancos en una grilla y arma los nodos de patrullaje.
+--- Sirve igual para el aula construida por codigo que para una
+--- importada: lo unico que cambia es el rectangulo disponible.
+local function layoutDesks(model: Model, center: Vector3, spacingX: number, spacingZ: number)
+	local desksFolder = Instance.new("Folder")
+	desksFolder.Name = "Bancos"
+	desksFolder.Parent = model
+
+	local desks: { Desk } = {}
+	local index = 0
+	local firstRowZ = center.Z - (C.Rows - 1) / 2 * spacingZ
+
+	for row = 1, C.Rows do
+		for column = 1, C.Columns do
+			index += 1
+			local x = center.X + (column - (C.Columns + 1) / 2) * spacingX
+			local z = firstRowZ + (row - 1) * spacingZ
+			-- Un banco roto es un banco menos, no un aula menos.
+			local ok, desk = pcall(buildDesk, desksFolder, index, row, column, Vector3.new(x, 0, z))
+			if ok then
+				table.insert(desks, desk)
+			else
+				warn(string.format("[Aula] No se pudo construir el banco %d: %s", index, tostring(desk)))
+			end
+		end
+	end
+
+	-- Un pasillo entre cada par de columnas, mas los dos laterales.
+	local aisleX: { number } = {}
+	for column = 1, C.Columns - 1 do
+		table.insert(aisleX, center.X + (column - (C.Columns + 1) / 2 + 0.5) * spacingX)
+	end
+	table.insert(aisleX, center.X - C.Columns / 2 * spacingX)
+	table.insert(aisleX, center.X + C.Columns / 2 * spacingX)
+	table.sort(aisleX)
+
+	local patrolNodes: { CFrame } = {}
+	local frontLane = firstRowZ - spacingZ * 0.8
+	local backLane = firstRowZ + (C.Rows - 1) * spacingZ + spacingZ * 0.7
+	for i, x in aisleX do
+		local goingBack = i % 2 == 1
+		local startZ = goingBack and frontLane or backLane
+		local endZ = goingBack and backLane or frontLane
+		local steps = C.Rows + 1
+		for s = 0, steps do
+			local z = startZ + (endZ - startZ) * (s / steps)
+			table.insert(patrolNodes, CFrame.new(x, 0, z) * CFrame.Angles(0, goingBack and math.pi or 0, 0))
+		end
+	end
+
+	return desks, patrolNodes, frontLane
+end
+
+--- Aula importada del catalogo: el modelo pone el escenario y nosotros
+--- ponemos adentro los bancos, las hojas y el recorrido del profesor.
+local function buildFromAsset(model: Model, asset: Model, size: Vector3): Classroom?
+	local center = Vector3.new(C.AssetOffset.Position.X, 0, C.AssetOffset.Position.Z)
+	local usableX = size.X * C.AssetGridInset
+	local usableZ = size.Z * C.AssetGridInset
+
+	local spacingX = math.max(6.5, usableX / C.Columns)
+	local spacingZ = math.max(6.5, usableZ / C.Rows)
+
+	local desks, patrolNodes, frontLane = layoutDesks(model, center, spacingX, spacingZ)
+	if #desks == 0 then
+		return nil
+	end
+
+	model.Parent = workspace
+
+	return {
+		model = model,
+		desks = desks,
+		patrolNodes = patrolNodes,
+		boardStand = CFrame.new(center.X, 0, frontLane - 4),
+		teacherSpawn = CFrame.new(center.X - 6, 3, frontLane - 3) * CFrame.Angles(0, math.pi, 0),
+		studentSpawn = CFrame.new(center.X, 3, center.Z + usableZ / 2 + 4),
+		roomCenter = center,
+		width = size.X,
+		depth = size.Z,
+	}
+end
+
 function ClassroomBuilder.build(parent: Instance): Classroom
 	local existing = parent:FindFirstChild("Aula")
 	if existing then
@@ -538,6 +623,18 @@ function ClassroomBuilder.build(parent: Instance): Classroom
 
 	local model = Instance.new("Model")
 	model.Name = "Aula"
+
+	-- Si hay un aula del catalogo, ese es el escenario y nosotros solo
+	-- ponemos los bancos adentro.
+	local asset, assetSize = ClassroomAsset.load()
+	if asset and assetSize then
+		local ok, imported = pcall(buildFromAsset, model, asset, assetSize)
+		if ok and imported then
+			return imported
+		end
+		warn("[Aula] El aula importada no se pudo amueblar, se construye la de siempre: " .. tostring(imported))
+		asset:Destroy()
+	end
 
 	local lastRowZ = C.FirstRowOffsetZ + (C.Rows - 1) * C.DeskSpacingZ
 	local halfWidth = (C.Columns - 1) / 2 * C.DeskSpacingX + C.Padding
@@ -600,50 +697,11 @@ function ClassroomBuilder.build(parent: Instance): Classroom
 			CFrame.new(width / 2 - 11, 6.5, backZ - 0.9), Color3.fromRGB(120, 124, 132), Enum.Material.Metal)
 	end)
 
-	-- Grilla de pupitres
-	local desksFolder = Instance.new("Folder")
-	desksFolder.Name = "Bancos"
-	desksFolder.Parent = model
-
-	local desks: { Desk } = {}
-	local index = 0
-	for row = 1, C.Rows do
-		for column = 1, C.Columns do
-			index += 1
-			local x = (column - (C.Columns + 1) / 2) * C.DeskSpacingX
-			local z = C.FirstRowOffsetZ + (row - 1) * C.DeskSpacingZ
-			-- Un banco roto es un banco menos, no un aula menos.
-			local ok, desk = pcall(buildDesk, desksFolder, index, row, column, Vector3.new(x, 0, z))
-			if ok then
-				table.insert(desks, desk)
-			else
-				warn(string.format("[Aula] No se pudo construir el banco %d: %s", index, tostring(desk)))
-			end
-		end
-	end
-
-	-- Nodos de patrullaje: un pasillo entre cada par de columnas, mas los laterales.
-	local aisleX: { number } = {}
-	for column = 1, C.Columns - 1 do
-		table.insert(aisleX, (column - (C.Columns + 1) / 2 + 0.5) * C.DeskSpacingX)
-	end
-	table.insert(aisleX, -halfWidth + 4)
-	table.insert(aisleX, halfWidth - 4)
-	table.sort(aisleX)
-
-	local patrolNodes: { CFrame } = {}
-	local frontLane = C.FirstRowOffsetZ - 6
-	local backLane = lastRowZ + 5
-	for i, x in aisleX do
-		local goingBack = i % 2 == 1
-		local startZ = goingBack and frontLane or backLane
-		local endZ = goingBack and backLane or frontLane
-		local steps = C.Rows + 1
-		for s = 0, steps do
-			local z = startZ + (endZ - startZ) * (s / steps)
-			table.insert(patrolNodes, CFrame.new(x, 0, z) * CFrame.Angles(0, goingBack and math.pi or 0, 0))
-		end
-	end
+	-- Grilla de pupitres y recorrido del profesor: el mismo codigo que
+	-- usa el aula importada, para que los bancos se comporten igual
+	-- vengan de donde vengan.
+	local gridCenter = Vector3.new(0, 0, (C.FirstRowOffsetZ + lastRowZ) / 2)
+	local desks, patrolNodes = layoutDesks(model, gridCenter, C.DeskSpacingX, C.DeskSpacingZ)
 
 	model.Parent = parent
 
