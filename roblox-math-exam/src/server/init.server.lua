@@ -45,12 +45,40 @@ if baseplate and baseplate:IsA("BasePart") then
 	baseplate:Destroy()
 end
 
-local classroom = ClassroomBuilder.build(Workspace)
+-- Ultima red: aunque el constructor entero se caiga, el jugador tiene
+-- que caer parado en un piso y leer que paso, no flotar en la nada.
+local built, classroom = pcall(ClassroomBuilder.build, Workspace)
+if not built then
+	warn("[Aula] El aula no se pudo construir: " .. tostring(classroom))
+	local emergency = Instance.new("Model")
+	emergency.Name = "Aula"
+	local floor = Instance.new("Part")
+	floor.Name = "PisoEmergencia"
+	floor.Size = Vector3.new(120, 1, 120)
+	floor.CFrame = CFrame.new(0, -0.5, 24)
+	floor.Anchored = true
+	floor.Color = Color3.fromRGB(198, 196, 188)
+	floor.Parent = emergency
+	emergency.Parent = Workspace
 
--- Chequeo basico: si esto no se cumple, el aula no se construyo y no
--- tiene sentido seguir en silencio.
-assert(classroom and #classroom.desks > 0, "[Aula] El aula se construyo sin bancos")
-print(string.format("[Aula] Aula construida: %d bancos.", #classroom.desks))
+	classroom = {
+		model = emergency,
+		desks = {},
+		patrolNodes = {},
+		boardStand = CFrame.new(0, 0, 4),
+		teacherSpawn = CFrame.new(-11, 3, 6),
+		studentSpawn = CFrame.new(0, 3, 40),
+		roomCenter = Vector3.new(0, 0, 24),
+		width = 120,
+		depth = 120,
+	}
+end
+
+if #classroom.desks == 0 then
+	warn("[Aula] El aula quedo sin bancos: mirá las lineas de arriba en el Output.")
+else
+	print(string.format("[Aula] Aula construida: %d bancos.", #classroom.desks))
+end
 
 -- Spawn de los alumnos: adentro del aula, no en el vacio.
 local spawnLocation = Workspace:FindFirstChildOfClass("SpawnLocation")

@@ -296,13 +296,26 @@ end
 
 resolveLocale()
 
-Hud.mount()
-Hud.setVisible(false)
-CameraRig.start()
-MainMenu.mount()
--- El menu arranca con el aula girando de fondo, no con la camara del
--- personaje detras de un panel oscuro.
-CameraRig.setMode("menu")
+-- Cada pieza de interfaz se monta aislada: si una falla, el resto del
+-- juego (los controles, los remotes) tiene que seguir andando.
+local function safely(name: string, run: () -> ())
+	local ok, err = pcall(run)
+	if not ok then
+		warn(string.format("[Aula] Fallo %s: %s", name, tostring(err)))
+	end
+end
+
+safely("el HUD", function()
+	Hud.mount()
+	Hud.setVisible(false)
+end)
+safely("la camara", CameraRig.start)
+safely("el menu", function()
+	MainMenu.mount()
+	-- El menu arranca con el aula girando de fondo, no con la camara del
+	-- personaje detras de un panel oscuro.
+	CameraRig.setMode("menu")
+end)
 
 Hud.onPrimary = primaryAction
 Hud.onStash = stashPhone

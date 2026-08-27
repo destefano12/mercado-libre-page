@@ -546,21 +546,34 @@ function ClassroomBuilder.build(parent: Instance): Classroom
 	local depth = backZ - frontZ
 	local center = Vector3.new(0, 0, (frontZ + backZ) / 2)
 
-	-- La envolvente y el pizarron son la base: si algo falla aca, falla
-	-- el aula y hay que enterarse.
-	buildShell(model, width, depth, center, frontZ, backZ, halfWidth)
-	buildWindowWall(model, halfWidth, frontZ, backZ, C.WallHeight, C.WallThickness)
-	local boardCF = buildBoard(model, frontZ, width)
-
-	-- De aca para abajo es decoracion. Cada pieza va en su propio pcall:
-	-- un mueble mal puesto no puede dejarte sin aula (ya paso una vez,
-	-- con un material que no existia).
+	-- Todo se construye aislado. Ya paso dos veces que un detalle
+	-- cosmetico (un material que no existe, una propiedad de solo
+	-- lectura) tirara abajo el aula entera y dejara al jugador flotando
+	-- en el vacio sin ninguna pista. No vuelve a pasar: si una pieza
+	-- falla, avisa por el Output y el resto se construye igual.
 	local function decorate(name: string, build: () -> ())
 		local ok, err = pcall(build)
 		if not ok then
 			warn(string.format("[Aula] No se pudo construir %s: %s", name, tostring(err)))
 		end
+		return ok
 	end
+
+	local shellOk = decorate("la envolvente", function()
+		buildShell(model, width, depth, center, frontZ, backZ, halfWidth)
+		buildWindowWall(model, halfWidth, frontZ, backZ, C.WallHeight, C.WallThickness)
+	end)
+
+	if not shellOk then
+		-- Piso de emergencia: sin esto no hay donde pararse.
+		block(model, "PisoEmergencia", Vector3.new(width, 1, depth),
+			CFrame.new(center.X, -0.5, center.Z), C.FloorColor, Enum.Material.SmoothPlastic)
+	end
+
+	local boardCF = CFrame.new(0, 8, frontZ + 0.7) * CFrame.Angles(0, math.pi, 0)
+	decorate("el pizarron", function()
+		boardCF = buildBoard(model, frontZ, width)
+	end)
 
 	decorate("el escritorio del profesor", function()
 		buildTeacherDesk(model, frontZ)
@@ -598,7 +611,13 @@ function ClassroomBuilder.build(parent: Instance): Classroom
 			index += 1
 			local x = (column - (C.Columns + 1) / 2) * C.DeskSpacingX
 			local z = C.FirstRowOffsetZ + (row - 1) * C.DeskSpacingZ
-			desks[index] = buildDesk(desksFolder, index, row, column, Vector3.new(x, 0, z))
+			-- Un banco roto es un banco menos, no un aula menos.
+			local ok, desk = pcall(buildDesk, desksFolder, index, row, column, Vector3.new(x, 0, z))
+			if ok then
+				table.insert(desks, desk)
+			else
+				warn(string.format("[Aula] No se pudo construir el banco %d: %s", index, tostring(desk)))
+			end
 		end
 	end
 
