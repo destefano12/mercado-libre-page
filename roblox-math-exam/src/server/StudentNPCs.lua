@@ -103,6 +103,20 @@ local rng = Random.new(os.time())
 -- Rig sentado
 -- ─────────────────────────────────────────────────────────────
 
+--- Todos los companeros viven en una carpeta aparte: el profe la
+--- excluye del raycast, si no cualquier alumno adelante tuyo le tapa
+--- la vista y nunca te ve el celular.
+local function studentsFolder(): Instance
+	local existing = classroom.model:FindFirstChild("Companeros")
+	if existing then
+		return existing
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = "Companeros"
+	folder.Parent = classroom.model
+	return folder
+end
+
 local function piece(model: Model, name: string, size: Vector3, cf: CFrame, color: Color3, material: Enum.Material?): BasePart
 	return Util.part({
 		Name = name,
@@ -139,7 +153,23 @@ local function avatarTemplate(): Model?
 	return template
 end
 
-local SIT_ANIMATION = "rbxassetid://2506281703"
+-- Angulos de la pose de sentado, en grados. Girando +θ sobre X en el
+-- C0 de una articulacion, el miembro que cuelga de ella va hacia
+-- adelante; con -θ va hacia atras.
+local SITTING_POSE = {
+	Waist = -8,          -- apenas inclinado sobre la hoja
+	LeftHip = 78, RightHip = 78,        -- muslos horizontales
+	LeftKnee = -78, RightKnee = -78,    -- pantorrillas para abajo
+	LeftShoulder = 32, RightShoulder = 32,
+	LeftElbow = 48, RightElbow = 48,
+}
+
+local function poseJoint(model: Model, name: string, degrees: number)
+	local joint = model:FindFirstChild(name, true)
+	if joint and joint:IsA("Motor6D") then
+		joint.C0 = joint.C0 * CFrame.Angles(math.rad(degrees), 0, 0)
+	end
+end
 
 --- Alumno con avatar de Roblox: cuerpo real, sentado en el banco.
 local function buildAvatarStudent(desk: any, index: number): Student?
@@ -185,24 +215,20 @@ local function buildAvatarStudent(desk: any, index: number): Student?
 	humanoid.WalkSpeed = 0
 	humanoid.JumpPower = 0
 
-	model.Parent = classroom.model
-	model:PivotTo(desk.seat.CFrame * CFrame.new(0, 2.6, 0))
+	model.Parent = studentsFolder()
 
-	-- Sentarlo y ponerle la pose de sentado del propio Roblox
-	task.defer(function()
-		if desk.seat and humanoid.Parent then
-			desk.seat:Sit(humanoid)
-		end
-		local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator", humanoid)
-		pcall(function()
-			local animation = Instance.new("Animation")
-			animation.AnimationId = SIT_ANIMATION
-			local track = animator:LoadAnimation(animation)
-			track.Priority = Enum.AnimationPriority.Idle
-			track.Looped = true
-			track:Play()
-		end)
-	end)
+	-- Sentado a mano y anclado. Antes se usaba Seat:Sit() con la
+	-- animacion de sentarse de Roblox, y cuando la animacion no cargaba
+	-- quedaban parados flotando arriba de la silla.
+	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if root then
+		model:PivotTo(desk.seat.CFrame * CFrame.new(0, 0.62, 0.15))
+		root.Anchored = true
+	end
+	for joint, degrees in SITTING_POSE do
+		poseJoint(model, joint, degrees)
+	end
+	humanoid.PlatformStand = true
 
 	local neck = model:FindFirstChild("Neck", true)
 

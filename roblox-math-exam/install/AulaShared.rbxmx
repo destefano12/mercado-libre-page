@@ -1250,21 +1250,25 @@ local Config = require(script.Parent:WaitForChild("Config"))
 
 local PhoneModel = {}
 
+-- Ojo con el signo del angulo sobre X: girando +θ la pantalla se
+-- inclina hacia tu cara y la lente mira para abajo (que es donde esta
+-- la hoja). Con -θ pasa al reves y el celu le saca fotos al techo.
+
 -- Escondido abajo del banco, sobre las piernas.
 PhoneModel.HIDDEN_C0 = CFrame.new(0.75, -1.9, -0.75)
 	* CFrame.Angles(0, math.pi, 0)
-	* CFrame.Angles(math.rad(-70), 0, 0)
+	* CFrame.Angles(math.rad(70), 0, 0)
 
 -- Levantado a la altura del pecho, pantalla mirando al alumno.
-PhoneModel.RAISED_C0 = CFrame.new(0.55, 0.15, -1.35)
+PhoneModel.RAISED_C0 = CFrame.new(0.55, 0.35, -1.3)
 	* CFrame.Angles(0, math.pi, 0)
-	* CFrame.Angles(math.rad(-22), 0, 0)
+	* CFrame.Angles(math.rad(28), 0, 0)
 
 -- Apuntando a la hoja: el celu baja y se inclina para que la camara
 -- mire el banco. Antes disparabas con el celu mirando al techo.
-PhoneModel.AIM_C0 = CFrame.new(0.35, -0.35, -1.5)
+PhoneModel.AIM_C0 = CFrame.new(0.3, -0.15, -1.55)
 	* CFrame.Angles(0, math.pi, 0)
-	* CFrame.Angles(math.rad(-72), 0, 0)
+	* CFrame.Angles(math.rad(68), 0, 0)
 
 local function findHold(character: Model): BasePart?
 	return (character:FindFirstChild("HumanoidRootPart") :: BasePart?)
@@ -1279,13 +1283,16 @@ function PhoneModel.attach(character: Model): (Model?, Weld?, BasePart?)
 		return nil, nil, nil
 	end
 
-	local existing = character:FindFirstChild("Celular")
+	local existing = character:FindFirstChild("CelularEnMano")
 	if existing then
 		existing:Destroy()
 	end
 
+	-- No se puede llamar "Celular": asi se llama la Tool de la mochila,
+	-- y el cliente terminaba enganchando la Tool en vez de la pantalla
+	-- (por eso el celu se veia apagado).
 	local model = Instance.new("Model")
-	model.Name = "Celular"
+	model.Name = "CelularEnMano"
 
 	local body = Util.part({
 		Name = "Cuerpo",

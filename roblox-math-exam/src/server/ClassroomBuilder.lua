@@ -201,8 +201,8 @@ local function buildWindowWall(model: Model, wallX: number, zStart: number, zEnd
 
 		local light = Instance.new("SurfaceLight")
 		light.Face = Enum.NormalId.Left
-		light.Brightness = 1.5
-		light.Range = 30
+		light.Brightness = 0.8
+		light.Range = 22
 		light.Angle = 130
 		light.Color = Color3.fromRGB(255, 248, 232)
 		light.Parent = glass
@@ -321,8 +321,8 @@ local function buildCeilingLights(model: Model, width: number, depth: number, ce
 
 			local light = Instance.new("SurfaceLight")
 			light.Face = Enum.NormalId.Bottom
-			light.Brightness = 2.6
-			light.Range = 34
+			light.Brightness = 1.1
+			light.Range = 26
 			light.Angle = 160
 			light.Color = Color3.fromRGB(255, 251, 238)
 			light.Parent = diffuser
@@ -499,19 +499,35 @@ local function buildDesk(parent: Instance, index: number, row: number, column: n
 	seat.Parent = model
 
 	-- La hoja de la prueba, apoyada donde la tendrias vos
-	-- Vertical, como una hoja de prueba de verdad (no apaisada).
+	-- La hoja va parada en un atril, mirando al alumno. Acostada sobre
+	-- la tabla el canvas de la SurfaceGui se acomodaba apaisado por mas
+	-- que la parte fuera vertical; parada usa la misma orientacion que
+	-- el pizarron, que es la unica que se lee derecha seguro.
+	local paperCF = base
+		* CFrame.new(0, topY + 1.35, 0.55)
+		* CFrame.Angles(0, math.pi, 0)
+		* CFrame.Angles(math.rad(14), 0, 0)
+
 	local paper = Util.part({
 		Name = "HojaDePrueba",
-		Size = Vector3.new(2.1, 0.04, 3.3),
-		CFrame = base * CFrame.new(0, topY + 0.11, 0.25) * CFrame.Angles(0, math.rad(-2), 0),
+		Size = Vector3.new(2.2, 2.9, 0.05),
+		CFrame = paperCF,
 		Color = WHITE,
 		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
 		Parent = model,
 	})
 
+	-- Tablilla de apoyo, para que la hoja no flote
+	local board = block(model, "Tablilla", Vector3.new(2.45, 3.15, 0.1), paperCF * CFrame.new(0, -0.05, 0.06),
+		Color3.fromRGB(146, 112, 78), Enum.Material.Wood)
+	board.CanCollide = false
+	local clip = block(model, "Clip", Vector3.new(0.9, 0.2, 0.16), paperCF * CFrame.new(0, 1.45, 0.02),
+		Color3.fromRGB(176, 180, 188), Enum.Material.Metal)
+	clip.CanCollide = false
+
 	local pencil = block(model, "Lapiz", Vector3.new(0.12, 0.12, 1.2),
-		base * CFrame.new(1.65, topY + 0.14, -0.55) * CFrame.Angles(0, math.rad(16), 0),
+		base * CFrame.new(1.5, topY + 0.14, 0.35) * CFrame.Angles(0, math.rad(16), 0),
 		Color3.fromRGB(226, 178, 60), Enum.Material.SmoothPlastic)
 	pencil.CanCollide = false
 

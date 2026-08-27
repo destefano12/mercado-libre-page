@@ -370,6 +370,14 @@ function TeacherAI:canSee(position: Vector3, ignore: { Instance }?): (boolean, n
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	local filter: { Instance } = { self.model }
+
+	-- Los companeros no tapan: son escenografia. Sin esto, con el aula
+	-- llena cualquiera adelante tuyo te hace invisible y el profe nunca
+	-- te agarra el celular.
+	local classmates = self.classroom.model and self.classroom.model:FindFirstChild("Companeros")
+	if classmates then
+		table.insert(filter, classmates)
+	end
 	if ignore then
 		for _, instance in ignore do
 			table.insert(filter, instance)

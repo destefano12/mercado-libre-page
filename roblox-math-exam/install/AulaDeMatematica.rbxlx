@@ -1285,21 +1285,25 @@ local Config = require(script.Parent:WaitForChild("Config"))
 
 local PhoneModel = {}
 
+-- Ojo con el signo del angulo sobre X: girando +θ la pantalla se
+-- inclina hacia tu cara y la lente mira para abajo (que es donde esta
+-- la hoja). Con -θ pasa al reves y el celu le saca fotos al techo.
+
 -- Escondido abajo del banco, sobre las piernas.
 PhoneModel.HIDDEN_C0 = CFrame.new(0.75, -1.9, -0.75)
 	* CFrame.Angles(0, math.pi, 0)
-	* CFrame.Angles(math.rad(-70), 0, 0)
+	* CFrame.Angles(math.rad(70), 0, 0)
 
 -- Levantado a la altura del pecho, pantalla mirando al alumno.
-PhoneModel.RAISED_C0 = CFrame.new(0.55, 0.15, -1.35)
+PhoneModel.RAISED_C0 = CFrame.new(0.55, 0.35, -1.3)
 	* CFrame.Angles(0, math.pi, 0)
-	* CFrame.Angles(math.rad(-22), 0, 0)
+	* CFrame.Angles(math.rad(28), 0, 0)
 
 -- Apuntando a la hoja: el celu baja y se inclina para que la camara
 -- mire el banco. Antes disparabas con el celu mirando al techo.
-PhoneModel.AIM_C0 = CFrame.new(0.35, -0.35, -1.5)
+PhoneModel.AIM_C0 = CFrame.new(0.3, -0.15, -1.55)
 	* CFrame.Angles(0, math.pi, 0)
-	* CFrame.Angles(math.rad(-72), 0, 0)
+	* CFrame.Angles(math.rad(68), 0, 0)
 
 local function findHold(character: Model): BasePart?
 	return (character:FindFirstChild("HumanoidRootPart") :: BasePart?)
@@ -1314,13 +1318,16 @@ function PhoneModel.attach(character: Model): (Model?, Weld?, BasePart?)
 		return nil, nil, nil
 	end
 
-	local existing = character:FindFirstChild("Celular")
+	local existing = character:FindFirstChild("CelularEnMano")
 	if existing then
 		existing:Destroy()
 	end
 
+	-- No se puede llamar "Celular": asi se llama la Tool de la mochila,
+	-- y el cliente terminaba enganchando la Tool en vez de la pantalla
+	-- (por eso el celu se veia apagado).
 	local model = Instance.new("Model")
-	model.Name = "Celular"
+	model.Name = "CelularEnMano"
 
 	local body = Util.part({
 		Name = "Cuerpo",
@@ -2571,10 +2578,10 @@ RoundService.start(classroom, teacher)
 local ok, err = pcall(function()
 	-- Luz de aula, no de quirofano: el brillo fuerte de antes quemaba
 	-- todo apenas entrabas.
-	Lighting.Ambient = Color3.fromRGB(78, 80, 90)
-	Lighting.OutdoorAmbient = Color3.fromRGB(96, 100, 112)
-	Lighting.Brightness = 1.1
-	Lighting.ExposureCompensation = -0.15
+	Lighting.Ambient = Color3.fromRGB(72, 74, 84)
+	Lighting.OutdoorAmbient = Color3.fromRGB(88, 92, 102)
+	Lighting.Brightness = 0.9
+	Lighting.ExposureCompensation = -0.25
 	Lighting.ClockTime = 9.5
 	Lighting.GeographicLatitude = 41
 	Lighting.EnvironmentDiffuseScale = 0.45
@@ -2584,9 +2591,9 @@ local ok, err = pcall(function()
 
 	if not Lighting:FindFirstChildOfClass("Atmosphere") then
 		local atmosphere = Instance.new("Atmosphere")
-		atmosphere.Density = 0.28
-		atmosphere.Haze = 1.2
-		atmosphere.Glare = 0.15
+		atmosphere.Density = 0.22
+		atmosphere.Haze = 0.8
+		atmosphere.Glare = 0
 		atmosphere.Color = Color3.fromRGB(215, 220, 232)
 		atmosphere.Parent = Lighting
 	end
@@ -2635,14 +2642,39 @@ local ClassroomAsset = {}
 
 local C = Config.Classroom
 
+local function countParts(model: Model): number
+	local total = 0
+	for _, descendant in model:GetDescendants() do
+		if descendant:IsA("BasePart") then
+			total += 1
+		end
+	end
+	return total
+end
+
+--- Reconoce un aula insertada a mano, se llame como se llame. Por
+--- nombre primero, y si no, por forma: un modelo grande, con muchas
+--- partes y sin Humanoid es un edificio, no un personaje.
 local function looksLikeClassroom(instance: Instance): boolean
 	if not instance:IsA("Model") or instance.Name == "Aula" then
 		return false
 	end
+	if instance:FindFirstChildOfClass("Humanoid") then
+		return false
+	end
+
 	local name = string.lower(instance.Name)
-	return name == "aulaimportada"
-		or string.find(name, "classroom") ~= nil
-		or string.find(name, "aula") ~= nil
+	if name == "aulaimportada" or string.find(name, "classroom") or string.find(name, "aula") then
+		return true
+	end
+
+	if countParts(instance) < 20 then
+		return false
+	end
+	local ok, _, dimensions = pcall(function()
+		return instance:GetBoundingBox()
+	end)
+	return ok and dimensions ~= nil and dimensions.X >= 35 and dimensions.Z >= 35
 end
 
 local function findInserted(): Model?
@@ -2970,8 +3002,8 @@ local function buildWindowWall(model: Model, wallX: number, zStart: number, zEnd
 
 		local light = Instance.new("SurfaceLight")
 		light.Face = Enum.NormalId.Left
-		light.Brightness = 1.5
-		light.Range = 30
+		light.Brightness = 0.8
+		light.Range = 22
 		light.Angle = 130
 		light.Color = Color3.fromRGB(255, 248, 232)
 		light.Parent = glass
@@ -3090,8 +3122,8 @@ local function buildCeilingLights(model: Model, width: number, depth: number, ce
 
 			local light = Instance.new("SurfaceLight")
 			light.Face = Enum.NormalId.Bottom
-			light.Brightness = 2.6
-			light.Range = 34
+			light.Brightness = 1.1
+			light.Range = 26
 			light.Angle = 160
 			light.Color = Color3.fromRGB(255, 251, 238)
 			light.Parent = diffuser
@@ -3268,19 +3300,35 @@ local function buildDesk(parent: Instance, index: number, row: number, column: n
 	seat.Parent = model
 
 	-- La hoja de la prueba, apoyada donde la tendrias vos
-	-- Vertical, como una hoja de prueba de verdad (no apaisada).
+	-- La hoja va parada en un atril, mirando al alumno. Acostada sobre
+	-- la tabla el canvas de la SurfaceGui se acomodaba apaisado por mas
+	-- que la parte fuera vertical; parada usa la misma orientacion que
+	-- el pizarron, que es la unica que se lee derecha seguro.
+	local paperCF = base
+		* CFrame.new(0, topY + 1.35, 0.55)
+		* CFrame.Angles(0, math.pi, 0)
+		* CFrame.Angles(math.rad(14), 0, 0)
+
 	local paper = Util.part({
 		Name = "HojaDePrueba",
-		Size = Vector3.new(2.1, 0.04, 3.3),
-		CFrame = base * CFrame.new(0, topY + 0.11, 0.25) * CFrame.Angles(0, math.rad(-2), 0),
+		Size = Vector3.new(2.2, 2.9, 0.05),
+		CFrame = paperCF,
 		Color = WHITE,
 		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
 		Parent = model,
 	})
 
+	-- Tablilla de apoyo, para que la hoja no flote
+	local board = block(model, "Tablilla", Vector3.new(2.45, 3.15, 0.1), paperCF * CFrame.new(0, -0.05, 0.06),
+		Color3.fromRGB(146, 112, 78), Enum.Material.Wood)
+	board.CanCollide = false
+	local clip = block(model, "Clip", Vector3.new(0.9, 0.2, 0.16), paperCF * CFrame.new(0, 1.45, 0.02),
+		Color3.fromRGB(176, 180, 188), Enum.Material.Metal)
+	clip.CanCollide = false
+
 	local pencil = block(model, "Lapiz", Vector3.new(0.12, 0.12, 1.2),
-		base * CFrame.new(1.65, topY + 0.14, -0.55) * CFrame.Angles(0, math.rad(16), 0),
+		base * CFrame.new(1.5, topY + 0.14, 0.35) * CFrame.Angles(0, math.rad(16), 0),
 		Color3.fromRGB(226, 178, 60), Enum.Material.SmoothPlastic)
 	pencil.CanCollide = false
 
@@ -4643,6 +4691,20 @@ local rng = Random.new(os.time())
 -- Rig sentado
 -- ─────────────────────────────────────────────────────────────
 
+--- Todos los companeros viven en una carpeta aparte: el profe la
+--- excluye del raycast, si no cualquier alumno adelante tuyo le tapa
+--- la vista y nunca te ve el celular.
+local function studentsFolder(): Instance
+	local existing = classroom.model:FindFirstChild("Companeros")
+	if existing then
+		return existing
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = "Companeros"
+	folder.Parent = classroom.model
+	return folder
+end
+
 local function piece(model: Model, name: string, size: Vector3, cf: CFrame, color: Color3, material: Enum.Material?): BasePart
 	return Util.part({
 		Name = name,
@@ -4679,7 +4741,23 @@ local function avatarTemplate(): Model?
 	return template
 end
 
-local SIT_ANIMATION = "rbxassetid://2506281703"
+-- Angulos de la pose de sentado, en grados. Girando +θ sobre X en el
+-- C0 de una articulacion, el miembro que cuelga de ella va hacia
+-- adelante; con -θ va hacia atras.
+local SITTING_POSE = {
+	Waist = -8,          -- apenas inclinado sobre la hoja
+	LeftHip = 78, RightHip = 78,        -- muslos horizontales
+	LeftKnee = -78, RightKnee = -78,    -- pantorrillas para abajo
+	LeftShoulder = 32, RightShoulder = 32,
+	LeftElbow = 48, RightElbow = 48,
+}
+
+local function poseJoint(model: Model, name: string, degrees: number)
+	local joint = model:FindFirstChild(name, true)
+	if joint and joint:IsA("Motor6D") then
+		joint.C0 = joint.C0 * CFrame.Angles(math.rad(degrees), 0, 0)
+	end
+end
 
 --- Alumno con avatar de Roblox: cuerpo real, sentado en el banco.
 local function buildAvatarStudent(desk: any, index: number): Student?
@@ -4725,24 +4803,20 @@ local function buildAvatarStudent(desk: any, index: number): Student?
 	humanoid.WalkSpeed = 0
 	humanoid.JumpPower = 0
 
-	model.Parent = classroom.model
-	model:PivotTo(desk.seat.CFrame * CFrame.new(0, 2.6, 0))
+	model.Parent = studentsFolder()
 
-	-- Sentarlo y ponerle la pose de sentado del propio Roblox
-	task.defer(function()
-		if desk.seat and humanoid.Parent then
-			desk.seat:Sit(humanoid)
-		end
-		local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator", humanoid)
-		pcall(function()
-			local animation = Instance.new("Animation")
-			animation.AnimationId = SIT_ANIMATION
-			local track = animator:LoadAnimation(animation)
-			track.Priority = Enum.AnimationPriority.Idle
-			track.Looped = true
-			track:Play()
-		end)
-	end)
+	-- Sentado a mano y anclado. Antes se usaba Seat:Sit() con la
+	-- animacion de sentarse de Roblox, y cuando la animacion no cargaba
+	-- quedaban parados flotando arriba de la silla.
+	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if root then
+		model:PivotTo(desk.seat.CFrame * CFrame.new(0, 0.62, 0.15))
+		root.Anchored = true
+	end
+	for joint, degrees in SITTING_POSE do
+		poseJoint(model, joint, degrees)
+	end
+	humanoid.PlatformStand = true
 
 	local neck = model:FindFirstChild("Neck", true)
 
@@ -5606,6 +5680,14 @@ function TeacherAI:canSee(position: Vector3, ignore: { Instance }?): (boolean, n
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	local filter: { Instance } = { self.model }
+
+	-- Los companeros no tapan: son escenografia. Sin esto, con el aula
+	-- llena cualquiera adelante tuyo te hace invisible y el profe nunca
+	-- te agarra el celular.
+	local classmates = self.classroom.model and self.classroom.model:FindFirstChild("Companeros")
+	if classmates then
+		table.insert(filter, classmates)
+	end
 	if ignore then
 		for _, instance in ignore do
 			table.insert(filter, instance)
@@ -6179,7 +6261,7 @@ local function bindPaper()
 end
 
 local function bindPhone(character: Model)
-	local phone = character:FindFirstChild("Celular")
+	local phone = character:FindFirstChild("CelularEnMano")
 	local screen = phone and phone:FindFirstChild("Pantalla") :: BasePart?
 	if not screen or screen == state.screen then
 		return
@@ -6193,7 +6275,7 @@ end
 local function watchCharacter(character: Model)
 	bindPhone(character)
 	character.ChildAdded:Connect(function(child)
-		if child.Name == "Celular" then
+		if child.Name == "CelularEnMano" then
 			task.wait(0.1)
 			bindPhone(character)
 		end
@@ -6220,7 +6302,7 @@ local function watchCharacter(character: Model)
 	hookTools(character)
 
 	character.ChildRemoved:Connect(function(child)
-		if child.Name == "Celular" and child:IsA("Model") then
+		if child.Name == "CelularEnMano" then
 			state.screen = nil
 			CameraRig.setScreen(nil)
 			PhoneUI.destroy()
@@ -6826,6 +6908,7 @@ local phoneOut = false
 local hasPhoto = false
 local lastRisk = 0
 local lastDanger = false
+local flashToken = 0
 local confiscated = false
 
 local function el(className: string, props: { [string]: any }, parent: Instance?): any
@@ -7319,6 +7402,17 @@ function Hud.flash(text: string, color: Color3?)
 
 	TweenService:Create(refs.flash, TweenInfo.new(1.1), { BackgroundTransparency = 1 }):Play()
 	TweenService:Create(refs.flashText, TweenInfo.new(1.6), { TextTransparency = 1 }):Play()
+
+	-- Red de seguridad: si un tween se pisa con otro, el velo blanco se
+	-- puede quedar tapando la pantalla. Esto lo apaga si o si.
+	flashToken += 1
+	local mine = flashToken
+	task.delay(1.8, function()
+		if flashToken == mine and refs.flash then
+			refs.flash.BackgroundTransparency = 1
+			refs.flashText.TextTransparency = 1
+		end
+	end)
 end
 
 --- Se apaga entero mientras esta abierto el menu de inicio.
@@ -7398,7 +7492,7 @@ MainMenu.onLocaleChanged = nil :: (() -> ())?
 MainMenu.open = false
 
 MainMenu.settings = {
-	brightness = 0.5,
+	brightness = 0.32,
 	volume = 0.7,
 	locale = "auto",
 	names = true,
@@ -7426,7 +7520,9 @@ end
 local function applyBrightness()
 	-- Los cambios de Lighting hechos desde el cliente son locales:
 	-- cada uno ve el aula con el brillo que eligio.
-	Lighting.ExposureCompensation = -0.5 + MainMenu.settings.brightness * 1.6
+	-- Arranca en 0.32 = exposicion 0. Antes el valor por defecto sumaba
+	-- exposicion encima de la del servidor y quemaba el aula entera.
+	Lighting.ExposureCompensation = -0.5 + MainMenu.settings.brightness * 1.56
 end
 
 local function applyVolume()
@@ -7971,9 +8067,9 @@ function PaperUI.mount(paperPart: BasePart)
 	gui = el("SurfaceGui", {
 		Name = "HojaDePrueba",
 		Adornee = paperPart,
-		Face = Enum.NormalId.Top,
+		Face = Enum.NormalId.Front,
 		SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud,
-		PixelsPerStud = 300,
+		PixelsPerStud = 340,
 		LightInfluence = 0.2,
 		MaxDistance = 40,
 		Active = true,  -- sin esto los botones no se pueden clickear en 3D

@@ -263,10 +263,10 @@ RoundService.start(classroom, teacher)
 local ok, err = pcall(function()
 	-- Luz de aula, no de quirofano: el brillo fuerte de antes quemaba
 	-- todo apenas entrabas.
-	Lighting.Ambient = Color3.fromRGB(78, 80, 90)
-	Lighting.OutdoorAmbient = Color3.fromRGB(96, 100, 112)
-	Lighting.Brightness = 1.1
-	Lighting.ExposureCompensation = -0.15
+	Lighting.Ambient = Color3.fromRGB(72, 74, 84)
+	Lighting.OutdoorAmbient = Color3.fromRGB(88, 92, 102)
+	Lighting.Brightness = 0.9
+	Lighting.ExposureCompensation = -0.25
 	Lighting.ClockTime = 9.5
 	Lighting.GeographicLatitude = 41
 	Lighting.EnvironmentDiffuseScale = 0.45
@@ -276,9 +276,9 @@ local ok, err = pcall(function()
 
 	if not Lighting:FindFirstChildOfClass("Atmosphere") then
 		local atmosphere = Instance.new("Atmosphere")
-		atmosphere.Density = 0.28
-		atmosphere.Haze = 1.2
-		atmosphere.Glare = 0.15
+		atmosphere.Density = 0.22
+		atmosphere.Haze = 0.8
+		atmosphere.Glare = 0
 		atmosphere.Color = Color3.fromRGB(215, 220, 232)
 		atmosphere.Parent = Lighting
 	end

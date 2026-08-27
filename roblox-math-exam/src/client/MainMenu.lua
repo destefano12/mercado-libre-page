@@ -37,7 +37,7 @@ MainMenu.onLocaleChanged = nil :: (() -> ())?
 MainMenu.open = false
 
 MainMenu.settings = {
-	brightness = 0.5,
+	brightness = 0.32,
 	volume = 0.7,
 	locale = "auto",
 	names = true,
@@ -65,7 +65,9 @@ end
 local function applyBrightness()
 	-- Los cambios de Lighting hechos desde el cliente son locales:
 	-- cada uno ve el aula con el brillo que eligio.
-	Lighting.ExposureCompensation = -0.5 + MainMenu.settings.brightness * 1.6
+	-- Arranca en 0.32 = exposicion 0. Antes el valor por defecto sumaba
+	-- exposicion encima de la del servidor y quemaba el aula entera.
+	Lighting.ExposureCompensation = -0.5 + MainMenu.settings.brightness * 1.56
 end
 
 local function applyVolume()

@@ -33,6 +33,7 @@ local phoneOut = false
 local hasPhoto = false
 local lastRisk = 0
 local lastDanger = false
+local flashToken = 0
 local confiscated = false
 
 local function el(className: string, props: { [string]: any }, parent: Instance?): any
@@ -526,6 +527,17 @@ function Hud.flash(text: string, color: Color3?)
 
 	TweenService:Create(refs.flash, TweenInfo.new(1.1), { BackgroundTransparency = 1 }):Play()
 	TweenService:Create(refs.flashText, TweenInfo.new(1.6), { TextTransparency = 1 }):Play()
+
+	-- Red de seguridad: si un tween se pisa con otro, el velo blanco se
+	-- puede quedar tapando la pantalla. Esto lo apaga si o si.
+	flashToken += 1
+	local mine = flashToken
+	task.delay(1.8, function()
+		if flashToken == mine and refs.flash then
+			refs.flash.BackgroundTransparency = 1
+			refs.flashText.TextTransparency = 1
+		end
+	end)
 end
 
 --- Se apaga entero mientras esta abierto el menu de inicio.

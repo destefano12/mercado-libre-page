@@ -108,7 +108,7 @@ local function bindPaper()
 end
 
 local function bindPhone(character: Model)
-	local phone = character:FindFirstChild("Celular")
+	local phone = character:FindFirstChild("CelularEnMano")
 	local screen = phone and phone:FindFirstChild("Pantalla") :: BasePart?
 	if not screen or screen == state.screen then
 		return
@@ -122,7 +122,7 @@ end
 local function watchCharacter(character: Model)
 	bindPhone(character)
 	character.ChildAdded:Connect(function(child)
-		if child.Name == "Celular" then
+		if child.Name == "CelularEnMano" then
 			task.wait(0.1)
 			bindPhone(character)
 		end
@@ -149,7 +149,7 @@ local function watchCharacter(character: Model)
 	hookTools(character)
 
 	character.ChildRemoved:Connect(function(child)
-		if child.Name == "Celular" and child:IsA("Model") then
+		if child.Name == "CelularEnMano" then
 			state.screen = nil
 			CameraRig.setScreen(nil)
 			PhoneUI.destroy()

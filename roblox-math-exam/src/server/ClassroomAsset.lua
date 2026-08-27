@@ -31,14 +31,39 @@ local ClassroomAsset = {}
 
 local C = Config.Classroom
 
+local function countParts(model: Model): number
+	local total = 0
+	for _, descendant in model:GetDescendants() do
+		if descendant:IsA("BasePart") then
+			total += 1
+		end
+	end
+	return total
+end
+
+--- Reconoce un aula insertada a mano, se llame como se llame. Por
+--- nombre primero, y si no, por forma: un modelo grande, con muchas
+--- partes y sin Humanoid es un edificio, no un personaje.
 local function looksLikeClassroom(instance: Instance): boolean
 	if not instance:IsA("Model") or instance.Name == "Aula" then
 		return false
 	end
+	if instance:FindFirstChildOfClass("Humanoid") then
+		return false
+	end
+
 	local name = string.lower(instance.Name)
-	return name == "aulaimportada"
-		or string.find(name, "classroom") ~= nil
-		or string.find(name, "aula") ~= nil
+	if name == "aulaimportada" or string.find(name, "classroom") or string.find(name, "aula") then
+		return true
+	end
+
+	if countParts(instance) < 20 then
+		return false
+	end
+	local ok, _, dimensions = pcall(function()
+		return instance:GetBoundingBox()
+	end)
+	return ok and dimensions ~= nil and dimensions.X >= 35 and dimensions.Z >= 35
 end
 
 local function findInserted(): Model?

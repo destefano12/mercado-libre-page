@@ -59,9 +59,9 @@ function PaperUI.mount(paperPart: BasePart)
 	gui = el("SurfaceGui", {
 		Name = "HojaDePrueba",
 		Adornee = paperPart,
-		Face = Enum.NormalId.Top,
+		Face = Enum.NormalId.Front,
 		SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud,
-		PixelsPerStud = 300,
+		PixelsPerStud = 340,
 		LightInfluence = 0.2,
 		MaxDistance = 40,
 		Active = true,  -- sin esto los botones no se pueden clickear en 3D
