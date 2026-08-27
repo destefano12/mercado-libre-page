@@ -51,14 +51,30 @@ copiaste y cuántas veces te pillaron.
 
 ## Cómo pasarlo a Roblox Studio
 
-### Opción A — los archivos `.rbxmx` (3 clics, sin instalar nada) ✅
+### Opción A — un solo archivo: abrí el lugar y listo ✅
 
-En `install/` hay tres archivos que ya traen **todo el código adentro**. Studio
-los inserta directo, no hay que copiar y pegar nada.
+`install/AulaDeMatematica.rbxlx` es **el lugar entero**, con todo el código ya
+puesto en su servicio.
+
+1. Bajate ese archivo (en GitHub: entrás al archivo y *Download raw file*).
+2. Doble clic (o desde Studio: *File → Open from File…*).
+3. **Play** ▶.
+
+No hay nada que insertar, mover ni renombrar: ya está todo ordenado. Cuando lo
+quieras tener en tu cuenta, *File → Publish to Roblox As…*, le ponés nombre y
+queda subido como lugar tuyo.
+
+Ojo: es un lugar nuevo, así que usalo si arrancás de cero. Si querés meter el
+juego dentro de un lugar que **ya tenés armado**, usá la opción B.
+
+### Opción B — los tres `.rbxmx`, para meterlo en un lugar que ya tenés
+
+En `install/` hay tres archivos que traen **todo el código adentro**. Studio los
+inserta directo, no hay que copiar y pegar nada.
 
 1. Bajate los tres archivos de `install/` (en GitHub: entrás al archivo y
    *Download raw file*, o bajás el repo entero con *Code → Download ZIP*).
-2. Abrí Roblox Studio con un lugar nuevo (Baseplate).
+2. Abrí tu lugar en Roblox Studio.
 3. En el panel **Explorer**, clic derecho sobre cada servicio → **Insert from
    File…** y elegí el archivo que le corresponde:
 
@@ -94,13 +110,13 @@ No hace falta tocar el Lighting ni borrar el Baseplate: el propio juego
 configura la iluminación de interior al arrancar y saca el baseplate, porque
 queda a la misma altura que el piso del aula.
 
-Si tocás el código y querés regenerar los `.rbxmx`:
+Si tocás el código y querés regenerar el lugar y los bundles:
 
 ```bash
-python3 tools/build_rbxmx.py
+python3 tools/build_studio.py
 ```
 
-### Opción B — Rojo (si vas a seguir programándolo)
+### Opción C — Rojo (si vas a seguir programándolo)
 
 ```bash
 rojo serve default.project.json
@@ -109,7 +125,7 @@ rojo serve default.project.json
 Y conectás desde el plugin de Rojo en Studio. Es lo más cómodo para iterar:
 guardás el archivo en tu editor y Studio se actualiza solo.
 
-### Opción C — a mano
+### Opción D — a mano
 
 Creás la estructura de abajo y pegás el contenido de cada archivo. Los
 ModuleScripts van **adentro** del `Script` / `LocalScript`, no al lado.

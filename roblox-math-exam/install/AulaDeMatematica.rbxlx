@@ -1,0 +1,5532 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
+  <Item class="Workspace" referent="RBX1">
+    <Properties>
+      <string name="Name">Workspace</string>
+    </Properties>
+  </Item>
+  <Item class="Lighting" referent="RBX2">
+    <Properties>
+      <string name="Name">Lighting</string>
+    </Properties>
+  </Item>
+  <Item class="ReplicatedStorage" referent="RBX3">
+    <Properties>
+      <string name="Name">ReplicatedStorage</string>
+    </Properties>
+    <Item class="Folder" referent="RBX10">
+      <Properties>
+        <string name="Name">Shared</string>
+      </Properties>
+      <Item class="ModuleScript" referent="RBX4">
+        <Properties>
+          <string name="Name">Config</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Config
+	------------------------------------------------------------------
+	Todos los numeros que definen el "feeling" del juego viven aca.
+	Si queres que el profe sea mas duro, que la prueba sea mas larga o
+	que el celu tarde mas en responder, tocas SOLO este archivo.
+--]]
+
+export type RiskState = {
+	risk: number,      -- 0..1
+	seen: boolean,     -- el profe te tiene en su cono de vision
+	inspecting: boolean,
+	teacherState: string,
+}
+
+local Config = {}
+
+-- ─────────────────────────────────────────────────────────────
+-- AULA (todo se construye por codigo, en 3D, a escala real)
+-- ─────────────────────────────────────────────────────────────
+Config.Classroom = {
+	Origin = CFrame.new(0, 0, 0),
+
+	Rows = 4,              -- filas de bancos (de adelante hacia atras)
+	Columns = 3,           -- bancos por fila
+	DeskSpacingX = 9,      -- separacion entre columnas (pasillos)
+	DeskSpacingZ = 8,      -- separacion entre filas
+	FirstRowOffsetZ = 14,  -- distancia del pizarron a la primera fila
+
+	WallHeight = 16,
+	WallThickness = 1,
+	Padding = 12,          -- aire entre el ultimo banco y la pared del fondo
+
+	FloorMaterial = Enum.Material.WoodPlanks,
+	FloorColor = Color3.fromRGB(150, 118, 84),
+	WallMaterial = Enum.Material.Concrete,
+	WallColor = Color3.fromRGB(226, 222, 210),
+	TrimColor = Color3.fromRGB(72, 92, 110),
+}
+
+-- ─────────────────────────────────────────────────────────────
+-- PRUEBA
+-- ─────────────────────────────────────────────────────────────
+Config.Exam = {
+	QuestionCount = 8,
+	RoundDuration = 300,        -- segundos de prueba
+	IntermissionDuration = 20,  -- entre rondas
+	MaxGrade = 10,              -- escala 1..10
+	PassingGrade = 6,
+
+	-- Progresion de dificultad a lo largo de la prueba (indice -> dificultad)
+	DifficultyCurve = { 1, 1, 2, 2, 3, 3, 4, 4, 5, 5 },
+
+	PointsCorrect = 100,
+	PointsCorrectSolo = 160,    -- responder sin usar el celu vale mas
+	PointsWrong = -40,
+}
+
+-- ─────────────────────────────────────────────────────────────
+-- PROFESOR
+-- ─────────────────────────────────────────────────────────────
+Config.Teacher = {
+	DisplayName = "Prof. Battaglia",
+
+	WalkSpeed = 7.5,
+	ChaseSpeed = 13,
+
+	-- Vision
+	FieldOfView = 105,          -- grados totales del cono
+	ViewDistance = 46,
+	PeripheralFactor = 0.55,    -- cuanto "cuenta" lo que ve de reojo
+
+	-- Comportamiento
+	InspectChance = 0.55,       -- prob. de frenar en un banco al pasar
+	InspectDuration = NumberRange.new(2.5, 5.0),
+	BoardChance = 0.30,         -- prob. de irse al pizarron (ventana segura)
+	BoardDuration = NumberRange.new(6.0, 11.0),
+	IdleAtWaypoint = NumberRange.new(0.4, 1.6),
+	HeadTurnSpeed = 4.0,
+
+	-- Sospecha (0..1 por jugador)
+	RiskGainSeen = 0.42,        -- por segundo, celu visible y a la vista
+	RiskGainInspect = 0.85,     -- por segundo, ademas te esta revisando la prueba
+	RiskGainHidden = 0.05,      -- por segundo, celu afuera pero no te ve
+	RiskDecay = 0.22,           -- por segundo, celu guardado
+	RiskCaught = 1.0,
+	RiskWarning = 0.55,         -- desde aca el HUD se pone rojo
+}
+
+-- ─────────────────────────────────────────────────────────────
+-- CELULAR / RoGPT
+-- ─────────────────────────────────────────────────────────────
+Config.Phone = {
+	RaiseTime = 0.35,           -- tween de sacar el celu
+	PhotoCooldown = 2.0,
+	BatteryMax = 100,
+	BatteryPerPhoto = 8,
+	BatteryDrainPerSecond = 0.6,
+	BatteryRechargePerSecond = 1.4, -- se recarga guardado (bolsillo con powerbank, cero realismo)
+
+	ConfiscationTime = 35,      -- segundos sin celu despues de que te pillan
+
+	-- RoGPT "pensando"
+	UploadTime = NumberRange.new(0.6, 1.2),
+	ThinkTime = NumberRange.new(1.4, 2.8),
+	TypeSpeed = 55,             -- caracteres por segundo al escribir la respuesta
+	ModelName = "RoGPT-4o",
+	Greeting = "Hola. Mandame la foto del ejercicio y te lo resuelvo paso a paso.",
+}
+
+-- ─────────────────────────────────────────────────────────────
+-- CAMARA (todo el juego es 3D: la camara acompaña, no hay pantallas planas)
+-- ─────────────────────────────────────────────────────────────
+Config.Camera = {
+	DeskOffset = Vector3.new(0, 3.2, 5.4),   -- sobre el hombro, mirando la prueba
+	DeskLookOffset = Vector3.new(0, 1.1, 0),
+	PhoneOffset = Vector3.new(0.9, 2.4, 2.6),-- acercada al celu
+	BlendTime = 0.45,
+	FieldOfView = 68,
+	PhoneFieldOfView = 52,
+}
+
+-- Sonidos: dejalos vacios y no suena nada (sin warnings en consola).
+-- Pone tus propios rbxassetid cuando tengas los efectos subidos.
+Config.Sounds = {
+	Shutter = "",       -- click de la camara
+	Send = "",          -- mensaje enviado
+	Reply = "",         -- RoGPT contesta
+	Correct = "",       -- respuesta correcta
+	Wrong = "",         -- respuesta incorrecta
+	Caught = "",        -- te pillaron
+	PhoneOut = "",      -- roce de sacar el celular
+}
+
+Config.Penalty = {
+	GradePerCatch = 1.5,        -- puntos de nota que te descuenta cada vez que te pillan
+	MaxCatches = 3,             -- a la tercera te saca de la prueba
+}
+
+table.freeze(Config)
+return Config
+]]></ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX5">
+        <Properties>
+          <string name="Name">MathEngine</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	MathEngine
+	------------------------------------------------------------------
+	Genera los ejercicios de la prueba y, para cada uno, la resolucion
+	paso a paso que despues escupe RoGPT en la pantalla del celular.
+
+	Cada generador devuelve:
+		prompt      : el enunciado tal cual va impreso en la hoja
+		answer      : la respuesta correcta (texto)
+		distractors : errores tipicos (para las opciones)
+		steps       : { {title, body}, ... }  resolucion del "modelo"
+		topic       : etiqueta para el chat
+--]]
+
+export type Step = { title: string, body: string }
+
+export type Question = {
+	id: number,
+	topic: string,
+	prompt: string,
+	choices: { string },
+	answerIndex: number,
+	steps: { Step },
+	difficulty: number,
+}
+
+local MathEngine = {}
+
+-- ─────────────────────────────────────────────────────────────
+-- Helpers
+-- ─────────────────────────────────────────────────────────────
+
+local function gcd(a: number, b: number): number
+	a, b = math.abs(a), math.abs(b)
+	while b > 0 do
+		a, b = b, a % b
+	end
+	return a == 0 and 1 or a
+end
+
+local function frac(n: number, d: number): string
+	if d < 0 then
+		n, d = -n, -d
+	end
+	local g = gcd(n, d)
+	n, d = n // g, d // g
+	if d == 1 then
+		return tostring(n)
+	end
+	return string.format("%d/%d", n, d)
+end
+
+local function num(value: number): string
+	if math.abs(value - math.round(value)) < 1e-9 then
+		return tostring(math.round(value))
+	end
+	return (string.format("%.2f", value):gsub("%.?0+$", ""))
+end
+
+local function signed(value: number): string
+	return value >= 0 and ("+ " .. num(value)) or ("- " .. num(-value))
+end
+
+-- "+ 3x" / "- 3x" para escribir polinomios prolijos
+local function signedTerm(value: number, variable: string): string
+	local coefficient = math.abs(value)
+	local body = if coefficient == 1 then variable else num(coefficient) .. variable
+	return (value >= 0 and "+ " or "- ") .. body
+end
+
+-- "3x" / "-x" / "x": coeficiente al frente de una variable, sin el 1 de mas.
+local function term(value: number, variable: string): string
+	if value == 1 then
+		return variable
+	elseif value == -1 then
+		return "-" .. variable
+	end
+	return num(value) .. variable
+end
+
+local function shuffle(list: { any }, rng: Random)
+	for i = #list, 2, -1 do
+		local j = rng:NextInteger(1, i)
+		list[i], list[j] = list[j], list[i]
+	end
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Generadores por dificultad
+-- ─────────────────────────────────────────────────────────────
+
+type Raw = {
+	topic: string,
+	prompt: string,
+	answer: string,
+	distractors: { string },
+	steps: { Step },
+}
+
+local generators: { { (Random) -> Raw } } = {}
+
+-- Dificultad 1 ─ jerarquia de operaciones
+generators[1] = {
+	function(rng: Random): Raw
+		local a, b, c, d = rng:NextInteger(3, 12), rng:NextInteger(2, 9), rng:NextInteger(2, 9), rng:NextInteger(2, 12)
+		local result = a + b * c - d
+		return {
+			topic = "Jerarquia de operaciones",
+			prompt = string.format("Resolve: %d + %d x %d - %d", a, b, c, d),
+			answer = num(result),
+			distractors = { num((a + b) * c - d), num(a + b * (c - d)), num(result + b) },
+			steps = {
+				{ title = "1. Primero la multiplicacion",
+				  body = string.format("%d x %d = %d", b, c, b * c) },
+				{ title = "2. Ahora sumas y restas de izquierda a derecha",
+				  body = string.format("%d + %d - %d = %d", a, b * c, d, result) },
+				{ title = "3. Resultado",
+				  body = string.format("= %d", result) },
+			},
+		}
+	end,
+	function(rng: Random): Raw
+		local a, b, c = rng:NextInteger(2, 9), rng:NextInteger(2, 9), rng:NextInteger(2, 12)
+		local result = a * (b + c)
+		return {
+			topic = "Propiedad distributiva",
+			prompt = string.format("Resolve: %d x (%d + %d)", a, b, c),
+			answer = num(result),
+			distractors = { num(a * b + c), num(a + b * c), num(result - a) },
+			steps = {
+				{ title = "1. Resolves el parentesis",
+				  body = string.format("%d + %d = %d", b, c, b + c) },
+				{ title = "2. Multiplicas",
+				  body = string.format("%d x %d = %d", a, b + c, result) },
+				{ title = "3. Verificacion (distributiva)",
+				  body = string.format("%d x %d + %d x %d = %d + %d = %d", a, b, a, c, a * b, a * c, result) },
+			},
+		}
+	end,
+}
+
+-- Dificultad 2 ─ ecuacion lineal simple
+generators[2] = {
+	function(rng: Random): Raw
+		local a = rng:NextInteger(2, 9)
+		local x = rng:NextInteger(-8, 12)
+		local b = rng:NextInteger(-15, 15)
+		if b == 0 then
+			b = rng:NextInteger(3, 15)
+		end
+		local c = a * x + b
+		return {
+			topic = "Ecuacion de primer grado",
+			prompt = string.format("Despeja x:   %dx %s = %d", a, signed(b), c),
+			answer = string.format("x = %d", x),
+			distractors = {
+				string.format("x = %s", num((c + b) / a)),
+				string.format("x = %s", num(c - b)),
+				string.format("x = %s", num((c - b) / (a + 1))),
+			},
+			steps = {
+				{ title = "1. Pasas el termino independiente",
+				  body = string.format("%dx = %d %s", a, c, signed(-b)) },
+				{ title = "2. Te queda",
+				  body = string.format("%dx = %d", a, c - b) },
+				{ title = "3. Dividis por el coeficiente",
+				  body = string.format("x = %d / %d = %d", c - b, a, x) },
+				{ title = "4. Verificacion",
+				  body = string.format("%d x (%d) %s = %d ✓", a, x, signed(b), c) },
+			},
+		}
+	end,
+	function(rng: Random): Raw
+		local total = rng:NextInteger(4, 40) * 10
+		local pct = ({ 5, 10, 15, 20, 25, 30, 40, 50, 75 })[rng:NextInteger(1, 9)]
+		local result = total * pct / 100
+		return {
+			topic = "Porcentaje",
+			prompt = string.format("Cuanto es el %d%% de %d?", pct, total),
+			answer = num(result),
+			distractors = { num(total * pct / 10), num(total / pct), num(result + pct) },
+			steps = {
+				{ title = "1. El porcentaje es una fraccion sobre 100",
+				  body = string.format("%d%% = %d/100 = %s", pct, pct, num(pct / 100)) },
+				{ title = "2. Multiplicas por el total",
+				  body = string.format("%s x %d = %s", num(pct / 100), total, num(result)) },
+				{ title = "3. Resultado",
+				  body = string.format("El %d%% de %d es %s", pct, total, num(result)) },
+			},
+		}
+	end,
+}
+
+-- Dificultad 3 ─ fracciones y proporciones
+generators[3] = {
+	function(rng: Random): Raw
+		-- Fracciones propias: se leen mejor en la hoja.
+		local b, d = rng:NextInteger(2, 9), rng:NextInteger(2, 9)
+		local a, c = rng:NextInteger(1, b - 1), rng:NextInteger(1, d - 1)
+		local n, den = a * d + c * b, b * d
+		return {
+			topic = "Suma de fracciones",
+			prompt = string.format("Resolve:   %d/%d + %d/%d", a, b, c, d),
+			answer = frac(n, den),
+			distractors = { frac(a + c, b + d), frac(n + 1, den), frac(a * c, b * d) },
+			steps = {
+				{ title = "1. Denominador comun",
+				  body = string.format("%d x %d = %d", b, d, den) },
+				{ title = "2. Amplificas cada fraccion",
+				  body = string.format("%d/%d = %d/%d   y   %d/%d = %d/%d", a, b, a * d, den, c, d, c * b, den) },
+				{ title = "3. Sumas los numeradores",
+				  body = string.format("(%d + %d)/%d = %d/%d", a * d, c * b, den, n, den) },
+				{ title = "4. Simplificas",
+				  body = string.format("= %s", frac(n, den)) },
+			},
+		}
+	end,
+	function(rng: Random): Raw
+		local k = rng:NextInteger(2, 9)
+		local a = rng:NextInteger(2, 9)
+		local b = a * k
+		local c = rng:NextInteger(2, 12)
+		if c == a then
+			c += 1
+		end
+		local x = c * k
+		return {
+			topic = "Proporcionalidad",
+			prompt = string.format("Si %d/%d = %d/x, cuanto vale x?", a, b, c),
+			answer = string.format("x = %d", x),
+			distractors = {
+				string.format("x = %d", math.max(1, c - k)),
+				string.format("x = %d", a * c),
+				string.format("x = %d", b - c),
+			},
+			steps = {
+				{ title = "1. Multiplicacion cruzada",
+				  body = string.format("%d x x = %d x %d", a, b, c) },
+				{ title = "2. Te queda",
+				  body = string.format("%dx = %d", a, b * c) },
+				{ title = "3. Despejas",
+				  body = string.format("x = %d / %d = %d", b * c, a, x) },
+			},
+		}
+	end,
+}
+
+-- Dificultad 4 ─ ecuaciones con parentesis / sistemas 2x2
+generators[4] = {
+	function(rng: Random): Raw
+		local a, b = rng:NextInteger(2, 6), rng:NextInteger(1, 8)
+		local c = rng:NextInteger(2, 6)
+		if a == c then
+			c += 1
+		end
+		local x = rng:NextInteger(-6, 9)
+		-- a(x + b) = cx + k  ->  k = a*x + a*b - c*x
+		local k = a * x + a * b - c * x
+		local right = if k == 0 then string.format("%dx", c) else string.format("%dx %s", c, signed(k))
+		return {
+			topic = "Ecuacion con parentesis",
+			prompt = string.format("Despeja x:   %d(x + %d) = %s", a, b, right),
+			answer = string.format("x = %d", x),
+			distractors = {
+				string.format("x = %s", num((k + a * b) / (a - c))),
+				string.format("x = %s", num((k - a * b) / (a + c))),
+				string.format("x = %d", x + 2),
+			},
+			steps = {
+				{ title = "1. Distribuis el parentesis",
+				  body = string.format("%dx + %d = %s", a, a * b, right) },
+				{ title = "2. Agrupas las x de un lado",
+				  body = string.format("%dx - %dx = %d - %d", a, c, k, a * b) },
+				{ title = "3. Operas",
+				  body = string.format("%s = %d", term(a - c, "x"), k - a * b) },
+				{ title = "4. Despejas",
+				  body = string.format("x = %d / %d = %d", k - a * b, a - c, x) },
+			},
+		}
+	end,
+	function(rng: Random): Raw
+		local x, y = rng:NextInteger(1, 9), rng:NextInteger(1, 9)
+		local s = x + y
+		local a = rng:NextInteger(2, 5)
+		local d = a * x - y
+		return {
+			topic = "Sistema de ecuaciones 2x2",
+			prompt = string.format("x + y = %d ;  %dx - y = %d.  Cuanto vale x?", s, a, d),
+			answer = string.format("x = %d", x),
+			distractors = {
+				string.format("x = %d", y),
+				string.format("x = %d", math.max(1, s - a)),
+				string.format("x = %s", num(s / 2)),
+			},
+			steps = {
+				{ title = "1. Sumas las dos ecuaciones (se cancela y)",
+				  body = string.format("(x + y) + (%dx - y) = %d + %d", a, s, d) },
+				{ title = "2. Queda solo x",
+				  body = string.format("%dx = %d", 1 + a, s + d) },
+				{ title = "3. Despejas x",
+				  body = string.format("x = %d / %d = %d", s + d, 1 + a, x) },
+				{ title = "4. Y de yapa, y",
+				  body = string.format("y = %d - %d = %d", s, x, y) },
+			},
+		}
+	end,
+}
+
+-- Dificultad 5 ─ cuadraticas y Pitagoras
+generators[5] = {
+	function(rng: Random): Raw
+		local r1 = rng:NextInteger(-7, 7)
+		local r2 = rng:NextInteger(-7, 7)
+		if r2 == r1 then
+			r2 += 1
+		end
+		local b, c = -(r1 + r2), r1 * r2
+		local big = math.max(r1, r2)
+		return {
+			topic = "Ecuacion cuadratica",
+			prompt = string.format("x² %s %s = 0.  Cual es la raiz mayor?", signedTerm(b, "x"), signed(c)),
+			answer = string.format("x = %d", big),
+			distractors = {
+				string.format("x = %d", math.min(r1, r2)),
+				string.format("x = %d", -big),
+				string.format("x = %s", num(b / 2)),
+			},
+			steps = {
+				{ title = "1. Formula resolvente",
+				  body = string.format("x = (-b ± √(b² - 4ac)) / 2a,  con a = 1, b = %d, c = %d", b, c) },
+				{ title = "2. Discriminante",
+				  body = string.format("Δ = (%d)² - 4·1·(%d) = %d - %d = %d", b, c, b * b, 4 * c, b * b - 4 * c) },
+				{ title = "3. Raices",
+				  body = string.format("x = (%d ± %s) / 2  →  x₁ = %d,  x₂ = %d", -b, num(math.sqrt(b * b - 4 * c)), math.max(r1, r2), math.min(r1, r2)) },
+				{ title = "4. Te pide la mayor",
+				  body = string.format("x = %d", big) },
+			},
+		}
+	end,
+	function(rng: Random): Raw
+		local triples = { { 3, 4, 5 }, { 6, 8, 10 }, { 5, 12, 13 }, { 8, 15, 17 }, { 9, 12, 15 }, { 7, 24, 25 } }
+		local t = triples[rng:NextInteger(1, #triples)]
+		local a, b, c = t[1], t[2], t[3]
+		return {
+			topic = "Teorema de Pitagoras",
+			prompt = string.format("Un triangulo rectangulo tiene catetos de %d y %d cm. Cuanto mide la hipotenusa?", a, b),
+			answer = string.format("%d cm", c),
+			distractors = {
+				string.format("%d cm", a + b),
+				string.format("%d cm", c + 1),
+				string.format("%s cm", num(math.sqrt(math.abs(b * b - a * a)))),
+			},
+			steps = {
+				{ title = "1. Planteo",
+				  body = "h² = cateto₁² + cateto₂²" },
+				{ title = "2. Reemplazas",
+				  body = string.format("h² = %d² + %d² = %d + %d = %d", a, b, a * a, b * b, a * a + b * b) },
+				{ title = "3. Raiz cuadrada",
+				  body = string.format("h = √%d = %d", a * a + b * b, c) },
+				{ title = "4. Respuesta",
+				  body = string.format("La hipotenusa mide %d cm", c) },
+			},
+		}
+	end,
+}
+
+-- ─────────────────────────────────────────────────────────────
+-- API
+-- ─────────────────────────────────────────────────────────────
+
+--- Arma una pregunta unica y reproducible para una dificultad dada.
+function MathEngine.buildQuestion(id: number, difficulty: number, rng: Random): Question
+	difficulty = math.clamp(difficulty, 1, #generators)
+	local pool = generators[difficulty]
+	local raw = pool[rng:NextInteger(1, #pool)](rng)
+
+	-- Opciones: la correcta + 3 distractores unicos.
+	local choices = { raw.answer }
+	local used = { [raw.answer] = true }
+	for _, option in raw.distractors do
+		if not used[option] and #choices < 4 then
+			used[option] = true
+			table.insert(choices, option)
+		end
+	end
+	-- Relleno por si algun distractor colisiono con la respuesta correcta.
+	local fillers = { "Ninguna de las anteriores", "No se puede determinar", "Faltan datos" }
+	for _, option in fillers do
+		if #choices >= 4 then
+			break
+		end
+		if not used[option] then
+			used[option] = true
+			table.insert(choices, option)
+		end
+	end
+
+	shuffle(choices, rng)
+	local answerIndex = table.find(choices, raw.answer) or 1
+
+	return {
+		id = id,
+		topic = raw.topic,
+		prompt = raw.prompt,
+		choices = choices,
+		answerIndex = answerIndex,
+		steps = raw.steps,
+		difficulty = difficulty,
+	}
+end
+
+--- Prueba completa. El seed hace que la prueba sea igual para todos
+--- los alumnos de la ronda (asi tiene sentido copiarse, ojo).
+function MathEngine.buildExam(seed: number, count: number, curve: { number }): { Question }
+	local rng = Random.new(seed)
+	local exam = table.create(count)
+	for i = 1, count do
+		local difficulty = curve[math.min(i, #curve)] or 1
+		exam[i] = MathEngine.buildQuestion(i, difficulty, rng)
+	end
+	return exam
+end
+
+--- Version "publica" de una pregunta: sin la respuesta ni los pasos.
+function MathEngine.sanitize(question: Question)
+	return {
+		id = question.id,
+		topic = question.topic,
+		prompt = question.prompt,
+		choices = question.choices,
+		difficulty = question.difficulty,
+	}
+end
+
+return MathEngine
+]]></ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX6">
+        <Properties>
+          <string name="Name">Net</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Net
+	------------------------------------------------------------------
+	Creacion / acceso tipado a los remotes. El servidor llama Net.build()
+	una sola vez; el cliente usa Net.event() / Net.func() y espera solo.
+--]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Net = {}
+
+local FOLDER_NAME = "Net"
+
+Net.Events = {
+	RiskUpdate = "RiskUpdate",       -- S->C  estado de riesgo del jugador
+	ExamUpdate = "ExamUpdate",       -- S->C  estado completo de la prueba
+	RoundUpdate = "RoundUpdate",     -- S->C  fase / tiempo / nota
+	PhoneState = "PhoneState",       -- C->S  el jugador saco o guardo el celu
+	Notify = "Notify",               -- S->C  toast 3D ("te pillo", "aprobaste", ...)
+	Caught = "Caught",               -- S->C  el profe te agarro
+	TeacherSay = "TeacherSay",       -- S->C  dialogo del profe (burbuja 3D)
+}
+
+Net.Functions = {
+	SubmitAnswer = "SubmitAnswer",   -- C->S  responder una pregunta
+	TakePhoto = "TakePhoto",         -- C->S  sacar foto a la prueba
+	AskRoGPT = "AskRoGPT",           -- C->S  mandar la foto al chat
+	GetExam = "GetExam",             -- C->S  pedir el estado inicial
+}
+
+local function getFolder(): Folder
+	local existing = ReplicatedStorage:FindFirstChild(FOLDER_NAME)
+	if existing then
+		return existing :: Folder
+	end
+	if RunService:IsServer() then
+		local folder = Instance.new("Folder")
+		folder.Name = FOLDER_NAME
+		folder.Parent = ReplicatedStorage
+		return folder
+	end
+	return ReplicatedStorage:WaitForChild(FOLDER_NAME, 30) :: Folder
+end
+
+-- Solo servidor: crea todos los remotes declarados arriba.
+function Net.build()
+	assert(RunService:IsServer(), "Net.build() es solo del servidor")
+	local folder = getFolder()
+
+	for _, name in Net.Events do
+		if not folder:FindFirstChild(name) then
+			local remote = Instance.new("RemoteEvent")
+			remote.Name = name
+			remote.Parent = folder
+		end
+	end
+
+	for _, name in Net.Functions do
+		if not folder:FindFirstChild(name) then
+			local remote = Instance.new("RemoteFunction")
+			remote.Name = name
+			remote.Parent = folder
+		end
+	end
+end
+
+-- Cache: RiskUpdate se dispara ~10 veces por segundo por jugador,
+-- no tiene sentido buscar el remote en el arbol cada vez.
+local cache: { [string]: Instance } = {}
+
+local function lookup(name: string, className: string): Instance
+	local cached = cache[name]
+	if cached and cached.Parent then
+		return cached
+	end
+	local folder = getFolder()
+	local remote = folder:WaitForChild(name, 30)
+	assert(remote and remote:IsA(className), ("%s %q no existe"):format(className, name))
+	cache[name] = remote
+	return remote
+end
+
+function Net.event(name: string): RemoteEvent
+	return lookup(name, "RemoteEvent") :: RemoteEvent
+end
+
+function Net.func(name: string): RemoteFunction
+	return lookup(name, "RemoteFunction") :: RemoteFunction
+end
+
+return Net
+]]></ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX7">
+        <Properties>
+          <string name="Name">PhoneModel</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	PhoneModel
+	------------------------------------------------------------------
+	El celular, en 3D, soldado al cuerpo del alumno. Lo crea el servidor
+	(asi lo ven todos, incluido el que se copia al lado) y el cliente le
+	monta encima la interfaz de RoGPT sobre la parte "Pantalla".
+
+	El Weld tiene C0 animable: guardado va abajo del banco, "afuera"
+	sube a la altura del pecho. Ese tween es literalmente el gesto de
+	sacar el celular.
+--]]
+
+local TweenService = game:GetService("TweenService")
+
+local Util = require(script.Parent:WaitForChild("Util"))
+local Config = require(script.Parent:WaitForChild("Config"))
+
+local PhoneModel = {}
+
+-- Escondido abajo del banco, sobre las piernas.
+PhoneModel.HIDDEN_C0 = CFrame.new(0.75, -1.9, -0.75)
+	* CFrame.Angles(0, math.pi, 0)
+	* CFrame.Angles(math.rad(-70), 0, 0)
+
+-- Levantado a la altura del pecho, pantalla mirando al alumno.
+PhoneModel.RAISED_C0 = CFrame.new(0.55, 0.15, -1.35)
+	* CFrame.Angles(0, math.pi, 0)
+	* CFrame.Angles(math.rad(-22), 0, 0)
+
+local function findHold(character: Model): BasePart?
+	return (character:FindFirstChild("HumanoidRootPart") :: BasePart?)
+		or (character:FindFirstChild("UpperTorso") :: BasePart?)
+		or (character:FindFirstChild("Torso") :: BasePart?)
+end
+
+--- Construye el celular y lo suelda al personaje. Devuelve model, weld, pantalla.
+function PhoneModel.attach(character: Model): (Model?, Weld?, BasePart?)
+	local hold = findHold(character)
+	if not hold then
+		return nil, nil, nil
+	end
+
+	local existing = character:FindFirstChild("Celular")
+	if existing then
+		existing:Destroy()
+	end
+
+	local model = Instance.new("Model")
+	model.Name = "Celular"
+
+	local body = Util.part({
+		Name = "Cuerpo",
+		Size = Vector3.new(0.78, 1.58, 0.09),
+		Color = Color3.fromRGB(28, 30, 36),
+		Material = Enum.Material.Metal,
+		Anchored = false,
+		CanCollide = false,
+		CastShadow = false,
+		Parent = model,
+	})
+	body.CFrame = hold.CFrame * PhoneModel.HIDDEN_C0
+	body.Massless = true
+	model.PrimaryPart = body
+
+	local function piece(name: string, size: Vector3, offset: CFrame, color: Color3, material: Enum.Material, transparency: number?): BasePart
+		local part = Util.part({
+			Name = name,
+			Size = size,
+			CFrame = body.CFrame * offset,
+			Color = color,
+			Material = material,
+			Anchored = false,
+			CanCollide = false,
+			CastShadow = false,
+			Transparency = transparency or 0,
+			Parent = model,
+		})
+		part.Massless = true
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = body
+		weld.Part1 = part
+		weld.Parent = body
+		return part
+	end
+
+	-- Pantalla (la cara -Z del celular es la que mira al alumno)
+	local screen = piece("Pantalla", Vector3.new(0.72, 1.46, 0.02),
+		CFrame.new(0, 0.02, -0.05), Color3.fromRGB(10, 11, 14), Enum.Material.SmoothPlastic)
+
+	-- Marco, camara y detalles
+	piece("Marco", Vector3.new(0.82, 1.62, 0.06), CFrame.new(0, 0, 0.01),
+		Color3.fromRGB(52, 56, 66), Enum.Material.Metal)
+	local lens = piece("Camara", Vector3.new(0.16, 0.16, 0.04), CFrame.new(-0.22, 0.62, 0.06),
+		Color3.fromRGB(16, 18, 24), Enum.Material.Glass)
+	lens.Shape = Enum.PartType.Cylinder
+	lens.Orientation = Vector3.new(0, 90, 0)
+	piece("Flash", Vector3.new(0.09, 0.09, 0.03), CFrame.new(-0.02, 0.62, 0.06),
+		Color3.fromRGB(240, 236, 210), Enum.Material.Neon)
+	piece("BotonVolumen", Vector3.new(0.04, 0.34, 0.05), CFrame.new(0.42, 0.35, 0),
+		Color3.fromRGB(64, 68, 78), Enum.Material.Metal)
+
+	model.Parent = character
+
+	local weld = Instance.new("Weld")
+	weld.Name = "Sujecion"
+	weld.Part0 = hold
+	weld.Part1 = body
+	weld.C0 = PhoneModel.HIDDEN_C0
+	weld.Parent = body
+
+	return model, weld, screen
+end
+
+--- Anima el gesto de sacar / guardar el celular.
+function PhoneModel.setRaised(weld: Weld, raised: boolean)
+	local goal = raised and PhoneModel.RAISED_C0 or PhoneModel.HIDDEN_C0
+	TweenService:Create(weld, TweenInfo.new(Config.Phone.RaiseTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		C0 = goal,
+	}):Play()
+end
+
+return PhoneModel
+]]></ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX8">
+        <Properties>
+          <string name="Name">Theme</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Theme
+	------------------------------------------------------------------
+	Paleta unica para todo lo que se dibuja sobre superficies 3D
+	(hoja de la prueba, pantalla del celular, HUD de accion).
+--]]
+
+local Theme = {}
+
+Theme.Font = Enum.Font.GothamMedium
+Theme.FontBold = Enum.Font.GothamBold
+Theme.FontMono = Enum.Font.Code
+
+Theme.Paper = {
+	Background = Color3.fromRGB(250, 249, 244),
+	Ink = Color3.fromRGB(38, 42, 52),
+	InkSoft = Color3.fromRGB(108, 116, 130),
+	Line = Color3.fromRGB(206, 210, 219),
+	Accent = Color3.fromRGB(28, 96, 190),
+	Correct = Color3.fromRGB(31, 145, 84),
+	Wrong = Color3.fromRGB(196, 54, 54),
+}
+
+-- Pantalla del celular: interfaz de RoGPT (oscura, tipo app de chat)
+Theme.Phone = {
+	Background = Color3.fromRGB(16, 17, 21),
+	Surface = Color3.fromRGB(28, 30, 36),
+	SurfaceAlt = Color3.fromRGB(38, 41, 48),
+	Text = Color3.fromRGB(238, 240, 245),
+	TextSoft = Color3.fromRGB(150, 156, 168),
+	Accent = Color3.fromRGB(16, 163, 127),   -- verde "asistente"
+	User = Color3.fromRGB(45, 95, 210),
+	Danger = Color3.fromRGB(220, 66, 66),
+	Battery = Color3.fromRGB(94, 216, 130),
+}
+
+Theme.Hud = {
+	Safe = Color3.fromRGB(52, 199, 123),
+	Warn = Color3.fromRGB(240, 178, 52),
+	Danger = Color3.fromRGB(232, 62, 62),
+	Panel = Color3.fromRGB(18, 19, 24),
+	Text = Color3.fromRGB(240, 242, 247),
+}
+
+function Theme.riskColor(risk: number): Color3
+	if risk < 0.35 then
+		return Theme.Hud.Safe:Lerp(Theme.Hud.Warn, risk / 0.35)
+	end
+	return Theme.Hud.Warn:Lerp(Theme.Hud.Danger, math.clamp((risk - 0.35) / 0.65, 0, 1))
+end
+
+table.freeze(Theme)
+return Theme
+]]></ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX9">
+        <Properties>
+          <string name="Name">Util</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Util
+	------------------------------------------------------------------
+	Azucar para construir cosas en 3D y animarlas sin repetir 40 lineas
+	de Instance.new por cada mueble del aula.
+--]]
+
+local TweenService = game:GetService("TweenService")
+
+local Util = {}
+
+--- Instance.new + props + hijos, en una sola expresion.
+function Util.new(className: string, props: { [string]: any }?, children: { Instance }?): Instance
+	local instance = Instance.new(className)
+	if props then
+		local parent = props.Parent
+		for key, value in props do
+			if key ~= "Parent" then
+				(instance :: any)[key] = value
+			end
+		end
+		if children then
+			for _, child in children do
+				child.Parent = instance
+			end
+		end
+		if parent then
+			instance.Parent = parent
+		end
+	elseif children then
+		for _, child in children do
+			child.Parent = instance
+		end
+	end
+	return instance
+end
+
+--- Bloque solido estandar del aula: anclado, sin colisiones raras.
+function Util.part(props: { [string]: any }): BasePart
+	local part = Instance.new("Part")
+	part.Anchored = true
+	part.CanCollide = true
+	part.CastShadow = true
+	part.TopSurface = Enum.SurfaceType.Smooth
+	part.BottomSurface = Enum.SurfaceType.Smooth
+	part.Material = Enum.Material.SmoothPlastic
+	for key, value in props do
+		if key ~= "Parent" then
+			(part :: any)[key] = value
+		end
+	end
+	part.Parent = props.Parent
+	return part
+end
+
+--- Suelda una parte a otra manteniendo la posicion actual.
+function Util.weld(part0: BasePart, part1: BasePart): WeldConstraint
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = part0
+	weld.Part1 = part1
+	weld.Parent = part0
+	return weld
+end
+
+function Util.tween(instance: Instance, info: TweenInfo, goal: { [string]: any }): Tween
+	local tween = TweenService:Create(instance, info, goal)
+	tween:Play()
+	return tween
+end
+
+Util.ease = function(time: number, style: Enum.EasingStyle?, direction: Enum.EasingDirection?): TweenInfo
+	return TweenInfo.new(time, style or Enum.EasingStyle.Quint, direction or Enum.EasingDirection.Out)
+end
+
+--- Redondea esquinas + borde, para las UI que van sobre superficies 3D.
+function Util.roundify(gui: GuiObject, radius: number, strokeColor: Color3?, strokeThickness: number?)
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, radius)
+	corner.Parent = gui
+	if strokeColor then
+		local stroke = Instance.new("UIStroke")
+		stroke.Color = strokeColor
+		stroke.Thickness = strokeThickness or 2
+		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		stroke.Parent = gui
+	end
+end
+
+--- Etiqueta 3D flotante (BillboardGui) — usado para nombres y burbujas.
+function Util.billboard(adornee: BasePart, size: UDim2, offset: Vector3): BillboardGui
+	local billboard = Instance.new("BillboardGui")
+	billboard.Adornee = adornee
+	billboard.Size = size
+	billboard.StudsOffsetWorldSpace = offset
+	billboard.AlwaysOnTop = false
+	billboard.MaxDistance = 60
+	billboard.LightInfluence = 0
+	return billboard
+end
+
+--- Interpola angulos evitando el salto en ±180.
+function Util.lerpAngle(from: number, to: number, alpha: number): number
+	local delta = (to - from + math.pi) % (math.pi * 2) - math.pi
+	return from + delta * alpha
+end
+
+function Util.randomInRange(range: NumberRange, rng: Random?): number
+	local generator = rng or Random.new()
+	return generator:NextNumber(range.Min, range.Max)
+end
+
+--- Toca un sonido posicional y lo limpia solo.
+function Util.playSound(soundId: string, parent: Instance, volume: number?, speed: number?)
+	if soundId == "" then
+		return
+	end
+	local sound = Instance.new("Sound")
+	sound.SoundId = soundId
+	sound.Volume = volume or 0.5
+	sound.PlaybackSpeed = speed or 1
+	sound.RollOffMaxDistance = 80
+	sound.Parent = parent
+	sound:Play()
+	sound.Ended:Once(function()
+		sound:Destroy()
+	end)
+	task.delay(10, function()
+		if sound.Parent then
+			sound:Destroy()
+		end
+	end)
+end
+
+return Util
+]]></ProtectedString>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="ServerScriptService" referent="RBX11">
+    <Properties>
+      <string name="Name">ServerScriptService</string>
+    </Properties>
+    <Item class="Script" referent="RBX18">
+      <Properties>
+        <string name="Name">Server</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	SERVIDOR — punto de entrada
+	------------------------------------------------------------------
+	Con Rojo, esta carpeta se convierte en un Script llamado "Server"
+	dentro de ServerScriptService, y los demas archivos quedan como
+	ModuleScripts hijos de este Script.
+
+	Orden de arranque:
+		1. remotes
+		2. aula (todo el 3D)
+		3. servicios (prueba / celular / sospecha)
+		4. profesor
+		5. ronda
+--]]
+
+local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+
+Net.build()
+
+local ClassroomBuilder = require(script:WaitForChild("ClassroomBuilder"))
+local ExamService = require(script:WaitForChild("ExamService"))
+local PhoneService = require(script:WaitForChild("PhoneService"))
+local SuspicionService = require(script:WaitForChild("SuspicionService"))
+local RoundService = require(script:WaitForChild("RoundService"))
+local TeacherAI = require(script:WaitForChild("TeacherAI"))
+
+-- ─────────────────────────────────────────────────────────────
+-- 0. Escenario base
+-- ─────────────────────────────────────────────────────────────
+
+-- Iluminacion de interior. Se aplica por codigo para que el juego se
+-- vea igual venga de Rojo, del .rbxmx o de copiar y pegar a mano.
+local function applyLighting()
+	Lighting.Technology = Enum.Technology.ShadowMap
+	Lighting.Ambient = Color3.fromRGB(90, 92, 102)
+	Lighting.OutdoorAmbient = Color3.fromRGB(115, 120, 132)
+	Lighting.Brightness = 2.2
+	Lighting.ClockTime = 10.5
+	Lighting.GeographicLatitude = -34.6
+	Lighting.EnvironmentDiffuseScale = 0.6
+	Lighting.EnvironmentSpecularScale = 0.4
+	Lighting.GlobalShadows = true
+	Lighting.FogEnd = 400
+
+	if not Lighting:FindFirstChildOfClass("Atmosphere") then
+		local atmosphere = Instance.new("Atmosphere")
+		atmosphere.Density = 0.28
+		atmosphere.Haze = 1.2
+		atmosphere.Glare = 0.15
+		atmosphere.Color = Color3.fromRGB(215, 220, 232)
+		atmosphere.Parent = Lighting
+	end
+end
+
+applyLighting()
+
+-- El baseplate del lugar vacio queda a la misma altura que el piso del
+-- aula y pelean por el mismo pixel. El aula trae su propio piso.
+local baseplate = Workspace:FindFirstChild("Baseplate")
+if baseplate and baseplate:IsA("BasePart") then
+	baseplate:Destroy()
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- 1. Aula
+-- ─────────────────────────────────────────────────────────────
+
+local classroom = ClassroomBuilder.build(Workspace)
+
+-- Spawn de los alumnos: adentro del aula, no en el vacio.
+local spawnLocation = Workspace:FindFirstChildOfClass("SpawnLocation")
+if not spawnLocation then
+	spawnLocation = Instance.new("SpawnLocation")
+	spawnLocation.Parent = Workspace
+end
+spawnLocation.Name = "EntradaAula"
+spawnLocation.Size = Vector3.new(8, 1, 8)
+spawnLocation.CFrame = classroom.studentSpawn * CFrame.new(0, -2.4, 0)
+spawnLocation.Anchored = true
+spawnLocation.Transparency = 1
+spawnLocation.CanCollide = false
+spawnLocation.Neutral = true
+
+-- ─────────────────────────────────────────────────────────────
+-- 2. Servicios
+-- ─────────────────────────────────────────────────────────────
+
+ExamService.init(classroom)
+
+local teacher = TeacherAI.new(classroom, function(player)
+	RoundService.handleCatch(player)
+end)
+
+SuspicionService.init(teacher, function(player)
+	-- Riesgo al maximo: el profe deja lo que estaba haciendo y viene.
+	teacher:confront(player)
+end)
+
+SuspicionService.start()
+PhoneService.start()
+teacher:start()
+
+-- ─────────────────────────────────────────────────────────────
+-- 3. Remotes
+-- ─────────────────────────────────────────────────────────────
+
+Net.func(Net.Functions.GetExam).OnServerInvoke = function(player)
+	RoundService.pushTo(player)
+	return ExamService.snapshot(player)
+end
+
+Net.func(Net.Functions.SubmitAnswer).OnServerInvoke = function(player, questionId, choice)
+	if RoundService.getPhase() ~= "Prueba" then
+		return { ok = false, reason = "La prueba no esta en curso." }
+	end
+	return ExamService.submitAnswer(player, questionId, choice)
+end
+
+Net.func(Net.Functions.TakePhoto).OnServerInvoke = function(player, questionId)
+	if RoundService.getPhase() ~= "Prueba" then
+		return { ok = false, reason = "No hay nada para fotografiar todavia." }
+	end
+	return PhoneService.takePhoto(player, questionId)
+end
+
+Net.func(Net.Functions.AskRoGPT).OnServerInvoke = function(player, photoId)
+	return PhoneService.askRoGPT(player, photoId)
+end
+
+Net.event(Net.Events.PhoneState).OnServerEvent:Connect(function(player, out)
+	if typeof(out) ~= "boolean" then
+		return
+	end
+	if RoundService.getPhase() ~= "Prueba" then
+		PhoneService.setOut(player, false)
+		return
+	end
+	PhoneService.setOut(player, out)
+end)
+
+-- ─────────────────────────────────────────────────────────────
+-- 4. Jugadores
+-- ─────────────────────────────────────────────────────────────
+
+local function onPlayerAdded(player: Player)
+	RoundService.addPlayer(player)
+	player.CharacterAdded:Connect(function(character)
+		RoundService.onCharacter(player, character)
+	end)
+	if player.Character then
+		RoundService.onCharacter(player, player.Character)
+	end
+end
+
+Players.PlayerAdded:Connect(onPlayerAdded)
+for _, player in Players:GetPlayers() do
+	task.spawn(onPlayerAdded, player)
+end
+
+Players.PlayerRemoving:Connect(function(player)
+	PhoneService.reset(player)
+	SuspicionService.reset(player)
+end)
+
+-- ─────────────────────────────────────────────────────────────
+-- 5. Ronda
+-- ─────────────────────────────────────────────────────────────
+
+RoundService.start(classroom, teacher)
+
+print(string.format("[Aula] Listo: %d bancos, %d nodos de patrullaje, prueba de %d ejercicios.",
+	#classroom.desks, #classroom.patrolNodes, Config.Exam.QuestionCount))
+]]></ProtectedString>
+      </Properties>
+      <Item class="ModuleScript" referent="RBX12">
+        <Properties>
+          <string name="Name">ClassroomBuilder</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	ClassroomBuilder
+	------------------------------------------------------------------
+	Construye el aula entera por codigo: piso, paredes, ventanas,
+	luminarias, pizarron, escritorio del profe, y la grilla de bancos
+	con su silla, su hoja de prueba y su lugar para el celular.
+
+	Todo es 3D real y a escala de personaje (nada de planos ni sprites).
+	Devuelve las referencias que necesitan los demas servicios:
+	bancos, nodos de patrullaje, posicion del pizarron y spawn del profe.
+--]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local ClassroomBuilder = {}
+
+export type Desk = {
+	index: number,
+	row: number,
+	column: number,
+	model: Model,
+	seat: Seat,
+	paper: BasePart,
+	deskTop: BasePart,
+	position: Vector3,
+}
+
+export type Classroom = {
+	model: Model,
+	desks: { Desk },
+	patrolNodes: { CFrame },
+	boardStand: CFrame,
+	teacherSpawn: CFrame,
+	studentSpawn: CFrame,
+	roomCenter: Vector3,
+	width: number,
+	depth: number,
+}
+
+local C = Config.Classroom
+
+-- ─────────────────────────────────────────────────────────────
+-- Piezas basicas
+-- ─────────────────────────────────────────────────────────────
+
+local function block(parent: Instance, name: string, size: Vector3, cf: CFrame, color: Color3, material: Enum.Material): BasePart
+	return Util.part({
+		Name = name,
+		Size = size,
+		CFrame = cf,
+		Color = color,
+		Material = material,
+		Parent = parent,
+	})
+end
+
+local function buildFloorAndCeiling(model: Model, width: number, depth: number, center: Vector3)
+	local floor = block(model, "Piso", Vector3.new(width, 1, depth),
+		CFrame.new(center.X, -0.5, center.Z), C.FloorColor, C.FloorMaterial)
+	floor.TopSurface = Enum.SurfaceType.Smooth
+
+	-- Zocalo de goma alrededor del piso
+	block(model, "Ceiling", Vector3.new(width, 1, depth),
+		CFrame.new(center.X, C.WallHeight + 0.5, center.Z), Color3.fromRGB(240, 240, 236), Enum.Material.Plaster)
+end
+
+local function buildWall(model: Model, name: string, size: Vector3, cf: CFrame)
+	local wall = block(model, name, size, cf, C.WallColor, C.WallMaterial)
+	wall.CastShadow = true
+	return wall
+end
+
+local function buildWindowWall(model: Model, wallX: number, zStart: number, zEnd: number, height: number, thickness: number, facingSign: number)
+	-- Ventanal lateral: la pared se construye por segmentos para que los
+	-- huecos sean huecos de verdad (y entre luz natural al aula).
+	local windowWidth = 8
+	local windowHeight = 7
+	local sillHeight = 5
+	local count = 3
+	local span = zEnd - zStart
+	local step = span / (count + 1)
+	local frameColor = C.TrimColor
+
+	local centers: { number } = {}
+	for i = 1, count do
+		table.insert(centers, zStart + step * i)
+	end
+
+	-- Segmentos macizos entre ventanas (y en los extremos del muro)
+	local edges: { number } = { zStart }
+	for _, z in centers do
+		table.insert(edges, z - windowWidth / 2)
+		table.insert(edges, z + windowWidth / 2)
+	end
+	table.insert(edges, zEnd)
+
+	for i = 1, #edges - 1, 2 do
+		local a, b = edges[i], edges[i + 1]
+		if b - a > 0.05 then
+			buildWall(model, "ParedVentanal", Vector3.new(thickness, height, b - a),
+				CFrame.new(wallX, height / 2, (a + b) / 2))
+		end
+	end
+
+	for _, z in centers do
+		-- Antepecho y dintel del hueco
+		buildWall(model, "Antepecho", Vector3.new(thickness, sillHeight, windowWidth),
+			CFrame.new(wallX, sillHeight / 2, z))
+		local lintelHeight = height - (sillHeight + windowHeight)
+		if lintelHeight > 0.05 then
+			buildWall(model, "Dintel", Vector3.new(thickness, lintelHeight, windowWidth),
+				CFrame.new(wallX, height - lintelHeight / 2, z))
+		end
+
+		local frameCF = CFrame.new(wallX, sillHeight + windowHeight / 2, z)
+
+		local glass = block(model, "Vidrio", Vector3.new(0.35, windowHeight, windowWidth), frameCF,
+			Color3.fromRGB(198, 226, 240), Enum.Material.Glass)
+		glass.Transparency = 0.72
+		glass.Reflectance = 0.08
+		glass.CastShadow = false
+
+		block(model, "Marco", Vector3.new(0.6, 0.5, windowWidth + 0.6), frameCF * CFrame.new(0, windowHeight / 2, 0), frameColor, Enum.Material.Metal)
+		block(model, "Marco", Vector3.new(0.6, 0.5, windowWidth + 0.6), frameCF * CFrame.new(0, -windowHeight / 2, 0), frameColor, Enum.Material.Metal)
+		block(model, "Marco", Vector3.new(0.6, windowHeight, 0.5), frameCF * CFrame.new(0, 0, windowWidth / 2), frameColor, Enum.Material.Metal)
+		block(model, "Marco", Vector3.new(0.6, windowHeight, 0.5), frameCF * CFrame.new(0, 0, -windowWidth / 2), frameColor, Enum.Material.Metal)
+		block(model, "Cruceta", Vector3.new(0.45, windowHeight, 0.3), frameCF, frameColor, Enum.Material.Metal)
+
+		block(model, "Alfeizar", Vector3.new(1.8, 0.4, windowWidth + 1.4),
+			CFrame.new(wallX - facingSign * 0.7, sillHeight - 0.15, z), Color3.fromRGB(236, 234, 228), Enum.Material.Marble)
+
+		local light = Instance.new("SurfaceLight")
+		light.Face = facingSign > 0 and Enum.NormalId.Left or Enum.NormalId.Right
+		light.Brightness = 1.6
+		light.Range = 32
+		light.Angle = 120
+		light.Color = Color3.fromRGB(255, 246, 224)
+		light.Parent = glass
+	end
+end
+
+local function buildBoard(model: Model, wallZ: number, width: number): CFrame
+	local boardWidth = math.min(width - 12, 26)
+	-- Rotado 180°: la cara Front del pizarron mira a los alumnos (+Z global).
+	local boardCF = CFrame.new(0, 8, wallZ + 0.7) * CFrame.Angles(0, math.pi, 0)
+
+	block(model, "MarcoPizarron", Vector3.new(boardWidth + 1.2, 9.2, 0.5), boardCF,
+		Color3.fromRGB(96, 74, 52), Enum.Material.Wood)
+	local board = block(model, "Pizarron", Vector3.new(boardWidth, 8, 0.35), boardCF * CFrame.new(0, 0, -0.2),
+		Color3.fromRGB(26, 54, 42), Enum.Material.Slate)
+	board.Name = "Pizarron"
+
+	-- Bandeja de tizas
+	block(model, "BandejaTizas", Vector3.new(boardWidth, 0.35, 1),
+		boardCF * CFrame.new(0, -4.4, -0.5), Color3.fromRGB(120, 96, 68), Enum.Material.Wood)
+	for i = -2, 2 do
+		local chalk = block(model, "Tiza", Vector3.new(0.9, 0.22, 0.22),
+			boardCF * CFrame.new(i * 2.2, -4.05, -0.6), Color3.fromRGB(248, 248, 240), Enum.Material.Sand)
+		chalk.CanCollide = false
+		chalk.Shape = Enum.PartType.Cylinder
+		chalk.Orientation = Vector3.new(0, 0, 0)
+	end
+
+	-- Texto tizado: el enunciado general de la prueba
+	local surface = Instance.new("SurfaceGui")
+	surface.Name = "TextoPizarron"
+	surface.Face = Enum.NormalId.Front
+	surface.CanvasSize = Vector2.new(1000, 320)
+	surface.LightInfluence = 0.35
+	surface.Adornee = board
+	surface.Parent = board
+
+	local title = Instance.new("TextLabel")
+	title.Size = UDim2.fromScale(1, 0.42)
+	title.BackgroundTransparency = 1
+	title.Font = Enum.Font.PermanentMarker
+	title.Text = "EVALUACION DE MATEMATICA"
+	title.TextColor3 = Color3.fromRGB(238, 240, 232)
+	title.TextScaled = true
+	title.Parent = surface
+
+	local subtitle = Instance.new("TextLabel")
+	subtitle.Position = UDim2.fromScale(0, 0.44)
+	subtitle.Size = UDim2.fromScale(1, 0.3)
+	subtitle.BackgroundTransparency = 1
+	subtitle.Font = Enum.Font.PermanentMarker
+	subtitle.Text = "Prohibido el uso de celulares"
+	subtitle.TextColor3 = Color3.fromRGB(196, 214, 200)
+	subtitle.TextScaled = true
+	subtitle.Parent = surface
+
+	return boardCF
+end
+
+local function buildTeacherDesk(model: Model, wallZ: number): CFrame
+	local deskCF = CFrame.new(-9, 0, wallZ + 5)
+	local topCF = deskCF * CFrame.new(0, 3.1, 0)
+
+	block(model, "EscritorioProfe", Vector3.new(8, 0.35, 3.4), topCF, Color3.fromRGB(118, 88, 60), Enum.Material.Wood)
+	block(model, "FrenteEscritorio", Vector3.new(8, 2.6, 0.3), deskCF * CFrame.new(0, 1.6, -1.5),
+		Color3.fromRGB(104, 78, 54), Enum.Material.Wood)
+	for _, offset in { Vector3.new(-3.6, 0, 0), Vector3.new(3.6, 0, 0) } do
+		block(model, "PataEscritorio", Vector3.new(0.4, 3, 3.2), deskCF * CFrame.new(offset.X, 1.5, 0),
+			Color3.fromRGB(88, 66, 46), Enum.Material.Wood)
+	end
+
+	-- Pila de pruebas corregidas + mate del profe
+	for i = 1, 4 do
+		local sheet = block(model, "Pruebas", Vector3.new(2.4, 0.06, 1.8),
+			topCF * CFrame.new(2.2 + math.random() * 0.1, 0.2 + i * 0.07, math.random() * 0.1),
+			Color3.fromRGB(250, 248, 240), Enum.Material.SmoothPlastic)
+		sheet.CanCollide = false
+	end
+	local mate = block(model, "Mate", Vector3.new(1, 1.1, 1), topCF * CFrame.new(-2.6, 0.75, 0),
+		Color3.fromRGB(86, 62, 42), Enum.Material.Wood)
+	mate.Shape = Enum.PartType.Cylinder
+	mate.Orientation = Vector3.new(0, 0, 90)
+	mate.CanCollide = false
+
+	return deskCF
+end
+
+local function buildLighting(model: Model, width: number, depth: number, center: Vector3)
+	local rows, cols = 3, 2
+	for r = 1, rows do
+		for c = 1, cols do
+			local x = center.X + (c - (cols + 1) / 2) * (width / cols) * 0.7
+			local z = center.Z + (r - (rows + 1) / 2) * (depth / rows) * 0.72
+			local fixture = block(model, "Luminaria", Vector3.new(6, 0.4, 1.4),
+				CFrame.new(x, C.WallHeight - 0.6, z), Color3.fromRGB(238, 240, 245), Enum.Material.Metal)
+			fixture.CanCollide = false
+
+			local tube = block(model, "Tubo", Vector3.new(5.6, 0.25, 1),
+				CFrame.new(x, C.WallHeight - 0.9, z), Color3.fromRGB(255, 252, 240), Enum.Material.Neon)
+			tube.CanCollide = false
+			tube.CastShadow = false
+
+			local light = Instance.new("SurfaceLight")
+			light.Face = Enum.NormalId.Bottom
+			light.Brightness = 3
+			light.Range = 34
+			light.Angle = 150
+			light.Color = Color3.fromRGB(255, 250, 235)
+			light.Parent = tube
+		end
+	end
+end
+
+local function buildDoor(model: Model, wallZ: number, width: number): CFrame
+	local doorCF = CFrame.new(width / 2 - 6, 0, wallZ - 0.4)
+	block(model, "MarcoPuerta", Vector3.new(6.4, 10.4, 0.6), doorCF * CFrame.new(0, 5.2, 0),
+		C.TrimColor, Enum.Material.Wood)
+	local door = block(model, "Puerta", Vector3.new(5.6, 9.6, 0.3), doorCF * CFrame.new(0, 4.8, -0.2),
+		Color3.fromRGB(142, 104, 68), Enum.Material.Wood)
+	local knob = block(model, "Picaporte", Vector3.new(0.5, 0.5, 0.5), doorCF * CFrame.new(2.2, 4.6, -0.5),
+		Color3.fromRGB(205, 178, 96), Enum.Material.Metal)
+	knob.Shape = Enum.PartType.Ball
+	knob.CanCollide = false
+	door.CanCollide = true
+	return doorCF
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Banco del alumno
+-- ─────────────────────────────────────────────────────────────
+
+local function buildDesk(parent: Instance, index: number, row: number, column: number, position: Vector3): Desk
+	local model = Instance.new("Model")
+	model.Name = string.format("Banco_%02d", index)
+	model.Parent = parent
+
+	local base = CFrame.new(position)
+	local topHeight = 3.0
+
+	local deskTop = block(model, "Tabla", Vector3.new(4.6, 0.28, 2.8), base * CFrame.new(0, topHeight, 0),
+		Color3.fromRGB(196, 158, 108), Enum.Material.WoodPlanks)
+	block(model, "BordeTabla", Vector3.new(4.7, 0.12, 2.9), base * CFrame.new(0, topHeight - 0.2, 0),
+		Color3.fromRGB(70, 74, 82), Enum.Material.Metal)
+
+	for _, offset in { Vector3.new(-2, 0, -1.1), Vector3.new(2, 0, -1.1), Vector3.new(-2, 0, 1.1), Vector3.new(2, 0, 1.1) } do
+		local leg = block(model, "Pata", Vector3.new(0.22, topHeight, 0.22),
+			base * CFrame.new(offset.X, topHeight / 2, offset.Z), Color3.fromRGB(74, 78, 86), Enum.Material.Metal)
+		leg.CanCollide = false
+	end
+	-- Estante bajo la tabla (mochilas, y el celu escondido)
+	local shelf = block(model, "Estante", Vector3.new(4, 0.15, 2), base * CFrame.new(0, 1.2, 0.1),
+		Color3.fromRGB(150, 120, 84), Enum.Material.Wood)
+	shelf.CanCollide = false
+
+	-- Silla + Seat (el Seat es lo que engancha al jugador a su banco)
+	local chairBase = base * CFrame.new(0, 0, 2.6)
+	local seat = Instance.new("Seat")
+	seat.Name = "Asiento"
+	seat.Size = Vector3.new(2.6, 0.35, 2.4)
+	seat.CFrame = chairBase * CFrame.new(0, 2.1, 0)
+	seat.Anchored = true
+	seat.Color = Color3.fromRGB(58, 96, 156)
+	seat.Material = Enum.Material.Fabric
+	seat.TopSurface = Enum.SurfaceType.Smooth
+	seat.Parent = model
+
+	block(model, "Respaldo", Vector3.new(2.6, 2.4, 0.28), chairBase * CFrame.new(0, 3.3, 1.1),
+		Color3.fromRGB(58, 96, 156), Enum.Material.Fabric)
+	for _, offset in { Vector3.new(-1.1, 0, -1), Vector3.new(1.1, 0, -1), Vector3.new(-1.1, 0, 1), Vector3.new(1.1, 0, 1) } do
+		local leg = block(model, "PataSilla", Vector3.new(0.18, 2.1, 0.18),
+			chairBase * CFrame.new(offset.X, 1.05, offset.Z), Color3.fromRGB(74, 78, 86), Enum.Material.Metal)
+		leg.CanCollide = false
+	end
+
+	-- La hoja de la prueba: parte fisica sobre la tabla, con la UI
+	-- montada en su cara superior (la arma el cliente sobre este Adornee).
+	local paper = Util.part({
+		Name = "HojaDePrueba",
+		Size = Vector3.new(3.2, 0.05, 2.3),
+		CFrame = base * CFrame.new(0, topHeight + 0.17, 0.1) * CFrame.Angles(0, math.rad(-2), 0),
+		Color = Color3.fromRGB(250, 249, 244),
+		Material = Enum.Material.SmoothPlastic,
+		CanCollide = false,
+		Parent = model,
+	})
+
+	-- Lapicera al costado, puro detalle
+	local pen = Util.part({
+		Name = "Lapicera",
+		Size = Vector3.new(0.16, 0.16, 1.4),
+		CFrame = base * CFrame.new(1.75, topHeight + 0.22, -0.4) * CFrame.Angles(0, math.rad(18), math.rad(90)),
+		Color = Color3.fromRGB(32, 46, 120),
+		Material = Enum.Material.Plastic,
+		CanCollide = false,
+		Parent = model,
+	})
+	pen.Shape = Enum.PartType.Cylinder
+
+	model.PrimaryPart = deskTop
+
+	return {
+		index = index,
+		row = row,
+		column = column,
+		model = model,
+		seat = seat,
+		paper = paper,
+		deskTop = deskTop,
+		position = position,
+	}
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Build
+-- ─────────────────────────────────────────────────────────────
+
+function ClassroomBuilder.build(parent: Instance): Classroom
+	local existing = parent:FindFirstChild("Aula")
+	if existing then
+		existing:Destroy()
+	end
+
+	local model = Instance.new("Model")
+	model.Name = "Aula"
+
+	local lastRowZ = C.FirstRowOffsetZ + (C.Rows - 1) * C.DeskSpacingZ
+	local halfWidth = (C.Columns - 1) / 2 * C.DeskSpacingX + C.Padding
+	local frontZ = -3
+	local backZ = lastRowZ + C.Padding
+	local width = halfWidth * 2
+	local depth = backZ - frontZ
+	local center = Vector3.new(0, 0, (frontZ + backZ) / 2)
+
+	buildFloorAndCeiling(model, width, depth, center)
+
+	local h = C.WallHeight
+	local t = C.WallThickness
+	buildWall(model, "ParedFrente", Vector3.new(width, h, t), CFrame.new(0, h / 2, frontZ))
+	buildWall(model, "ParedFondo", Vector3.new(width, h, t), CFrame.new(0, h / 2, backZ))
+	buildWall(model, "ParedIzq", Vector3.new(t, h, depth), CFrame.new(-halfWidth, h / 2, center.Z))
+	buildWindowWall(model, halfWidth, frontZ, backZ, h, t, 1)
+
+	-- Zocalos
+	for _, spec in {
+		{ Vector3.new(width, 1.2, t + 0.3), CFrame.new(0, 0.6, frontZ) },
+		{ Vector3.new(width, 1.2, t + 0.3), CFrame.new(0, 0.6, backZ) },
+		{ Vector3.new(t + 0.3, 1.2, depth), CFrame.new(-halfWidth, 0.6, center.Z) },
+		{ Vector3.new(t + 0.3, 1.2, depth), CFrame.new(halfWidth, 0.6, center.Z) },
+	} do
+		block(model, "Zocalo", spec[1] :: Vector3, spec[2] :: CFrame, C.TrimColor, Enum.Material.Wood)
+	end
+
+	local boardCF = buildBoard(model, frontZ, width)
+	buildTeacherDesk(model, frontZ)
+	buildLighting(model, width, depth, center)
+	buildDoor(model, backZ, width)
+
+	-- Grilla de bancos
+	local desksFolder = Instance.new("Folder")
+	desksFolder.Name = "Bancos"
+	desksFolder.Parent = model
+
+	local desks: { Desk } = {}
+	local index = 0
+	for row = 1, C.Rows do
+		for column = 1, C.Columns do
+			index += 1
+			local x = (column - (C.Columns + 1) / 2) * C.DeskSpacingX
+			local z = C.FirstRowOffsetZ + (row - 1) * C.DeskSpacingZ
+			desks[index] = buildDesk(desksFolder, index, row, column, Vector3.new(x, 0, z))
+		end
+	end
+
+	-- Nodos de patrullaje: el profe recorre pasillo por pasillo.
+	-- Pasillos entre columnas + los dos laterales.
+	local aisleX: { number } = {}
+	for column = 1, C.Columns - 1 do
+		table.insert(aisleX, (column - (C.Columns + 1) / 2 + 0.5) * C.DeskSpacingX)
+	end
+	table.insert(aisleX, -halfWidth + 4.5)
+	table.insert(aisleX, halfWidth - 4.5)
+	table.sort(aisleX)
+
+	local patrolNodes: { CFrame } = {}
+	local frontLane = C.FirstRowOffsetZ - 6
+	local backLane = lastRowZ + 5
+	for i, x in aisleX do
+		local goingBack = i % 2 == 1
+		local startZ = goingBack and frontLane or backLane
+		local endZ = goingBack and backLane or frontLane
+		local steps = C.Rows + 1
+		for s = 0, steps do
+			local alpha = s / steps
+			local z = startZ + (endZ - startZ) * alpha
+			-- Mira hacia donde camina: +Z (hacia el fondo) o -Z (hacia el pizarron).
+			local facing = goingBack and math.pi or 0
+			table.insert(patrolNodes, CFrame.new(x, 0, z) * CFrame.Angles(0, facing, 0))
+		end
+	end
+
+	model.Parent = parent
+
+	return {
+		model = model,
+		desks = desks,
+		patrolNodes = patrolNodes,
+		boardStand = CFrame.new(boardCF.Position.X, 0, boardCF.Position.Z + 4),
+		teacherSpawn = CFrame.new(-9, 3, frontZ + 9) * CFrame.Angles(0, math.pi, 0),
+		studentSpawn = CFrame.new(0, 3, backZ - 6),
+		roomCenter = center,
+		width = width,
+		depth = depth,
+	}
+end
+
+return ClassroomBuilder
+]]></ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX13">
+        <Properties>
+          <string name="Name">ExamService</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	ExamService
+	------------------------------------------------------------------
+	Dueño de la prueba: genera el examen de la ronda (el mismo para
+	todos, si no copiarse no tendria gracia), reparte bancos, recibe
+	respuestas, lleva el puntaje y calcula la nota final.
+
+	Nunca manda al cliente la respuesta correcta: la hoja viaja
+	"sanitizada". La unica forma de ver la resolucion es el celular.
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local MathEngine = require(Shared:WaitForChild("MathEngine"))
+local Net = require(Shared:WaitForChild("Net"))
+
+local E = Config.Exam
+
+local ExamService = {}
+
+export type AnswerRecord = {
+	choice: number,
+	correct: boolean,
+	usedPhone: boolean,
+	at: number,
+}
+
+export type PlayerExam = {
+	player: Player,
+	desk: any,
+	answers: { [number]: AnswerRecord },
+	answered: number,
+	correct: number,
+	cheated: number,
+	catches: number,
+	points: number,
+	finished: boolean,
+	phoneUsedOn: { [number]: boolean },
+}
+
+local state = {
+	classroom = nil :: any,
+	questions = {} :: { MathEngine.Question },
+	publicQuestions = {} :: { any },
+	seed = 0,
+	players = {} :: { [Player]: PlayerExam },
+}
+
+-- ─────────────────────────────────────────────────────────────
+-- Ronda
+-- ─────────────────────────────────────────────────────────────
+
+function ExamService.init(classroom)
+	state.classroom = classroom
+end
+
+function ExamService.newRound(seed: number)
+	state.seed = seed
+	state.questions = MathEngine.buildExam(seed, E.QuestionCount, E.DifficultyCurve)
+	state.publicQuestions = {}
+	for index, question in state.questions do
+		state.publicQuestions[index] = MathEngine.sanitize(question)
+	end
+
+	for player in state.players do
+		ExamService.resetPlayer(player)
+	end
+end
+
+function ExamService.getPublicExam()
+	return state.publicQuestions
+end
+
+function ExamService.getQuestion(id: number): MathEngine.Question?
+	return state.questions[id]
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Jugadores
+-- ─────────────────────────────────────────────────────────────
+
+local function freeDesk(): any
+	if not state.classroom then
+		return nil
+	end
+	local taken: { [any]: boolean } = {}
+	for _, entry in state.players do
+		if entry.desk then
+			taken[entry.desk] = true
+		end
+	end
+	for _, desk in state.classroom.desks do
+		if not taken[desk] then
+			return desk
+		end
+	end
+	return nil
+end
+
+function ExamService.addPlayer(player: Player): PlayerExam
+	local desk = freeDesk()
+	local entry: PlayerExam = {
+		player = player,
+		desk = desk,
+		answers = {},
+		answered = 0,
+		correct = 0,
+		cheated = 0,
+		catches = 0,
+		points = 0,
+		finished = false,
+		phoneUsedOn = {},
+	}
+	state.players[player] = entry
+
+	if desk then
+		desk.paper:SetAttribute("OwnerUserId", player.UserId)
+		desk.seat:SetAttribute("OwnerUserId", player.UserId)
+	end
+
+	return entry
+end
+
+function ExamService.removePlayer(player: Player)
+	local entry = state.players[player]
+	if entry and entry.desk then
+		entry.desk.paper:SetAttribute("OwnerUserId", 0)
+		entry.desk.seat:SetAttribute("OwnerUserId", 0)
+	end
+	state.players[player] = nil
+end
+
+function ExamService.get(player: Player): PlayerExam?
+	return state.players[player]
+end
+
+function ExamService.resetPlayer(player: Player)
+	local entry = state.players[player]
+	if not entry then
+		return
+	end
+	entry.answers = {}
+	entry.answered = 0
+	entry.correct = 0
+	entry.cheated = 0
+	entry.catches = 0
+	entry.points = 0
+	entry.finished = false
+	entry.phoneUsedOn = {}
+	ExamService.push(player)
+end
+
+--- Sienta al jugador en su banco y lo deja listo para rendir.
+function ExamService.seatPlayer(player: Player)
+	local entry = state.players[player]
+	if not entry or not entry.desk then
+		return
+	end
+	local character = player.Character
+	if not character then
+		return
+	end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then
+		return
+	end
+	character:PivotTo(entry.desk.seat.CFrame * CFrame.new(0, 3, 0))
+	task.wait(0.1)
+	entry.desk.seat:Sit(humanoid)
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Responder
+-- ─────────────────────────────────────────────────────────────
+
+local function grade(entry: PlayerExam): number
+	local total = #state.questions
+	if total == 0 then
+		return 1
+	end
+	local raw = entry.correct / total
+	local value = 1 + raw * (E.MaxGrade - 1)
+	value -= entry.catches * Config.Penalty.GradePerCatch
+	return math.clamp(math.floor(value * 10 + 0.5) / 10, 1, E.MaxGrade)
+end
+
+function ExamService.getGrade(player: Player): number
+	local entry = state.players[player]
+	return entry and grade(entry) or 1
+end
+
+function ExamService.markPhoneUsed(player: Player, questionId: number)
+	local entry = state.players[player]
+	if not entry then
+		return
+	end
+	entry.phoneUsedOn[questionId] = true
+end
+
+function ExamService.submitAnswer(player: Player, questionId: number, choice: number)
+	local entry = state.players[player]
+	if not entry then
+		return { ok = false, reason = "Todavia no estas rindiendo." }
+	end
+	if entry.finished then
+		return { ok = false, reason = "Ya entregaste la prueba." }
+	end
+	local question = state.questions[questionId]
+	if not question then
+		return { ok = false, reason = "Ese ejercicio no existe." }
+	end
+	if entry.answers[questionId] then
+		return { ok = false, reason = "Ya respondiste ese ejercicio." }
+	end
+	if typeof(choice) ~= "number" or choice < 1 or choice > #question.choices or choice % 1 ~= 0 then
+		return { ok = false, reason = "Opcion invalida." }
+	end
+
+	local correct = choice == question.answerIndex
+	local usedPhone = entry.phoneUsedOn[questionId] == true
+
+	entry.answers[questionId] = {
+		choice = choice,
+		correct = correct,
+		usedPhone = usedPhone,
+		at = os.clock(),
+	}
+	entry.answered += 1
+	if correct then
+		entry.correct += 1
+		entry.points += usedPhone and E.PointsCorrect or E.PointsCorrectSolo
+	else
+		entry.points += E.PointsWrong
+	end
+	if usedPhone then
+		entry.cheated += 1
+	end
+
+	if entry.answered >= #state.questions then
+		entry.finished = true
+	end
+
+	ExamService.push(player)
+
+	return {
+		ok = true,
+		correct = correct,
+		answerIndex = question.answerIndex,
+		finished = entry.finished,
+		grade = grade(entry),
+	}
+end
+
+function ExamService.registerCatch(player: Player)
+	local entry = state.players[player]
+	if not entry then
+		return
+	end
+	entry.catches += 1
+	if entry.catches >= Config.Penalty.MaxCatches then
+		entry.finished = true
+	end
+	ExamService.push(player)
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Replicacion
+-- ─────────────────────────────────────────────────────────────
+
+function ExamService.snapshot(player: Player)
+	local entry = state.players[player]
+	if not entry then
+		return nil
+	end
+
+	local answers: { [number]: any } = {}
+	for id, record in entry.answers do
+		answers[id] = { choice = record.choice, correct = record.correct, usedPhone = record.usedPhone }
+	end
+
+	return {
+		questions = state.publicQuestions,
+		answers = answers,
+		answered = entry.answered,
+		correct = entry.correct,
+		cheated = entry.cheated,
+		catches = entry.catches,
+		points = entry.points,
+		grade = grade(entry),
+		finished = entry.finished,
+		seatIndex = entry.desk and entry.desk.index or 0,
+	}
+end
+
+function ExamService.push(player: Player)
+	local snapshot = ExamService.snapshot(player)
+	if snapshot then
+		Net.event(Net.Events.ExamUpdate):FireClient(player, snapshot)
+	end
+end
+
+function ExamService.pushAll()
+	for player in state.players do
+		ExamService.push(player)
+	end
+end
+
+function ExamService.allPlayers(): { [Player]: PlayerExam }
+	return state.players
+end
+
+Players.PlayerRemoving:Connect(function(player)
+	ExamService.removePlayer(player)
+end)
+
+return ExamService
+]]></ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX14">
+        <Properties>
+          <string name="Name">PhoneService</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	PhoneService
+	------------------------------------------------------------------
+	El celular es autoritativo del lado del servidor: bateria, cooldown
+	de la camara, confiscacion y el contenido de la foto.
+
+	Flujo:
+		1. El cliente pide TakePhoto(questionId)  -> el server valida que
+		   ese ejercicio sea el que el jugador tiene delante y devuelve un
+		   "photoId" (un ticket de un solo uso) con el texto fotografiado.
+		2. El cliente pide AskRoGPT(photoId)      -> el server consume el
+		   ticket, marca el ejercicio como "resuelto con ayuda" y devuelve
+		   la resolucion paso a paso.
+
+	Asi el cliente nunca tiene las respuestas antes de tiempo: primero
+	tiene que arriesgarse a sacar la foto.
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+local PhoneModel = require(Shared:WaitForChild("PhoneModel"))
+
+local ExamService = require(script.Parent:WaitForChild("ExamService"))
+local SuspicionService = require(script.Parent:WaitForChild("SuspicionService"))
+
+local P = Config.Phone
+
+local PhoneService = {}
+
+type Photo = {
+	id: string,
+	questionId: number,
+	prompt: string,
+	topic: string,
+	takenAt: number,
+	used: boolean,
+}
+
+type PhoneData = {
+	battery: number,
+	out: boolean,
+	confiscatedUntil: number,
+	nextPhotoAt: number,
+	photos: { [string]: Photo },
+	photoCount: number,
+	dirty: boolean,
+	model: Model?,
+	weld: Weld?,
+}
+
+local phones: { [Player]: PhoneData } = {}
+
+local function ensure(player: Player): PhoneData
+	local data = phones[player]
+	if not data then
+		data = {
+			battery = P.BatteryMax,
+			out = false,
+			confiscatedUntil = 0,
+			nextPhotoAt = 0,
+			photos = {},
+			photoCount = 0,
+			dirty = true,
+			model = nil,
+			weld = nil,
+		}
+		phones[player] = data
+	end
+	return data
+end
+
+local function snapshot(player: Player, data: PhoneData)
+	local now = os.clock()
+	return {
+		battery = math.floor(data.battery + 0.5),
+		batteryMax = P.BatteryMax,
+		out = data.out,
+		confiscated = now < data.confiscatedUntil,
+		confiscatedFor = math.max(0, data.confiscatedUntil - now),
+		cooldown = math.max(0, data.nextPhotoAt - now),
+		photos = data.photoCount,
+	}
+end
+
+local function push(player: Player)
+	local data = ensure(player)
+	Net.event(Net.Events.PhoneState):FireClient(player, snapshot(player, data))
+	data.dirty = false
+end
+
+function PhoneService.isAvailable(player: Player): (boolean, string?)
+	local data = ensure(player)
+	if os.clock() < data.confiscatedUntil then
+		return false, string.format("El profe te lo saco. Faltan %ds.", math.ceil(data.confiscatedUntil - os.clock()))
+	end
+	if data.battery <= 1 then
+		return false, "Sin bateria. Guardalo un rato para que cargue."
+	end
+	return true, nil
+end
+
+--- Crea (o recrea) el celular fisico soldado al alumno. Lo llama el
+--- servidor cada vez que aparece un personaje nuevo.
+function PhoneService.equip(player: Player): boolean
+	local character = player.Character
+	if not character then
+		return false
+	end
+	local data = ensure(player)
+	if data.model and data.model.Parent == character then
+		return true
+	end
+	local model, weld = PhoneModel.attach(character)
+	data.model = model
+	data.weld = weld
+	data.out = false
+	SuspicionService.setPhoneOut(player, false)
+	push(player)
+	return model ~= nil
+end
+
+local function applyPose(data: PhoneData)
+	if data.weld and data.weld.Parent then
+		PhoneModel.setRaised(data.weld, data.out)
+	end
+end
+
+--- El cliente avisa que saco / guardo el celu. Esto es lo que mira el profe.
+function PhoneService.setOut(player: Player, out: boolean): boolean
+	local data = ensure(player)
+	if out then
+		local ok = PhoneService.isAvailable(player)
+		if not ok then
+			data.out = false
+			applyPose(data)
+			SuspicionService.setPhoneOut(player, false)
+			push(player)
+			return false
+		end
+	end
+	data.out = out
+	applyPose(data)
+	SuspicionService.setPhoneOut(player, out)
+	push(player)
+	return true
+end
+
+function PhoneService.confiscate(player: Player)
+	local data = ensure(player)
+	data.out = false
+	data.confiscatedUntil = os.clock() + P.ConfiscationTime
+	data.photos = {}
+	data.photoCount = 0
+	if data.model then
+		data.model:Destroy()
+		data.model = nil
+		data.weld = nil
+	end
+	-- Se lo devuelve cuando termina la confiscacion.
+	task.delay(P.ConfiscationTime, function()
+		if player.Parent and os.clock() >= data.confiscatedUntil then
+			PhoneService.equip(player)
+		end
+	end)
+	SuspicionService.setPhoneOut(player, false)
+	push(player)
+end
+
+function PhoneService.reset(player: Player)
+	local data = ensure(player)
+	data.battery = P.BatteryMax
+	if data.weld and data.weld.Parent then
+		data.out = false
+		applyPose(data)
+	end
+	data.out = false
+	data.confiscatedUntil = 0
+	data.nextPhotoAt = 0
+	data.photos = {}
+	data.photoCount = 0
+	SuspicionService.setPhoneOut(player, false)
+	push(player)
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Sacar la foto
+-- ─────────────────────────────────────────────────────────────
+
+local function newPhotoId(player: Player, data: PhoneData): string
+	data.photoCount += 1
+	return string.format("IMG_%d_%03d", player.UserId % 100000, data.photoCount)
+end
+
+function PhoneService.takePhoto(player: Player, questionId: number)
+	local data = ensure(player)
+	local now = os.clock()
+
+	local available, reason = PhoneService.isAvailable(player)
+	if not available then
+		return { ok = false, reason = reason }
+	end
+	if not data.out then
+		return { ok = false, reason = "Primero saca el celular." }
+	end
+	if now < data.nextPhotoAt then
+		return { ok = false, reason = "Esperá un segundo, se esta guardando la anterior." }
+	end
+	if typeof(questionId) ~= "number" or questionId % 1 ~= 0 then
+		return { ok = false, reason = "Ejercicio invalido." }
+	end
+
+	local entry = ExamService.get(player)
+	if not entry then
+		return { ok = false, reason = "No estas rindiendo." }
+	end
+	if entry.finished then
+		return { ok = false, reason = "Ya terminaste la prueba." }
+	end
+	if entry.answers[questionId] then
+		return { ok = false, reason = "Ese ejercicio ya lo respondiste." }
+	end
+
+	local question = ExamService.getQuestion(questionId)
+	if not question then
+		return { ok = false, reason = "Ese ejercicio no existe." }
+	end
+
+	data.battery = math.max(0, data.battery - P.BatteryPerPhoto)
+	data.nextPhotoAt = now + P.PhotoCooldown
+
+	local photo: Photo = {
+		id = newPhotoId(player, data),
+		questionId = questionId,
+		prompt = question.prompt,
+		topic = question.topic,
+		takenAt = now,
+		used = false,
+	}
+	data.photos[photo.id] = photo
+	push(player)
+
+	return {
+		ok = true,
+		photoId = photo.id,
+		questionId = questionId,
+		prompt = question.prompt,
+		topic = question.topic,
+		choices = question.choices,
+		uploadTime = Random.new():NextNumber(P.UploadTime.Min, P.UploadTime.Max),
+	}
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Mandarsela a RoGPT
+-- ─────────────────────────────────────────────────────────────
+
+function PhoneService.askRoGPT(player: Player, photoId: string)
+	local data = ensure(player)
+
+	local available, reason = PhoneService.isAvailable(player)
+	if not available then
+		return { ok = false, reason = reason }
+	end
+	if typeof(photoId) ~= "string" then
+		return { ok = false, reason = "Foto invalida." }
+	end
+
+	local photo = data.photos[photoId]
+	if not photo then
+		return { ok = false, reason = "Esa foto no esta en la galeria." }
+	end
+	if photo.used then
+		return { ok = false, reason = "Ya le mandaste esa foto." }
+	end
+
+	local question = ExamService.getQuestion(photo.questionId)
+	if not question then
+		return { ok = false, reason = "No se entiende la foto, esta movida." }
+	end
+
+	photo.used = true
+	ExamService.markPhoneUsed(player, photo.questionId)
+
+	local rng = Random.new()
+	return {
+		ok = true,
+		model = P.ModelName,
+		photoId = photoId,
+		questionId = photo.questionId,
+		topic = question.topic,
+		prompt = question.prompt,
+		steps = question.steps,
+		answer = question.choices[question.answerIndex],
+		thinkTime = rng:NextNumber(P.ThinkTime.Min, P.ThinkTime.Max),
+	}
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Bateria
+-- ─────────────────────────────────────────────────────────────
+
+function PhoneService.start()
+	local accumulator = 0
+	RunService.Heartbeat:Connect(function(dt)
+		accumulator += dt
+		if accumulator < 0.5 then
+			return
+		end
+		local step = accumulator
+		accumulator = 0
+
+		local now = os.clock()
+		for player, data in phones do
+			local before = data.battery
+			if data.out then
+				data.battery = math.max(0, data.battery - P.BatteryDrainPerSecond * step)
+				if data.battery <= 0 then
+					PhoneService.setOut(player, false)
+				end
+			else
+				data.battery = math.min(P.BatteryMax, data.battery + P.BatteryRechargePerSecond * step)
+			end
+			if math.floor(before) ~= math.floor(data.battery) or (data.confiscatedUntil > 0 and now < data.confiscatedUntil + 1) then
+				push(player)
+			end
+		end
+	end)
+end
+
+Players.PlayerRemoving:Connect(function(player)
+	phones[player] = nil
+end)
+
+return PhoneService
+]]></ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX15">
+        <Properties>
+          <string name="Name">RoundService</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	RoundService
+	------------------------------------------------------------------
+	Ciclo de la clase:
+
+		Preparacion -> los alumnos entran, se sientan, el profe reparte
+		Prueba      -> corre el reloj, se puede responder (y copiarse)
+		Resultados  -> notas, ranking y quien se copio sin que lo vean
+
+	Tambien mantiene leaderstats (Nota / Copiadas / Pillado) y es quien
+	decide que pasa cuando el profe agarra a alguien con el celular.
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+
+local ExamService = require(script.Parent:WaitForChild("ExamService"))
+local PhoneService = require(script.Parent:WaitForChild("PhoneService"))
+local SuspicionService = require(script.Parent:WaitForChild("SuspicionService"))
+
+local E = Config.Exam
+
+local RoundService = {}
+
+local state = {
+	phase = "Preparacion",
+	timeLeft = 0,
+	roundNumber = 0,
+	classroom = nil :: any,
+	teacher = nil :: any,
+	results = {} :: { any },
+}
+
+-- ─────────────────────────────────────────────────────────────
+-- leaderstats
+-- ─────────────────────────────────────────────────────────────
+
+local function setupStats(player: Player)
+	local stats = player:FindFirstChild("leaderstats")
+	if stats then
+		return stats
+	end
+	stats = Instance.new("Folder")
+	stats.Name = "leaderstats"
+
+	local grade = Instance.new("NumberValue")
+	grade.Name = "Nota"
+	grade.Value = 1
+	grade.Parent = stats
+
+	local cheats = Instance.new("IntValue")
+	cheats.Name = "Copiadas"
+	cheats.Parent = stats
+
+	local catches = Instance.new("IntValue")
+	catches.Name = "Pillado"
+	catches.Parent = stats
+
+	stats.Parent = player
+	return stats
+end
+
+local function syncStats(player: Player)
+	local entry = ExamService.get(player)
+	local stats = player:FindFirstChild("leaderstats")
+	if not entry or not stats then
+		return
+	end
+	local grade = stats:FindFirstChild("Nota") :: NumberValue?
+	local cheats = stats:FindFirstChild("Copiadas") :: IntValue?
+	local catches = stats:FindFirstChild("Pillado") :: IntValue?
+	if grade then
+		grade.Value = ExamService.getGrade(player)
+	end
+	if cheats then
+		cheats.Value = entry.cheated
+	end
+	if catches then
+		catches.Value = entry.catches
+	end
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Replicacion de la ronda
+-- ─────────────────────────────────────────────────────────────
+
+local function pushRound(target: Player?)
+	local payload = {
+		phase = state.phase,
+		timeLeft = math.max(0, math.floor(state.timeLeft)),
+		roundNumber = state.roundNumber,
+		questionCount = E.QuestionCount,
+		results = state.results,
+	}
+	if target then
+		Net.event(Net.Events.RoundUpdate):FireClient(target, payload)
+	else
+		Net.event(Net.Events.RoundUpdate):FireAllClients(payload)
+	end
+end
+
+function RoundService.notify(player: Player, text: string, kind: string?)
+	Net.event(Net.Events.Notify):FireClient(player, { text = text, kind = kind or "info" })
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Jugadores
+-- ─────────────────────────────────────────────────────────────
+
+function RoundService.addPlayer(player: Player)
+	setupStats(player)
+	local entry = ExamService.addPlayer(player)
+	if not entry.desk then
+		RoundService.notify(player, "El aula esta llena. Mirá desde el fondo hasta que se libere un banco.", "warn")
+	end
+	PhoneService.reset(player)
+	SuspicionService.reset(player)
+	pushRound(player)
+	ExamService.push(player)
+
+	if state.phase == "Prueba" then
+		task.spawn(function()
+			task.wait(0.5)
+			ExamService.seatPlayer(player)
+			RoundService.notify(player, "Entraste con la prueba empezada. Sentate y arrancá.", "info")
+		end)
+	end
+end
+
+function RoundService.onCharacter(player: Player, character: Model)
+	local humanoid = character:WaitForChild("Humanoid", 10) :: Humanoid?
+	if not humanoid then
+		return
+	end
+	humanoid.UseJumpPower = true
+	humanoid.JumpPower = 0 -- en clase no se salta
+	humanoid.WalkSpeed = 14
+
+	-- El celular fisico se suelda al cuerpo apenas aparece el personaje.
+	PhoneService.equip(player)
+
+	humanoid.Died:Connect(function()
+		SuspicionService.reset(player)
+		PhoneService.setOut(player, false)
+	end)
+
+	if state.phase == "Prueba" then
+		task.spawn(function()
+			task.wait(0.6)
+			ExamService.seatPlayer(player)
+		end)
+	end
+end
+
+--- Lo agarraron con el celu.
+function RoundService.handleCatch(player: Player)
+	PhoneService.confiscate(player)
+	ExamService.registerCatch(player)
+	SuspicionService.pardon(player, 4)
+	syncStats(player)
+
+	local entry = ExamService.get(player)
+	local catches = entry and entry.catches or 1
+	local expelled = catches >= Config.Penalty.MaxCatches
+
+	Net.event(Net.Events.Caught):FireClient(player, {
+		catches = catches,
+		maxCatches = Config.Penalty.MaxCatches,
+		confiscatedFor = Config.Phone.ConfiscationTime,
+		gradePenalty = Config.Penalty.GradePerCatch,
+		expelled = expelled,
+	})
+
+	if expelled then
+		RoundService.notify(player, "Te sacaron de la prueba. Esperá la proxima ronda.", "danger")
+	else
+		RoundService.notify(player, string.format("Te pillaron. -%.1f de nota y sin celu %ds.",
+			Config.Penalty.GradePerCatch, Config.Phone.ConfiscationTime), "danger")
+	end
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Ciclo
+-- ─────────────────────────────────────────────────────────────
+
+local function buildResults()
+	local results = {}
+	for player, entry in ExamService.allPlayers() do
+		table.insert(results, {
+			name = player.DisplayName,
+			userId = player.UserId,
+			grade = ExamService.getGrade(player),
+			correct = entry.correct,
+			answered = entry.answered,
+			cheated = entry.cheated,
+			catches = entry.catches,
+			points = entry.points,
+		})
+	end
+	table.sort(results, function(a, b)
+		if a.grade == b.grade then
+			return a.points > b.points
+		end
+		return a.grade > b.grade
+	end)
+	return results
+end
+
+local function runPhase(name: string, duration: number, onTick: ((number) -> ())?)
+	state.phase = name
+	state.timeLeft = duration
+	pushRound()
+
+	local lastWhole = math.floor(duration)
+	while state.timeLeft > 0 do
+		local dt = task.wait(0.25)
+		state.timeLeft = math.max(0, state.timeLeft - dt)
+		if onTick then
+			onTick(dt)
+		end
+		local whole = math.floor(state.timeLeft)
+		if whole ~= lastWhole then
+			lastWhole = whole
+			pushRound()
+		end
+	end
+	state.timeLeft = 0
+	pushRound()
+end
+
+function RoundService.start(classroom, teacher)
+	state.classroom = classroom
+	state.teacher = teacher
+
+	task.spawn(function()
+		while true do
+			-- ── Preparacion ─────────────────────────────
+			state.results = {}
+			for _, player in Players:GetPlayers() do
+				PhoneService.reset(player)
+				SuspicionService.reset(player)
+			end
+			runPhase("Preparacion", E.IntermissionDuration)
+
+			-- ── Prueba ──────────────────────────────────
+			state.roundNumber += 1
+			ExamService.newRound(os.time() + state.roundNumber * 977)
+			for _, player in Players:GetPlayers() do
+				ExamService.resetPlayer(player)
+				task.spawn(ExamService.seatPlayer, player)
+			end
+			if teacher then
+				teacher:say("Guarden todo. Empieza la prueba.", 4)
+			end
+
+			local syncAccumulator = 0
+			runPhase("Prueba", E.RoundDuration, function(dt)
+				syncAccumulator += dt
+				if syncAccumulator >= 1 then
+					syncAccumulator = 0
+					for _, player in Players:GetPlayers() do
+						syncStats(player)
+					end
+				end
+			end)
+
+			-- ── Resultados ──────────────────────────────
+			for _, player in Players:GetPlayers() do
+				PhoneService.setOut(player, false)
+				SuspicionService.reset(player)
+				syncStats(player)
+				local grade = ExamService.getGrade(player)
+				if grade >= E.PassingGrade then
+					RoundService.notify(player, string.format("Aprobaste con %.1f.", grade), "success")
+				else
+					RoundService.notify(player, string.format("Te sacaste %.1f. La proxima estudia (o copiate mejor).", grade), "warn")
+				end
+			end
+			state.results = buildResults()
+			if teacher then
+				teacher:say("Entreguen las hojas. Corrijo para la proxima clase.", 5)
+			end
+			runPhase("Resultados", 15)
+		end
+	end)
+end
+
+function RoundService.getPhase(): string
+	return state.phase
+end
+
+function RoundService.pushTo(player: Player)
+	pushRound(player)
+end
+
+return RoundService
+]]></ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX16">
+        <Properties>
+          <string name="Name">SuspicionService</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	SuspicionService
+	------------------------------------------------------------------
+	El termometro del juego. Cada tick mira, para cada alumno:
+
+		* tiene el celu afuera?
+		* el profe lo tiene dentro del cono de vision (con raycast real)?
+		* ademas le esta revisando la prueba de cerca?
+
+	Y mueve la barra de riesgo. Si llega a 1 -> el profe lo confronta.
+	El riesgo se replica al cliente para dibujar el medidor y decidir
+	si el boton de "sacar foto" se puede apretar tranquilo.
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+
+local T = Config.Teacher
+
+local SuspicionService = {}
+
+type Entry = {
+	risk: number,
+	phoneOut: boolean,
+	seen: boolean,
+	factor: number,
+	lastPush: number,
+	immuneUntil: number,
+}
+
+local entries: { [Player]: Entry } = {}
+local teacher: any = nil
+local onCaught: ((Player) -> ())? = nil
+local active = false
+
+local function ensure(player: Player): Entry
+	local entry = entries[player]
+	if not entry then
+		entry = {
+			risk = 0,
+			phoneOut = false,
+			seen = false,
+			factor = 0,
+			lastPush = 0,
+			immuneUntil = 0,
+		}
+		entries[player] = entry
+	end
+	return entry
+end
+
+function SuspicionService.init(teacherRef: any, caughtCallback: (Player) -> ())
+	teacher = teacherRef
+	onCaught = caughtCallback
+end
+
+function SuspicionService.setPhoneOut(player: Player, out: boolean)
+	ensure(player).phoneOut = out
+end
+
+function SuspicionService.isPhoneOut(player: Player): boolean
+	return ensure(player).phoneOut
+end
+
+function SuspicionService.getRisk(player: Player): number
+	return ensure(player).risk
+end
+
+--- Ventana de gracia (por ejemplo justo despues de que te pillan).
+function SuspicionService.pardon(player: Player, seconds: number)
+	local entry = ensure(player)
+	entry.risk = 0
+	entry.immuneUntil = os.clock() + seconds
+end
+
+function SuspicionService.reset(player: Player)
+	local entry = ensure(player)
+	entry.risk = 0
+	entry.phoneOut = false
+	entry.seen = false
+	entry.factor = 0
+end
+
+local function targetPosition(player: Player): (Vector3?, Instance?)
+	local character = player.Character
+	if not character then
+		return nil, nil
+	end
+	local head = character:FindFirstChild("Head") :: BasePart?
+	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local reference = head or root
+	if not reference then
+		return nil, nil
+	end
+	-- El celu se mira a la altura del pecho, apenas sobre la tabla del banco.
+	return reference.Position - Vector3.new(0, 0.6, 0), character
+end
+
+local function push(player: Player, entry: Entry, force: boolean?)
+	local now = os.clock()
+	if not force and now - entry.lastPush < 0.12 then
+		return
+	end
+	entry.lastPush = now
+	Net.event(Net.Events.RiskUpdate):FireClient(player, {
+		risk = entry.risk,
+		seen = entry.seen,
+		inspecting = teacher ~= nil and teacher:isInspecting(player),
+		teacherState = teacher and teacher:getState() or "Patrullando",
+	})
+end
+
+function SuspicionService.start()
+	if active then
+		return
+	end
+	active = true
+
+	local accumulator = 0
+	RunService.Heartbeat:Connect(function(dt)
+		if not teacher or not active then
+			return
+		end
+		accumulator += dt
+		if accumulator < 0.1 then
+			return
+		end
+		local step = accumulator
+		accumulator = 0
+
+		local now = os.clock()
+
+		for _, player in Players:GetPlayers() do
+			local entry = ensure(player)
+			local position, character = targetPosition(player)
+
+			local seen, factor = false, 0
+			if position and teacher.canSee then
+				seen, factor = teacher:canSee(position, character and { character } or nil)
+			end
+			entry.seen = seen
+			entry.factor = factor
+
+			if now < entry.immuneUntil then
+				entry.risk = 0
+			elseif entry.phoneOut then
+				local inspecting = teacher:isInspecting(player)
+				local gain
+				if seen and inspecting then
+					gain = T.RiskGainInspect * factor
+				elseif seen then
+					gain = T.RiskGainSeen * factor
+				else
+					gain = T.RiskGainHidden
+				end
+				entry.risk = math.clamp(entry.risk + gain * step, 0, 1)
+				if not seen then
+					-- Nervios, sí; pero si nadie te vio, nadie te puede pillar.
+					entry.risk = math.min(entry.risk, 0.85)
+				end
+			else
+				-- Guardado: baja mas rapido si el profe ni te mira.
+				local decay = T.RiskDecay * (seen and 0.55 or 1.6)
+				entry.risk = math.clamp(entry.risk - decay * step, 0, 1)
+			end
+
+			if entry.risk >= T.RiskCaught and onCaught then
+				entry.risk = 0
+				entry.immuneUntil = now + 3
+				push(player, entry, true)
+				onCaught(player)
+			else
+				push(player, entry)
+			end
+		end
+	end)
+end
+
+Players.PlayerRemoving:Connect(function(player)
+	entries[player] = nil
+end)
+
+return SuspicionService
+]]></ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX17">
+        <Properties>
+          <string name="Name">TeacherAI</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	TeacherAI
+	------------------------------------------------------------------
+	El profesor. Es lo unico que separa al alumno de un 10 facil.
+
+	Ciclo de comportamiento:
+		Patrullando  -> recorre pasillo por pasillo entre los bancos
+		Revisando    -> frena en un banco, se planta y mira la prueba
+		Pizarron     -> se da vuelta a escribir (ventana segura para copiarse)
+		Confrontando -> te vio con el celu y viene derecho a tu banco
+
+	Vision:
+		cono de FOV configurable + raycast real (los bancos y las paredes
+		tapan). La cabeza gira (Motor6D del cuello), asi que el cono que
+		ve el jugador en pantalla coincide con lo que "ve" el profe.
+--]]
+
+local PathfindingService = game:GetService("PathfindingService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local T = Config.Teacher
+
+local TeacherAI = {}
+TeacherAI.__index = TeacherAI
+
+export type Teacher = typeof(setmetatable({} :: any, TeacherAI))
+
+local PHRASES = {
+	patrol = {
+		"Sin hablar, por favor.",
+		"Tienen que justificar todos los pasos.",
+		"Les quedan pocos minutos.",
+		"El que copia se lleva un uno.",
+	},
+	board = {
+		"Ojo con el signo del segundo termino.",
+		"Anoto la formula en el pizarron.",
+		"Ejercicio 5, presten atencion.",
+	},
+	inspect = {
+		"A ver esa hoja...",
+		"Mmm. Ese planteo no cierra.",
+		"Muy bien ese desarrollo.",
+	},
+	caught = {
+		"Dame ese telefono. Ahora.",
+		"Te vi. Guardalo o te llevas un uno.",
+		"En serio? Con el celular en la prueba?",
+	},
+}
+
+local function pick(list: { string }): string
+	return list[math.random(1, #list)]
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Rig
+-- ─────────────────────────────────────────────────────────────
+
+local function buildFallbackRig(): Model
+	-- Rig estilizado por si no se puede crear un avatar real
+	-- (Studio sin acceso a la API de avatares).
+	local model = Instance.new("Model")
+	model.Name = "Profesor"
+
+	local root = Util.part({
+		Name = "HumanoidRootPart",
+		Size = Vector3.new(2, 2, 1),
+		CFrame = CFrame.new(0, 3, 0),
+		Transparency = 1,
+		Anchored = false,
+		CanCollide = true,
+		Parent = model,
+	})
+
+	local function bodyPart(name: string, size: Vector3, offset: Vector3, color: Color3, material: Enum.Material)
+		local part = Util.part({
+			Name = name,
+			Size = size,
+			CFrame = root.CFrame * CFrame.new(offset),
+			Color = color,
+			Material = material,
+			Anchored = false,
+			CanCollide = false,
+			Parent = model,
+		})
+		Util.weld(root, part)
+		return part
+	end
+
+	local suit = Color3.fromRGB(58, 62, 76)
+	local torso = bodyPart("Torso", Vector3.new(2.2, 2.4, 1.1), Vector3.new(0, 0.2, 0), suit, Enum.Material.Fabric)
+	bodyPart("Camisa", Vector3.new(0.9, 2.2, 1.2), Vector3.new(0, 0.25, -0.02), Color3.fromRGB(232, 236, 242), Enum.Material.Fabric)
+	bodyPart("Corbata", Vector3.new(0.35, 1.6, 1.3), Vector3.new(0, 0.1, -0.02), Color3.fromRGB(122, 38, 44), Enum.Material.Fabric)
+	local head = bodyPart("Head", Vector3.new(1.5, 1.5, 1.5), Vector3.new(0, 2.1, 0), Color3.fromRGB(226, 190, 156), Enum.Material.SmoothPlastic)
+	local hair = bodyPart("Pelo", Vector3.new(1.6, 0.5, 1.6), Vector3.new(0, 2.9, 0), Color3.fromRGB(120, 118, 116), Enum.Material.SmoothPlastic)
+
+	-- La cabeza cuelga de un Motor6D "Neck": asi tambien gira en el rig
+	-- de respaldo y el cono de vision coincide con lo que se ve.
+	for _, weld in root:GetChildren() do
+		if weld:IsA("WeldConstraint") then
+			local part1 = (weld :: WeldConstraint).Part1
+			if part1 == head or part1 == hair then
+				weld:Destroy()
+			end
+		end
+	end
+	local neck = Instance.new("Motor6D")
+	neck.Name = "Neck"
+	neck.Part0 = torso
+	neck.Part1 = head
+	neck.C0 = CFrame.new(0, 1.2, 0)
+	neck.C1 = CFrame.new(0, -0.7, 0)
+	neck.Parent = torso
+	Util.weld(head, hair)
+	bodyPart("BrazoIzq", Vector3.new(0.9, 2.2, 0.9), Vector3.new(-1.6, 0.2, 0), suit, Enum.Material.Fabric)
+	bodyPart("BrazoDer", Vector3.new(0.9, 2.2, 0.9), Vector3.new(1.6, 0.2, 0), suit, Enum.Material.Fabric)
+	bodyPart("PiernaIzq", Vector3.new(0.9, 2.4, 0.9), Vector3.new(-0.55, -2.2, 0), Color3.fromRGB(42, 46, 58), Enum.Material.Fabric)
+	bodyPart("PiernaDer", Vector3.new(0.9, 2.4, 0.9), Vector3.new(0.55, -2.2, 0), Color3.fromRGB(42, 46, 58), Enum.Material.Fabric)
+
+	local humanoid = Instance.new("Humanoid")
+	humanoid.RigType = Enum.HumanoidRigType.R15
+	humanoid.HipHeight = 3.4
+	humanoid.Parent = model
+
+	model.PrimaryPart = root
+	head.Name = "Head"
+	return model
+end
+
+local function buildAvatarRig(): Model?
+	local description = Instance.new("HumanoidDescription")
+	description.HeightScale = 1.05
+	description.BodyTypeScale = 0.4
+	description.ProportionScale = 0.6
+	description.HeadColor = Color3.fromRGB(226, 190, 156)
+	description.TorsoColor = Color3.fromRGB(58, 62, 76)
+	description.LeftArmColor = Color3.fromRGB(226, 190, 156)
+	description.RightArmColor = Color3.fromRGB(226, 190, 156)
+	description.LeftLegColor = Color3.fromRGB(42, 46, 58)
+	description.RightLegColor = Color3.fromRGB(42, 46, 58)
+
+	local ok, model = pcall(function()
+		return Players:CreateHumanoidModelFromDescription(description, Enum.HumanoidRigType.R15)
+	end)
+	if ok and model then
+		return model
+	end
+	return nil
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Constructor
+-- ─────────────────────────────────────────────────────────────
+
+function TeacherAI.new(classroom, onCatch: (Player) -> ())
+	local self = setmetatable({}, TeacherAI)
+
+	self.classroom = classroom
+	self.onCatch = onCatch
+	self.state = "Patrullando"
+	self.gazeYaw = 0
+	self.targetGazeYaw = 0
+	self.inspectTarget = nil :: Player?
+	self.confrontTarget = nil :: Player?
+	self.running = false
+	self.rng = Random.new(os.clock() * 1000)
+	self.nodeIndex = 1
+
+	local model = buildAvatarRig() or buildFallbackRig()
+	model.Name = "Profesor"
+
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	assert(humanoid, "El rig del profesor no tiene Humanoid")
+	humanoid.WalkSpeed = T.WalkSpeed
+	humanoid.DisplayName = T.DisplayName
+	humanoid.NameDisplayDistance = 60
+	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	humanoid.BreakJointsOnDeath = false
+
+	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart?
+	assert(root, "El rig del profesor no tiene HumanoidRootPart")
+
+	self.model = model
+	self.humanoid = humanoid
+	self.root = root
+	self.head = (model:FindFirstChild("Head") :: BasePart?) or root
+	self.neck = model:FindFirstChild("Neck", true)
+	self.neckBase = if self.neck and self.neck:IsA("Motor6D") then self.neck.C0 else nil
+
+	model.Parent = workspace
+	model:PivotTo(classroom.teacherSpawn)
+
+	self:_setupAnimations()
+	self:_buildBubble()
+
+	return self
+end
+
+function TeacherAI:_setupAnimations()
+	local animator = self.humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator", self.humanoid)
+	local function load(id: string): AnimationTrack?
+		local animation = Instance.new("Animation")
+		animation.AnimationId = id
+		local ok, track = pcall(function()
+			return animator:LoadAnimation(animation)
+		end)
+		return ok and track or nil
+	end
+
+	self.animations = {
+		idle = load("rbxassetid://507766666"),
+		walk = load("rbxassetid://507777826"),
+		write = load("rbxassetid://507770239"),
+	}
+	if self.animations.idle then
+		self.animations.idle:Play(0.3)
+	end
+end
+
+function TeacherAI:_playAnim(name: string)
+	if self.currentAnim == name then
+		return
+	end
+	self.currentAnim = name
+	for key, track in self.animations do
+		if track then
+			if key == name then
+				track:Play(0.25)
+			else
+				track:Stop(0.25)
+			end
+		end
+	end
+end
+
+function TeacherAI:_buildBubble()
+	local billboard = Util.billboard(self.head, UDim2.fromScale(9, 2.4), Vector3.new(0, 3.2, 0))
+	billboard.Name = "Dialogo"
+	billboard.AlwaysOnTop = true
+	billboard.Enabled = false
+	billboard.MaxDistance = 90
+	billboard.Parent = self.head
+
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.fromScale(1, 1)
+	frame.BackgroundColor3 = Color3.fromRGB(20, 22, 28)
+	frame.BackgroundTransparency = 0.12
+	frame.Parent = billboard
+	Util.roundify(frame, 14, Color3.fromRGB(90, 96, 112), 2)
+
+	local label = Instance.new("TextLabel")
+	label.Name = "Texto"
+	label.Size = UDim2.fromScale(0.9, 0.7)
+	label.Position = UDim2.fromScale(0.05, 0.15)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.GothamMedium
+	label.TextColor3 = Color3.fromRGB(240, 242, 248)
+	label.TextScaled = true
+	label.Text = ""
+	label.Parent = frame
+
+	self.bubble = billboard
+	self.bubbleLabel = label
+end
+
+function TeacherAI:say(text: string, duration: number?)
+	self.bubbleLabel.Text = text
+	self.bubble.Enabled = true
+	self.speechToken = (self.speechToken or 0) + 1
+	local token = self.speechToken
+	task.delay(duration or 3.2, function()
+		if self.speechToken == token and self.bubble then
+			self.bubble.Enabled = false
+		end
+	end)
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Movimiento
+-- ─────────────────────────────────────────────────────────────
+
+function TeacherAI:_moveTo(goal: Vector3, timeout: number?): boolean
+	local humanoid: Humanoid = self.humanoid
+	local root: BasePart = self.root
+	local deadline = os.clock() + (timeout or 14)
+
+	local path = PathfindingService:CreatePath({
+		AgentRadius = 2.6,
+		AgentHeight = 6,
+		AgentCanJump = false,
+		WaypointSpacing = 4,
+	})
+
+	local ok = pcall(function()
+		path:ComputeAsync(root.Position, goal)
+	end)
+
+	local waypoints: { Vector3 } = {}
+	if ok and path.Status == Enum.PathStatus.Success then
+		for i, waypoint in path:GetWaypoints() do
+			if i > 1 then
+				table.insert(waypoints, waypoint.Position)
+			end
+		end
+	end
+	if #waypoints == 0 then
+		waypoints = { goal }
+	end
+
+	for _, point in waypoints do
+		humanoid:MoveTo(point)
+		local lastDistance = math.huge
+		local stuckFor = 0
+		while self.running do
+			local distance = (Vector3.new(root.Position.X, 0, root.Position.Z) - Vector3.new(point.X, 0, point.Z)).Magnitude
+			if distance < 2.2 then
+				break
+			end
+			if os.clock() > deadline then
+				return false
+			end
+			if distance > lastDistance - 0.05 then
+				stuckFor += 0.1
+				if stuckFor > 2 then
+					return false
+				end
+			else
+				stuckFor = 0
+			end
+			lastDistance = distance
+			humanoid:MoveTo(point)
+			task.wait(0.1)
+		end
+	end
+	return true
+end
+
+function TeacherAI:_faceTowards(position: Vector3, duration: number?)
+	local root: BasePart = self.root
+	local elapsed = 0
+	local total = duration or 0.45
+	local start = root.CFrame
+	local flat = Vector3.new(position.X, root.Position.Y, position.Z)
+	if (flat - root.Position).Magnitude < 0.1 then
+		return
+	end
+	local goal = CFrame.lookAt(root.Position, flat)
+	while elapsed < total and self.running do
+		local dt = task.wait()
+		elapsed += dt
+		local alpha = math.clamp(elapsed / total, 0, 1)
+		root.CFrame = start:Lerp(goal, alpha)
+	end
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Vision
+-- ─────────────────────────────────────────────────────────────
+
+function TeacherAI:getGazeCFrame(): CFrame
+	local head: BasePart = self.head
+	local root: BasePart = self.root
+	local origin = head.Position
+	local look = (root.CFrame * CFrame.Angles(0, self.gazeYaw, 0)).LookVector
+	return CFrame.lookAt(origin, origin + look)
+end
+
+--- Devuelve visible (bool) y factor 0..1 (1 = de frente y cerca).
+function TeacherAI:canSee(position: Vector3, ignore: { Instance }?): (boolean, number)
+	if self.state == "Pizarron" then
+		-- De espaldas: literalmente no puede ver nada del aula.
+		return false, 0
+	end
+
+	local gaze = self:getGazeCFrame()
+	local delta = position - gaze.Position
+	local distance = delta.Magnitude
+	if distance > T.ViewDistance or distance < 0.05 then
+		return false, 0
+	end
+
+	local direction = delta.Unit
+	local dot = direction:Dot(gaze.LookVector)
+	local halfFov = math.rad(T.FieldOfView / 2)
+	local angle = math.acos(math.clamp(dot, -1, 1))
+	if angle > halfFov then
+		return false, 0
+	end
+
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	local filter: { Instance } = { self.model }
+	if ignore then
+		for _, instance in ignore do
+			table.insert(filter, instance)
+		end
+	end
+	params.FilterDescendantsInstances = filter
+	params.IgnoreWater = true
+
+	local result = workspace:Raycast(gaze.Position, direction * distance, params)
+	if result then
+		return false, 0
+	end
+
+	-- Centro del cono = 1, borde = PeripheralFactor. Lejos = menos.
+	local focus = 1 - (angle / halfFov)
+	local proximity = 1 - (distance / T.ViewDistance) * 0.65
+	local factor = math.clamp((T.PeripheralFactor + (1 - T.PeripheralFactor) * focus) * proximity, 0, 1)
+	return true, factor
+end
+
+function TeacherAI:isInspecting(player: Player): boolean
+	return self.inspectTarget == player
+end
+
+function TeacherAI:getState(): string
+	return self.state
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Comportamiento
+-- ─────────────────────────────────────────────────────────────
+
+function TeacherAI:_nearestDeskWithStudent(position: Vector3, maxDistance: number)
+	local best, bestDistance = nil, maxDistance
+	for _, desk in self.classroom.desks do
+		local occupant = desk.seat.Occupant
+		if occupant then
+			local distance = (desk.seat.Position - position).Magnitude
+			if distance < bestDistance then
+				best, bestDistance = desk, distance
+			end
+		end
+	end
+	return best
+end
+
+function TeacherAI:_inspect(desk)
+	local occupant = desk.seat.Occupant
+	local character = occupant and occupant.Parent
+	local player = character and Players:GetPlayerFromCharacter(character)
+	if not player then
+		return
+	end
+
+	self.state = "Revisando"
+	self.inspectTarget = player
+	self:_playAnim("idle")
+	self:_faceTowards(desk.seat.Position, 0.4)
+	self.targetGazeYaw = 0
+	if self.rng:NextNumber() < 0.5 then
+		self:say(pick(PHRASES.inspect), 2.6)
+	end
+
+	local duration = Util.randomInRange(T.InspectDuration, self.rng)
+	local elapsed = 0
+	while elapsed < duration and self.running and self.state == "Revisando" do
+		elapsed += task.wait(0.1)
+	end
+
+	self.inspectTarget = nil
+	if self.state == "Revisando" then
+		self.state = "Patrullando"
+	end
+end
+
+function TeacherAI:_goToBoard()
+	self.state = "Pizarron"
+	self.inspectTarget = nil
+	self:_playAnim("walk")
+	self:_moveTo(self.classroom.boardStand.Position, 12)
+	self:_faceTowards(self.classroom.boardStand.Position + self.classroom.boardStand.LookVector * 6, 0.5)
+	self.targetGazeYaw = 0
+	self:_playAnim("write")
+	self:say(pick(PHRASES.board), 3)
+
+	local duration = Util.randomInRange(T.BoardDuration, self.rng)
+	local elapsed = 0
+	while elapsed < duration and self.running and self.state == "Pizarron" do
+		elapsed += task.wait(0.1)
+	end
+
+	if self.state == "Pizarron" then
+		self.state = "Patrullando"
+	end
+end
+
+function TeacherAI:_patrolStep()
+	local nodes = self.classroom.patrolNodes
+	if #nodes == 0 then
+		task.wait(1)
+		return
+	end
+
+	self.nodeIndex = self.nodeIndex % #nodes + 1
+	local node = nodes[self.nodeIndex]
+
+	self.state = "Patrullando"
+	self:_playAnim("walk")
+	self:_moveTo(node.Position, 12)
+	self:_playAnim("idle")
+
+	if not self.running or self.state == "Confrontando" then
+		return
+	end
+
+	-- Frena a mirar un banco cercano
+	if self.rng:NextNumber() < T.InspectChance then
+		local desk = self:_nearestDeskWithStudent(self.root.Position, 12)
+		if desk then
+			self:_inspect(desk)
+			return
+		end
+	end
+
+	if self.rng:NextNumber() < 0.12 then
+		self:say(pick(PHRASES.patrol), 3)
+	end
+
+	task.wait(Util.randomInRange(T.IdleAtWaypoint, self.rng))
+end
+
+--- Interrumpe todo y va derecho al banco del jugador.
+function TeacherAI:confront(player: Player)
+	if self.state == "Confrontando" then
+		return
+	end
+	self.confrontTarget = player
+	self.state = "Confrontando"
+	self.inspectTarget = nil
+
+	task.spawn(function()
+		local character = player.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+		self.humanoid.WalkSpeed = T.ChaseSpeed
+		self:_playAnim("walk")
+		self:say(pick(PHRASES.caught), 3.4)
+
+		if root then
+			local approach = root.Position + (self.root.Position - root.Position).Unit * 4
+			self:_moveTo(Vector3.new(approach.X, root.Position.Y, approach.Z), 10)
+			self:_faceTowards(root.Position, 0.35)
+		end
+
+		self:_playAnim("idle")
+		self.humanoid.WalkSpeed = T.WalkSpeed
+		self.onCatch(player)
+
+		task.wait(1.6)
+		self.confrontTarget = nil
+		if self.state == "Confrontando" then
+			self.state = "Patrullando"
+		end
+	end)
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Loop
+-- ─────────────────────────────────────────────────────────────
+
+function TeacherAI:start()
+	if self.running then
+		return
+	end
+	self.running = true
+
+	-- Cerebro
+	task.spawn(function()
+		while self.running do
+			if self.state == "Confrontando" then
+				task.wait(0.2)
+			elseif os.clock() - (self.lastBoardAt or 0) > 28 and self.rng:NextNumber() < T.BoardChance then
+				self.lastBoardAt = os.clock()
+				self:_goToBoard()
+			else
+				self:_patrolStep()
+			end
+		end
+	end)
+
+	-- Cabeza: barrido lateral mientras camina, fija cuando revisa.
+	self.gazeConnection = RunService.Heartbeat:Connect(function(dt)
+		if self.state == "Patrullando" then
+			self.targetGazeYaw = math.sin(os.clock() * 0.85) * math.rad(38)
+		elseif self.state == "Revisando" or self.state == "Confrontando" then
+			self.targetGazeYaw = 0
+		elseif self.state == "Pizarron" then
+			self.targetGazeYaw = 0
+		end
+
+		self.gazeYaw = Util.lerpAngle(self.gazeYaw, self.targetGazeYaw, math.clamp(dt * T.HeadTurnSpeed, 0, 1))
+
+		if self.neck and self.neckBase then
+			(self.neck :: Motor6D).C0 = self.neckBase * CFrame.Angles(0, self.gazeYaw, 0)
+		end
+	end)
+end
+
+function TeacherAI:destroy()
+	self.running = false
+	if self.gazeConnection then
+		self.gazeConnection:Disconnect()
+	end
+	if self.model then
+		self.model:Destroy()
+	end
+end
+
+return TeacherAI
+]]></ProtectedString>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="StarterPlayer" referent="RBX19">
+    <Properties>
+      <string name="Name">StarterPlayer</string>
+    </Properties>
+    <Item class="StarterPlayerScripts" referent="RBX20">
+      <Properties>
+        <string name="Name">StarterPlayerScripts</string>
+      </Properties>
+      <Item class="LocalScript" referent="RBX25">
+        <Properties>
+          <string name="Name">Client</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	CLIENTE — punto de entrada
+	------------------------------------------------------------------
+	Une las tres piezas: la hoja 3D del banco, el celular 3D con RoGPT
+	y el HUD de acciones. Toda la logica sensible (respuestas correctas,
+	bateria, riesgo) vive en el servidor; aca solo se presenta y se pide.
+
+	Controles:
+		E  -> acercar la camara a la hoja
+		F  -> sacar / usar el celular  (mismo boton grande de abajo)
+		Q  -> guardar el celular
+--]]
+
+local ContextActionService = game:GetService("ContextActionService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local CameraRig = require(script:WaitForChild("CameraRig"))
+local Hud = require(script:WaitForChild("Hud"))
+local PaperUI = require(script:WaitForChild("PaperUI"))
+local PhoneUI = require(script:WaitForChild("PhoneUI"))
+
+local player = Players.LocalPlayer
+
+local state = {
+	phoneOut = false,
+	busy = false,
+	phase = "Preparacion",
+	paper = nil :: BasePart?,
+	screen = nil :: BasePart?,
+	phoneState = { battery = 100, out = false, confiscated = false, confiscatedFor = 0 },
+}
+
+-- ─────────────────────────────────────────────────────────────
+-- Encontrar mi banco y mi celular
+-- ─────────────────────────────────────────────────────────────
+
+local function findMyPaper(): BasePart?
+	local classroom = workspace:FindFirstChild("Aula")
+	local desks = classroom and classroom:FindFirstChild("Bancos")
+	if not desks then
+		return nil
+	end
+	for _, desk in desks:GetChildren() do
+		local paper = desk:FindFirstChild("HojaDePrueba") :: BasePart?
+		if paper and paper:GetAttribute("OwnerUserId") == player.UserId then
+			return paper
+		end
+	end
+	return nil
+end
+
+local function bindPaper()
+	local paper = findMyPaper()
+	if not paper or paper == state.paper then
+		return
+	end
+	state.paper = paper
+	CameraRig.setPaper(paper)
+	PaperUI.mount(paper)
+	if PaperUI.snapshot then
+		PaperUI.render()
+	end
+end
+
+local function bindPhone(character: Model)
+	local phone = character:FindFirstChild("Celular")
+	local screen = phone and phone:FindFirstChild("Pantalla") :: BasePart?
+	if not screen or screen == state.screen then
+		return
+	end
+	state.screen = screen
+	CameraRig.setScreen(screen)
+	PhoneUI.mount(screen)
+	PhoneUI.setPhoneState(state.phoneState)
+end
+
+local function watchCharacter(character: Model)
+	bindPhone(character)
+	character.ChildAdded:Connect(function(child)
+		if child.Name == "Celular" then
+			task.wait(0.1)
+			bindPhone(character)
+		end
+	end)
+	character.ChildRemoved:Connect(function(child)
+		if child.Name == "Celular" then
+			state.screen = nil
+			CameraRig.setScreen(nil)
+			PhoneUI.destroy()
+			if state.phoneOut then
+				state.phoneOut = false
+				Hud.setPhoneOut(false)
+				CameraRig.setMode("libre")
+			end
+		end
+	end)
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Acciones
+-- ─────────────────────────────────────────────────────────────
+
+local function setPhoneOut(out: boolean)
+	if state.phoneOut == out then
+		return
+	end
+	state.phoneOut = out
+	Net.event(Net.Events.PhoneState):FireServer(out)
+	Hud.setPhoneOut(out)
+
+	if out then
+		PhoneUI.reset()
+		CameraRig.setMode("celu")
+		Util.playSound(Config.Sounds.PhoneOut, workspace, 0.4)
+	else
+		CameraRig.setMode("libre")
+	end
+end
+
+local function takePhoto()
+	if state.busy or not state.phoneOut then
+		return
+	end
+	local questionId = PaperUI.current
+	state.busy = true
+	PhoneUI.setBusy(true)
+
+	-- Gesto completo: apuntás el celu a la hoja, flash, y volvés a la pantalla.
+	CameraRig.setMode("hoja")
+	task.wait(0.28)
+	Hud.flash("", Color3.fromRGB(255, 255, 255))
+	Util.playSound(Config.Sounds.Shutter, workspace, 0.5)
+	task.wait(0.18)
+	CameraRig.setMode("celu")
+
+	local response = Net.func(Net.Functions.TakePhoto):InvokeServer(questionId)
+	state.busy = false
+	PhoneUI.setBusy(false)
+
+	if not response or not response.ok then
+		PhoneUI.system(response and response.reason or "No se pudo sacar la foto.")
+		return
+	end
+
+	PhoneUI.photo(response)
+	PhoneUI.setPendingPhoto(response)
+	Hud.refreshPrimary()
+end
+
+local function sendToRoGPT()
+	local photo = PhoneUI.getPendingPhoto()
+	if state.busy or not photo then
+		return
+	end
+	state.busy = true
+	PhoneUI.setBusy(true)
+	PhoneUI.setPendingPhoto(nil)
+
+	PhoneUI.system(string.format("Subiendo %s ...", photo.photoId))
+	Util.playSound(Config.Sounds.Send, workspace, 0.4)
+	task.wait(photo.uploadTime or 0.8)
+
+	local _, dismiss = PhoneUI.typing()
+	local response = Net.func(Net.Functions.AskRoGPT):InvokeServer(photo.photoId)
+
+	if not response or not response.ok then
+		dismiss()
+		PhoneUI.system(response and response.reason or "RoGPT no contesta.")
+		state.busy = false
+		PhoneUI.setBusy(false)
+		return
+	end
+
+	task.wait(response.thinkTime or 1.5)
+	dismiss()
+	Util.playSound(Config.Sounds.Reply, workspace, 0.4)
+	PhoneUI.answer(response)
+
+	state.busy = false
+	PhoneUI.setBusy(false)
+	Hud.refreshPrimary()
+end
+
+--- El boton grande de abajo cambia segun el momento.
+local function primaryAction()
+	if state.phoneState.confiscated then
+		Hud.notify("El profe te lo saco. Bancá un poco.", "warn")
+		return
+	end
+	if state.phase ~= "Prueba" then
+		Hud.notify("Todavia no empezo la prueba.", "info")
+		return
+	end
+	if not state.phoneOut then
+		setPhoneOut(true)
+		return
+	end
+	if PhoneUI.getPendingPhoto() then
+		task.spawn(sendToRoGPT)
+		return
+	end
+	task.spawn(takePhoto)
+end
+
+local function stashPhone()
+	if state.phoneOut then
+		setPhoneOut(false)
+	end
+end
+
+local function togglePaper()
+	CameraRig.toggle("hoja")
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Montaje
+-- ─────────────────────────────────────────────────────────────
+
+Hud.mount()
+CameraRig.start()
+
+Hud.onPrimary = primaryAction
+Hud.onStash = stashPhone
+Hud.onPaper = togglePaper
+
+PhoneUI.onTakePhoto = function()
+	task.spawn(takePhoto)
+end
+PhoneUI.onSend = function()
+	task.spawn(sendToRoGPT)
+end
+PhoneUI.onClose = stashPhone
+
+PaperUI.onAnswer = function(questionId: number, choice: number)
+	if state.phase ~= "Prueba" then
+		Hud.notify("La prueba no esta en curso.", "info")
+		return
+	end
+	task.spawn(function()
+		local response = Net.func(Net.Functions.SubmitAnswer):InvokeServer(questionId, choice)
+		if not response or not response.ok then
+			Hud.notify(response and response.reason or "No se pudo responder.", "warn")
+			return
+		end
+		if response.correct then
+			Util.playSound(Config.Sounds.Correct, workspace, 0.45)
+			Hud.notify("Correcto.", "success")
+		else
+			Util.playSound(Config.Sounds.Wrong, workspace, 0.45)
+			Hud.notify("Ese estaba mal.", "warn")
+		end
+		if response.finished then
+			Hud.notify(string.format("Entregaste la prueba. Nota: %.1f", response.grade), "info")
+		end
+	end)
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Remotes
+-- ─────────────────────────────────────────────────────────────
+
+Net.event(Net.Events.ExamUpdate).OnClientEvent:Connect(function(snapshot)
+	bindPaper()
+	PaperUI.setSnapshot(snapshot)
+	Hud.setExam(snapshot)
+end)
+
+Net.event(Net.Events.RiskUpdate).OnClientEvent:Connect(function(data)
+	Hud.setRisk(data)
+end)
+
+Net.event(Net.Events.RoundUpdate).OnClientEvent:Connect(function(data)
+	state.phase = data.phase
+	Hud.setRound(data)
+	if data.phase ~= "Prueba" and state.phoneOut then
+		setPhoneOut(false)
+	end
+	if data.phase == "Prueba" then
+		task.delay(1, bindPaper)
+	end
+end)
+
+Net.event(Net.Events.PhoneState).OnClientEvent:Connect(function(data)
+	state.phoneState = data
+	PhoneUI.setPhoneState(data)
+	Hud.setPhoneState(data)
+	if not data.out and state.phoneOut then
+		-- El servidor lo guardo por su cuenta (bateria, confiscacion, ronda).
+		state.phoneOut = false
+		Hud.setPhoneOut(false)
+		CameraRig.setMode("libre")
+	end
+end)
+
+Net.event(Net.Events.Notify).OnClientEvent:Connect(function(data)
+	Hud.notify(data.text, data.kind)
+end)
+
+Net.event(Net.Events.Caught).OnClientEvent:Connect(function(data)
+	state.phoneOut = false
+	Hud.setPhoneOut(false)
+	CameraRig.setMode("libre")
+	PhoneUI.reset()
+	Util.playSound(Config.Sounds.Caught, workspace, 0.6)
+	Hud.flash(data.expelled and "TE SACARON DE LA PRUEBA" or "TE PILLARON")
+end)
+
+-- ─────────────────────────────────────────────────────────────
+-- Teclado / gamepad
+-- ─────────────────────────────────────────────────────────────
+
+ContextActionService:BindAction("AulaCelular", function(_, inputState)
+	if inputState == Enum.UserInputState.Begin then
+		primaryAction()
+	end
+	return Enum.ContextActionResult.Sink
+end, false, Enum.KeyCode.F, Enum.KeyCode.ButtonX)
+
+ContextActionService:BindAction("AulaGuardar", function(_, inputState)
+	if inputState == Enum.UserInputState.Begin then
+		stashPhone()
+	end
+	return Enum.ContextActionResult.Sink
+end, false, Enum.KeyCode.Q, Enum.KeyCode.ButtonB)
+
+ContextActionService:BindAction("AulaHoja", function(_, inputState)
+	if inputState == Enum.UserInputState.Begin then
+		togglePaper()
+	end
+	return Enum.ContextActionResult.Sink
+end, false, Enum.KeyCode.E, Enum.KeyCode.ButtonY)
+
+-- ─────────────────────────────────────────────────────────────
+-- Personaje
+-- ─────────────────────────────────────────────────────────────
+
+if player.Character then
+	watchCharacter(player.Character)
+end
+player.CharacterAdded:Connect(function(character)
+	task.wait(0.5)
+	watchCharacter(character)
+	bindPaper()
+end)
+
+-- Reloj del celular, para que la barra de estado no quede muerta.
+task.spawn(function()
+	while true do
+		local now = os.date("*t")
+		PhoneUI.setClock(string.format("%02d:%02d", now.hour, now.min))
+		task.wait(20)
+	end
+end)
+
+-- Primer estado
+task.spawn(function()
+	local snapshot = Net.func(Net.Functions.GetExam):InvokeServer()
+	bindPaper()
+	if snapshot then
+		PaperUI.setSnapshot(snapshot)
+		Hud.setExam(snapshot)
+	end
+end)
+
+-- El banco puede tardar en asignarse (por ejemplo si entraste tarde).
+task.spawn(function()
+	while not state.paper do
+		bindPaper()
+		task.wait(1)
+	end
+end)
+]]></ProtectedString>
+        </Properties>
+        <Item class="ModuleScript" referent="RBX21">
+          <Properties>
+            <string name="Name">CameraRig</string>
+            <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	CameraRig
+	------------------------------------------------------------------
+	Tres encuadres, todos en 3D dentro del aula:
+
+		"libre"  -> camara normal de Roblox (mirás el aula, al profe, etc.)
+		"hoja"   -> plano cerrado sobre la hoja de la prueba
+		"celu"   -> plano cerrado sobre la pantalla del celular
+
+	Los cambios son con blend suave: nunca hay un corte seco.
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+
+local player = Players.LocalPlayer
+
+local CameraRig = {}
+CameraRig.mode = "libre"
+
+local camera = workspace.CurrentCamera
+local paperPart: BasePart? = nil
+local screenPart: BasePart? = nil
+local blend = 0
+local current: CFrame? = nil
+local baseFov = Config.Camera.FieldOfView
+
+function CameraRig.setPaper(part: BasePart?)
+	paperPart = part
+end
+
+function CameraRig.setScreen(part: BasePart?)
+	screenPart = part
+end
+
+function CameraRig.setMode(mode: string)
+	if CameraRig.mode == mode then
+		return
+	end
+	CameraRig.mode = mode
+	if mode == "libre" then
+		blend = 0
+	end
+end
+
+function CameraRig.toggle(mode: string)
+	CameraRig.setMode(CameraRig.mode == mode and "libre" or mode)
+end
+
+local function goalCFrame(): CFrame?
+	local character = player.Character
+	if not character then
+		return nil
+	end
+
+	if CameraRig.mode == "celu" and screenPart and screenPart.Parent then
+		-- La cara -Z de la pantalla es la que mira al alumno.
+		local origin = screenPart.CFrame * CFrame.new(0, 0, -2.15)
+		return CFrame.lookAt(origin.Position, screenPart.Position)
+	end
+
+	if CameraRig.mode == "hoja" and paperPart and paperPart.Parent then
+		local offset = Config.Camera.DeskOffset
+		local origin = paperPart.CFrame * CFrame.new(offset.X, offset.Y, offset.Z)
+		local target = paperPart.Position + Config.Camera.DeskLookOffset
+		return CFrame.lookAt(origin.Position, target)
+	end
+
+	return nil
+end
+
+function CameraRig.start()
+	camera = workspace.CurrentCamera
+
+	RunService:BindToRenderStep("AulaCamera", Enum.RenderPriority.Camera.Value + 1, function(dt)
+		camera = workspace.CurrentCamera
+		if not camera then
+			return
+		end
+
+		local goal = goalCFrame()
+		local speed = math.clamp(dt / Config.Camera.BlendTime, 0, 1)
+
+		if goal then
+			if camera.CameraType ~= Enum.CameraType.Scriptable then
+				camera.CameraType = Enum.CameraType.Scriptable
+				current = camera.CFrame
+			end
+			current = (current or camera.CFrame):Lerp(goal, speed)
+			camera.CFrame = current
+			blend = math.min(1, blend + dt * 3)
+
+			local targetFov = CameraRig.mode == "celu" and Config.Camera.PhoneFieldOfView or baseFov
+			camera.FieldOfView += (targetFov - camera.FieldOfView) * speed
+		else
+			if camera.CameraType == Enum.CameraType.Scriptable then
+				camera.CameraType = Enum.CameraType.Custom
+				camera.CameraSubject = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+				current = nil
+			end
+			camera.FieldOfView += (baseFov - camera.FieldOfView) * speed
+		end
+	end)
+end
+
+function CameraRig.stop()
+	RunService:UnbindFromRenderStep("AulaCamera")
+	if camera then
+		camera.CameraType = Enum.CameraType.Custom
+	end
+end
+
+return CameraRig
+]]></ProtectedString>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="RBX22">
+          <Properties>
+            <string name="Name">Hud</string>
+            <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Hud
+	------------------------------------------------------------------
+	Lo unico que vive pegado a la camara, y a proposito: son los
+	controles y el medidor de riesgo. Todo el resto del juego (la hoja,
+	el celular, RoGPT) pasa en objetos 3D adentro del aula.
+
+		arriba   -> estado del profe + barra de riesgo + reloj de la prueba
+		abajo    -> el boton grande de accion (sacar el celu / sacar foto)
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Theme = require(Shared:WaitForChild("Theme"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local player = Players.LocalPlayer
+
+local Hud = {}
+Hud.onPrimary = nil :: (() -> ())?
+Hud.onStash = nil :: (() -> ())?
+Hud.onPaper = nil :: (() -> ())?
+
+local refs: { [string]: any } = {}
+local phoneOut = false
+local lastRisk = 0
+local lastDanger = false
+local confiscated = false
+
+local function el(className: string, props: { [string]: any }, parent: Instance?): any
+	local instance = Instance.new(className)
+	for key, value in props do
+		(instance :: any)[key] = value
+	end
+	if parent then
+		instance.Parent = parent
+	end
+	return instance
+end
+
+local STATE_LABEL = {
+	Patrullando = "recorriendo los pasillos",
+	Revisando = "revisando una prueba",
+	Pizarron = "escribiendo en el pizarron",
+	Confrontando = "viene para tu banco",
+}
+
+-- ─────────────────────────────────────────────────────────────
+-- Construccion
+-- ─────────────────────────────────────────────────────────────
+
+function Hud.mount()
+	local playerGui = player:WaitForChild("PlayerGui")
+	local existing = playerGui:FindFirstChild("AulaHud")
+	if existing then
+		existing:Destroy()
+	end
+
+	local screen = el("ScreenGui", {
+		Name = "AulaHud",
+		ResetOnSpawn = false,
+		IgnoreGuiInset = true,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		Parent = playerGui,
+	})
+	refs.screen = screen
+
+	-- ── Panel del profesor ────────────────────────────────
+	local teacher = el("Frame", {
+		Name = "Profesor",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 18),
+		Size = UDim2.fromOffset(420, 78),
+		BackgroundColor3 = Theme.Hud.Panel,
+		BackgroundTransparency = 0.15,
+		BorderSizePixel = 0,
+	}, screen)
+	Util.roundify(teacher, 14, Color3.fromRGB(58, 62, 74), 1)
+
+	el("TextLabel", {
+		Size = UDim2.new(1, -28, 0, 20),
+		Position = UDim2.fromOffset(14, 10),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		Text = Config.Teacher.DisplayName:upper(),
+		TextColor3 = Theme.Hud.Text,
+		TextSize = 15,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, teacher)
+
+	refs.teacherState = el("TextLabel", {
+		Size = UDim2.new(1, -28, 0, 18),
+		Position = UDim2.fromOffset(14, 30),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = "recorriendo los pasillos",
+		TextColor3 = Color3.fromRGB(168, 174, 188),
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, teacher)
+
+	local track = el("Frame", {
+		Size = UDim2.new(1, -28, 0, 10),
+		Position = UDim2.new(0, 14, 1, -20),
+		BackgroundColor3 = Color3.fromRGB(42, 45, 54),
+		BorderSizePixel = 0,
+	}, teacher)
+	Util.roundify(track, 5)
+
+	refs.riskBar = el("Frame", {
+		Size = UDim2.fromScale(0, 1),
+		BackgroundColor3 = Theme.Hud.Safe,
+		BorderSizePixel = 0,
+	}, track)
+	Util.roundify(refs.riskBar, 5)
+
+	refs.riskText = el("TextLabel", {
+		AnchorPoint = Vector2.new(1, 0),
+		Size = UDim2.fromOffset(120, 20),
+		Position = UDim2.new(1, -14, 0, 10),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		Text = "SEGURO",
+		TextColor3 = Theme.Hud.Safe,
+		TextSize = 15,
+		TextXAlignment = Enum.TextXAlignment.Right,
+	}, teacher)
+
+	-- ── Reloj / progreso ──────────────────────────────────
+	local round = el("Frame", {
+		Name = "Ronda",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -18, 0, 18),
+		Size = UDim2.fromOffset(190, 78),
+		BackgroundColor3 = Theme.Hud.Panel,
+		BackgroundTransparency = 0.15,
+		BorderSizePixel = 0,
+	}, screen)
+	Util.roundify(round, 14, Color3.fromRGB(58, 62, 74), 1)
+
+	refs.phase = el("TextLabel", {
+		Size = UDim2.new(1, -24, 0, 18),
+		Position = UDim2.fromOffset(12, 10),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = "PREPARACION",
+		TextColor3 = Color3.fromRGB(168, 174, 188),
+		TextSize = 13,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, round)
+
+	refs.timer = el("TextLabel", {
+		Size = UDim2.new(1, -24, 0, 30),
+		Position = UDim2.fromOffset(12, 26),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		Text = "00:00",
+		TextColor3 = Theme.Hud.Text,
+		TextSize = 28,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, round)
+
+	refs.progress = el("TextLabel", {
+		Size = UDim2.new(1, -24, 0, 16),
+		Position = UDim2.new(0, 12, 1, -22),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = "0 / 0 respondidos",
+		TextColor3 = Color3.fromRGB(150, 156, 168),
+		TextSize = 13,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, round)
+
+	-- ── Aviso grande "te esta mirando" ────────────────────
+	refs.warning = el("TextLabel", {
+		Name = "Aviso",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 108),
+		Size = UDim2.fromOffset(460, 44),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		Text = "",
+		TextColor3 = Theme.Hud.Danger,
+		TextSize = 30,
+		TextTransparency = 1,
+	}, screen)
+
+	-- ── Barra de acciones (abajo) ─────────────────────────
+	local bottom = el("Frame", {
+		Name = "Acciones",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -26),
+		Size = UDim2.fromOffset(620, 78),
+		BackgroundTransparency = 1,
+	}, screen)
+
+	el("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 12),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+	}, bottom)
+
+	local function button(name: string, text: string, order: number, width: number, color: Color3, textSize: number): TextButton
+		local instance = el("TextButton", {
+			Name = name,
+			LayoutOrder = order,
+			Size = UDim2.fromOffset(width, 62),
+			BackgroundColor3 = color,
+			AutoButtonColor = true,
+			Font = Theme.FontBold,
+			Text = text,
+			TextColor3 = Theme.Hud.Text,
+			TextSize = textSize,
+			BorderSizePixel = 0,
+		}, bottom)
+		Util.roundify(instance, 16, Color3.fromRGB(255, 255, 255), 0)
+		local stroke = instance:FindFirstChildOfClass("UIStroke")
+		if stroke then
+			stroke.Transparency = 0.85
+		end
+		return instance
+	end
+
+	refs.paperButton = button("Hoja", "Ver la hoja  [E]", 1, 190, Color3.fromRGB(38, 42, 52), 18)
+	refs.primaryButton = button("Principal", "📷  Sacar el celular", 2, 300, Theme.Hud.Safe, 22)
+	refs.stashButton = button("Guardar", "Guardar  [Q]", 3, 170, Color3.fromRGB(38, 42, 52), 18)
+	refs.stashButton.Visible = false
+
+	refs.hint = el("TextLabel", {
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -8),
+		Size = UDim2.fromOffset(700, 18),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = "Sacá el celular cuando el profe no te vea. Con la foto, RoGPT te resuelve el ejercicio.",
+		TextColor3 = Color3.fromRGB(150, 156, 168),
+		TextSize = 14,
+	}, screen)
+
+	refs.primaryButton.MouseButton1Click:Connect(function()
+		if Hud.onPrimary then
+			Hud.onPrimary()
+		end
+	end)
+	refs.stashButton.MouseButton1Click:Connect(function()
+		if Hud.onStash then
+			Hud.onStash()
+		end
+	end)
+	refs.paperButton.MouseButton1Click:Connect(function()
+		if Hud.onPaper then
+			Hud.onPaper()
+		end
+	end)
+
+	-- ── Toasts ────────────────────────────────────────────
+	refs.toasts = el("Frame", {
+		Name = "Avisos",
+		AnchorPoint = Vector2.new(0, 0),
+		Position = UDim2.fromOffset(18, 18),
+		Size = UDim2.fromOffset(330, 300),
+		BackgroundTransparency = 1,
+	}, screen)
+	el("UIListLayout", {
+		Padding = UDim.new(0, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, refs.toasts)
+
+	-- ── Flash de "te pillaron" ────────────────────────────
+	refs.flash = el("Frame", {
+		Name = "Flash",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Theme.Hud.Danger,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ZIndex = 10,
+		Visible = true,
+	}, screen)
+
+	refs.flashText = el("TextLabel", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.42),
+		Size = UDim2.fromOffset(800, 90),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		Text = "",
+		TextColor3 = Color3.fromRGB(255, 255, 255),
+		TextSize = 54,
+		TextTransparency = 1,
+		ZIndex = 11,
+	}, screen)
+
+	return screen
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Actualizaciones
+-- ─────────────────────────────────────────────────────────────
+
+function Hud.setRisk(data: any)
+	if not refs.riskBar then
+		return
+	end
+	local risk = data.risk or 0
+	lastRisk = risk
+	local color = Theme.riskColor(risk)
+
+	TweenService:Create(refs.riskBar, TweenInfo.new(0.18), {
+		Size = UDim2.fromScale(math.clamp(risk, 0, 1), 1),
+		BackgroundColor3 = color,
+	}):Play()
+
+	refs.teacherState.Text = STATE_LABEL[data.teacherState] or "en el aula"
+	if data.inspecting then
+		refs.teacherState.Text = "esta parado en tu banco"
+	end
+
+	local label
+	if data.teacherState == "Pizarron" then
+		label = "ESTA DE ESPALDAS"
+	elseif data.seen then
+		label = "TE VE"
+	elseif risk > Config.Teacher.RiskWarning then
+		label = "SOSPECHA"
+	else
+		label = "SEGURO"
+	end
+	refs.riskText.Text = label
+	refs.riskText.TextColor3 = color
+
+	local danger = (data.seen and phoneOut) == true
+	if danger ~= lastDanger then
+		lastDanger = danger
+		refs.warning.Text = danger and "TE ESTA MIRANDO — GUARDÁ EL CELULAR" or ""
+		TweenService:Create(refs.warning, TweenInfo.new(0.2), {
+			TextTransparency = danger and 0 or 1,
+		}):Play()
+	end
+
+	Hud.refreshPrimary()
+end
+
+function Hud.setPhoneOut(out: boolean)
+	phoneOut = out
+	if refs.stashButton then
+		refs.stashButton.Visible = out
+	end
+	Hud.refreshPrimary()
+end
+
+function Hud.refreshPrimary()
+	local button = refs.primaryButton
+	if not button or confiscated then
+		return
+	end
+
+	if phoneOut then
+		button.Text = "📷  Sacar foto"
+		button.Size = UDim2.fromOffset(260, 62)
+	else
+		button.Text = "📷  Sacar el celular"
+		button.Size = UDim2.fromOffset(300, 62)
+	end
+
+	-- Verde = momento seguro; rojo = te va a ver.
+	local color = Theme.riskColor(lastRisk)
+	button.BackgroundColor3 = color:Lerp(Color3.fromRGB(20, 22, 28), 0.15)
+end
+
+function Hud.setPhoneState(state: any)
+	if not refs.hint then
+		return
+	end
+	confiscated = state.confiscated == true
+	if confiscated then
+		refs.hint.Text = string.format("El profe te confisco el celular. Te lo devuelve en %ds.", math.ceil(state.confiscatedFor))
+		refs.primaryButton.AutoButtonColor = false
+		refs.primaryButton.BackgroundColor3 = Color3.fromRGB(48, 50, 58)
+		refs.primaryButton.Text = "Sin celular"
+	else
+		refs.primaryButton.AutoButtonColor = true
+		refs.hint.Text = string.format("Bateria %d%%  ·  Sacá el celular cuando el profe no te vea.", state.battery)
+		Hud.refreshPrimary()
+	end
+end
+
+function Hud.setRound(data: any)
+	if not refs.timer then
+		return
+	end
+	local minutes = math.floor(data.timeLeft / 60)
+	local seconds = data.timeLeft % 60
+	refs.timer.Text = string.format("%02d:%02d", minutes, seconds)
+	refs.phase.Text = string.upper(data.phase)
+	refs.phase.TextColor3 = data.phase == "Prueba" and Theme.Hud.Safe or Color3.fromRGB(168, 174, 188)
+end
+
+function Hud.setExam(snapshot: any)
+	if not refs.progress then
+		return
+	end
+	refs.progress.Text = string.format("%d / %d respondidos  ·  nota %.1f",
+		snapshot.answered, #snapshot.questions, snapshot.grade)
+end
+
+function Hud.notify(text: string, kind: string?)
+	if not refs.toasts then
+		return
+	end
+	local color = Theme.Hud.Safe
+	if kind == "danger" then
+		color = Theme.Hud.Danger
+	elseif kind == "warn" then
+		color = Theme.Hud.Warn
+	elseif kind == "info" then
+		color = Color3.fromRGB(92, 148, 232)
+	end
+
+	local toast = el("Frame", {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = Theme.Hud.Panel,
+		BackgroundTransparency = 0.1,
+		BorderSizePixel = 0,
+		LayoutOrder = -os.time(),
+	}, refs.toasts)
+	Util.roundify(toast, 12, color, 2)
+	el("UIPadding", {
+		PaddingTop = UDim.new(0, 10),
+		PaddingBottom = UDim.new(0, 10),
+		PaddingLeft = UDim.new(0, 12),
+		PaddingRight = UDim.new(0, 12),
+	}, toast)
+	el("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = text,
+		TextColor3 = Theme.Hud.Text,
+		TextSize = 16,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, toast)
+
+	task.delay(5, function()
+		if toast.Parent then
+			TweenService:Create(toast, TweenInfo.new(0.35), { BackgroundTransparency = 1 }):Play()
+			task.wait(0.35)
+			toast:Destroy()
+		end
+	end)
+end
+
+--- Golpe de color a pantalla completa: rojo cuando te pillan,
+--- blanco cuando dispara el flash de la camara.
+function Hud.flash(text: string, color: Color3?)
+	if not refs.flash then
+		return
+	end
+	refs.flash.BackgroundColor3 = color or Theme.Hud.Danger
+	refs.flashText.Text = text
+	refs.flash.BackgroundTransparency = color and 0.2 or 0.45
+	refs.flashText.TextTransparency = 0
+
+	TweenService:Create(refs.flash, TweenInfo.new(1.1), { BackgroundTransparency = 1 }):Play()
+	TweenService:Create(refs.flashText, TweenInfo.new(1.6), { TextTransparency = 1 }):Play()
+end
+
+return Hud
+]]></ProtectedString>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="RBX23">
+          <Properties>
+            <string name="Name">PaperUI</string>
+            <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	PaperUI
+	------------------------------------------------------------------
+	La hoja de la prueba. No es una pantalla plana pegada a la camara:
+	es una SurfaceGui montada sobre la hoja fisica que esta apoyada en
+	el banco, con el Adornee puesto desde el PlayerGui (que es lo que
+	hace que los botones sean clickeables en el mundo 3D).
+
+	Se ve un ejercicio por vez, con sus cuatro opciones y una tira de
+	pestañas abajo para moverse entre los 8 ejercicios.
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Theme = require(Shared:WaitForChild("Theme"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local player = Players.LocalPlayer
+
+local PaperUI = {}
+PaperUI.current = 1
+PaperUI.snapshot = nil :: any
+PaperUI.onAnswer = nil :: ((number, number) -> ())?
+PaperUI.onSelect = nil :: ((number) -> ())?
+
+local LETTERS = { "A", "B", "C", "D" }
+
+local gui: SurfaceGui? = nil
+local refs: { [string]: any } = {}
+
+local function el(className: string, props: { [string]: any }, parent: Instance?): any
+	local instance = Instance.new(className)
+	for key, value in props do
+		(instance :: any)[key] = value
+	end
+	if parent then
+		instance.Parent = parent
+	end
+	return instance
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Construccion
+-- ─────────────────────────────────────────────────────────────
+
+function PaperUI.mount(paperPart: BasePart)
+	if gui then
+		gui:Destroy()
+	end
+
+	local playerGui = player:WaitForChild("PlayerGui")
+
+	gui = el("SurfaceGui", {
+		Name = "HojaDePrueba",
+		Adornee = paperPart,
+		Face = Enum.NormalId.Top,
+		SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud,
+		PixelsPerStud = 340,
+		LightInfluence = 0.25,
+		MaxDistance = 40,
+		AlwaysOnTop = false,
+		Active = true,  -- sin esto los botones no se pueden clickear en 3D
+		ResetOnSpawn = false,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		Parent = playerGui,
+	})
+
+	local sheet = el("Frame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Theme.Paper.Background,
+		BorderSizePixel = 0,
+	}, gui)
+
+	-- ── Encabezado ────────────────────────────────────────
+	local header = el("Frame", {
+		Size = UDim2.new(1, 0, 0, 92),
+		BackgroundTransparency = 1,
+	}, sheet)
+
+	el("TextLabel", {
+		Size = UDim2.new(0.62, 0, 0, 34),
+		Position = UDim2.fromOffset(28, 16),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		Text = "EVALUACION DE MATEMATICA",
+		TextColor3 = Theme.Paper.Ink,
+		TextSize = 30,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, header)
+
+	refs.student = el("TextLabel", {
+		Size = UDim2.new(0.62, 0, 0, 24),
+		Position = UDim2.fromOffset(28, 52),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = string.format("Alumno: %s   ·   Curso: 3° B   ·   Tema: unico", player.DisplayName),
+		TextColor3 = Theme.Paper.InkSoft,
+		TextSize = 20,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, header)
+
+	local gradeBox = el("Frame", {
+		Size = UDim2.fromOffset(120, 62),
+		Position = UDim2.new(1, -148, 0, 16),
+		BackgroundColor3 = Theme.Paper.Background,
+		BorderSizePixel = 0,
+	}, header)
+	Util.roundify(gradeBox, 8, Theme.Paper.Line, 2)
+
+	el("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 18),
+		Position = UDim2.fromOffset(0, 6),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = "NOTA",
+		TextColor3 = Theme.Paper.InkSoft,
+		TextSize = 14,
+	}, gradeBox)
+
+	refs.grade = el("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 34),
+		Position = UDim2.fromOffset(0, 22),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		Text = "-",
+		TextColor3 = Theme.Paper.Accent,
+		TextSize = 30,
+	}, gradeBox)
+
+	el("Frame", {
+		Size = UDim2.new(1, -56, 0, 2),
+		Position = UDim2.fromOffset(28, 88),
+		BackgroundColor3 = Theme.Paper.Line,
+		BorderSizePixel = 0,
+	}, header)
+
+	-- ── Cuerpo del ejercicio ──────────────────────────────
+	local body = el("Frame", {
+		Size = UDim2.new(1, -56, 1, -212),
+		Position = UDim2.fromOffset(28, 104),
+		BackgroundTransparency = 1,
+	}, sheet)
+
+	refs.topic = el("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 22),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = "",
+		TextColor3 = Theme.Paper.Accent,
+		TextSize = 18,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, body)
+
+	refs.prompt = el("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 84),
+		Position = UDim2.fromOffset(0, 26),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		Text = "",
+		TextColor3 = Theme.Paper.Ink,
+		TextSize = 34,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+	}, body)
+
+	local options = el("Frame", {
+		Size = UDim2.new(1, 0, 1, -118),
+		Position = UDim2.fromOffset(0, 118),
+		BackgroundTransparency = 1,
+	}, body)
+
+	el("UIGridLayout", {
+		CellSize = UDim2.new(0.5, -10, 0.5, -10),
+		CellPadding = UDim2.fromOffset(20, 16),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, options)
+
+	refs.options = {}
+	for index = 1, 4 do
+		local button = el("TextButton", {
+			Name = "Opcion" .. index,
+			LayoutOrder = index,
+			BackgroundColor3 = Theme.Paper.Background,
+			AutoButtonColor = false,
+			Font = Theme.Font,
+			Text = "",
+			TextColor3 = Theme.Paper.Ink,
+			TextSize = 26,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			BorderSizePixel = 0,
+		}, options)
+		Util.roundify(button, 10, Theme.Paper.Line, 2)
+
+		el("UIPadding", { PaddingLeft = UDim.new(0, 58), PaddingRight = UDim.new(0, 12) }, button)
+
+		local bullet = el("Frame", {
+			Name = "Bullet",
+			Size = UDim2.fromOffset(34, 34),
+			Position = UDim2.new(0, -48, 0.5, -17),
+			BackgroundColor3 = Theme.Paper.Background,
+			BorderSizePixel = 0,
+		}, button)
+		Util.roundify(bullet, 17, Theme.Paper.InkSoft, 2)
+
+		el("TextLabel", {
+			Name = "Letra",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			Font = Theme.FontBold,
+			Text = LETTERS[index],
+			TextColor3 = Theme.Paper.InkSoft,
+			TextSize = 20,
+		}, bullet)
+
+		button.MouseButton1Click:Connect(function()
+			if PaperUI.onAnswer then
+				PaperUI.onAnswer(PaperUI.current, index)
+			end
+		end)
+
+		refs.options[index] = button
+	end
+
+	-- ── Pestañas de ejercicios ────────────────────────────
+	local tabs = el("Frame", {
+		Size = UDim2.new(1, -56, 0, 64),
+		Position = UDim2.new(0, 28, 1, -84),
+		BackgroundTransparency = 1,
+	}, sheet)
+
+	el("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 10),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+	}, tabs)
+
+	refs.tabs = {}
+	refs.tabsFrame = tabs
+
+	el("Frame", {
+		Size = UDim2.new(1, -56, 0, 2),
+		Position = UDim2.new(0, 28, 1, -96),
+		BackgroundColor3 = Theme.Paper.Line,
+		BorderSizePixel = 0,
+	}, sheet)
+
+	refs.footer = el("TextLabel", {
+		Size = UDim2.new(1, -56, 0, 20),
+		Position = UDim2.new(0, 28, 1, -22),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = "Tocá una opcion para responder. El celular esta abajo del banco.",
+		TextColor3 = Theme.Paper.InkSoft,
+		TextSize = 16,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, sheet)
+
+	return gui
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Render
+-- ─────────────────────────────────────────────────────────────
+
+local function buildTabs(count: number)
+	if #refs.tabs == count then
+		return
+	end
+	for _, tab in refs.tabs do
+		tab:Destroy()
+	end
+	refs.tabs = {}
+
+	for index = 1, count do
+		local tab = el("TextButton", {
+			Name = "Tab" .. index,
+			LayoutOrder = index,
+			Size = UDim2.fromOffset(46, 46),
+			BackgroundColor3 = Theme.Paper.Background,
+			AutoButtonColor = false,
+			Font = Theme.FontBold,
+			Text = tostring(index),
+			TextColor3 = Theme.Paper.InkSoft,
+			TextSize = 20,
+			BorderSizePixel = 0,
+		}, refs.tabsFrame)
+		Util.roundify(tab, 10, Theme.Paper.Line, 2)
+
+		tab.MouseButton1Click:Connect(function()
+			PaperUI.setCurrent(index)
+		end)
+		refs.tabs[index] = tab
+	end
+end
+
+function PaperUI.setCurrent(index: number)
+	local snapshot = PaperUI.snapshot
+	if not snapshot then
+		return
+	end
+	PaperUI.current = math.clamp(index, 1, #snapshot.questions)
+	PaperUI.render()
+	if PaperUI.onSelect then
+		PaperUI.onSelect(PaperUI.current)
+	end
+end
+
+function PaperUI.firstUnanswered(): number
+	local snapshot = PaperUI.snapshot
+	if not snapshot then
+		return 1
+	end
+	for index = 1, #snapshot.questions do
+		if not snapshot.answers[index] then
+			return index
+		end
+	end
+	return #snapshot.questions
+end
+
+function PaperUI.setSnapshot(snapshot: any)
+	local first = PaperUI.snapshot == nil
+	PaperUI.snapshot = snapshot
+	if first or snapshot.answers[PaperUI.current] then
+		PaperUI.current = PaperUI.firstUnanswered()
+	end
+	PaperUI.render()
+	if PaperUI.onSelect then
+		PaperUI.onSelect(PaperUI.current)
+	end
+end
+
+function PaperUI.render()
+	local snapshot = PaperUI.snapshot
+	if not gui or not snapshot then
+		return
+	end
+
+	buildTabs(#snapshot.questions)
+
+	local question = snapshot.questions[PaperUI.current]
+	if not question then
+		return
+	end
+	local record = snapshot.answers[PaperUI.current]
+
+	refs.topic.Text = string.format("Ejercicio %d de %d  ·  %s", PaperUI.current, #snapshot.questions, question.topic)
+	refs.prompt.Text = question.prompt
+	refs.grade.Text = snapshot.answered > 0 and string.format("%.1f", snapshot.grade) or "-"
+
+	for index, button in refs.options do
+		local text = question.choices[index] or ""
+		button.Text = text
+		button.Visible = text ~= ""
+
+		local bullet = button:FindFirstChild("Bullet")
+		local letter = bullet and bullet:FindFirstChild("Letra")
+		local stroke = button:FindFirstChildOfClass("UIStroke")
+		local bulletStroke = bullet and bullet:FindFirstChildOfClass("UIStroke")
+
+		local color = Theme.Paper.Line
+		local fill = Theme.Paper.Background
+		local ink = Theme.Paper.Ink
+
+		if record then
+			if index == record.choice then
+				color = record.correct and Theme.Paper.Correct or Theme.Paper.Wrong
+				fill = color:Lerp(Theme.Paper.Background, 0.85)
+				ink = color
+			else
+				ink = Theme.Paper.InkSoft
+			end
+		end
+
+		button.BackgroundColor3 = fill
+		button.TextColor3 = ink
+		if stroke then
+			stroke.Color = color
+			stroke.Thickness = record and index == record.choice and 3 or 2
+		end
+		if bulletStroke then
+			bulletStroke.Color = color
+		end
+		if letter then
+			letter.TextColor3 = ink
+		end
+	end
+
+	for index, tab in refs.tabs do
+		local answered = snapshot.answers[index]
+		local stroke = tab:FindFirstChildOfClass("UIStroke")
+		local isCurrent = index == PaperUI.current
+
+		if answered then
+			local color = answered.correct and Theme.Paper.Correct or Theme.Paper.Wrong
+			tab.BackgroundColor3 = color:Lerp(Theme.Paper.Background, 0.82)
+			tab.TextColor3 = color
+			if stroke then
+				stroke.Color = color
+			end
+		else
+			tab.BackgroundColor3 = Theme.Paper.Background
+			tab.TextColor3 = Theme.Paper.InkSoft
+			if stroke then
+				stroke.Color = Theme.Paper.Line
+			end
+		end
+
+		if isCurrent then
+			tab.TextColor3 = Theme.Paper.Accent
+			if stroke then
+				stroke.Color = Theme.Paper.Accent
+				stroke.Thickness = 3
+			end
+		elseif stroke then
+			stroke.Thickness = 2
+		end
+	end
+
+	if record then
+		refs.footer.Text = record.correct
+			and "Bien. Pasá al siguiente ejercicio."
+			or "Ese estaba mal. Ya no se puede corregir."
+	elseif snapshot.finished then
+		refs.footer.Text = "Prueba entregada."
+	else
+		refs.footer.Text = "Tocá una opcion para responder. La foto del celular sale de este ejercicio."
+	end
+end
+
+function PaperUI.setEnabled(enabled: boolean)
+	if gui then
+		gui.Enabled = enabled
+	end
+end
+
+function PaperUI.destroy()
+	if gui then
+		gui:Destroy()
+		gui = nil
+	end
+end
+
+return PaperUI
+]]></ProtectedString>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="RBX24">
+          <Properties>
+            <string name="Name">PhoneUI</string>
+            <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	PhoneUI — la app RoGPT
+	------------------------------------------------------------------
+	Interfaz montada sobre la pantalla fisica del celular 3D que el
+	alumno tiene soldado al cuerpo. No hay ninguna pantalla pegada a la
+	camara: si el celular esta abajo del banco, la app esta abajo del
+	banco, y para leerla hay que levantarlo (y arriesgarse).
+
+	Flujo completo:
+		sacar foto  ->  se ve la miniatura de la hoja
+		enviar      ->  "Subiendo imagen..." + "RoGPT esta escribiendo"
+		respuesta   ->  resolucion paso a paso, tipeada en vivo
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Theme = require(Shared:WaitForChild("Theme"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local player = Players.LocalPlayer
+local P = Config.Phone
+
+local PhoneUI = {}
+PhoneUI.onTakePhoto = nil :: (() -> ())?
+PhoneUI.onSend = nil :: (() -> ())?
+PhoneUI.onClose = nil :: (() -> ())?
+
+local gui: SurfaceGui? = nil
+local refs: { [string]: any } = {}
+local busy = false
+local pendingPhoto: any = nil
+local typingToken = 0
+
+local function el(className: string, props: { [string]: any }, parent: Instance?): any
+	local instance = Instance.new(className)
+	for key, value in props do
+		(instance :: any)[key] = value
+	end
+	if parent then
+		instance.Parent = parent
+	end
+	return instance
+end
+
+local function scrollToBottom()
+	task.defer(function()
+		if refs.chat then
+			refs.chat.CanvasPosition = Vector2.new(0, math.max(0, refs.chat.AbsoluteCanvasSize.Y))
+		end
+	end)
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Construccion
+-- ─────────────────────────────────────────────────────────────
+
+function PhoneUI.mount(screenPart: BasePart)
+	if gui then
+		gui:Destroy()
+	end
+	local playerGui = player:WaitForChild("PlayerGui")
+
+	gui = el("SurfaceGui", {
+		Name = "RoGPT",
+		Adornee = screenPart,
+		Face = Enum.NormalId.Front,
+		SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud,
+		PixelsPerStud = 600,
+		LightInfluence = 0,
+		Brightness = 2,
+		MaxDistance = 25,
+		Active = true,
+		ResetOnSpawn = false,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		Parent = playerGui,
+	})
+
+	local screen = el("Frame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Theme.Phone.Background,
+		BorderSizePixel = 0,
+	}, gui)
+
+	-- ── Barra de estado ───────────────────────────────────
+	local status = el("Frame", {
+		Size = UDim2.new(1, 0, 0, 34),
+		BackgroundTransparency = 1,
+	}, screen)
+
+	refs.clock = el("TextLabel", {
+		Size = UDim2.new(0.4, 0, 1, 0),
+		Position = UDim2.fromOffset(16, 0),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		Text = "10:24",
+		TextColor3 = Theme.Phone.Text,
+		TextSize = 16,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, status)
+
+	refs.battery = el("TextLabel", {
+		Size = UDim2.new(0.5, -16, 1, 0),
+		Position = UDim2.new(0.5, 0, 0, 0),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = "▮▮▮  100%",
+		TextColor3 = Theme.Phone.Battery,
+		TextSize = 15,
+		TextXAlignment = Enum.TextXAlignment.Right,
+	}, status)
+
+	-- ── Header de la app ──────────────────────────────────
+	local header = el("Frame", {
+		Size = UDim2.new(1, 0, 0, 62),
+		Position = UDim2.fromOffset(0, 34),
+		BackgroundColor3 = Theme.Phone.Surface,
+		BorderSizePixel = 0,
+	}, screen)
+
+	local logo = el("Frame", {
+		Size = UDim2.fromOffset(38, 38),
+		Position = UDim2.fromOffset(14, 12),
+		BackgroundColor3 = Theme.Phone.Accent,
+		BorderSizePixel = 0,
+	}, header)
+	Util.roundify(logo, 12)
+
+	el("TextLabel", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		Text = "R",
+		TextColor3 = Color3.fromRGB(12, 14, 18),
+		TextSize = 22,
+	}, logo)
+
+	el("TextLabel", {
+		Size = UDim2.new(1, -70, 0, 22),
+		Position = UDim2.fromOffset(62, 12),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		Text = "RoGPT",
+		TextColor3 = Theme.Phone.Text,
+		TextSize = 20,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, header)
+
+	refs.subtitle = el("TextLabel", {
+		Size = UDim2.new(1, -70, 0, 18),
+		Position = UDim2.fromOffset(62, 32),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = P.ModelName .. " · en linea",
+		TextColor3 = Theme.Phone.Accent,
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, header)
+
+	-- ── Chat ──────────────────────────────────────────────
+	refs.chat = el("ScrollingFrame", {
+		Size = UDim2.new(1, 0, 1, -196),
+		Position = UDim2.fromOffset(0, 96),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 3,
+		ScrollBarImageColor3 = Theme.Phone.SurfaceAlt,
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		ElasticBehavior = Enum.ElasticBehavior.Never,
+	}, screen)
+
+	el("UIListLayout", {
+		Padding = UDim.new(0, 10),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+	}, refs.chat)
+
+	el("UIPadding", {
+		PaddingTop = UDim.new(0, 12),
+		PaddingBottom = UDim.new(0, 12),
+		PaddingLeft = UDim.new(0, 12),
+		PaddingRight = UDim.new(0, 12),
+	}, refs.chat)
+
+	-- ── Barra de acciones ─────────────────────────────────
+	local bar = el("Frame", {
+		Size = UDim2.new(1, 0, 0, 100),
+		Position = UDim2.new(0, 0, 1, -100),
+		BackgroundColor3 = Theme.Phone.Surface,
+		BorderSizePixel = 0,
+	}, screen)
+
+	local function actionButton(name: string, text: string, order: number, color: Color3): TextButton
+		local button = el("TextButton", {
+			Name = name,
+			LayoutOrder = order,
+			Size = UDim2.new(0, 0, 0, 46),
+			AutomaticSize = Enum.AutomaticSize.X,
+			BackgroundColor3 = color,
+			AutoButtonColor = true,
+			Font = Theme.FontBold,
+			Text = text,
+			TextColor3 = Theme.Phone.Text,
+			TextSize = 17,
+			BorderSizePixel = 0,
+		}, bar)
+		Util.roundify(button, 12)
+		el("UIPadding", { PaddingLeft = UDim.new(0, 16), PaddingRight = UDim.new(0, 16) }, button)
+		return button
+	end
+
+	el("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+	}, bar)
+
+	refs.photoButton = actionButton("Foto", "📷  Foto", 1, Theme.Phone.SurfaceAlt)
+	refs.sendButton = actionButton("Enviar", "Enviar ▸", 2, Theme.Phone.Accent)
+	refs.closeButton = actionButton("Guardar", "Guardar", 3, Theme.Phone.SurfaceAlt)
+
+	refs.photoButton.MouseButton1Click:Connect(function()
+		if PhoneUI.onTakePhoto then
+			PhoneUI.onTakePhoto()
+		end
+	end)
+	refs.sendButton.MouseButton1Click:Connect(function()
+		if PhoneUI.onSend then
+			PhoneUI.onSend()
+		end
+	end)
+	refs.closeButton.MouseButton1Click:Connect(function()
+		if PhoneUI.onClose then
+			PhoneUI.onClose()
+		end
+	end)
+
+	PhoneUI.reset()
+	return gui
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Mensajes
+-- ─────────────────────────────────────────────────────────────
+
+local order = 0
+
+local function bubble(side: string, color: Color3): Frame
+	order += 1
+	local holder = el("Frame", {
+		Name = "Msg",
+		LayoutOrder = order,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+	}, refs.chat)
+
+	local frame = el("Frame", {
+		Name = "Bubble",
+		Size = UDim2.new(0.88, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Position = side == "user" and UDim2.new(1, 0, 0, 0) or UDim2.new(0, 0, 0, 0),
+		AnchorPoint = side == "user" and Vector2.new(1, 0) or Vector2.new(0, 0),
+		BackgroundColor3 = color,
+		BorderSizePixel = 0,
+	}, holder)
+	Util.roundify(frame, 14)
+	el("UIPadding", {
+		PaddingTop = UDim.new(0, 10),
+		PaddingBottom = UDim.new(0, 10),
+		PaddingLeft = UDim.new(0, 12),
+		PaddingRight = UDim.new(0, 12),
+	}, frame)
+	el("UIListLayout", {
+		Padding = UDim.new(0, 6),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, frame)
+
+	return frame
+end
+
+local function line(parent: Frame, text: string, size: number, color: Color3, font: Enum.Font?, layoutOrder: number?): TextLabel
+	return el("TextLabel", {
+		LayoutOrder = layoutOrder or 1,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		Font = font or Theme.Font,
+		Text = text,
+		TextColor3 = color,
+		TextSize = size,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, parent)
+end
+
+function PhoneUI.assistant(text: string): Frame
+	local frame = bubble("assistant", Theme.Phone.Surface)
+	line(frame, text, 16, Theme.Phone.Text)
+	scrollToBottom()
+	return frame
+end
+
+function PhoneUI.user(text: string): Frame
+	local frame = bubble("user", Theme.Phone.User)
+	line(frame, text, 16, Theme.Phone.Text)
+	scrollToBottom()
+	return frame
+end
+
+function PhoneUI.system(text: string)
+	order += 1
+	el("TextLabel", {
+		LayoutOrder = order,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = text,
+		TextColor3 = Theme.Phone.TextSoft,
+		TextSize = 13,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Center,
+	}, refs.chat)
+	scrollToBottom()
+end
+
+--- Miniatura de la foto: la hoja fotografiada, con su enunciado.
+function PhoneUI.photo(photoData: any): Frame
+	local frame = bubble("user", Theme.Phone.User)
+
+	local sheet = el("Frame", {
+		LayoutOrder = 1,
+		Size = UDim2.new(1, 0, 0, 118),
+		BackgroundColor3 = Theme.Paper.Background,
+		BorderSizePixel = 0,
+		ClipsDescendants = true,
+	}, frame)
+	Util.roundify(sheet, 8)
+	el("UIGradient", {
+		Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(214, 214, 206)),
+		Rotation = 65,
+	}, sheet)
+
+	el("TextLabel", {
+		Size = UDim2.new(1, -20, 0, 14),
+		Position = UDim2.fromOffset(10, 10),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = "EVALUACION DE MATEMATICA · 3° B",
+		TextColor3 = Theme.Paper.InkSoft,
+		TextSize = 10,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, sheet)
+
+	el("TextLabel", {
+		Size = UDim2.new(1, -20, 0, 70),
+		Position = UDim2.fromOffset(10, 30),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		Text = photoData.prompt,
+		TextColor3 = Theme.Paper.Ink,
+		TextSize = 15,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+	}, sheet)
+
+	el("TextLabel", {
+		Size = UDim2.new(1, -20, 0, 12),
+		Position = UDim2.new(0, 10, 1, -20),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		Text = photoData.photoId .. ".jpg",
+		TextColor3 = Theme.Paper.InkSoft,
+		TextSize = 9,
+		TextXAlignment = Enum.TextXAlignment.Right,
+	}, sheet)
+
+	line(frame, "Resolveme este ejercicio, paso a paso.", 15, Theme.Phone.Text, nil, 2)
+	scrollToBottom()
+	return frame
+end
+
+--- Burbuja "escribiendo..." con los tres puntitos animados.
+function PhoneUI.typing(): (Frame, () -> ())
+	local frame = bubble("assistant", Theme.Phone.Surface)
+	local label = line(frame, "escribiendo", 16, Theme.Phone.TextSoft)
+	scrollToBottom()
+
+	local alive = true
+	task.spawn(function()
+		local dots = 0
+		while alive and label.Parent do
+			dots = (dots + 1) % 4
+			label.Text = "escribiendo" .. string.rep(".", dots)
+			task.wait(0.35)
+		end
+	end)
+
+	return frame, function()
+		alive = false
+		local holder = frame.Parent
+		if holder then
+			holder:Destroy()
+		end
+	end
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Respuesta tipeada
+-- ─────────────────────────────────────────────────────────────
+
+local function typeInto(label: TextLabel, text: string, token: number)
+	local speed = P.TypeSpeed
+	local shown = 0
+	local total = #text
+	while shown < total do
+		if typingToken ~= token or not label.Parent then
+			label.Text = text
+			return
+		end
+		local dt = RunService.Heartbeat:Wait()
+		shown = math.min(total, shown + speed * dt)
+		label.Text = string.sub(text, 1, math.floor(shown))
+		scrollToBottom()
+	end
+	label.Text = text
+end
+
+--- Escribe la resolucion completa, paso por paso, como si la fuera pensando.
+function PhoneUI.answer(response: any)
+	typingToken += 1
+	local token = typingToken
+
+	local frame = bubble("assistant", Theme.Phone.Surface)
+	line(frame, response.topic, 12, Theme.Phone.Accent, Theme.FontBold, 0)
+
+	task.spawn(function()
+		local index = 1
+		for _, step in response.steps do
+			if typingToken ~= token then
+				return
+			end
+			index += 1
+			local title = line(frame, step.title, 15, Theme.Phone.Text, Theme.FontBold, index)
+			title.Text = ""
+			typeInto(title, step.title, token)
+
+			index += 1
+			local body = line(frame, step.body, 15, Theme.Phone.TextSoft, Theme.FontMono, index)
+			body.Text = ""
+			typeInto(body, step.body, token)
+			task.wait(0.12)
+		end
+
+		if typingToken ~= token then
+			return
+		end
+
+		index += 1
+		local result = el("Frame", {
+			LayoutOrder = index,
+			Size = UDim2.new(1, 0, 0, 44),
+			BackgroundColor3 = Theme.Phone.Accent,
+			BorderSizePixel = 0,
+		}, frame)
+		Util.roundify(result, 10)
+		el("TextLabel", {
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			Font = Theme.FontBold,
+			Text = "Respuesta:  " .. tostring(response.answer),
+			TextColor3 = Color3.fromRGB(10, 14, 16),
+			TextSize = 18,
+		}, result)
+
+		index += 1
+		line(frame, "Marcá esa opcion en la hoja. Y guardá el celular.", 13, Theme.Phone.TextSoft, nil, index)
+		scrollToBottom()
+	end)
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Estado
+-- ─────────────────────────────────────────────────────────────
+
+function PhoneUI.reset()
+	typingToken += 1
+	pendingPhoto = nil
+	busy = false
+	if refs.chat then
+		for _, child in refs.chat:GetChildren() do
+			if child:IsA("GuiObject") then
+				child:Destroy()
+			end
+		end
+	end
+	order = 0
+	if refs.chat then
+		PhoneUI.system("Hoy · " .. P.ModelName)
+		PhoneUI.assistant(P.Greeting)
+	end
+	PhoneUI.refreshButtons()
+end
+
+function PhoneUI.setPendingPhoto(photoData: any)
+	pendingPhoto = photoData
+	PhoneUI.refreshButtons()
+end
+
+function PhoneUI.getPendingPhoto(): any
+	return pendingPhoto
+end
+
+function PhoneUI.setBusy(value: boolean)
+	busy = value
+	PhoneUI.refreshButtons()
+end
+
+function PhoneUI.refreshButtons()
+	if not refs.sendButton then
+		return
+	end
+	local hasPhoto = pendingPhoto ~= nil
+	refs.sendButton.BackgroundColor3 = (hasPhoto and not busy) and Theme.Phone.Accent or Theme.Phone.SurfaceAlt
+	refs.sendButton.TextColor3 = (hasPhoto and not busy) and Theme.Phone.Text or Theme.Phone.TextSoft
+	refs.sendButton.Text = hasPhoto and "Enviar foto ▸" or "Enviar ▸"
+	refs.photoButton.Text = busy and "..." or "📷  Foto"
+end
+
+function PhoneUI.setPhoneState(state: any)
+	if not refs.battery then
+		return
+	end
+	local bars = math.clamp(math.ceil(state.battery / 34), 0, 3)
+	refs.battery.Text = string.format("%s%s  %d%%", string.rep("▮", bars), string.rep("▯", 3 - bars), state.battery)
+	refs.battery.TextColor3 = state.battery > 20 and Theme.Phone.Battery or Theme.Phone.Danger
+
+	if state.confiscated then
+		refs.subtitle.Text = "sin señal · te lo saco el profe"
+		refs.subtitle.TextColor3 = Theme.Phone.Danger
+	else
+		refs.subtitle.Text = P.ModelName .. " · en linea"
+		refs.subtitle.TextColor3 = Theme.Phone.Accent
+	end
+end
+
+function PhoneUI.setClock(text: string)
+	if refs.clock then
+		refs.clock.Text = text
+	end
+end
+
+function PhoneUI.setEnabled(enabled: boolean)
+	if gui then
+		gui.Enabled = enabled
+	end
+end
+
+function PhoneUI.destroy()
+	typingToken += 1
+	if gui then
+		gui:Destroy()
+		gui = nil
+	end
+	refs = {}
+end
+
+return PhoneUI
+]]></ProtectedString>
+          </Properties>
+        </Item>
+      </Item>
+    </Item>
+  </Item>
+</roblox>
