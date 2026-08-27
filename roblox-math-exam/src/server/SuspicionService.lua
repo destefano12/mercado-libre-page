@@ -154,8 +154,10 @@ function SuspicionService.start()
 				local gain
 				if seen and inspecting then
 					gain = T.RiskGainInspect * factor
+					teacher:alert(1.2)
 				elseif seen then
 					gain = T.RiskGainSeen * factor
+					teacher:alert(0.8)
 				else
 					gain = T.RiskGainHidden
 				end

@@ -22,6 +22,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local CharacterArt = require(Shared:WaitForChild("CharacterArt"))
 local Config = require(Shared:WaitForChild("Config"))
 local Util = require(Shared:WaitForChild("Util"))
 
@@ -59,6 +60,14 @@ local PHRASES = {
 local function pick(list: { string }): string
 	return list[math.random(1, #list)]
 end
+
+local INSPECT_NPC = {
+	"Bien ese planteo.",
+	"Prolijo, me gusta.",
+	"Che, esa cuenta esta mal.",
+	"Seguí asi.",
+	"Menos borrones, por favor.",
+}
 
 -- ─────────────────────────────────────────────────────────────
 -- Rig
@@ -100,14 +109,12 @@ local function buildFallbackRig(): Model
 	bodyPart("Camisa", Vector3.new(0.9, 2.2, 1.2), Vector3.new(0, 0.25, -0.02), Color3.fromRGB(232, 236, 242), Enum.Material.Fabric)
 	bodyPart("Corbata", Vector3.new(0.35, 1.6, 1.3), Vector3.new(0, 0.1, -0.02), Color3.fromRGB(122, 38, 44), Enum.Material.Fabric)
 	local head = bodyPart("Head", Vector3.new(1.5, 1.5, 1.5), Vector3.new(0, 2.1, 0), Color3.fromRGB(226, 190, 156), Enum.Material.SmoothPlastic)
-	local hair = bodyPart("Pelo", Vector3.new(1.6, 0.5, 1.6), Vector3.new(0, 2.9, 0), Color3.fromRGB(120, 118, 116), Enum.Material.SmoothPlastic)
 
 	-- La cabeza cuelga de un Motor6D "Neck": asi tambien gira en el rig
 	-- de respaldo y el cono de vision coincide con lo que se ve.
 	for _, weld in root:GetChildren() do
 		if weld:IsA("WeldConstraint") then
-			local part1 = (weld :: WeldConstraint).Part1
-			if part1 == head or part1 == hair then
+			if (weld :: WeldConstraint).Part1 == head then
 				weld:Destroy()
 			end
 		end
@@ -119,7 +126,6 @@ local function buildFallbackRig(): Model
 	neck.C0 = CFrame.new(0, 1.2, 0)
 	neck.C1 = CFrame.new(0, -0.7, 0)
 	neck.Parent = torso
-	Util.weld(head, hair)
 	bodyPart("BrazoIzq", Vector3.new(0.9, 2.2, 0.9), Vector3.new(-1.6, 0.2, 0), suit, Enum.Material.Fabric)
 	bodyPart("BrazoDer", Vector3.new(0.9, 2.2, 0.9), Vector3.new(1.6, 0.2, 0), suit, Enum.Material.Fabric)
 	bodyPart("PiernaIzq", Vector3.new(0.9, 2.4, 0.9), Vector3.new(-0.55, -2.2, 0), Color3.fromRGB(42, 46, 58), Enum.Material.Fabric)
@@ -197,6 +203,18 @@ function TeacherAI.new(classroom, onCatch: (Player) -> ())
 
 	model.Parent = workspace
 	model:PivotTo(classroom.teacherSpawn)
+
+	-- Cara, canas y anteojos. El profe tiene que leerse de lejos: si esta
+	-- contento o hecho una furia se tiene que ver desde el fondo del aula.
+	local skin = Color3.fromRGB(226, 190, 156)
+	self.face = CharacterArt.attachFace(self.head, skin)
+	CharacterArt.attachOldHair(self.head)
+	CharacterArt.attachGlasses(self.head)
+
+	self.mood = "neutral"
+	self.moodUntil = 0
+	self.alertUntil = 0
+	self.nextBlink = os.clock() + 3
 
 	self:_setupAnimations()
 	self:_buildBubble()
@@ -281,6 +299,37 @@ function TeacherAI:say(text: string, duration: number?)
 			self.bubble.Enabled = false
 		end
 	end)
+end
+
+--- Le fuerza una expresion por unos segundos (por ejemplo al retar a alguien).
+function TeacherAI:setMood(name: string, duration: number?)
+	self.mood = name
+	self.moodUntil = os.clock() + (duration or 2.5)
+end
+
+--- "Algo raro vi": lo pone en cara de sospecha un ratito.
+function TeacherAI:alert(duration: number?)
+	self.alertUntil = math.max(self.alertUntil, os.clock() + (duration or 0.8))
+end
+
+--- Expresion que corresponde a lo que esta haciendo y viendo.
+function TeacherAI:_currentExpression(now: number): string
+	if now < self.moodUntil then
+		return self.mood
+	end
+	if self.state == "Confrontando" then
+		return "enojado"
+	end
+	if now < self.alertUntil then
+		return "sospecha"
+	end
+	if self.state == "Pizarron" then
+		return "contento"
+	end
+	if self.state == "Revisando" then
+		return self.inspectMood or "contento"
+	end
+	return "neutral"
 end
 
 -- ─────────────────────────────────────────────────────────────
@@ -433,7 +482,7 @@ end
 function TeacherAI:_nearestDeskWithStudent(position: Vector3, maxDistance: number)
 	local best, bestDistance = nil, maxDistance
 	for _, desk in self.classroom.desks do
-		local occupant = desk.seat.Occupant
+		local occupant = desk.seat.Occupant or desk.model:GetAttribute("Ocupado")
 		if occupant then
 			local distance = (desk.seat.Position - position).Magnitude
 			if distance < bestDistance then
@@ -448,17 +497,39 @@ function TeacherAI:_inspect(desk)
 	local occupant = desk.seat.Occupant
 	local character = occupant and occupant.Parent
 	local player = character and Players:GetPlayerFromCharacter(character)
+
+	-- Tambien frena en los bancos de los companeros: eso es lo que hace
+	-- que pase por al lado tuyo sin que sea siempre por vos.
 	if not player then
+		self.state = "Revisando"
+		self.inspectMood = "contento"
+		self:_playAnim("idle")
+		self:_faceTowards(desk.seat.Position, 0.4)
+		self.targetGazeYaw = 0
+		if self.rng:NextNumber() < 0.6 then
+			self:say(INSPECT_NPC[self.rng:NextInteger(1, #INSPECT_NPC)], 2.4)
+		end
+		local wait = Util.randomInRange(T.InspectDuration, self.rng) * 0.7
+		local spent = 0
+		while spent < wait and self.running and self.state == "Revisando" do
+			spent += task.wait(0.1)
+		end
+		if self.state == "Revisando" then
+			self.state = "Patrullando"
+		end
 		return
 	end
 
 	self.state = "Revisando"
 	self.inspectTarget = player
+	self.inspectMood = "contento"
 	self:_playAnim("idle")
 	self:_faceTowards(desk.seat.Position, 0.4)
 	self.targetGazeYaw = 0
 	if self.rng:NextNumber() < 0.5 then
-		self:say(pick(PHRASES.inspect), 2.6)
+		local phrase = pick(PHRASES.inspect)
+		self:say(phrase, 2.6)
+		self.inspectMood = phrase:find("no cierra") and "sospecha" or "contento"
 	end
 
 	local duration = Util.randomInRange(T.InspectDuration, self.rng)
@@ -543,6 +614,7 @@ function TeacherAI:confront(player: Player)
 		local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 		self.humanoid.WalkSpeed = T.ChaseSpeed
 		self:_playAnim("walk")
+		self:setMood("enojado", 6)
 		self:say(pick(PHRASES.caught), 3.4)
 
 		if root then
@@ -598,6 +670,17 @@ function TeacherAI:start()
 		end
 
 		self.gazeYaw = Util.lerpAngle(self.gazeYaw, self.targetGazeYaw, math.clamp(dt * T.HeadTurnSpeed, 0, 1))
+
+		if self.face then
+			local now = os.clock()
+			self.face.setExpression(self:_currentExpression(now))
+			-- Los ojos siguen el barrido de la cabeza, medio paso adelante.
+			self.face.look(math.clamp(self.gazeYaw * 1.6, -1, 1), 0)
+			if now > self.nextBlink then
+				self.nextBlink = now + math.random(3, 7)
+				self.face.blink()
+			end
+		end
 
 		if self.neck and self.neckBase then
 			(self.neck :: Motor6D).C0 = self.neckBase * CFrame.Angles(0, self.gazeYaw, 0)

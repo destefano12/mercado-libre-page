@@ -22,8 +22,8 @@ local Config = {}
 Config.Classroom = {
 	Origin = CFrame.new(0, 0, 0),
 
-	Rows = 4,              -- filas de bancos (de adelante hacia atras)
-	Columns = 3,           -- bancos por fila
+	Rows = 5,              -- filas de bancos (de adelante hacia atras)
+	Columns = 4,           -- bancos por fila
 	DeskSpacingX = 9,      -- separacion entre columnas (pasillos)
 	DeskSpacingZ = 8,      -- separacion entre filas
 	FirstRowOffsetZ = 14,  -- distancia del pizarron a la primera fila

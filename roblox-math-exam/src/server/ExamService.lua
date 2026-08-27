@@ -22,6 +22,11 @@ local E = Config.Exam
 
 local ExamService = {}
 
+-- Ganchos opcionales: los usa el arranque para levantar al companero NPC
+-- que estaba sentado en ese banco (y volver a sentarlo cuando se libera).
+ExamService.onDeskAssigned = nil :: ((any) -> ())?
+ExamService.onDeskReleased = nil :: ((any) -> ())?
+
 export type AnswerRecord = {
 	choice: number,
 	correct: boolean,
@@ -120,6 +125,9 @@ function ExamService.addPlayer(player: Player): PlayerExam
 	if desk then
 		desk.paper:SetAttribute("OwnerUserId", player.UserId)
 		desk.seat:SetAttribute("OwnerUserId", player.UserId)
+		if ExamService.onDeskAssigned then
+			ExamService.onDeskAssigned(desk)
+		end
 	end
 
 	return entry
@@ -130,6 +138,9 @@ function ExamService.removePlayer(player: Player)
 	if entry and entry.desk then
 		entry.desk.paper:SetAttribute("OwnerUserId", 0)
 		entry.desk.seat:SetAttribute("OwnerUserId", 0)
+		if ExamService.onDeskReleased then
+			ExamService.onDeskReleased(entry.desk)
+		end
 	end
 	state.players[player] = nil
 end

@@ -30,6 +30,7 @@ local ExamService = require(script:WaitForChild("ExamService"))
 local PhoneService = require(script:WaitForChild("PhoneService"))
 local SuspicionService = require(script:WaitForChild("SuspicionService"))
 local RoundService = require(script:WaitForChild("RoundService"))
+local StudentNPCs = require(script:WaitForChild("StudentNPCs"))
 local TeacherAI = require(script:WaitForChild("TeacherAI"))
 
 -- ─────────────────────────────────────────────────────────────
@@ -97,7 +98,18 @@ ExamService.init(classroom)
 
 local teacher = TeacherAI.new(classroom, function(player)
 	RoundService.handleCatch(player)
+	-- Todo el curso se da vuelta a mirar. Es media la gracia.
+	StudentNPCs.reactAll("sorprendido", 3.5)
 end)
+
+-- El aula se llena de companeros, y cada jugador que entra se lleva el
+-- banco de uno (ese NPC se levanta y se va).
+StudentNPCs.init(classroom, teacher)
+StudentNPCs.fillAll()
+StudentNPCs.start()
+
+ExamService.onDeskAssigned = StudentNPCs.vacate
+ExamService.onDeskReleased = StudentNPCs.occupy
 
 SuspicionService.init(teacher, function(player)
 	-- Riesgo al maximo: el profe deja lo que estaba haciendo y viene.

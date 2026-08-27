@@ -12,6 +12,13 @@ personaje: la app de RoGPT se dibuja sobre su pantalla, no sobre la cámara.
 Lo único pegado a la pantalla es el HUD de controles (el botón grande de abajo
 y el medidor de riesgo), que es lo que hace falta para poder jugar en celular.
 
+El aula está llena: **20 bancos con compañeros** que escriben, se miran de
+reojo y se ponen nerviosos cuando el profe pasa cerca. El profe tiene canas,
+anteojos y **cara**: se pone contento cuando ve una prueba bien hecha y hecho
+una furia cuando te agarra con el celular. Las paredes tienen láminas de
+matemática y de lengua, hay pizarrón verde, reloj con agujas que andan,
+biblioteca, bandera y mochilas abajo de los bancos.
+
 ---
 
 ## Cómo se juega
@@ -48,6 +55,50 @@ blanco. La nota es de 1 a 10 y se ve en el `leaderstats` junto con cuántas
 copiaste y cuántas veces te pillaron.
 
 ---
+
+## Cómo subirlo a Roblox (paso a paso)
+
+Si nunca publicaste un juego, es esto y nada más:
+
+**1. Instalá Roblox Studio** (es gratis y solo para PC/Mac)
+   - Entrá a **create.roblox.com** e iniciá sesión con tu cuenta de Roblox
+     (la misma con la que jugás; si no tenés, creala ahí).
+   - Botón **Start Creating** → descarga **Roblox Studio** → instalás y abrís.
+
+**2. Bajate el archivo del juego**
+   - `install/AulaDeMatematica.rbxlx` de este repo (*Download raw file*).
+   - Guardalo donde lo encuentres, por ejemplo en Escritorio.
+
+**3. Abrilo**
+   - Doble clic en el archivo. Si no abre solo: en Studio, **File → Open from
+     File…** y lo elegís.
+   - Se abre el aula con todo adentro.
+
+**4. Probalo**
+   - Botón **Play** ▶ (arriba a la izquierda). Aparecés sentado en tu banco.
+   - Para salir del modo prueba: **Stop** ⏹.
+
+**5. Subilo a tu cuenta**
+   - **File → Publish to Roblox As…**
+   - Elegí **Create new game**, ponele nombre (ej: "Prueba de Matemática") y
+     descripción, y **Create**.
+   - Listo: ya está subido. Studio te lo guarda en la nube, no en tu PC.
+
+**6. Hacelo público** (si querés que entren tus amigos)
+   - En Studio: **Home → Game Settings → Basic Info**, y en la web:
+     **create.roblox.com → Creations → tu juego → ⋯ → Configure → Permissions**
+     y ponelo en **Public**.
+   - Copiá el link del juego desde **create.roblox.com → Creations → tu juego →
+     ⋯ → Copy Link** y mandáselo a quien quieras.
+
+**7. Para jugarlo de verdad**
+   - Entrá al link desde roblox.com o desde la app y dale **Jugar**.
+
+Cada vez que cambies algo en Studio, volvés a **File → Publish to Roblox** (sin
+el "As…") y se actualiza el juego que ya subiste.
+
+> Ojo: para publicar hay que tener cuenta de Roblox verificada. Si te pide
+> verificar el mail, hacelo desde la web de Roblox y volvé a publicar.
 
 ## Cómo pasarlo a Roblox Studio
 
@@ -187,19 +238,35 @@ Para probar con más de un alumno: *Test* → *Clients and Servers* → 2 player
 - `Net.lua` — creación y acceso cacheado a los remotes.
 - `PhoneModel.lua` — el celular 3D soldado al alumno, con el `Weld` animable que
   es literalmente el gesto de sacarlo y guardarlo.
+- `CharacterArt.lua` — caras, pelo y anteojos hechos con partes y una
+  SurfaceGui, sin depender de ningún asset subido. Las expresiones no son
+  imágenes: mueven cejas, ojos y una boca de nueve segmentos sobre una
+  parábola, así que el profe pasa de contento a furioso de verdad.
 - `Theme.lua` / `Util.lua` — paleta y azúcar para construir y animar.
 
 **Servidor**
 
 - `ClassroomBuilder.lua` — construye el aula entera: piso, paredes, ventanal
-  lateral con huecos reales y luz natural entrando, luminarias, pizarrón con
-  bandeja de tizas, escritorio del profe, puerta, y la grilla de bancos con su
-  silla, su `Seat`, su hoja y su lapicera. Devuelve además los nodos de
-  patrullaje de los pasillos.
-- `TeacherAI.lua` — el profesor: patrulla con `PathfindingService`, frena a
-  revisar bancos, se va al pizarrón (ventana segura), y tiene visión real —
-  cono de FOV + raycast, con la cabeza girando por el `Motor6D` del cuello, así
-  que lo que "ve" coincide con lo que ves vos que mira.
+  lateral con huecos reales y luz natural entrando, luminarias, pizarrón verde
+  con bandeja de tizas, escritorio del profe, puerta, y la grilla de 20 bancos
+  con su silla, su `Seat`, su hoja, su cartuchera y la mochila abajo. Más la
+  decoración: láminas de matemática (Pitágoras, resolvente, áreas, tabla del 7,
+  π) y de lengua (acentuación, sujeto y predicado, conectores), reloj de pared
+  con agujas que se mueven con la hora real, biblioteca con libros, bandera,
+  plantas, cesto de papeles y el cartel de "prohibido el celular". Devuelve
+  además los nodos de patrullaje de los pasillos.
+- `StudentNPCs.lua` — los compañeros de curso: rigs sentados y anclados (sin
+  Humanoid ni física, así 20 alumnos no cuestan nada) que escriben, parpadean,
+  se miran de reojo, giran la cabeza cuando el profe pasa y ponen cara de susto
+  cuando pillan a alguien. Cuando entra un jugador, el NPC de ese banco se
+  levanta y le deja el lugar.
+- `TeacherAI.lua` — el profesor: canas, anteojos y cara. Patrulla con
+  `PathfindingService`, frena a revisar bancos (los tuyos y los de tus
+  compañeros), se va al pizarrón (ventana segura), y tiene visión real — cono
+  de FOV + raycast, con la cabeza girando por el `Motor6D` del cuello, así que
+  lo que "ve" coincide con lo que ves vos que mira. La expresión sigue lo que
+  está haciendo: neutral patrullando, contento revisando una prueba prolija,
+  cara de sospecha cuando te ve algo raro y furioso cuando viene a tu banco.
 - `SuspicionService.lua` — el termómetro: sube el riesgo si tenés el celu
   afuera y te ve (más rápido todavía si encima te está revisando la prueba),
   baja si lo guardás. Al máximo, dispara la confrontación.
@@ -230,7 +297,7 @@ Todo en `src/shared/Config.lua`:
 
 | Querés… | Tocá |
 |---|---|
-| Un aula más grande | `Classroom.Rows`, `Classroom.Columns` |
+| Un aula más grande (y más compañeros) | `Classroom.Rows`, `Classroom.Columns` |
 | Un profe más duro | `Teacher.FieldOfView`, `Teacher.ViewDistance`, `Teacher.RiskGainSeen` |
 | Más ventanas seguras | `Teacher.BoardChance`, `Teacher.BoardDuration` |
 | Prueba más larga | `Exam.QuestionCount`, `Exam.RoundDuration` |
