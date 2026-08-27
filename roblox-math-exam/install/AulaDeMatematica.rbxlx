@@ -3,21 +3,42 @@
     <Properties>
       <string name="Name">Workspace</string>
     </Properties>
+    <Item class="Part" referent="RBX2">
+      <Properties>
+        <string name="Name">Baseplate</string>
+        <Vector3 name="size"><X>512</X><Y>1</Y><Z>512</Z></Vector3>
+        <CoordinateFrame name="CFrame"><X>0</X><Y>-0.5</Y><Z>24</Z><R00>1</R00><R01>0</R01><R02>0</R02><R10>0</R10><R11>1</R11><R12>0</R12><R20>0</R20><R21>0</R21><R22>1</R22></CoordinateFrame>
+        <bool name="Anchored">true</bool>
+        <int name="BrickColor">194</int>
+        <token name="Material">816</token>
+      </Properties>
+    </Item>
+    <Item class="SpawnLocation" referent="RBX3">
+      <Properties>
+        <string name="Name">SpawnLocation</string>
+        <Vector3 name="size"><X>12</X><Y>1</Y><Z>12</Z></Vector3>
+        <CoordinateFrame name="CFrame"><X>0</X><Y>0.5</Y><Z>40</Z><R00>1</R00><R01>0</R01><R02>0</R02><R10>0</R10><R11>1</R11><R12>0</R12><R20>0</R20><R21>0</R21><R22>1</R22></CoordinateFrame>
+        <bool name="Anchored">true</bool>
+        <bool name="Neutral">true</bool>
+        <int name="BrickColor">194</int>
+      </Properties>
+    </Item>
   </Item>
-  <Item class="Lighting" referent="RBX2">
+  <Item class="Lighting" referent="RBX4">
     <Properties>
       <string name="Name">Lighting</string>
+      <token name="Technology">3</token>
     </Properties>
   </Item>
-  <Item class="ReplicatedStorage" referent="RBX3">
+  <Item class="ReplicatedStorage" referent="RBX5">
     <Properties>
       <string name="Name">ReplicatedStorage</string>
     </Properties>
-    <Item class="Folder" referent="RBX11">
+    <Item class="Folder" referent="RBX13">
       <Properties>
         <string name="Name">Shared</string>
       </Properties>
-      <Item class="ModuleScript" referent="RBX4">
+      <Item class="ModuleScript" referent="RBX6">
         <Properties>
           <string name="Name">CharacterArt</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -382,7 +403,7 @@ return CharacterArt
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX5">
+      <Item class="ModuleScript" referent="RBX7">
         <Properties>
           <string name="Name">Config</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -530,7 +551,7 @@ return Config
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX6">
+      <Item class="ModuleScript" referent="RBX8">
         <Properties>
           <string name="Name">MathEngine</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -972,7 +993,7 @@ return MathEngine
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX7">
+      <Item class="ModuleScript" referent="RBX9">
         <Properties>
           <string name="Name">Net</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -1071,7 +1092,7 @@ return Net
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX8">
+      <Item class="ModuleScript" referent="RBX10">
         <Properties>
           <string name="Name">PhoneModel</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -1200,7 +1221,7 @@ return PhoneModel
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX9">
+      <Item class="ModuleScript" referent="RBX11">
         <Properties>
           <string name="Name">Theme</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -1260,7 +1281,7 @@ return Theme
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX10">
+      <Item class="ModuleScript" referent="RBX12">
         <Properties>
           <string name="Name">Util</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -1403,11 +1424,11 @@ return Util
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="RBX12">
+  <Item class="ServerScriptService" referent="RBX14">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Script" referent="RBX20">
+    <Item class="Script" referent="RBX22">
       <Properties>
         <string name="Name">Server</string>
         <ProtectedString name="Source"><![CDATA[--!strict
@@ -1446,34 +1467,8 @@ local StudentNPCs = require(script:WaitForChild("StudentNPCs"))
 local TeacherAI = require(script:WaitForChild("TeacherAI"))
 
 -- ─────────────────────────────────────────────────────────────
--- 0. Escenario base
+-- 1. Aula
 -- ─────────────────────────────────────────────────────────────
-
--- Iluminacion de interior. Se aplica por codigo para que el juego se
--- vea igual venga de Rojo, del .rbxmx o de copiar y pegar a mano.
-local function applyLighting()
-	Lighting.Technology = Enum.Technology.ShadowMap
-	Lighting.Ambient = Color3.fromRGB(90, 92, 102)
-	Lighting.OutdoorAmbient = Color3.fromRGB(115, 120, 132)
-	Lighting.Brightness = 2.2
-	Lighting.ClockTime = 10.5
-	Lighting.GeographicLatitude = -34.6
-	Lighting.EnvironmentDiffuseScale = 0.6
-	Lighting.EnvironmentSpecularScale = 0.4
-	Lighting.GlobalShadows = true
-	Lighting.FogEnd = 400
-
-	if not Lighting:FindFirstChildOfClass("Atmosphere") then
-		local atmosphere = Instance.new("Atmosphere")
-		atmosphere.Density = 0.28
-		atmosphere.Haze = 1.2
-		atmosphere.Glare = 0.15
-		atmosphere.Color = Color3.fromRGB(215, 220, 232)
-		atmosphere.Parent = Lighting
-	end
-end
-
-applyLighting()
 
 -- El baseplate del lugar vacio queda a la misma altura que el piso del
 -- aula y pelean por el mismo pixel. El aula trae su propio piso.
@@ -1482,11 +1477,8 @@ if baseplate and baseplate:IsA("BasePart") then
 	baseplate:Destroy()
 end
 
--- ─────────────────────────────────────────────────────────────
--- 1. Aula
--- ─────────────────────────────────────────────────────────────
-
 local classroom = ClassroomBuilder.build(Workspace)
+print("[Aula] Aula construida.")
 
 -- Spawn de los alumnos: adentro del aula, no en el vacio.
 local spawnLocation = Workspace:FindFirstChildOfClass("SpawnLocation")
@@ -1508,29 +1500,48 @@ spawnLocation.Neutral = true
 
 ExamService.init(classroom)
 
-local teacher = TeacherAI.new(classroom, function(player)
-	RoundService.handleCatch(player)
-	-- Todo el curso se da vuelta a mirar. Es media la gracia.
-	StudentNPCs.reactAll("sorprendido", 3.5)
+-- Cada pieza va en su propio pcall: si el rig del profe o los companeros
+-- fallan por algo del entorno, el aula y la prueba tienen que seguir
+-- funcionando igual (y el Output tiene que decir por que).
+local teacher
+local built, teacherError = pcall(function()
+	teacher = TeacherAI.new(classroom, function(player)
+		RoundService.handleCatch(player)
+		-- Todo el curso se da vuelta a mirar. Es media la gracia.
+		StudentNPCs.reactAll("sorprendido", 3.5)
+	end)
+	teacher:start()
 end)
+if built then
+	print("[Aula] Profesor en el aula.")
+else
+	warn("[Aula] No se pudo crear al profesor: " .. tostring(teacherError))
+end
 
 -- El aula se llena de companeros, y cada jugador que entra se lleva el
 -- banco de uno (ese NPC se levanta y se va).
-StudentNPCs.init(classroom, teacher)
-StudentNPCs.fillAll()
-StudentNPCs.start()
+local filled, npcError = pcall(function()
+	StudentNPCs.init(classroom, teacher)
+	StudentNPCs.fillAll()
+	StudentNPCs.start()
+end)
+if filled then
+	print("[Aula] Companeros sentados.")
+else
+	warn("[Aula] No se pudieron sentar los companeros: " .. tostring(npcError))
+end
 
 ExamService.onDeskAssigned = StudentNPCs.vacate
 ExamService.onDeskReleased = StudentNPCs.occupy
 
-SuspicionService.init(teacher, function(player)
-	-- Riesgo al maximo: el profe deja lo que estaba haciendo y viene.
-	teacher:confront(player)
-end)
-
-SuspicionService.start()
+if teacher then
+	SuspicionService.init(teacher, function(player)
+		-- Riesgo al maximo: el profe deja lo que estaba haciendo y viene.
+		teacher:confront(player)
+	end)
+	SuspicionService.start()
+end
 PhoneService.start()
-teacher:start()
 
 -- ─────────────────────────────────────────────────────────────
 -- 3. Remotes
@@ -1600,11 +1611,46 @@ end)
 
 RoundService.start(classroom, teacher)
 
+-- ─────────────────────────────────────────────────────────────
+-- 6. Iluminacion de interior
+-- ─────────────────────────────────────────────────────────────
+--
+-- Va ultimo y adentro de un pcall a proposito: es puro adorno, y si
+-- alguna propiedad no se deja escribir en la version de Roblox que
+-- tengas, no me interesa que se lleve puesto el aula entera.
+--
+-- Lighting.Technology NO se toca desde aca: es de solo lectura en
+-- runtime. Viene puesta en ShadowMap desde el archivo del lugar, y si
+-- abris esto en un lugar tuyo la ponés a mano en Lighting > Technology.
+local ok, err = pcall(function()
+	Lighting.Ambient = Color3.fromRGB(90, 92, 102)
+	Lighting.OutdoorAmbient = Color3.fromRGB(115, 120, 132)
+	Lighting.Brightness = 2.2
+	Lighting.ClockTime = 10.5
+	Lighting.GeographicLatitude = -34.6
+	Lighting.EnvironmentDiffuseScale = 0.6
+	Lighting.EnvironmentSpecularScale = 0.4
+	Lighting.GlobalShadows = true
+	Lighting.FogEnd = 400
+
+	if not Lighting:FindFirstChildOfClass("Atmosphere") then
+		local atmosphere = Instance.new("Atmosphere")
+		atmosphere.Density = 0.28
+		atmosphere.Haze = 1.2
+		atmosphere.Glare = 0.15
+		atmosphere.Color = Color3.fromRGB(215, 220, 232)
+		atmosphere.Parent = Lighting
+	end
+end)
+if not ok then
+	warn("[Aula] No se pudo ajustar la iluminacion: " .. tostring(err))
+end
+
 print(string.format("[Aula] Listo: %d bancos, %d nodos de patrullaje, prueba de %d ejercicios.",
 	#classroom.desks, #classroom.patrolNodes, Config.Exam.QuestionCount))
 ]]></ProtectedString>
       </Properties>
-      <Item class="ModuleScript" referent="RBX13">
+      <Item class="ModuleScript" referent="RBX15">
         <Properties>
           <string name="Name">ClassroomBuilder</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -2384,7 +2430,7 @@ return ClassroomBuilder
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX14">
+      <Item class="ModuleScript" referent="RBX16">
         <Properties>
           <string name="Name">ExamService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -2721,7 +2767,7 @@ return ExamService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX15">
+      <Item class="ModuleScript" referent="RBX17">
         <Properties>
           <string name="Name">PhoneService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -3067,7 +3113,7 @@ return PhoneService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX16">
+      <Item class="ModuleScript" referent="RBX18">
         <Properties>
           <string name="Name">RoundService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -3374,7 +3420,7 @@ return RoundService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX17">
+      <Item class="ModuleScript" referent="RBX19">
         <Properties>
           <string name="Name">StudentNPCs</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -3701,7 +3747,7 @@ return StudentNPCs
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX18">
+      <Item class="ModuleScript" referent="RBX20">
         <Properties>
           <string name="Name">SuspicionService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -3898,7 +3944,7 @@ return SuspicionService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX19">
+      <Item class="ModuleScript" referent="RBX21">
         <Properties>
           <string name="Name">TeacherAI</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -4607,15 +4653,15 @@ return TeacherAI
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="RBX21">
+  <Item class="StarterPlayer" referent="RBX23">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="RBX22">
+    <Item class="StarterPlayerScripts" referent="RBX24">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="RBX27">
+      <Item class="LocalScript" referent="RBX29">
         <Properties>
           <string name="Name">Client</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -4998,7 +5044,7 @@ task.spawn(function()
 end)
 ]]></ProtectedString>
         </Properties>
-        <Item class="ModuleScript" referent="RBX23">
+        <Item class="ModuleScript" referent="RBX25">
           <Properties>
             <string name="Name">CameraRig</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -5122,7 +5168,7 @@ return CameraRig
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX24">
+        <Item class="ModuleScript" referent="RBX26">
           <Properties>
             <string name="Name">Hud</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -5605,7 +5651,7 @@ return Hud
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX25">
+        <Item class="ModuleScript" referent="RBX27">
           <Properties>
             <string name="Name">PaperUI</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -6060,7 +6106,7 @@ return PaperUI
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX26">
+        <Item class="ModuleScript" referent="RBX28">
           <Properties>
             <string name="Name">PhoneUI</string>
             <ProtectedString name="Source"><![CDATA[--!strict

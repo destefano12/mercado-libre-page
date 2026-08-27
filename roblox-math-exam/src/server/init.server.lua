@@ -34,34 +34,8 @@ local StudentNPCs = require(script:WaitForChild("StudentNPCs"))
 local TeacherAI = require(script:WaitForChild("TeacherAI"))
 
 -- ─────────────────────────────────────────────────────────────
--- 0. Escenario base
+-- 1. Aula
 -- ─────────────────────────────────────────────────────────────
-
--- Iluminacion de interior. Se aplica por codigo para que el juego se
--- vea igual venga de Rojo, del .rbxmx o de copiar y pegar a mano.
-local function applyLighting()
-	Lighting.Technology = Enum.Technology.ShadowMap
-	Lighting.Ambient = Color3.fromRGB(90, 92, 102)
-	Lighting.OutdoorAmbient = Color3.fromRGB(115, 120, 132)
-	Lighting.Brightness = 2.2
-	Lighting.ClockTime = 10.5
-	Lighting.GeographicLatitude = -34.6
-	Lighting.EnvironmentDiffuseScale = 0.6
-	Lighting.EnvironmentSpecularScale = 0.4
-	Lighting.GlobalShadows = true
-	Lighting.FogEnd = 400
-
-	if not Lighting:FindFirstChildOfClass("Atmosphere") then
-		local atmosphere = Instance.new("Atmosphere")
-		atmosphere.Density = 0.28
-		atmosphere.Haze = 1.2
-		atmosphere.Glare = 0.15
-		atmosphere.Color = Color3.fromRGB(215, 220, 232)
-		atmosphere.Parent = Lighting
-	end
-end
-
-applyLighting()
 
 -- El baseplate del lugar vacio queda a la misma altura que el piso del
 -- aula y pelean por el mismo pixel. El aula trae su propio piso.
@@ -70,11 +44,8 @@ if baseplate and baseplate:IsA("BasePart") then
 	baseplate:Destroy()
 end
 
--- ─────────────────────────────────────────────────────────────
--- 1. Aula
--- ─────────────────────────────────────────────────────────────
-
 local classroom = ClassroomBuilder.build(Workspace)
+print("[Aula] Aula construida.")
 
 -- Spawn de los alumnos: adentro del aula, no en el vacio.
 local spawnLocation = Workspace:FindFirstChildOfClass("SpawnLocation")
@@ -96,29 +67,48 @@ spawnLocation.Neutral = true
 
 ExamService.init(classroom)
 
-local teacher = TeacherAI.new(classroom, function(player)
-	RoundService.handleCatch(player)
-	-- Todo el curso se da vuelta a mirar. Es media la gracia.
-	StudentNPCs.reactAll("sorprendido", 3.5)
+-- Cada pieza va en su propio pcall: si el rig del profe o los companeros
+-- fallan por algo del entorno, el aula y la prueba tienen que seguir
+-- funcionando igual (y el Output tiene que decir por que).
+local teacher
+local built, teacherError = pcall(function()
+	teacher = TeacherAI.new(classroom, function(player)
+		RoundService.handleCatch(player)
+		-- Todo el curso se da vuelta a mirar. Es media la gracia.
+		StudentNPCs.reactAll("sorprendido", 3.5)
+	end)
+	teacher:start()
 end)
+if built then
+	print("[Aula] Profesor en el aula.")
+else
+	warn("[Aula] No se pudo crear al profesor: " .. tostring(teacherError))
+end
 
 -- El aula se llena de companeros, y cada jugador que entra se lleva el
 -- banco de uno (ese NPC se levanta y se va).
-StudentNPCs.init(classroom, teacher)
-StudentNPCs.fillAll()
-StudentNPCs.start()
+local filled, npcError = pcall(function()
+	StudentNPCs.init(classroom, teacher)
+	StudentNPCs.fillAll()
+	StudentNPCs.start()
+end)
+if filled then
+	print("[Aula] Companeros sentados.")
+else
+	warn("[Aula] No se pudieron sentar los companeros: " .. tostring(npcError))
+end
 
 ExamService.onDeskAssigned = StudentNPCs.vacate
 ExamService.onDeskReleased = StudentNPCs.occupy
 
-SuspicionService.init(teacher, function(player)
-	-- Riesgo al maximo: el profe deja lo que estaba haciendo y viene.
-	teacher:confront(player)
-end)
-
-SuspicionService.start()
+if teacher then
+	SuspicionService.init(teacher, function(player)
+		-- Riesgo al maximo: el profe deja lo que estaba haciendo y viene.
+		teacher:confront(player)
+	end)
+	SuspicionService.start()
+end
 PhoneService.start()
-teacher:start()
 
 -- ─────────────────────────────────────────────────────────────
 -- 3. Remotes
@@ -187,6 +177,41 @@ end)
 -- ─────────────────────────────────────────────────────────────
 
 RoundService.start(classroom, teacher)
+
+-- ─────────────────────────────────────────────────────────────
+-- 6. Iluminacion de interior
+-- ─────────────────────────────────────────────────────────────
+--
+-- Va ultimo y adentro de un pcall a proposito: es puro adorno, y si
+-- alguna propiedad no se deja escribir en la version de Roblox que
+-- tengas, no me interesa que se lleve puesto el aula entera.
+--
+-- Lighting.Technology NO se toca desde aca: es de solo lectura en
+-- runtime. Viene puesta en ShadowMap desde el archivo del lugar, y si
+-- abris esto en un lugar tuyo la ponés a mano en Lighting > Technology.
+local ok, err = pcall(function()
+	Lighting.Ambient = Color3.fromRGB(90, 92, 102)
+	Lighting.OutdoorAmbient = Color3.fromRGB(115, 120, 132)
+	Lighting.Brightness = 2.2
+	Lighting.ClockTime = 10.5
+	Lighting.GeographicLatitude = -34.6
+	Lighting.EnvironmentDiffuseScale = 0.6
+	Lighting.EnvironmentSpecularScale = 0.4
+	Lighting.GlobalShadows = true
+	Lighting.FogEnd = 400
+
+	if not Lighting:FindFirstChildOfClass("Atmosphere") then
+		local atmosphere = Instance.new("Atmosphere")
+		atmosphere.Density = 0.28
+		atmosphere.Haze = 1.2
+		atmosphere.Glare = 0.15
+		atmosphere.Color = Color3.fromRGB(215, 220, 232)
+		atmosphere.Parent = Lighting
+	end
+end)
+if not ok then
+	warn("[Aula] No se pudo ajustar la iluminacion: " .. tostring(err))
+end
 
 print(string.format("[Aula] Listo: %d bancos, %d nodos de patrullaje, prueba de %d ejercicios.",
 	#classroom.desks, #classroom.patrolNodes, Config.Exam.QuestionCount))

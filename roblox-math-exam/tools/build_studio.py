@@ -55,17 +55,59 @@ def cdata(source: str) -> str:
 
 
 def item(class_name: str, name: str, referent: str, source: str | None,
-         children: list[str], indent: int) -> str:
+         children: list[str], indent: int, extra: list[str] | None = None) -> str:
     pad = "  " * indent
     lines = [f'{pad}<Item class="{class_name}" referent="{referent}">',
              f"{pad}  <Properties>",
              f'{pad}    <string name="Name">{name}</string>']
     if source is not None:
         lines.append(f'{pad}    <ProtectedString name="Source">{cdata(source)}</ProtectedString>')
+    for line in extra or []:
+        lines.append(f"{pad}    {line}")
     lines.append(f"{pad}  </Properties>")
     lines.extend(children)
     lines.append(f"{pad}</Item>")
     return "\n".join(lines)
+
+
+def cframe(x: float, y: float, z: float) -> str:
+    """CFrame sin rotacion, en el formato que serializa Roblox."""
+    return (
+        '<CoordinateFrame name="CFrame">'
+        f"<X>{x}</X><Y>{y}</Y><Z>{z}</Z>"
+        "<R00>1</R00><R01>0</R01><R02>0</R02>"
+        "<R10>0</R10><R11>1</R11><R12>0</R12>"
+        "<R20>0</R20><R21>0</R21><R22>1</R22>"
+        "</CoordinateFrame>"
+    )
+
+
+def vector3(name: str, x: float, y: float, z: float) -> str:
+    return f'<Vector3 name="{name}"><X>{x}</X><Y>{y}</Y><Z>{z}</Z></Vector3>'
+
+
+# Piso y spawn de emergencia. El juego los borra/reubica al arrancar; estan
+# para que, si el servidor alguna vez se cae, caigas parado en un piso y no
+# en el vacio (que es imposible de diagnosticar mirando la pantalla).
+BASEPLATE = [
+    vector3("size", 512, 1, 512),
+    cframe(0, -0.5, 24),
+    '<bool name="Anchored">true</bool>',
+    '<int name="BrickColor">194</int>',
+    '<token name="Material">816</token>',
+]
+
+SPAWN = [
+    vector3("size", 12, 1, 12),
+    cframe(0, 0.5, 40),
+    '<bool name="Anchored">true</bool>',
+    '<bool name="Neutral">true</bool>',
+    '<int name="BrickColor">194</int>',
+]
+
+# Lighting.Technology es de solo lectura desde un script, asi que la
+# sombra buena se define aca, en el archivo del lugar. 3 = ShadowMap.
+LIGHTING = ['<token name="Technology">3</token>']
 
 
 def bundle(referent: Referent, container_class: str, container_name: str,
@@ -104,14 +146,17 @@ def build_place() -> Path:
     """El lugar completo: cada bundle ya colgado del servicio que le toca.
 
     Los servicios que no estan listados (Players, SoundService, etc.) los
-    crea Studio sola al abrir. El aula, la iluminacion y el spawn los
-    arma el propio juego al arrancar, asi que el lugar va vacio.
+    crea Studio sola al abrir. El aula la arma el juego al arrancar; el
+    baseplate y el spawn que van aca son la red de seguridad.
     """
     referent = Referent()
 
     services = [
-        item("Workspace", "Workspace", referent.next(), None, [], 1),
-        item("Lighting", "Lighting", referent.next(), None, [], 1),
+        item("Workspace", "Workspace", referent.next(), None, [
+            item("Part", "Baseplate", referent.next(), None, [], 2, BASEPLATE),
+            item("SpawnLocation", "SpawnLocation", referent.next(), None, [], 2, SPAWN),
+        ], 1),
+        item("Lighting", "Lighting", referent.next(), None, [], 1, LIGHTING),
         item("ReplicatedStorage", "ReplicatedStorage", referent.next(), None, [
             bundle(referent, "Folder", "Shared", None, "shared", 2),
         ], 1),

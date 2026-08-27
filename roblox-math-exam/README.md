@@ -157,9 +157,10 @@ correcto** (si insertás en el lugar equivocado, arrastrá el objeto al servicio
 que va, funciona igual), y que no queden **dos copias** del mismo objeto si
 insertaste dos veces — borrá la repetida.
 
-No hace falta tocar el Lighting ni borrar el Baseplate: el propio juego
-configura la iluminación de interior al arrancar y saca el baseplate, porque
-queda a la misma altura que el piso del aula.
+No hace falta tocar nada más: el archivo ya viene con la sombra buena
+(`Lighting.Technology = ShadowMap`) y el juego ajusta el resto de la
+iluminación al arrancar. El baseplate y el spawn que trae el lugar son una red
+de seguridad — el juego los saca y los reubica adentro del aula.
 
 Si tocás el código y querés regenerar el lugar y los bundles:
 
@@ -219,6 +220,7 @@ cuando arranca el servidor).
 | "Infinite yield possible on ReplicatedStorage:WaitForChild(\"Shared\")" | La carpeta `Shared` no quedó en `ReplicatedStorage` o quedó con otro nombre. |
 | Se ve el aula pero no la hoja ni el HUD | El `Client` no quedó en `StarterPlayerScripts`. Fijate que sea un **LocalScript**, no un Script. |
 | No pasa nada de nada | El `Server` no quedó en `ServerScriptService`, o quedó *Disabled* (propiedad `Disabled` en false). |
+| **Aparezco en la nada, sin aula, y solo se ve el HUD** | El script del servidor se cortó con un error. Abrí **View → Output** en Studio y dale Play: la primera línea roja te dice en qué se cayó. Si arrancó bien vas a leer `[Aula] Aula construida.`, `[Aula] Profesor en el aula.` y `[Aula] Companeros sentados.` |
 | El profe no camina | Falta activar el pathfinding del lugar: normalmente no hace falta, pero revisá que el aula esté sobre terreno/piso y no flotando. |
 
 Para probar con más de un alumno: *Test* → *Clients and Servers* → 2 players →
@@ -311,6 +313,14 @@ mensaje enviado, respuesta y "te pillaron" y suenan solos.
 ---
 
 ## Notas técnicas
+
+- `Lighting.Technology` **no se puede escribir desde un script** (es de solo
+  lectura en runtime): viene puesta en `ShadowMap` desde el archivo del lugar.
+  Si armás el juego en un lugar propio con los `.rbxmx`, ponela a mano en
+  `Lighting → Technology`.
+- El arranque del servidor está por etapas y las partes cosméticas (profesor,
+  compañeros, iluminación) van cada una en su `pcall`: si una falla, avisa por
+  el Output pero el aula y la prueba siguen en pie.
 
 - El servidor es autoritativo en todo lo que importa: respuestas correctas,
   batería, sospecha y confiscación. El cliente sólo dibuja y pide.
