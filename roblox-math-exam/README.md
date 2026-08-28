@@ -127,145 +127,42 @@ el "As…") y se actualiza el juego que ya subiste.
 
 ## Cómo pasarlo a Roblox Studio
 
-### Opción A — un solo archivo: abrí el lugar y listo ✅
+### Un solo archivo, un solo clic ✅
 
-`install/AulaDeMatematica.rbxlx` es **el lugar entero**, con todo el código ya
-puesto en su servicio.
+`install/AulaDeMatematica-TODO-EN-UNO.rbxmx` trae el juego entero adentro y se
+instala solo.
 
-1. Bajate ese archivo (en GitHub: entrás al archivo y *Download raw file*).
-2. Doble clic (o desde Studio: *File → Open from File…*).
-3. **Play** ▶.
-
-No hay nada que insertar, mover ni renombrar: ya está todo ordenado. Cuando lo
-quieras tener en tu cuenta, *File → Publish to Roblox As…*, le ponés nombre y
-queda subido como lugar tuyo.
-
-Ojo: es un lugar nuevo, así que usalo si arrancás de cero. Si querés meter el
-juego dentro de un lugar que **ya tenés armado**, usá la opción B.
-
-### Opción B — los tres `.rbxmx`, para meterlo en un lugar que ya tenés
-
-En `install/` hay tres archivos que traen **todo el código adentro**. Studio los
-inserta directo, no hay que copiar y pegar nada.
-
-1. Bajate los tres archivos de `install/` (en GitHub: entrás al archivo y
-   *Download raw file*, o bajás el repo entero con *Code → Download ZIP*).
-2. Abrí tu lugar en Roblox Studio.
-3. En el panel **Explorer**, clic derecho sobre cada servicio → **Insert from
-   File…** y elegí el archivo que le corresponde:
-
-   | Clic derecho en | Insertás |
-   |---|---|
-   | `ReplicatedStorage` | `AulaShared.rbxmx` |
-   | `ServerScriptService` | `AulaServer.rbxmx` |
-   | `StarterPlayer` → `StarterPlayerScripts` | `AulaClient.rbxmx` |
-
+1. Bajate ese archivo.
+2. En Studio, abrí **tu** lugar (el que ya tiene tu escuela puesta).
+3. Clic derecho sobre **Workspace** → **Insert from File…** → elegilo.
 4. **Play** ▶.
 
-Si no ves el Explorer: pestaña *View* → *Explorer*. Y si no ves
-`StarterPlayerScripts`, abrí el triangulito de `StarterPlayer`.
-
-Tiene que quedar exactamente así:
-
-```
-ReplicatedStorage
-└── Shared                (Folder)      ← AulaShared.rbxmx
-ServerScriptService
-└── Server                (Script)      ← AulaServer.rbxmx
-StarterPlayer
-└── StarterPlayerScripts
-    └── Client            (LocalScript) ← AulaClient.rbxmx
-```
-
-Cuidado con dos cosas al insertar: que el servicio esté **seleccionado el
-correcto** (si insertás en el lugar equivocado, arrastrá el objeto al servicio
-que va, funciona igual), y que no queden **dos copias** del mismo objeto si
-insertaste dos veces — borrá la repetida.
-
-No hace falta tocar nada más: el archivo ya viene con la sombra buena
-(`Lighting.Technology = ShadowMap`) y el juego ajusta el resto de la
-iluminación al arrancar. El baseplate y el spawn que trae el lugar son una red
-de seguridad — el juego los saca y los reubica adentro del aula.
-
-Si tocás el código y querés regenerar el lugar y los bundles:
-
-```bash
-python3 tools/build_studio.py
-```
-
-Antes de empaquetar corre `tools/check.py`, que atrapa lo que el compilador
-no ve (y que en Roblox se paga caro, porque revienta recién en runtime y te
-deja sin aula):
-
-```bash
-python3 tools/check.py
-```
-
-- Toda referencia a `Config` apunta a una clave que existe.
-- Todo `Enum.X.Y` es un valor real de Roblox — así se encontró un
-  `Enum.Material.Ceramic` que no existe (es `CeramicTiles`) y que tiraba abajo
-  el aula entera.
-- Ninguna propiedad de solo lectura se escribe desde un script (`Lighting.Technology`).
-- Toda clave de idioma usada está definida, y los tres idiomas tienen
-  exactamente las mismas claves.
-
-### Opción C — Rojo (si vas a seguir programándolo)
-
-```bash
-rojo serve default.project.json
-```
-
-Y conectás desde el plugin de Rojo en Studio. Es lo más cómodo para iterar:
-guardás el archivo en tu editor y Studio se actualiza solo.
-
-### Opción D — a mano
-
-Creás la estructura de abajo y pegás el contenido de cada archivo. Los
-ModuleScripts van **adentro** del `Script` / `LocalScript`, no al lado.
+Al arrancar, un script instalador reparte las piezas por los servicios que
+Roblox exige (`Shared` → ReplicatedStorage, `Client` → StarterPlayerScripts,
+`Server` → ServerScriptService) y se borra a sí mismo. En el Output vas a leer:
 
 ```
-ReplicatedStorage
-└── Shared                (Folder)
-    ├── Config            (ModuleScript)  src/shared/Config.lua
-    ├── MathEngine        (ModuleScript)  src/shared/MathEngine.lua
-    ├── Net               (ModuleScript)  src/shared/Net.lua
-    ├── PhoneModel        (ModuleScript)  src/shared/PhoneModel.lua
-    ├── Theme             (ModuleScript)  src/shared/Theme.lua
-    └── Util              (ModuleScript)  src/shared/Util.lua
-
-ServerScriptService
-└── Server                (Script)        src/server/init.server.lua
-    ├── ClassroomBuilder  (ModuleScript)  src/server/ClassroomBuilder.lua
-    ├── ExamService       (ModuleScript)  src/server/ExamService.lua
-    ├── PhoneService      (ModuleScript)  src/server/PhoneService.lua
-    ├── RoundService      (ModuleScript)  src/server/RoundService.lua
-    ├── SuspicionService  (ModuleScript)  src/server/SuspicionService.lua
-    └── TeacherAI         (ModuleScript)  src/server/TeacherAI.lua
-
-StarterPlayer/StarterPlayerScripts
-└── Client                (LocalScript)   src/client/init.client.lua
-    ├── CameraRig         (ModuleScript)  src/client/CameraRig.lua
-    ├── Hud               (ModuleScript)  src/client/Hud.lua
-    ├── PaperUI           (ModuleScript)  src/client/PaperUI.lua
-    └── PhoneUI           (ModuleScript)  src/client/PhoneUI.lua
+[Instalador] Listo: el juego quedo instalado en este lugar.
 ```
 
-Vayas por donde vayas: **no hay que crear ningún RemoteEvent a mano** (los crea
-`Net.build()`) ni construir el aula (la levanta `ClassroomBuilder` por código
-cuando arranca el servidor).
+Esa separación no es un capricho: Roblox obliga a que el código del servidor y
+el del cliente vivan aparte, porque si no cualquiera podría leer las respuestas
+de la prueba. Pero no es problema tuyo — lo hace el instalador.
 
-### Si algo no arranca
+Para actualizar a una versión nueva: insertás el archivo nuevo y listo, pisa la
+instalación anterior.
 
-| Síntoma | Qué pasó |
-|---|---|
-| "Infinite yield possible on ReplicatedStorage:WaitForChild(\"Shared\")" | La carpeta `Shared` no quedó en `ReplicatedStorage` o quedó con otro nombre. |
-| Se ve el aula pero no la hoja ni el HUD | El `Client` no quedó en `StarterPlayerScripts`. Fijate que sea un **LocalScript**, no un Script. |
-| No pasa nada de nada | El `Server` no quedó en `ServerScriptService`, o quedó *Disabled* (propiedad `Disabled` en false). |
-| **Aparezco en la nada, sin aula, y solo se ve el HUD** | El script del servidor se cortó con un error. Abrí **View → Output** en Studio y dale Play: la primera línea roja te dice en qué se cayó. Si arrancó bien vas a leer `[Aula] Aula construida: 20 bancos.`, `[Aula] Profesor en el aula.` y `[Aula] Companeros sentados.` |
-| El profe no camina | Falta activar el pathfinding del lugar: normalmente no hace falta, pero revisá que el aula esté sobre terreno/piso y no flotando. |
+### Las otras formas (si las necesitás)
 
-Para probar con más de un alumno: *Test* → *Clients and Servers* → 2 players →
-*Start*.
+- `AulaDeMatematica.rbxlx` — un lugar nuevo con el juego y el aula construida
+  por código. Para arrancar de cero, sin tu escuela.
+- `AulaShared.rbxmx` / `AulaServer.rbxmx` / `AulaClient.rbxmx` — los tres
+  bundles por separado, para insertarlos a mano en cada servicio.
+- **Rojo** (`rojo serve default.project.json`) — para seguir programándolo:
+  guardás en tu editor y Studio se actualiza solo.
+
+Si tocás el código, `python3 tools/build_studio.py` regenera todo (y antes corre
+`tools/check.py`, que se niega a empaquetar si algo no cierra).
 
 ## Qué hace cada archivo
 

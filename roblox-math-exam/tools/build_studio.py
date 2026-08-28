@@ -37,6 +37,7 @@ BUNDLES = [
 ]
 
 PLACE_NAME = "AulaDeMatematica.rbxlx"
+ALL_IN_ONE_NAME = "AulaDeMatematica-TODO-EN-UNO.rbxmx"
 
 
 class Referent:
@@ -145,6 +146,38 @@ def build_models() -> list[Path]:
     return written
 
 
+def build_all_in_one() -> Path:
+    """Un solo modelo que insertas donde sea y se instala solo.
+
+    Adentro van los tres bundles mas un Script instalador que los
+    reparte por los servicios que Roblox exige. El Server va apagado y
+    lo prende el instalador recien cuando Shared ya esta en su lugar.
+    """
+    referent = Referent()
+
+    installer = item(
+        "Script", "Instalador", referent.next(),
+        (SRC / "installer" / "Instalador.server.lua").read_text(encoding="utf-8"),
+        [], 2,
+    )
+
+    children = [installer]
+    for _, container_class, container_name, entry_file, folder in BUNDLES:
+        extra = ['<bool name="Disabled">true</bool>'] if container_class == "Script" else None
+        body = bundle(referent, container_class, container_name, entry_file, folder, 2)
+        if extra:
+            # El Server arranca apagado: se prende cuando Shared ya esta puesto.
+            body = body.replace(
+                f'<string name="Name">{container_name}</string>',
+                f'<string name="Name">{container_name}</string>\n      {extra[0]}',
+                1,
+            )
+        children.append(body)
+
+    root = item("Model", "AulaDeMatematica", referent.next(), None, children, 1)
+    return write(ALL_IN_ONE_NAME, root)
+
+
 def build_place() -> Path:
     """El lugar completo: cada bundle ya colgado del servicio que le toca.
 
@@ -186,7 +219,7 @@ def main() -> None:
         raise SystemExit("hay problemas: no se empaqueta nada")
 
     print()
-    for target in [build_place()] + build_models():
+    for target in [build_all_in_one(), build_place()] + build_models():
         size = target.stat().st_size / 1024
         print(f"{target.relative_to(ROOT)}  ({size:.0f} KB)")
 
