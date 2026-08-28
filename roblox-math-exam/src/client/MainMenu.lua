@@ -27,12 +27,12 @@ local Strings = require(Shared:WaitForChild("Strings"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local Util = require(Shared:WaitForChild("Util"))
 
+local LobbyUI = require(script.Parent:WaitForChild("LobbyUI"))
+
 local player = Players.LocalPlayer
 
 local MainMenu = {}
 MainMenu.onPlay = nil :: (() -> ())?
-MainMenu.onMode = nil :: ((string) -> ())?
-MainMenu.onInvite = nil :: (() -> ())?
 MainMenu.onLocaleChanged = nil :: (() -> ())?
 MainMenu.open = false
 
@@ -301,77 +301,9 @@ local function showSettings()
 end
 
 local function showModes()
-	local list = panelList()
-	label(list, Strings.get("menu.mode"), 24, Theme.Menu.Text, 1, Theme.FontBold)
-
-	local options = {
-		{ id = "solo", key = "menu.mode.solo" },
-		{ id = "friends", key = "menu.mode.friends" },
-		{ id = "public", key = "menu.mode.public" },
-	}
-
-	for index, option in options do
-		local card = el("TextButton", {
-			LayoutOrder = index + 1,
-			Size = UDim2.new(1, 0, 0, 74),
-			BackgroundColor3 = Theme.Menu.Panel,
-			BackgroundTransparency = MainMenu.settings.mode == option.id and 0 or 0.5,
-			AutoButtonColor = false,
-			Text = "",
-			BorderSizePixel = 0,
-		}, list)
-		Util.roundify(card, 8, MainMenu.settings.mode == option.id and Theme.Menu.Accent or Theme.Menu.Line, 1)
-
-		el("TextLabel", {
-			Position = UDim2.fromOffset(16, 12),
-			Size = UDim2.new(1, -32, 0, 22),
-			BackgroundTransparency = 1,
-			Font = Theme.FontBold,
-			Text = Strings.get(option.key),
-			TextColor3 = Theme.Menu.Text,
-			TextSize = 18,
-			TextXAlignment = Enum.TextXAlignment.Left,
-		}, card)
-
-		el("TextLabel", {
-			Position = UDim2.fromOffset(16, 38),
-			Size = UDim2.new(1, -32, 0, 24),
-			BackgroundTransparency = 1,
-			Font = Theme.Font,
-			Text = Strings.get(option.key .. ".desc"),
-			TextColor3 = Theme.Menu.Muted,
-			TextSize = 14,
-			TextXAlignment = Enum.TextXAlignment.Left,
-			TextWrapped = true,
-		}, card)
-
-		card.MouseButton1Click:Connect(function()
-			MainMenu.settings.mode = option.id
-			showModes()
-			if MainMenu.onMode then
-				MainMenu.onMode(option.id)
-			end
-		end)
-	end
-
-	local invite = el("TextButton", {
-		LayoutOrder = 90,
-		Size = UDim2.new(1, 0, 0, 42),
-		BackgroundTransparency = 1,
-		AutoButtonColor = false,
-		Font = Theme.FontBold,
-		Text = Strings.get("menu.mode.invite") .. "  →",
-		TextColor3 = Theme.Menu.Accent,
-		TextSize = 16,
-		TextXAlignment = Enum.TextXAlignment.Left,
-	}, list)
-	invite.MouseButton1Click:Connect(function()
-		if MainMenu.onInvite then
-			MainMenu.onInvite()
-		end
-	end)
-
-	refs.modeStatus = label(list, "", 14, Theme.Menu.Muted, 91)
+	clearPanel()
+	-- El buscador de salas se dibuja solo adentro del panel.
+	LobbyUI.render(refs.panel)
 end
 
 local function showCredits()
@@ -380,12 +312,6 @@ local function showCredits()
 	local body = label(list, Strings.get("menu.credits.body"), 16, Theme.Menu.Muted, 2)
 	body.Size = UDim2.new(1, 0, 0, 220)
 	body.TextYAlignment = Enum.TextYAlignment.Top
-end
-
-function MainMenu.setModeStatus(text: string)
-	if refs.modeStatus then
-		refs.modeStatus.Text = text
-	end
 end
 
 -- ─────────────────────────────────────────────────────────────

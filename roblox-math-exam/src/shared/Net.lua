@@ -32,6 +32,9 @@ Net.Functions = {
 	GetExam = "GetExam",             -- C->S  pedir el estado inicial
 	ChooseMode = "ChooseMode",       -- C->S  solo / con amigos / con todos
 	StoryChoice = "StoryChoice",     -- S->C  te pide que elijas (y espera)
+	ListRooms = "ListRooms",         -- C->S  salas abiertas
+	CreateRoom = "CreateRoom",       -- C->S  abrir una sala nueva
+	JoinRoom = "JoinRoom",           -- C->S  entrar a una sala
 }
 
 local function getFolder(): Folder

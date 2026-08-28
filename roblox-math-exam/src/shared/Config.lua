@@ -188,6 +188,20 @@ Config.Story = {
 	PassingLie = 5,             -- de aca para abajo, mentir tiene sentido
 }
 
+-- ─────────────────────────────────────────────────────────────
+-- SALAS
+-- ─────────────────────────────────────────────────────────────
+Config.Lobby = {
+	MaxRooms = 40,          -- cuantas se listan
+	RoomTTL = 1800,         -- segundos que vive una sala sin señales de vida
+	HeartbeatEvery = 25,    -- cada cuanto la sala avisa que sigue viva
+	DefaultMaxPlayers = 8,
+	MinPlayers = 2,
+	MaxPlayers = 20,
+	NameLimit = 24,
+	PasswordLimit = 16,
+}
+
 Config.Penalty = {
 	GradePerCatch = 2,          -- puntos de nota que te descuenta cada vez que te pillan
 	MaxCatches = 2,             -- a la segunda te saca de la prueba

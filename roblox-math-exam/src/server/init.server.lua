@@ -31,6 +31,7 @@ local ExamService = require(script:WaitForChild("ExamService"))
 local PhoneService = require(script:WaitForChild("PhoneService"))
 local SuspicionService = require(script:WaitForChild("SuspicionService"))
 local RoundService = require(script:WaitForChild("RoundService"))
+local LobbyService = require(script:WaitForChild("LobbyService"))
 local StoryService = require(script:WaitForChild("StoryService"))
 local StudentNPCs = require(script:WaitForChild("StudentNPCs"))
 local ToolService = require(script:WaitForChild("ToolService"))
@@ -187,6 +188,21 @@ end
 
 -- Solo / con amigos: se reserva un servidor privado y se manda al
 -- jugador ahi. En Studio no existe (PlaceId = 0) y se avisa sin drama.
+Net.func(Net.Functions.ListRooms).OnServerInvoke = function(player, query)
+	return LobbyService.list(player, query)
+end
+
+Net.func(Net.Functions.CreateRoom).OnServerInvoke = function(player, options)
+	return LobbyService.create(player, options)
+end
+
+Net.func(Net.Functions.JoinRoom).OnServerInvoke = function(player, code, password)
+	return LobbyService.join(player, code, password)
+end
+
+-- Si este servidor es una sala, mantiene vivo su aviso en el listado.
+LobbyService.startHeartbeat()
+
 Net.func(Net.Functions.StoryChoice).OnServerInvoke = function(player, id)
 	StoryService.submitChoice(player, id)
 	return true

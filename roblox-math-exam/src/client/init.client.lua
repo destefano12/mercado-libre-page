@@ -21,7 +21,6 @@ local ContextActionService = game:GetService("ContextActionService")
 local LocalizationService = game:GetService("LocalizationService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local SocialService = game:GetService("SocialService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
@@ -385,36 +384,6 @@ MainMenu.onPlay = closeMenu
 MainMenu.onLocaleChanged = function()
 	resolveLocale()
 	refreshAllTexts()
-end
-
-MainMenu.onMode = function(mode: string)
-	if mode == "public" then
-		MainMenu.setModeStatus(Strings.get("menu.mode.current"))
-		return
-	end
-	MainMenu.setModeStatus(Strings.get("menu.mode.moving"))
-	task.spawn(function()
-		local response = Net.func(Net.Functions.ChooseMode):InvokeServer(mode)
-		if not response or not response.ok then
-			MainMenu.setModeStatus(reasonText(response and response.reason, "menu.mode.unavailable"))
-		end
-	end)
-end
-
-MainMenu.onInvite = function()
-	task.spawn(function()
-		local can = false
-		pcall(function()
-			can = SocialService:CanSendGameInviteAsync(player)
-		end)
-		if can then
-			pcall(function()
-				SocialService:PromptGameInvite(player)
-			end)
-		else
-			MainMenu.setModeStatus(Strings.get("menu.mode.unavailable"))
-		end
-	end)
 end
 
 PhoneUI.onTakePhoto = function()

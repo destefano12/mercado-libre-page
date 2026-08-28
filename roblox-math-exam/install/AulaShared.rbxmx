@@ -710,6 +710,20 @@ Config.Story = {
 	PassingLie = 5,             -- de aca para abajo, mentir tiene sentido
 }
 
+-- ─────────────────────────────────────────────────────────────
+-- SALAS
+-- ─────────────────────────────────────────────────────────────
+Config.Lobby = {
+	MaxRooms = 40,          -- cuantas se listan
+	RoomTTL = 1800,         -- segundos que vive una sala sin señales de vida
+	HeartbeatEvery = 25,    -- cada cuanto la sala avisa que sigue viva
+	DefaultMaxPlayers = 8,
+	MinPlayers = 2,
+	MaxPlayers = 20,
+	NameLimit = 24,
+	PasswordLimit = 16,
+}
+
 Config.Penalty = {
 	GradePerCatch = 2,          -- puntos de nota que te descuenta cada vez que te pillan
 	MaxCatches = 2,             -- a la segunda te saca de la prueba
@@ -1188,6 +1202,9 @@ Net.Functions = {
 	GetExam = "GetExam",             -- C->S  pedir el estado inicial
 	ChooseMode = "ChooseMode",       -- C->S  solo / con amigos / con todos
 	StoryChoice = "StoryChoice",     -- S->C  te pide que elijas (y espera)
+	ListRooms = "ListRooms",         -- C->S  salas abiertas
+	CreateRoom = "CreateRoom",       -- C->S  abrir una sala nueva
+	JoinRoom = "JoinRoom",           -- C->S  entrar a una sala
 }
 
 local function getFolder(): Folder
@@ -1663,6 +1680,30 @@ local en = {
 	["story.epilogue.cheated"] = "Copied: {count}",
 	["story.epilogue.caught"] = "Caught: {count}",
 	["story.epilogue.again"] = "Tomorrow there is another test.",
+	["lobby.title"] = "Rooms",
+	["lobby.search"] = "Search by name",
+	["lobby.create"] = "Create room",
+	["lobby.join"] = "Join",
+	["lobby.refresh"] = "Refresh",
+	["lobby.empty"] = "No rooms open right now. Create one.",
+	["lobby.loading"] = "Looking for rooms…",
+	["lobby.name"] = "Room name",
+	["lobby.password"] = "Password",
+	["lobby.passwordOptional"] = "Password (leave empty for public)",
+	["lobby.maxPlayers"] = "Players: {count}",
+	["lobby.slots"] = "{count} of {max}",
+	["lobby.public"] = "Public",
+	["lobby.private"] = "Private",
+	["lobby.locked"] = "This room has a password.",
+	["lobby.wrongPassword"] = "Wrong password.",
+	["lobby.full"] = "That room is full.",
+	["lobby.gone"] = "That room is gone.",
+	["lobby.joining"] = "Joining…",
+	["lobby.creating"] = "Creating the room…",
+	["lobby.unavailable"] = "Rooms only work in the published game, not in Studio.",
+	["lobby.needName"] = "Give the room a name.",
+	["lobby.back"] = "Back",
+	["lobby.host"] = "by {host}",
 }
 
 local es = {
@@ -1883,6 +1924,30 @@ local es = {
 	["story.epilogue.cheated"] = "Copiadas: {count}",
 	["story.epilogue.caught"] = "Veces que te pillaron: {count}",
 	["story.epilogue.again"] = "Mañana hay otra prueba.",
+	["lobby.title"] = "Salas",
+	["lobby.search"] = "Buscar por nombre",
+	["lobby.create"] = "Crear sala",
+	["lobby.join"] = "Unirse",
+	["lobby.refresh"] = "Actualizar",
+	["lobby.empty"] = "No hay salas abiertas. Creá una.",
+	["lobby.loading"] = "Buscando salas…",
+	["lobby.name"] = "Nombre de la sala",
+	["lobby.password"] = "Contraseña",
+	["lobby.passwordOptional"] = "Contraseña (vacío = pública)",
+	["lobby.maxPlayers"] = "Jugadores: {count}",
+	["lobby.slots"] = "{count} de {max}",
+	["lobby.public"] = "Pública",
+	["lobby.private"] = "Privada",
+	["lobby.locked"] = "Esta sala tiene contraseña.",
+	["lobby.wrongPassword"] = "Contraseña incorrecta.",
+	["lobby.full"] = "Esa sala está llena.",
+	["lobby.gone"] = "Esa sala ya no existe.",
+	["lobby.joining"] = "Entrando…",
+	["lobby.creating"] = "Creando la sala…",
+	["lobby.unavailable"] = "Las salas solo andan en el juego publicado, no en Studio.",
+	["lobby.needName"] = "Ponele un nombre a la sala.",
+	["lobby.back"] = "Volver",
+	["lobby.host"] = "de {host}",
 }
 
 local pt = {
@@ -2103,6 +2168,30 @@ local pt = {
 	["story.epilogue.cheated"] = "Coladas: {count}",
 	["story.epilogue.caught"] = "Vezes que te pegaram: {count}",
 	["story.epilogue.again"] = "Amanhã tem outra prova.",
+	["lobby.title"] = "Salas",
+	["lobby.search"] = "Buscar por nome",
+	["lobby.create"] = "Criar sala",
+	["lobby.join"] = "Entrar",
+	["lobby.refresh"] = "Atualizar",
+	["lobby.empty"] = "Nenhuma sala aberta. Cria uma.",
+	["lobby.loading"] = "Procurando salas…",
+	["lobby.name"] = "Nome da sala",
+	["lobby.password"] = "Senha",
+	["lobby.passwordOptional"] = "Senha (vazio = pública)",
+	["lobby.maxPlayers"] = "Jogadores: {count}",
+	["lobby.slots"] = "{count} de {max}",
+	["lobby.public"] = "Pública",
+	["lobby.private"] = "Privada",
+	["lobby.locked"] = "Esta sala tem senha.",
+	["lobby.wrongPassword"] = "Senha incorreta.",
+	["lobby.full"] = "Essa sala está cheia.",
+	["lobby.gone"] = "Essa sala não existe mais.",
+	["lobby.joining"] = "Entrando…",
+	["lobby.creating"] = "Criando a sala…",
+	["lobby.unavailable"] = "As salas só funcionam no jogo publicado, não no Studio.",
+	["lobby.needName"] = "Dá um nome para a sala.",
+	["lobby.back"] = "Voltar",
+	["lobby.host"] = "de {host}",
 }
 
 local tables: { [string]: { [string]: string } } = { en = en, es = es, pt = pt }

@@ -35,10 +35,9 @@ misma partida ven la misma prueba, cada una en su idioma.
 Al entrar arranca el menú, con el aula girando despacio de fondo:
 
 - **Jugar** — entra al aula.
-- **Partida** — *Solo* y *Con amigos* reservan un aula privada y te llevan ahí
-  (más el botón de invitar); *Con todos* te deja en el servidor actual. Las
-  salas privadas solo funcionan en el juego publicado: en Studio te avisa y te
-  deja donde estás.
+- **Partida** — el buscador de salas: buscás por nombre, entrás a una, o creás
+  la tuya con nombre, cuánta gente entra y contraseña (vacía = pública). Más el
+  botón de invitar amigos al servidor actual.
 - **Ajustes** — brillo, volumen, idioma (automático / ES / EN / PT) y nombres de
   los compañeros. El brillo y el volumen son de cada jugador, no del servidor.
 - **Créditos**
@@ -242,6 +241,25 @@ Si tocás el código, `python3 tools/build_studio.py` regenera todo (y antes cor
   avisos y el botón grande de abajo.
 
 ---
+
+## Salas
+
+Roblox no tiene "salas": tiene servidores. Una sala es un servidor reservado de
+tu mismo juego, y el listado que las conecta es un `MemoryStoreService` que
+todos los servidores leen.
+
+- **Crear** — `TeleportService:ReserveServer()` devuelve el código de un
+  servidor nuevo y vacío; ese código se publica en el listado junto al nombre,
+  el cupo y la contraseña, y te teletransporta ahí.
+- **Entrar** — se lee el código del listado, se valida la contraseña del lado
+  del servidor (nunca viaja al cliente) y se teletransporta.
+- **Que no queden salas fantasma** — la sala avisa que sigue viva desde adentro:
+  el servidor reservado recibe su propio código por `TeleportData`, actualiza
+  cuánta gente hay y borra el aviso cuando queda vacío.
+
+Nada de esto existe en Studio, porque no hay servidores que reservar: ahí el
+buscador dice "las salas solo andan en el juego publicado" y seguís jugando
+local. Los cupos y los límites están en `Config.Lobby`.
 
 ## El aula importada
 
