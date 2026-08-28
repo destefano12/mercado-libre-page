@@ -38,6 +38,22 @@ Config.Classroom = {
 	AssetGridInset = 0.62,          -- cuanto del aula ocupa la grilla de bancos
 	HideAssetFurniture = true,      -- saca los bancos que traiga el modelo
 
+	-- Una escuela entera tiene asientos por todos lados (gradas, salon
+	-- de actos, comedor). Para que la prueba no termine en la tribuna,
+	-- se elige la sala mas parecida a un aula.
+	--
+	-- Si te elige la equivocada: poné una Part en el medio del aula de
+	-- matematica y llamala "AulaDeMatematica". Esa gana siempre.
+	RoomMarkerName = "AulaDeMatematica",
+	RoomMarkerRadius = 90,
+	SeatClusterRadius = 16,         -- asientos a menos de esto son la misma sala
+
+	-- La hoja va acostada en la mesa. El canvas de una SurfaceGui sobre
+	-- la cara de arriba se acomoda segun los ejes LOCALES de la parte,
+	-- asi que la hoja se gira para que el texto quede vertical.
+	-- Si te queda de costado o al reves, cambia esto por 0, 180 o 270.
+	PaperSpin = 90,
+
 	Rows = 5,              -- filas de bancos (de adelante hacia atras)
 	Columns = 4,           -- bancos por fila
 	DeskSpacingX = 8,      -- separacion entre columnas (pasillos)
@@ -150,8 +166,12 @@ Config.Camera = {
 
 	BlendTime = 0.35,
 	FieldOfView = 70,
-	PaperFieldOfView = 60,
-	PhoneFieldOfView = 46,
+
+	-- Cuanto de la pantalla ocupa el objeto al mirarlo. 0.8 = llena el
+	-- 80%. El campo de vision se calcula solo a partir de esto, asi que
+	-- la hoja se ve igual de grande este donde este la mesa.
+	PaperFill = 0.82,
+	PhoneFill = 0.78,
 	MenuFieldOfView = 42,
 	CineFieldOfView = 38,   -- un poco de teleobjetivo: se lee mas a pelicula
 }

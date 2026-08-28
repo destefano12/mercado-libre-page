@@ -145,17 +145,135 @@ local function clearFurniture(model: Model)
 	end
 end
 
---- Los asientos que ya trae el aula. Si los tiene, son la mejor guia
---- que hay: nos dicen donde se sienta cada alumno Y para donde mira,
---- que es justo lo que el codigo no puede adivinar solo.
-function ClassroomAsset.findSeats(model: Model): { Seat }
-	local seats: { Seat } = {}
-	for _, descendant in model:GetDescendants() do
-		if descendant:IsA("Seat") then
-			table.insert(seats, descendant)
+--- Un nombre que suene a aula de matematica, mirando el asiento y todo
+--- lo que lo contiene.
+local function inMathRoom(seat: Instance): boolean
+	local node: Instance? = seat
+	local depth = 0
+	while node and depth < 8 do
+		local name = string.lower(node.Name)
+		if string.find(name, "math") or string.find(name, "matem")
+			or string.find(name, "classroom") or string.find(name, "aula") then
+			return true
+		end
+		node = node.Parent
+		depth += 1
+	end
+	return false
+end
+
+--- Agrupa asientos que estan cerca entre si: cada grupo es una sala.
+local function cluster(seats: { Seat }, radius: number): { { Seat } }
+	local groups: { { Seat } } = {}
+	local taken: { [Seat]: boolean } = {}
+
+	for _, seat in seats do
+		if not taken[seat] then
+			-- Crece el grupo por vecindad, tipo mancha de aceite.
+			local group = { seat }
+			taken[seat] = true
+			local index = 1
+			while index <= #group do
+				local current = group[index]
+				for _, other in seats do
+					if not taken[other] and (other.Position - current.Position).Magnitude <= radius then
+						taken[other] = true
+						table.insert(group, other)
+					end
+				end
+				index += 1
+			end
+			table.insert(groups, group)
 		end
 	end
-	return seats
+
+	return groups
+end
+
+local function footprint(group: { Seat }): number
+	local minX, maxX = math.huge, -math.huge
+	local minZ, maxZ = math.huge, -math.huge
+	for _, seat in group do
+		minX = math.min(minX, seat.Position.X)
+		maxX = math.max(maxX, seat.Position.X)
+		minZ = math.min(minZ, seat.Position.Z)
+		maxZ = math.max(maxZ, seat.Position.Z)
+	end
+	return math.max(maxX - minX, maxZ - minZ)
+end
+
+--- Los asientos del AULA, no los de la tribuna.
+---
+--- Una escuela entera puede tener cientos de asientos: gradas, salon de
+--- actos, comedor. Si los agarramos todos, la prueba termina rindiendose
+--- en un estadio. Asi que se agrupan por cercania y se elige el grupo
+--- que se parece a un aula: pocos asientos y juntos.
+---
+--- Si en tu escuela hay una parte llamada "AulaDeMatematica", gana esa
+--- sin discusion: es la forma de decidirlo vos en diez segundos.
+function ClassroomAsset.findSeats(model: Model): { Seat }
+	local all: { Seat } = {}
+	for _, descendant in model:GetDescendants() do
+		if descendant:IsA("Seat") then
+			table.insert(all, descendant)
+		end
+	end
+	if #all == 0 then
+		return all
+	end
+
+	-- 1. Marcador puesto a mano: manda sobre todo lo demas.
+	local marker = workspace:FindFirstChild(C.RoomMarkerName, true)
+	if marker and marker:IsA("BasePart") then
+		local picked: { Seat } = {}
+		for _, seat in all do
+			if (seat.Position - marker.Position).Magnitude <= C.RoomMarkerRadius then
+				table.insert(picked, seat)
+			end
+		end
+		if #picked > 0 then
+			print(string.format("[Aula] %d asientos alrededor de %q.", #picked, C.RoomMarkerName))
+			return picked
+		end
+	end
+
+	-- 2. Por nombre: si algo se llama "math" o "classroom", es ese.
+	local named: { Seat } = {}
+	for _, seat in all do
+		if inMathRoom(seat) then
+			table.insert(named, seat)
+		end
+	end
+	if #named >= 2 then
+		print(string.format("[Aula] %d asientos en una sala que se llama como un aula.", #named))
+		return named
+	end
+
+	-- 3. Por forma: el grupo mas parecido a un aula gana.
+	local best: { Seat }? = nil
+	local bestScore = -math.huge
+	for _, group in cluster(all, C.SeatClusterRadius) do
+		local count = #group
+		local spread = footprint(group)
+
+		-- Un aula tiene entre 6 y 40 bancos y entra en unos 60 studs.
+		-- Una tribuna tiene muchos mas y ocupa el doble o el triple.
+		local score = 0
+		score += (count >= 6 and count <= 40) and 40 or -math.abs(count - 20)
+		score -= math.max(0, spread - 60) * 0.6
+		score += math.min(count, 30)
+
+		if score > bestScore then
+			bestScore, best = score, group
+		end
+	end
+
+	if best then
+		print(string.format("[Aula] Elegida la sala de %d asientos (%.0f studs de ancho) entre %d asientos de toda la escuela.",
+			#best, footprint(best), #all))
+		return best
+	end
+	return all
 end
 
 --- Muebles que parecen bancos: el plan B cuando el aula no trae Seats.

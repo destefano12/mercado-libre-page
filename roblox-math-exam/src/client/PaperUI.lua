@@ -59,7 +59,7 @@ function PaperUI.mount(paperPart: BasePart)
 	gui = el("SurfaceGui", {
 		Name = "HojaDePrueba",
 		Adornee = paperPart,
-		Face = Enum.NormalId.Front,
+		Face = Enum.NormalId.Top,
 		SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud,
 		PixelsPerStud = 340,
 		LightInfluence = 0.2,

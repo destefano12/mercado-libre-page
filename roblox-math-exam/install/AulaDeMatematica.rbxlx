@@ -595,6 +595,22 @@ Config.Classroom = {
 	AssetGridInset = 0.62,          -- cuanto del aula ocupa la grilla de bancos
 	HideAssetFurniture = true,      -- saca los bancos que traiga el modelo
 
+	-- Una escuela entera tiene asientos por todos lados (gradas, salon
+	-- de actos, comedor). Para que la prueba no termine en la tribuna,
+	-- se elige la sala mas parecida a un aula.
+	--
+	-- Si te elige la equivocada: poné una Part en el medio del aula de
+	-- matematica y llamala "AulaDeMatematica". Esa gana siempre.
+	RoomMarkerName = "AulaDeMatematica",
+	RoomMarkerRadius = 90,
+	SeatClusterRadius = 16,         -- asientos a menos de esto son la misma sala
+
+	-- La hoja va acostada en la mesa. El canvas de una SurfaceGui sobre
+	-- la cara de arriba se acomoda segun los ejes LOCALES de la parte,
+	-- asi que la hoja se gira para que el texto quede vertical.
+	-- Si te queda de costado o al reves, cambia esto por 0, 180 o 270.
+	PaperSpin = 90,
+
 	Rows = 5,              -- filas de bancos (de adelante hacia atras)
 	Columns = 4,           -- bancos por fila
 	DeskSpacingX = 8,      -- separacion entre columnas (pasillos)
@@ -707,8 +723,12 @@ Config.Camera = {
 
 	BlendTime = 0.35,
 	FieldOfView = 70,
-	PaperFieldOfView = 60,
-	PhoneFieldOfView = 46,
+
+	-- Cuanto de la pantalla ocupa el objeto al mirarlo. 0.8 = llena el
+	-- 80%. El campo de vision se calcula solo a partir de esto, asi que
+	-- la hoja se ve igual de grande este donde este la mesa.
+	PaperFill = 0.82,
+	PhoneFill = 0.78,
 	MenuFieldOfView = 42,
 	CineFieldOfView = 38,   -- un poco de teleobjetivo: se lee mas a pelicula
 }
@@ -2986,17 +3006,135 @@ local function clearFurniture(model: Model)
 	end
 end
 
---- Los asientos que ya trae el aula. Si los tiene, son la mejor guia
---- que hay: nos dicen donde se sienta cada alumno Y para donde mira,
---- que es justo lo que el codigo no puede adivinar solo.
-function ClassroomAsset.findSeats(model: Model): { Seat }
-	local seats: { Seat } = {}
-	for _, descendant in model:GetDescendants() do
-		if descendant:IsA("Seat") then
-			table.insert(seats, descendant)
+--- Un nombre que suene a aula de matematica, mirando el asiento y todo
+--- lo que lo contiene.
+local function inMathRoom(seat: Instance): boolean
+	local node: Instance? = seat
+	local depth = 0
+	while node and depth < 8 do
+		local name = string.lower(node.Name)
+		if string.find(name, "math") or string.find(name, "matem")
+			or string.find(name, "classroom") or string.find(name, "aula") then
+			return true
+		end
+		node = node.Parent
+		depth += 1
+	end
+	return false
+end
+
+--- Agrupa asientos que estan cerca entre si: cada grupo es una sala.
+local function cluster(seats: { Seat }, radius: number): { { Seat } }
+	local groups: { { Seat } } = {}
+	local taken: { [Seat]: boolean } = {}
+
+	for _, seat in seats do
+		if not taken[seat] then
+			-- Crece el grupo por vecindad, tipo mancha de aceite.
+			local group = { seat }
+			taken[seat] = true
+			local index = 1
+			while index <= #group do
+				local current = group[index]
+				for _, other in seats do
+					if not taken[other] and (other.Position - current.Position).Magnitude <= radius then
+						taken[other] = true
+						table.insert(group, other)
+					end
+				end
+				index += 1
+			end
+			table.insert(groups, group)
 		end
 	end
-	return seats
+
+	return groups
+end
+
+local function footprint(group: { Seat }): number
+	local minX, maxX = math.huge, -math.huge
+	local minZ, maxZ = math.huge, -math.huge
+	for _, seat in group do
+		minX = math.min(minX, seat.Position.X)
+		maxX = math.max(maxX, seat.Position.X)
+		minZ = math.min(minZ, seat.Position.Z)
+		maxZ = math.max(maxZ, seat.Position.Z)
+	end
+	return math.max(maxX - minX, maxZ - minZ)
+end
+
+--- Los asientos del AULA, no los de la tribuna.
+---
+--- Una escuela entera puede tener cientos de asientos: gradas, salon de
+--- actos, comedor. Si los agarramos todos, la prueba termina rindiendose
+--- en un estadio. Asi que se agrupan por cercania y se elige el grupo
+--- que se parece a un aula: pocos asientos y juntos.
+---
+--- Si en tu escuela hay una parte llamada "AulaDeMatematica", gana esa
+--- sin discusion: es la forma de decidirlo vos en diez segundos.
+function ClassroomAsset.findSeats(model: Model): { Seat }
+	local all: { Seat } = {}
+	for _, descendant in model:GetDescendants() do
+		if descendant:IsA("Seat") then
+			table.insert(all, descendant)
+		end
+	end
+	if #all == 0 then
+		return all
+	end
+
+	-- 1. Marcador puesto a mano: manda sobre todo lo demas.
+	local marker = workspace:FindFirstChild(C.RoomMarkerName, true)
+	if marker and marker:IsA("BasePart") then
+		local picked: { Seat } = {}
+		for _, seat in all do
+			if (seat.Position - marker.Position).Magnitude <= C.RoomMarkerRadius then
+				table.insert(picked, seat)
+			end
+		end
+		if #picked > 0 then
+			print(string.format("[Aula] %d asientos alrededor de %q.", #picked, C.RoomMarkerName))
+			return picked
+		end
+	end
+
+	-- 2. Por nombre: si algo se llama "math" o "classroom", es ese.
+	local named: { Seat } = {}
+	for _, seat in all do
+		if inMathRoom(seat) then
+			table.insert(named, seat)
+		end
+	end
+	if #named >= 2 then
+		print(string.format("[Aula] %d asientos en una sala que se llama como un aula.", #named))
+		return named
+	end
+
+	-- 3. Por forma: el grupo mas parecido a un aula gana.
+	local best: { Seat }? = nil
+	local bestScore = -math.huge
+	for _, group in cluster(all, C.SeatClusterRadius) do
+		local count = #group
+		local spread = footprint(group)
+
+		-- Un aula tiene entre 6 y 40 bancos y entra en unos 60 studs.
+		-- Una tribuna tiene muchos mas y ocupa el doble o el triple.
+		local score = 0
+		score += (count >= 6 and count <= 40) and 40 or -math.abs(count - 20)
+		score -= math.max(0, spread - 60) * 0.6
+		score += math.min(count, 30)
+
+		if score > bestScore then
+			bestScore, best = score, group
+		end
+	end
+
+	if best then
+		print(string.format("[Aula] Elegida la sala de %d asientos (%.0f studs de ancho) entre %d asientos de toda la escuela.",
+			#best, footprint(best), #all))
+		return best
+	end
+	return all
 end
 
 --- Muebles que parecen bancos: el plan B cuando el aula no trae Seats.
@@ -3581,32 +3719,22 @@ local function buildDesk(parent: Instance, index: number, row: number, column: n
 	seat.Parent = model
 
 	-- La hoja de la prueba, apoyada donde la tendrias vos
-	-- La hoja va parada en un atril, mirando al alumno. Acostada sobre
-	-- la tabla el canvas de la SurfaceGui se acomodaba apaisado por mas
-	-- que la parte fuera vertical; parada usa la misma orientacion que
-	-- el pizarron, que es la unica que se lee derecha seguro.
+	-- Acostada en la tabla, como una hoja de verdad. El giro es lo que
+	-- pone el texto en vertical: el canvas se acomoda por los ejes
+	-- locales de la parte, no por los del mundo.
 	local paperCF = base
-		* CFrame.new(0, topY + 1.35, 0.55)
-		* CFrame.Angles(0, math.pi, 0)
-		* CFrame.Angles(math.rad(14), 0, 0)
+		* CFrame.new(0, topY + 0.11, 0.25)
+		* CFrame.Angles(0, math.rad(C.PaperSpin), 0)
 
 	local paper = Util.part({
 		Name = "HojaDePrueba",
-		Size = Vector3.new(2.2, 2.9, 0.05),
+		Size = Vector3.new(3.3, 0.04, 2.1),
 		CFrame = paperCF,
 		Color = WHITE,
 		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
 		Parent = model,
 	})
-
-	-- Tablilla de apoyo, para que la hoja no flote
-	local board = block(model, "Tablilla", Vector3.new(2.45, 3.15, 0.1), paperCF * CFrame.new(0, -0.05, 0.06),
-		Color3.fromRGB(146, 112, 78), Enum.Material.Wood)
-	board.CanCollide = false
-	local clip = block(model, "Clip", Vector3.new(0.9, 0.2, 0.16), paperCF * CFrame.new(0, 1.45, 0.02),
-		Color3.fromRGB(176, 180, 188), Enum.Material.Metal)
-	clip.CanCollide = false
 
 	local pencil = block(model, "Lapiz", Vector3.new(0.12, 0.12, 1.2),
 		base * CFrame.new(1.5, topY + 0.14, 0.35) * CFrame.Angles(0, math.rad(16), 0),
@@ -3692,27 +3820,21 @@ local function attachToSeat(parent: Instance, index: number, seat: Seat): Desk
 	model.Name = string.format("Banco_%02d", index)
 	model.Parent = parent
 
+	-- Acostada sobre la mesa que tenga el alumno adelante. La altura
+	-- sale del asiento: la mesa esta poco mas de un stud por encima.
 	local paperCF = seat.CFrame
-		* CFrame.new(0, 1.9, -1.9)
-		* CFrame.Angles(0, math.pi, 0)
-		* CFrame.Angles(math.rad(14), 0, 0)
+		* CFrame.new(0, 1.2, -1.8)
+		* CFrame.Angles(0, math.rad(C.PaperSpin), 0)
 
 	local paper = Util.part({
 		Name = "HojaDePrueba",
-		Size = Vector3.new(2.2, 2.9, 0.05),
+		Size = Vector3.new(3.3, 0.04, 2.1),
 		CFrame = paperCF,
 		Color = WHITE,
 		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
 		Parent = model,
 	})
-
-	local board = block(model, "Tablilla", Vector3.new(2.45, 3.15, 0.1),
-		paperCF * CFrame.new(0, -0.05, 0.06), Color3.fromRGB(146, 112, 78), Enum.Material.Wood)
-	board.CanCollide = false
-	local clip = block(model, "Clip", Vector3.new(0.9, 0.2, 0.16),
-		paperCF * CFrame.new(0, 1.45, 0.02), Color3.fromRGB(176, 180, 188), Enum.Material.Metal)
-	clip.CanCollide = false
 
 	model.PrimaryPart = paper
 
@@ -8098,17 +8220,28 @@ end
 
 --- Camara a la altura de los ojos, apenas adelante de la cara, mirando
 --- al objeto. Es como mirás una hoja o el celular en la vida real.
-local function eyesOn(target: BasePart): CFrame?
+---
+--- El campo de vision NO es fijo: se calcula para que el objeto llene
+--- la pantalla. Con un FOV fijo, la hoja se veia chiquita cuando la
+--- camara quedaba lejos y gigante cuando quedaba cerca, y eso cambia
+--- con cada aula importada porque las mesas estan a distinta altura.
+local function eyesOn(target: BasePart, fill: number): (CFrame?, number)
 	local reference = head()
 	if not reference then
-		return nil
+		return nil, Config.Camera.FieldOfView
 	end
-	local origin = reference.CFrame * Config.Camera.EyeOffset
-	local direction = target.Position - origin.Position
-	if direction.Magnitude < 0.05 then
-		return nil
+
+	local origin = (reference.CFrame * Config.Camera.EyeOffset).Position
+	local distance = (target.Position - origin).Magnitude
+	if distance < 0.15 then
+		return nil, Config.Camera.FieldOfView
 	end
-	return CFrame.lookAt(origin.Position, target.Position)
+
+	-- El lado mas largo del objeto es lo que tiene que entrar en cuadro.
+	local size = math.max(target.Size.X, target.Size.Y, target.Size.Z)
+	local fov = math.deg(2 * math.atan((size / 2) / math.max(0.2, fill * distance)))
+
+	return CFrame.lookAt(origin, target.Position), math.clamp(fov, 16, 75)
 end
 
 local function goalCFrame(): (CFrame?, number)
@@ -8125,11 +8258,11 @@ local function goalCFrame(): (CFrame?, number)
 	end
 
 	if CameraRig.mode == "celu" and screenPart and screenPart.Parent then
-		return eyesOn(screenPart), Config.Camera.PhoneFieldOfView
+		return eyesOn(screenPart, Config.Camera.PhoneFill)
 	end
 
 	if CameraRig.mode == "hoja" and paperPart and paperPart.Parent then
-		return eyesOn(paperPart), Config.Camera.PaperFieldOfView
+		return eyesOn(paperPart, Config.Camera.PaperFill)
 	end
 
 	return nil, Config.Camera.FieldOfView
@@ -10126,7 +10259,7 @@ function PaperUI.mount(paperPart: BasePart)
 	gui = el("SurfaceGui", {
 		Name = "HojaDePrueba",
 		Adornee = paperPart,
-		Face = Enum.NormalId.Front,
+		Face = Enum.NormalId.Top,
 		SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud,
 		PixelsPerStud = 340,
 		LightInfluence = 0.2,

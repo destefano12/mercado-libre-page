@@ -643,17 +643,28 @@ end
 
 --- Camara a la altura de los ojos, apenas adelante de la cara, mirando
 --- al objeto. Es como mirás una hoja o el celular en la vida real.
-local function eyesOn(target: BasePart): CFrame?
+---
+--- El campo de vision NO es fijo: se calcula para que el objeto llene
+--- la pantalla. Con un FOV fijo, la hoja se veia chiquita cuando la
+--- camara quedaba lejos y gigante cuando quedaba cerca, y eso cambia
+--- con cada aula importada porque las mesas estan a distinta altura.
+local function eyesOn(target: BasePart, fill: number): (CFrame?, number)
 	local reference = head()
 	if not reference then
-		return nil
+		return nil, Config.Camera.FieldOfView
 	end
-	local origin = reference.CFrame * Config.Camera.EyeOffset
-	local direction = target.Position - origin.Position
-	if direction.Magnitude < 0.05 then
-		return nil
+
+	local origin = (reference.CFrame * Config.Camera.EyeOffset).Position
+	local distance = (target.Position - origin).Magnitude
+	if distance < 0.15 then
+		return nil, Config.Camera.FieldOfView
 	end
-	return CFrame.lookAt(origin.Position, target.Position)
+
+	-- El lado mas largo del objeto es lo que tiene que entrar en cuadro.
+	local size = math.max(target.Size.X, target.Size.Y, target.Size.Z)
+	local fov = math.deg(2 * math.atan((size / 2) / math.max(0.2, fill * distance)))
+
+	return CFrame.lookAt(origin, target.Position), math.clamp(fov, 16, 75)
 end
 
 local function goalCFrame(): (CFrame?, number)
@@ -670,11 +681,11 @@ local function goalCFrame(): (CFrame?, number)
 	end
 
 	if CameraRig.mode == "celu" and screenPart and screenPart.Parent then
-		return eyesOn(screenPart), Config.Camera.PhoneFieldOfView
+		return eyesOn(screenPart, Config.Camera.PhoneFill)
 	end
 
 	if CameraRig.mode == "hoja" and paperPart and paperPart.Parent then
-		return eyesOn(paperPart), Config.Camera.PaperFieldOfView
+		return eyesOn(paperPart, Config.Camera.PaperFill)
 	end
 
 	return nil, Config.Camera.FieldOfView
@@ -2671,7 +2682,7 @@ function PaperUI.mount(paperPart: BasePart)
 	gui = el("SurfaceGui", {
 		Name = "HojaDePrueba",
 		Adornee = paperPart,
-		Face = Enum.NormalId.Front,
+		Face = Enum.NormalId.Top,
 		SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud,
 		PixelsPerStud = 340,
 		LightInfluence = 0.2,

@@ -499,32 +499,22 @@ local function buildDesk(parent: Instance, index: number, row: number, column: n
 	seat.Parent = model
 
 	-- La hoja de la prueba, apoyada donde la tendrias vos
-	-- La hoja va parada en un atril, mirando al alumno. Acostada sobre
-	-- la tabla el canvas de la SurfaceGui se acomodaba apaisado por mas
-	-- que la parte fuera vertical; parada usa la misma orientacion que
-	-- el pizarron, que es la unica que se lee derecha seguro.
+	-- Acostada en la tabla, como una hoja de verdad. El giro es lo que
+	-- pone el texto en vertical: el canvas se acomoda por los ejes
+	-- locales de la parte, no por los del mundo.
 	local paperCF = base
-		* CFrame.new(0, topY + 1.35, 0.55)
-		* CFrame.Angles(0, math.pi, 0)
-		* CFrame.Angles(math.rad(14), 0, 0)
+		* CFrame.new(0, topY + 0.11, 0.25)
+		* CFrame.Angles(0, math.rad(C.PaperSpin), 0)
 
 	local paper = Util.part({
 		Name = "HojaDePrueba",
-		Size = Vector3.new(2.2, 2.9, 0.05),
+		Size = Vector3.new(3.3, 0.04, 2.1),
 		CFrame = paperCF,
 		Color = WHITE,
 		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
 		Parent = model,
 	})
-
-	-- Tablilla de apoyo, para que la hoja no flote
-	local board = block(model, "Tablilla", Vector3.new(2.45, 3.15, 0.1), paperCF * CFrame.new(0, -0.05, 0.06),
-		Color3.fromRGB(146, 112, 78), Enum.Material.Wood)
-	board.CanCollide = false
-	local clip = block(model, "Clip", Vector3.new(0.9, 0.2, 0.16), paperCF * CFrame.new(0, 1.45, 0.02),
-		Color3.fromRGB(176, 180, 188), Enum.Material.Metal)
-	clip.CanCollide = false
 
 	local pencil = block(model, "Lapiz", Vector3.new(0.12, 0.12, 1.2),
 		base * CFrame.new(1.5, topY + 0.14, 0.35) * CFrame.Angles(0, math.rad(16), 0),
@@ -610,27 +600,21 @@ local function attachToSeat(parent: Instance, index: number, seat: Seat): Desk
 	model.Name = string.format("Banco_%02d", index)
 	model.Parent = parent
 
+	-- Acostada sobre la mesa que tenga el alumno adelante. La altura
+	-- sale del asiento: la mesa esta poco mas de un stud por encima.
 	local paperCF = seat.CFrame
-		* CFrame.new(0, 1.9, -1.9)
-		* CFrame.Angles(0, math.pi, 0)
-		* CFrame.Angles(math.rad(14), 0, 0)
+		* CFrame.new(0, 1.2, -1.8)
+		* CFrame.Angles(0, math.rad(C.PaperSpin), 0)
 
 	local paper = Util.part({
 		Name = "HojaDePrueba",
-		Size = Vector3.new(2.2, 2.9, 0.05),
+		Size = Vector3.new(3.3, 0.04, 2.1),
 		CFrame = paperCF,
 		Color = WHITE,
 		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
 		Parent = model,
 	})
-
-	local board = block(model, "Tablilla", Vector3.new(2.45, 3.15, 0.1),
-		paperCF * CFrame.new(0, -0.05, 0.06), Color3.fromRGB(146, 112, 78), Enum.Material.Wood)
-	board.CanCollide = false
-	local clip = block(model, "Clip", Vector3.new(0.9, 0.2, 0.16),
-		paperCF * CFrame.new(0, 1.45, 0.02), Color3.fromRGB(176, 180, 188), Enum.Material.Metal)
-	clip.CanCollide = false
 
 	model.PrimaryPart = paper
 
