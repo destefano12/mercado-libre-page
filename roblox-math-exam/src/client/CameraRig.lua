@@ -31,6 +31,7 @@ local camera = workspace.CurrentCamera
 local paperPart: BasePart? = nil
 local screenPart: BasePart? = nil
 local menuFocus: Vector3? = nil
+local cineCFrame: CFrame? = nil
 local current: CFrame? = nil
 
 function CameraRig.setPaper(part: BasePart?)
@@ -43,6 +44,12 @@ end
 
 function CameraRig.setMenuFocus(position: Vector3?)
 	menuFocus = position
+end
+
+--- Durante una cinematica manda Cinematic: nos corremos y ponemos la
+--- camara exactamente donde nos dice, sin suavizado propio.
+function CameraRig.setCine(cf: CFrame?)
+	cineCFrame = cf
 end
 
 function CameraRig.setMode(mode: string)
@@ -81,6 +88,10 @@ local function eyesOn(target: BasePart): CFrame?
 end
 
 local function goalCFrame(): (CFrame?, number)
+	if CameraRig.mode == "cine" then
+		return cineCFrame, Config.Camera.CineFieldOfView
+	end
+
 	if CameraRig.mode == "menu" then
 		local focus = menuFocus or Vector3.new(0, 8, 24)
 		local angle = os.clock() * 0.08
@@ -119,7 +130,8 @@ function CameraRig.start()
 			end
 			-- El menu arranca ya en su lugar; los encuadres de juego entran
 			-- con un blend corto para que no haya corte seco.
-			current = (current or goal):Lerp(goal, CameraRig.mode == "menu" and 1 or alpha)
+			local instant = CameraRig.mode == "menu" or CameraRig.mode == "cine"
+			current = (current or goal):Lerp(goal, instant and 1 or alpha)
 			camera.CFrame = current
 		else
 			if camera.CameraType == Enum.CameraType.Scriptable then

@@ -648,6 +648,11 @@ Config.Phone = {
 
 	ConfiscationTime = 35,      -- segundos sin celu despues de que te pillan
 
+	-- RoGPT no es magia: a veces no hay señal y a veces se manda una
+	-- macana. Es lo que hace que copiarse no sea gratis.
+	NoInternetChance = 0.18,
+	WrongAnswerChance = 0.12,
+
 	-- RoGPT "pensando"
 	UploadTime = NumberRange.new(0.6, 1.2),
 	ThinkTime = NumberRange.new(1.4, 2.8),
@@ -670,6 +675,7 @@ Config.Camera = {
 	PaperFieldOfView = 60,
 	PhoneFieldOfView = 46,
 	MenuFieldOfView = 42,
+	CineFieldOfView = 38,   -- un poco de teleobjetivo: se lee mas a pelicula
 }
 
 -- Sonidos. Son los que vienen adentro del motor de Roblox
@@ -684,6 +690,24 @@ Config.Sounds = {
 	Caught = "rbxasset://sounds/snap.mp3",                  -- te pillaron
 	PhoneOut = "rbxasset://sounds/switch.wav",              -- sacar el celular
 	Write = "rbxasset://sounds/switch3.wav",                -- escribir con el lapiz
+}
+
+-- ─────────────────────────────────────────────────────────────
+-- HISTORIA
+-- ─────────────────────────────────────────────────────────────
+-- El dia no termina cuando entregas la prueba: suena el timbre, salis
+-- del aula con todos, y despues tenes que llegar a tu casa y que tu
+-- viejo no se entere de como te fue.
+Config.Story = {
+	DismissalDuration = 20,     -- salida del aula y de la escuela
+	HomeDuration = 75,          -- la escena en casa
+	EpilogueDuration = 14,      -- la placa final
+
+	HomeOrigin = CFrame.new(1200, 0, 1200),
+	FadeTime = 1.2,
+	LetterboxTime = 0.8,
+
+	PassingLie = 5,             -- de aca para abajo, mentir tiene sentido
 }
 
 Config.Penalty = {
@@ -1153,6 +1177,8 @@ Net.Events = {
 	Notify = "Notify",               -- S->C  toast 3D ("te pillo", "aprobaste", ...)
 	Caught = "Caught",               -- S->C  el profe te agarro
 	TeacherSay = "TeacherSay",       -- S->C  dialogo del profe (burbuja 3D)
+	Cinematic = "Cinematic",         -- S->C  arranca una secuencia de camara
+	StoryLine = "StoryLine",         -- S->C  una linea de dialogo de la historia
 }
 
 Net.Functions = {
@@ -1161,6 +1187,7 @@ Net.Functions = {
 	AskRoGPT = "AskRoGPT",           -- C->S  mandar la foto al chat
 	GetExam = "GetExam",             -- C->S  pedir el estado inicial
 	ChooseMode = "ChooseMode",       -- C->S  solo / con amigos / con todos
+	StoryChoice = "StoryChoice",     -- S->C  te pide que elijas (y espera)
 }
 
 local function getFolder(): Folder
@@ -1608,6 +1635,34 @@ local en = {
 	["choice.none"] = "None of the above",
 	["choice.cantTell"] = "Cannot be determined",
 	["choice.missingData"] = "Not enough information",
+	["phone.error.offline"] = "No signal. The upload did not go through — try again.",
+	["phone.disclaimer"] = "I may be wrong. Double-check it.",
+	["hud.phase.dismissal"] = "BELL",
+	["hud.phase.home"] = "HOME",
+	["hud.phase.epilogue"] = "END OF DAY",
+	["story.bell"] = "There's the bell. Papers on my desk.",
+	["story.leaving"] = "Everyone files out. Another day survived.",
+	["story.goodbye"] = "See you tomorrow!",
+	["story.walkingHome"] = "The walk home is short when you have bad news.",
+	["story.homeArrival"] = "Home.",
+	["story.dadName"] = "Dad",
+	["story.dad.greet"] = "There you are. How did the math test go?",
+	["story.dad.askPhone"] = "Hand me your phone. The school app tells me everything.",
+	["story.dad.suspicious"] = "Why are you holding it like that?",
+	["story.choice.truth"] = "Tell the truth",
+	["story.choice.lie"] = "Lie about it",
+	["story.choice.give"] = "Hand over the phone",
+	["story.choice.hide"] = "Hide the phone",
+	["story.result.truthPass"] = "You told him the truth and it was good news. Easy day.",
+	["story.result.truthFail"] = "You told him you failed. He was not happy, but he was not surprised either.",
+	["story.result.lieHeld"] = "He believed you. For now.",
+	["story.result.lieCaught"] = "He opened the app while you were still talking.",
+	["story.result.phoneTaken"] = "He kept the phone. A week without it.",
+	["story.epilogue.title"] = "COPYING IS NEVER WORTH IT",
+	["story.epilogue.grade"] = "Final grade: {grade}",
+	["story.epilogue.cheated"] = "Copied: {count}",
+	["story.epilogue.caught"] = "Caught: {count}",
+	["story.epilogue.again"] = "Tomorrow there is another test.",
 }
 
 local es = {
@@ -1800,6 +1855,34 @@ local es = {
 	["choice.none"] = "Ninguna de las anteriores",
 	["choice.cantTell"] = "No se puede determinar",
 	["choice.missingData"] = "Faltan datos",
+	["phone.error.offline"] = "Sin señal. La foto no subió, probá de nuevo.",
+	["phone.disclaimer"] = "Puedo estar equivocado. Fijate igual.",
+	["hud.phase.dismissal"] = "TIMBRE",
+	["hud.phase.home"] = "EN CASA",
+	["hud.phase.epilogue"] = "FIN DEL DÍA",
+	["story.bell"] = "Ahí está el timbre. Las hojas sobre mi escritorio.",
+	["story.leaving"] = "Todos salen. Otro día sobrevivido.",
+	["story.goodbye"] = "¡Nos vemos mañana!",
+	["story.walkingHome"] = "El camino a casa se hace corto cuando traés malas noticias.",
+	["story.homeArrival"] = "En casa.",
+	["story.dadName"] = "Papá",
+	["story.dad.greet"] = "Ahí estás. ¿Cómo te fue en la prueba de matemática?",
+	["story.dad.askPhone"] = "Pasame el celular. La app de la escuela me dice todo.",
+	["story.dad.suspicious"] = "¿Por qué lo agarrás así?",
+	["story.choice.truth"] = "Decir la verdad",
+	["story.choice.lie"] = "Mentir",
+	["story.choice.give"] = "Darle el celular",
+	["story.choice.hide"] = "Esconder el celular",
+	["story.result.truthPass"] = "Le dijiste la verdad y era buena noticia. Día fácil.",
+	["story.result.truthFail"] = "Le dijiste que te fue mal. No le gustó, pero tampoco se sorprendió.",
+	["story.result.lieHeld"] = "Te creyó. Por ahora.",
+	["story.result.lieCaught"] = "Abrió la app mientras todavía hablabas.",
+	["story.result.phoneTaken"] = "Se quedó con el celular. Una semana sin él.",
+	["story.epilogue.title"] = "COPIARSE NUNCA ES BUENO",
+	["story.epilogue.grade"] = "Nota final: {grade}",
+	["story.epilogue.cheated"] = "Copiadas: {count}",
+	["story.epilogue.caught"] = "Veces que te pillaron: {count}",
+	["story.epilogue.again"] = "Mañana hay otra prueba.",
 }
 
 local pt = {
@@ -1992,6 +2075,34 @@ local pt = {
 	["choice.none"] = "Nenhuma das anteriores",
 	["choice.cantTell"] = "Não dá para determinar",
 	["choice.missingData"] = "Faltam dados",
+	["phone.error.offline"] = "Sem sinal. A foto não subiu, tenta de novo.",
+	["phone.disclaimer"] = "Posso estar errado. Confere mesmo assim.",
+	["hud.phase.dismissal"] = "SINAL",
+	["hud.phase.home"] = "EM CASA",
+	["hud.phase.epilogue"] = "FIM DO DIA",
+	["story.bell"] = "Tocou o sinal. As folhas na minha mesa.",
+	["story.leaving"] = "Todo mundo sai. Mais um dia sobrevivido.",
+	["story.goodbye"] = "Até amanhã!",
+	["story.walkingHome"] = "O caminho para casa fica curto quando você traz más notícias.",
+	["story.homeArrival"] = "Em casa.",
+	["story.dadName"] = "Pai",
+	["story.dad.greet"] = "Aí está você. Como foi a prova de matemática?",
+	["story.dad.askPhone"] = "Me passa o celular. O app da escola me conta tudo.",
+	["story.dad.suspicious"] = "Por que você está segurando assim?",
+	["story.choice.truth"] = "Falar a verdade",
+	["story.choice.lie"] = "Mentir",
+	["story.choice.give"] = "Entregar o celular",
+	["story.choice.hide"] = "Esconder o celular",
+	["story.result.truthPass"] = "Você falou a verdade e era boa notícia. Dia fácil.",
+	["story.result.truthFail"] = "Você disse que foi mal. Ele não gostou, mas também não se surpreendeu.",
+	["story.result.lieHeld"] = "Ele acreditou. Por enquanto.",
+	["story.result.lieCaught"] = "Ele abriu o app enquanto você ainda falava.",
+	["story.result.phoneTaken"] = "Ele ficou com o celular. Uma semana sem ele.",
+	["story.epilogue.title"] = "COLAR NUNCA VALE A PENA",
+	["story.epilogue.grade"] = "Nota final: {grade}",
+	["story.epilogue.cheated"] = "Coladas: {count}",
+	["story.epilogue.caught"] = "Vezes que te pegaram: {count}",
+	["story.epilogue.again"] = "Amanhã tem outra prova.",
 }
 
 local tables: { [string]: { [string]: string } } = { en = en, es = es, pt = pt }

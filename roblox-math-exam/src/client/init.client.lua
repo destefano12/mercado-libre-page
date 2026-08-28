@@ -30,6 +30,7 @@ local Strings = require(Shared:WaitForChild("Strings"))
 local Util = require(Shared:WaitForChild("Util"))
 
 local CameraRig = require(script:WaitForChild("CameraRig"))
+local Cinematic = require(script:WaitForChild("Cinematic"))
 local Hud = require(script:WaitForChild("Hud"))
 local MainMenu = require(script:WaitForChild("MainMenu"))
 local PaperUI = require(script:WaitForChild("PaperUI"))
@@ -360,6 +361,14 @@ safely("el HUD", function()
 	Hud.setVisible(false)
 end)
 safely("la camara", CameraRig.start)
+safely("las cinematicas", function()
+	Cinematic.mount()
+	Cinematic.onChoice = function(id: string)
+		task.spawn(function()
+			Net.func(Net.Functions.StoryChoice):InvokeServer(id)
+		end)
+	end
+end)
 safely("el menu", function()
 	MainMenu.mount()
 	-- El menu arranca con el aula girando de fondo, no con la camara del
@@ -475,6 +484,21 @@ end)
 
 Net.event(Net.Events.Notify).OnClientEvent:Connect(function(data)
 	Hud.notify(data.key, data.kind, data.args)
+end)
+
+Net.event(Net.Events.Cinematic).OnClientEvent:Connect(function(payload)
+	Cinematic.handle(payload)
+	-- Durante una cinematica no hay HUD: es una pelicula, no una partida.
+	if payload.sequence == "libre" then
+		Hud.setVisible(not MainMenu.open)
+	elseif payload.sequence ~= "prompt" then
+		Hud.setVisible(false)
+		stashPhone()
+	end
+end)
+
+Net.event(Net.Events.StoryLine).OnClientEvent:Connect(function(data)
+	Cinematic.line(data.key, data.args, data.duration or 4)
 end)
 
 Net.event(Net.Events.TeacherSay).OnClientEvent:Connect(function(data)

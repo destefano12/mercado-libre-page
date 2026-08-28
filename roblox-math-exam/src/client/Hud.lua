@@ -438,6 +438,9 @@ local PHASE_KEY = {
 	Preparacion = "hud.phase.prep",
 	Prueba = "hud.phase.exam",
 	Resultados = "hud.phase.results",
+	Salida = "hud.phase.dismissal",
+	Casa = "hud.phase.home",
+	Epilogo = "hud.phase.epilogue",
 }
 
 function Hud.setRound(data: any)

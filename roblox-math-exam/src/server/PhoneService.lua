@@ -295,12 +295,37 @@ function PhoneService.askRoGPT(player: Player, photoId: string)
 		return { ok = false, reason = { key = "error.blurry" } }
 	end
 
+	local rng = Random.new()
+
+	-- Sin señal: la foto no se consume, podés reintentar. Es la unica
+	-- forma de que copiarse tenga algo de riesgo propio, mas alla del
+	-- profe.
+	if rng:NextNumber() < P.NoInternetChance then
+		return { ok = false, reason = { key = "phone.error.offline" } }
+	end
+
 	photo.used = true
 	ExamService.markPhoneUsed(player, photo.questionId)
 
-	local rng = Random.new()
+	-- Y a veces RoGPT se manda una macana: te da una opcion equivocada
+	-- con la misma cara de seguridad. Copiarse no es garantia.
+	local answerIndex = question.answerIndex
+	local mistaken = rng:NextNumber() < P.WrongAnswerChance
+	if mistaken then
+		local options = {}
+		for index = 1, #question.choices do
+			if index ~= question.answerIndex then
+				table.insert(options, index)
+			end
+		end
+		if #options > 0 then
+			answerIndex = options[rng:NextInteger(1, #options)]
+		end
+	end
+
 	return {
 		ok = true,
+		mistaken = mistaken,
 		model = P.ModelName,
 		photoId = photoId,
 		questionId = photo.questionId,
@@ -308,9 +333,9 @@ function PhoneService.askRoGPT(player: Player, photoId: string)
 		promptKey = question.promptKey,
 		promptArgs = question.promptArgs,
 		steps = question.steps,
-		answer = question.choices[question.answerIndex],
+		answer = question.choices[answerIndex],
 		-- La letra es lo que de verdad te sirve: marcas esa y listo.
-		answerLetter = string.sub("ABCD", question.answerIndex, question.answerIndex),
+		answerLetter = string.sub("ABCD", answerIndex, answerIndex),
 		thinkTime = rng:NextNumber(P.ThinkTime.Min, P.ThinkTime.Max),
 	}
 end

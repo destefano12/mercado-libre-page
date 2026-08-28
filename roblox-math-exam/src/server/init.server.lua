@@ -31,6 +31,7 @@ local ExamService = require(script:WaitForChild("ExamService"))
 local PhoneService = require(script:WaitForChild("PhoneService"))
 local SuspicionService = require(script:WaitForChild("SuspicionService"))
 local RoundService = require(script:WaitForChild("RoundService"))
+local StoryService = require(script:WaitForChild("StoryService"))
 local StudentNPCs = require(script:WaitForChild("StudentNPCs"))
 local ToolService = require(script:WaitForChild("ToolService"))
 local TeacherAI = require(script:WaitForChild("TeacherAI"))
@@ -139,6 +140,14 @@ end
 ExamService.onDeskAssigned = StudentNPCs.vacate
 ExamService.onDeskReleased = StudentNPCs.occupy
 
+-- La segunda mitad del dia: la salida, la casa y la placa final.
+local storyOk, storyError = pcall(StoryService.init, classroom)
+if storyOk then
+	print("[Aula] Historia lista (salida, casa y epilogo).")
+else
+	warn("[Aula] No se pudo preparar la historia: " .. tostring(storyError))
+end
+
 if teacher then
 	SuspicionService.init(teacher, function(player)
 		-- Riesgo al maximo: el profe deja lo que estaba haciendo y viene.
@@ -178,6 +187,11 @@ end
 
 -- Solo / con amigos: se reserva un servidor privado y se manda al
 -- jugador ahi. En Studio no existe (PlaceId = 0) y se avisa sin drama.
+Net.func(Net.Functions.StoryChoice).OnServerInvoke = function(player, id)
+	StoryService.submitChoice(player, id)
+	return true
+end
+
 Net.func(Net.Functions.ChooseMode).OnServerInvoke = function(player, mode)
 	if mode ~= "solo" and mode ~= "friends" then
 		return { ok = true, stay = true }

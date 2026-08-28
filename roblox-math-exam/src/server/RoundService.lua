@@ -22,6 +22,8 @@ local Net = require(Shared:WaitForChild("Net"))
 local ExamService = require(script.Parent:WaitForChild("ExamService"))
 local PhoneService = require(script.Parent:WaitForChild("PhoneService"))
 local SuspicionService = require(script.Parent:WaitForChild("SuspicionService"))
+local StoryService = require(script.Parent:WaitForChild("StoryService"))
+local StudentNPCs = require(script.Parent:WaitForChild("StudentNPCs"))
 local ToolService = require(script.Parent:WaitForChild("ToolService"))
 
 local E = Config.Exam
@@ -287,7 +289,10 @@ function RoundService.start(classroom, teacher)
 				end
 			end)
 
-			-- ── Resultados ──────────────────────────────
+			-- ── El resto del dia ────────────────────────
+			-- Timbre, salida del aula, casa y placa final. La prueba es
+			-- solo la primera mitad.
+			state.results = buildResults()
 			for _, player in Players:GetPlayers() do
 				PhoneService.setOut(player, false)
 				SuspicionService.reset(player)
@@ -299,11 +304,24 @@ function RoundService.start(classroom, teacher)
 					RoundService.notify(player, "notify.failed", "warn", { grade = string.format("%.1f", grade) })
 				end
 			end
-			state.results = buildResults()
 			if teacher then
 				teacher:say("teacher.end", 5)
 			end
-			runPhase("Resultados", 15)
+
+			state.phase = "Salida"
+			pushRound()
+			pcall(StoryService.dismissal, teacher)
+
+			state.phase = "Casa"
+			pushRound()
+			pcall(StoryService.atHome)
+
+			state.phase = "Epilogo"
+			pushRound()
+			pcall(StoryService.epilogue)
+
+			pcall(StoryService.backToSchool)
+			pcall(StudentNPCs.refill)
 		end
 	end)
 end

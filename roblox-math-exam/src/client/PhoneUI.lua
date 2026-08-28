@@ -493,6 +493,13 @@ function PhoneUI.answer(response: any)
 		index += 1
 		line(frame, Strings.get("phone.markIt", { letter = response.answerLetter or "?" }),
 			13, Theme.Phone.TextSoft, nil, index)
+
+		-- Cuando se mando una macana lo dice, pero en chiquito y despues
+		-- de la respuesta: como haria un chatbot de verdad.
+		if response.mistaken then
+			index += 1
+			line(frame, Strings.get("phone.disclaimer"), 12, Theme.Phone.Danger, nil, index)
+		end
 		scrollToBottom()
 	end)
 end

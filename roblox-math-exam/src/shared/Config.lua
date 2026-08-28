@@ -126,6 +126,11 @@ Config.Phone = {
 
 	ConfiscationTime = 35,      -- segundos sin celu despues de que te pillan
 
+	-- RoGPT no es magia: a veces no hay señal y a veces se manda una
+	-- macana. Es lo que hace que copiarse no sea gratis.
+	NoInternetChance = 0.18,
+	WrongAnswerChance = 0.12,
+
 	-- RoGPT "pensando"
 	UploadTime = NumberRange.new(0.6, 1.2),
 	ThinkTime = NumberRange.new(1.4, 2.8),
@@ -148,6 +153,7 @@ Config.Camera = {
 	PaperFieldOfView = 60,
 	PhoneFieldOfView = 46,
 	MenuFieldOfView = 42,
+	CineFieldOfView = 38,   -- un poco de teleobjetivo: se lee mas a pelicula
 }
 
 -- Sonidos. Son los que vienen adentro del motor de Roblox
@@ -162,6 +168,24 @@ Config.Sounds = {
 	Caught = "rbxasset://sounds/snap.mp3",                  -- te pillaron
 	PhoneOut = "rbxasset://sounds/switch.wav",              -- sacar el celular
 	Write = "rbxasset://sounds/switch3.wav",                -- escribir con el lapiz
+}
+
+-- ─────────────────────────────────────────────────────────────
+-- HISTORIA
+-- ─────────────────────────────────────────────────────────────
+-- El dia no termina cuando entregas la prueba: suena el timbre, salis
+-- del aula con todos, y despues tenes que llegar a tu casa y que tu
+-- viejo no se entere de como te fue.
+Config.Story = {
+	DismissalDuration = 20,     -- salida del aula y de la escuela
+	HomeDuration = 75,          -- la escena en casa
+	EpilogueDuration = 14,      -- la placa final
+
+	HomeOrigin = CFrame.new(1200, 0, 1200),
+	FadeTime = 1.2,
+	LetterboxTime = 0.8,
+
+	PassingLie = 5,             -- de aca para abajo, mentir tiene sentido
 }
 
 Config.Penalty = {

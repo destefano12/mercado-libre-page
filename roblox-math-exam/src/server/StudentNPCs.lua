@@ -412,6 +412,63 @@ function StudentNPCs.fillAll()
 	end
 end
 
+local WALK_ANIMATION = "rbxassetid://507777826"
+
+--- Suena el timbre: se paran y se van por la puerta. Es la cinematica
+--- de salida, y es lo que hace que la escuela se sienta escuela.
+function StudentNPCs.dismiss(exit: Vector3)
+	for desk, student in students do
+		local model = student.model
+		task.spawn(function()
+			local humanoid = model:FindFirstChildOfClass("Humanoid")
+			local root = model:FindFirstChild("HumanoidRootPart") :: BasePart?
+
+			if humanoid and root then
+				-- Deshace la pose de sentado: el mismo angulo al reves.
+				for joint, degrees in SITTING_POSE do
+					poseJoint(model, joint, -degrees)
+				end
+				root.Anchored = false
+				humanoid.PlatformStand = false
+				humanoid.WalkSpeed = rng:NextNumber(9, 13)
+
+				pcall(function()
+					local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator", humanoid)
+					local animation = Instance.new("Animation")
+					animation.AnimationId = WALK_ANIMATION
+					local track = animator:LoadAnimation(animation)
+					track.Looped = true
+					track:Play()
+				end)
+
+				-- Salen escalonados, no todos juntos como un ejercito.
+				task.wait(rng:NextNumber(0.2, 2.6))
+				humanoid:MoveTo(exit + Vector3.new(rng:NextNumber(-6, 6), 0, rng:NextNumber(-4, 4)))
+			end
+
+			task.delay(14, function()
+				if model.Parent then
+					model:Destroy()
+				end
+			end)
+		end)
+		desk.model:SetAttribute("Ocupado", false)
+	end
+	table.clear(students)
+end
+
+--- Vuelve a llenar el aula para el dia siguiente.
+function StudentNPCs.refill()
+	if not classroom then
+		return
+	end
+	for _, desk in classroom.desks do
+		if not students[desk] and desk.paper:GetAttribute("OwnerUserId") == 0 then
+			StudentNPCs.occupy(desk)
+		end
+	end
+end
+
 --- Le cambia la cara a todo el curso (por ejemplo cuando pillan a alguien).
 function StudentNPCs.reactAll(mood: string, duration: number)
 	local until_ = os.clock() + duration

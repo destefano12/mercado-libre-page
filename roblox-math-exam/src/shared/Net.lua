@@ -21,6 +21,8 @@ Net.Events = {
 	Notify = "Notify",               -- S->C  toast 3D ("te pillo", "aprobaste", ...)
 	Caught = "Caught",               -- S->C  el profe te agarro
 	TeacherSay = "TeacherSay",       -- S->C  dialogo del profe (burbuja 3D)
+	Cinematic = "Cinematic",         -- S->C  arranca una secuencia de camara
+	StoryLine = "StoryLine",         -- S->C  una linea de dialogo de la historia
 }
 
 Net.Functions = {
@@ -29,6 +31,7 @@ Net.Functions = {
 	AskRoGPT = "AskRoGPT",           -- C->S  mandar la foto al chat
 	GetExam = "GetExam",             -- C->S  pedir el estado inicial
 	ChooseMode = "ChooseMode",       -- C->S  solo / con amigos / con todos
+	StoryChoice = "StoryChoice",     -- S->C  te pide que elijas (y espera)
 }
 
 local function getFolder(): Folder
