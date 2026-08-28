@@ -346,31 +346,38 @@ Para probar con más de un alumno: *Test* → *Clients and Servers* → 2 player
 
 ---
 
-## El aula importada del catálogo
+## El aula importada
 
-Por defecto el juego usa el aula `14664582891` del catálogo de Roblox como
-escenario y le pone adentro sus propios bancos, hojas y el recorrido del
-profesor. Va por dos caminos, en este orden:
+Si hay un aula puesta en `Workspace`, el juego la usa de escenario y le pone
+adentro las hojas, los asientos que falten y el recorrido del profesor.
 
-1. **Un modelo ya insertado**: si en `Workspace` hay un modelo llamado
-   `AulaImportada` (o con "classroom" en el nombre), usa ese. Es el camino
-   confiable: insertás el modelo desde el Toolbox de Studio, lo renombrás y
-   listo.
-2. **Bajarlo por código** con `InsertService:LoadAsset`. Funciona si el modelo
-   es libre; si Roblox no lo deja, avisa por el Output y sigue.
+**La reconoce sola**, sin que tengas que renombrar nada: cualquier modelo grande
+(20+ partes, más de 35x35 studs, sin Humanoid) que cuelgue de `Workspace`. Y
+**no la mueve de lugar**: la dejás donde querés y los bancos se acomodan ahí.
 
-Si los dos fallan, construye el aula de siempre. Nunca te quedás sin aula.
+Cómo la amuebla, en este orden:
 
-Lo que el código **no puede adivinar** es dónde están el pizarrón y el frente
-del aula importada. Si los bancos quedan mirando para el lado equivocado, se
-arregla con un número en `Config.Classroom`:
+1. **Si el aula trae `Seat` propios**, los usa tal cual. Es el mejor caso, porque
+   el asiento dice dónde se sienta cada alumno *y hacia dónde mira* — que es
+   justo lo único que el código no puede deducir mirando un modelo.
+2. **Si trae bancos pero sin `Seat`** (partes que se llaman desk, mesa, pupitre…),
+   les pone un asiento delante a cada uno.
+3. **Si no encuentra nada**, saca los muebles del modelo y arma su propia grilla
+   adentro.
 
-| Ajuste | Para qué |
+El recorrido del profesor sale de dónde quedaron los bancos: un nodo al costado
+de cada uno, serpenteando por columnas, así pasa por todos sin que el código
+tenga que entender el plano del aula.
+
+También puede bajarla sola del catálogo (`AssetId`), pero eso solo funciona si
+el modelo está en tu inventario — entrá a su página y apretá **Get**. Si no
+puede, avisa adentro del juego y usa el aula construida por código.
+
+| Ajuste en `Config.Classroom` | Para qué |
 |---|---|
-| `AssetRotation` | girar el aula: 0, 90, 180 o 270 |
-| `AssetOffset` | moverla si quedó corrida |
-| `AssetGridInset` | cuánto del aula ocupan los bancos (0.62 = 62%) |
-| `HideAssetFurniture` | saca los bancos que traiga el modelo |
+| `AssetRotation` | hacia dónde miran los bancos si el aula no trae asientos: 0, 90, 180 o 270 |
+| `AssetGridInset` | cuánto del piso ocupa la grilla, en el caso 3 |
+| `HideAssetFurniture` | sacar los muebles del modelo, solo en el caso 3 |
 | `UseAsset` | ponelo en `false` y vuelve el aula construida por código |
 
 ## Ajustes rápidos

@@ -145,10 +145,56 @@ local function clearFurniture(model: Model)
 	end
 end
 
---- Devuelve el modelo ya puesto y su tamaño, o nil si no hay ninguno.
-function ClassroomAsset.load(): (Model?, Vector3?)
+--- Los asientos que ya trae el aula. Si los tiene, son la mejor guia
+--- que hay: nos dicen donde se sienta cada alumno Y para donde mira,
+--- que es justo lo que el codigo no puede adivinar solo.
+function ClassroomAsset.findSeats(model: Model): { Seat }
+	local seats: { Seat } = {}
+	for _, descendant in model:GetDescendants() do
+		if descendant:IsA("Seat") then
+			table.insert(seats, descendant)
+		end
+	end
+	return seats
+end
+
+--- Muebles que parecen bancos: el plan B cuando el aula no trae Seats.
+function ClassroomAsset.findDeskParts(model: Model): { BasePart }
+	local matches: { BasePart } = {}
+	local patterns = { "desk", "pupitre", "banco", "table", "mesa" }
+
+	for _, descendant in model:GetDescendants() do
+		local name = string.lower(descendant.Name)
+		local hit = false
+		for _, pattern in patterns do
+			if string.find(name, pattern) then
+				hit = true
+				break
+			end
+		end
+		if hit then
+			local part = if descendant:IsA("BasePart")
+				then descendant :: BasePart
+				elseif descendant:IsA("Model") then descendant.PrimaryPart or descendant:FindFirstChildWhichIsA("BasePart")
+				else nil
+			-- Una mesa es ancha y baja: descarta paredes y pisos enteros.
+			if part and part.Size.X < 12 and part.Size.Z < 12 and part.Size.Y < 6 then
+				table.insert(matches, part)
+			end
+		end
+	end
+	return matches
+end
+
+function ClassroomAsset.clearFurniture(model: Model)
+	clearFurniture(model)
+end
+
+--- Devuelve el modelo, su tamaño y su centro. Un aula insertada a mano
+--- NO se mueve: se respeta donde la pusiste y los bancos van ahi.
+function ClassroomAsset.load(): (Model?, Vector3?, Vector3?)
 	if not C.UseAsset then
-		return nil, nil
+		return nil, nil, nil
 	end
 
 	local model = findInserted()
@@ -158,27 +204,32 @@ function ClassroomAsset.load(): (Model?, Vector3?)
 		fromCatalog = true
 	end
 	if not model then
-		return nil, nil
+		return nil, nil, nil
 	end
 
-	model.Name = "AulaImportada"
-
-	local ok, size = pcall(function()
-		clearFurniture(model)
-		local dimensions = place(model)
-		return dimensions
+	local ok, err = pcall(function()
+		for _, descendant in model:GetDescendants() do
+			if descendant:IsA("BasePart") then
+				descendant.Anchored = true
+			end
+		end
+		-- Solo se acomoda la que bajamos nosotros: cae en cualquier lado.
+		if fromCatalog then
+			place(model)
+		end
 	end)
 	if not ok then
-		warn("[Aula] El modelo importado no se pudo acomodar: " .. tostring(size))
-		model:Destroy()
-		return nil, nil
+		warn("[Aula] El modelo importado no se pudo preparar: " .. tostring(err))
+		return nil, nil, nil
 	end
 
-	print(string.format("[Aula] Usando el aula importada (%s), %.0f x %.0f studs.",
-		fromCatalog and "del catalogo" or "ya insertada",
-		(size :: Vector3).X, (size :: Vector3).Z))
+	local box, size = model:GetBoundingBox()
 
-	return model, size :: Vector3
+	print(string.format("[Aula] Usando el aula importada \"%s\" (%s): %.0f x %.0f studs, %d asientos propios.",
+		model.Name, fromCatalog and "del catalogo" or "puesta por vos",
+		size.X, size.Z, #ClassroomAsset.findSeats(model)))
+
+	return model, size, box.Position
 end
 
 return ClassroomAsset

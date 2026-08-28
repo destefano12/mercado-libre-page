@@ -602,20 +602,176 @@ local function layoutDesks(model: Model, center: Vector3, spacingX: number, spac
 	return desks, patrolNodes, frontLane
 end
 
---- Aula importada del catalogo: el modelo pone el escenario y nosotros
---- ponemos adentro los bancos, las hojas y el recorrido del profesor.
-local function buildFromAsset(model: Model, asset: Model, size: Vector3): Classroom?
-	local center = Vector3.new(C.AssetOffset.Position.X, 0, C.AssetOffset.Position.Z)
-	local usableX = size.X * C.AssetGridInset
-	local usableZ = size.Z * C.AssetGridInset
+--- Cuelga la hoja de la prueba delante de un asiento que ya existe en
+--- el aula importada. El asiento nos dice para donde mira el alumno,
+--- que es lo unico que el codigo no puede deducir del modelo.
+local function attachToSeat(parent: Instance, index: number, seat: Seat): Desk
+	local model = Instance.new("Model")
+	model.Name = string.format("Banco_%02d", index)
+	model.Parent = parent
 
-	local spacingX = math.max(6.5, usableX / C.Columns)
-	local spacingZ = math.max(6.5, usableZ / C.Rows)
+	local paperCF = seat.CFrame
+		* CFrame.new(0, 1.9, -1.9)
+		* CFrame.Angles(0, math.pi, 0)
+		* CFrame.Angles(math.rad(14), 0, 0)
 
-	local desks, patrolNodes, frontLane = layoutDesks(model, center, spacingX, spacingZ)
+	local paper = Util.part({
+		Name = "HojaDePrueba",
+		Size = Vector3.new(2.2, 2.9, 0.05),
+		CFrame = paperCF,
+		Color = WHITE,
+		Material = Enum.Material.SmoothPlastic,
+		CanCollide = false,
+		Parent = model,
+	})
+
+	local board = block(model, "Tablilla", Vector3.new(2.45, 3.15, 0.1),
+		paperCF * CFrame.new(0, -0.05, 0.06), Color3.fromRGB(146, 112, 78), Enum.Material.Wood)
+	board.CanCollide = false
+	local clip = block(model, "Clip", Vector3.new(0.9, 0.2, 0.16),
+		paperCF * CFrame.new(0, 1.45, 0.02), Color3.fromRGB(176, 180, 188), Enum.Material.Metal)
+	clip.CanCollide = false
+
+	model.PrimaryPart = paper
+
+	return {
+		index = index,
+		row = 1,
+		column = index,
+		model = model,
+		seat = seat,
+		paper = paper,
+		deskTop = paper,
+		position = seat.Position,
+	}
+end
+
+--- Asiento propio delante de un mueble del aula importada, cuando el
+--- modelo trae bancos pero no Seats.
+local function seatAtDeskPart(parent: Instance, part: BasePart, facing: Vector3): Seat
+	local seat = Instance.new("Seat")
+	seat.Name = "Asiento"
+	seat.Size = Vector3.new(2.2, 0.3, 2)
+	seat.CFrame = CFrame.lookAt(part.Position - facing * 2.6 + Vector3.new(0, -part.Size.Y / 2 + 1.1, 0),
+		part.Position + Vector3.new(0, -part.Size.Y / 2 + 1.1, 0))
+	seat.Anchored = true
+	seat.Transparency = 1
+	seat.CanCollide = true
+	seat.Parent = parent
+	return seat
+end
+
+--- El recorrido del profesor sale de donde estan los bancos: un nodo al
+--- costado de cada uno, serpenteando por columnas. Asi pasa por todos
+--- sin que el codigo tenga que saber como es el aula.
+local function patrolFromDesks(desks: { Desk }, forward: Vector3): { CFrame }
+	local right = forward:Cross(Vector3.new(0, 1, 0)).Unit
+
+	local entries = {}
+	for _, desk in desks do
+		table.insert(entries, {
+			desk = desk,
+			ahead = desk.position:Dot(forward),
+			side = desk.position:Dot(right),
+		})
+	end
+
+	-- Columnas: bancos que comparten pasillo caen en el mismo grupo.
+	table.sort(entries, function(a, b)
+		local columnA, columnB = math.floor(a.side / 6 + 0.5), math.floor(b.side / 6 + 0.5)
+		if columnA ~= columnB then
+			return columnA < columnB
+		end
+		local descending = columnA % 2 == 1
+		if descending then
+			return a.ahead > b.ahead
+		end
+		return a.ahead < b.ahead
+	end)
+
+	local nodes: { CFrame } = {}
+	for _, entry in entries do
+		local spot = entry.desk.position + right * 3.6 + Vector3.new(0, 0, 0)
+		table.insert(nodes, CFrame.lookAt(spot, spot - forward))
+	end
+	return nodes
+end
+
+--- Aula importada: el modelo pone el escenario y nosotros ponemos las
+--- hojas, los asientos que falten y el recorrido del profesor.
+local function buildFromAsset(model: Model, asset: Model, size: Vector3, center: Vector3): Classroom?
+	local desksFolder = Instance.new("Folder")
+	desksFolder.Name = "Bancos"
+	desksFolder.Parent = model
+
+	local desks: { Desk } = {}
+
+	-- 1. Los asientos que ya trae el aula. Es el mejor caso: sabemos
+	--    exactamente donde y hacia donde se sienta cada uno.
+	local seats = ClassroomAsset.findSeats(asset)
+	if #seats >= 2 then
+		for index, seat in seats do
+			local ok, desk = pcall(attachToSeat, desksFolder, index, seat)
+			if ok then
+				table.insert(desks, desk)
+			end
+		end
+	end
+
+	-- 2. Si no hay Seats, buscamos muebles que parezcan bancos y les
+	--    ponemos un asiento delante.
+	if #desks == 0 then
+		local facing = (CFrame.Angles(0, math.rad(C.AssetRotation), 0)).LookVector
+		local parts = ClassroomAsset.findDeskParts(asset)
+		for index, part in parts do
+			local ok, desk = pcall(function()
+				local seat = seatAtDeskPart(desksFolder, part, facing)
+				return attachToSeat(desksFolder, index, seat)
+			end)
+			if ok then
+				table.insert(desks, desk)
+			end
+		end
+	end
+
+	-- 3. Ultimo recurso: nuestra grilla adentro del aula, sacando los
+	--    muebles del modelo para que no se pisen.
+	local forward = (CFrame.Angles(0, math.rad(C.AssetRotation), 0)).LookVector
+	if #desks == 0 then
+		ClassroomAsset.clearFurniture(asset)
+		local usableX = size.X * C.AssetGridInset
+		local usableZ = size.Z * C.AssetGridInset
+		local gridCenter = Vector3.new(center.X, 0, center.Z)
+		desks = layoutDesks(model, gridCenter, math.max(6.5, usableX / C.Columns), math.max(6.5, usableZ / C.Rows))
+	end
+
 	if #desks == 0 then
 		return nil
 	end
+
+	-- Con asientos propios, el frente es hacia donde miran ellos.
+	if #seats >= 2 then
+		local sum = Vector3.zero
+		for _, seat in seats do
+			sum += seat.CFrame.LookVector
+		end
+		if sum.Magnitude > 0.01 then
+			forward = Vector3.new(sum.X, 0, sum.Z).Unit
+		end
+	end
+
+	local patrolNodes = patrolFromDesks(desks, forward)
+
+	local frontMost, backMost = -math.huge, math.huge
+	for _, desk in desks do
+		local ahead = desk.position:Dot(forward)
+		frontMost = math.max(frontMost, ahead)
+		backMost = math.min(backMost, ahead)
+	end
+
+	local flatCenter = Vector3.new(center.X, 0, center.Z)
+	local boardSpot = flatCenter + forward * (frontMost - flatCenter:Dot(forward) + 7)
+	local backSpot = flatCenter + forward * (backMost - flatCenter:Dot(forward) - 7)
 
 	model.Parent = workspace
 
@@ -623,10 +779,10 @@ local function buildFromAsset(model: Model, asset: Model, size: Vector3): Classr
 		model = model,
 		desks = desks,
 		patrolNodes = patrolNodes,
-		boardStand = CFrame.new(center.X, 0, frontLane - 4),
-		teacherSpawn = CFrame.new(center.X - 6, 3, frontLane - 3) * CFrame.Angles(0, math.pi, 0),
-		studentSpawn = CFrame.new(center.X, 3, center.Z + usableZ / 2 + 4),
-		roomCenter = center,
+		boardStand = CFrame.lookAt(boardSpot, boardSpot + forward),
+		teacherSpawn = CFrame.lookAt(boardSpot + Vector3.new(0, 3, 0), boardSpot - forward + Vector3.new(0, 3, 0)),
+		studentSpawn = CFrame.new(backSpot + Vector3.new(0, 3, 0)),
+		roomCenter = flatCenter,
 		width = size.X,
 		depth = size.Z,
 		usedAsset = true,
@@ -644,9 +800,9 @@ function ClassroomBuilder.build(parent: Instance): Classroom
 
 	-- Si hay un aula del catalogo, ese es el escenario y nosotros solo
 	-- ponemos los bancos adentro.
-	local asset, assetSize = ClassroomAsset.load()
-	if asset and assetSize then
-		local ok, imported = pcall(buildFromAsset, model, asset, assetSize)
+	local asset, assetSize, assetCenter = ClassroomAsset.load()
+	if asset and assetSize and assetCenter then
+		local ok, imported = pcall(buildFromAsset, model, asset, assetSize, assetCenter)
 		if ok and imported then
 			return imported
 		end
