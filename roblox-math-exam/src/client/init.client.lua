@@ -455,14 +455,34 @@ Net.event(Net.Events.Notify).OnClientEvent:Connect(function(data)
 	Hud.notify(data.key, data.kind, data.args)
 end)
 
+--- Durante una cinematica el juego maneja al personaje: si el jugador
+--- puede caminar, pelea contra la escena.
+local function setControls(enabled: boolean)
+	local scripts = player:FindFirstChild("PlayerScripts")
+	local module = scripts and scripts:FindFirstChild("PlayerModule")
+	if not module then
+		return
+	end
+	pcall(function()
+		local controls = require(module):GetControls()
+		if enabled then
+			controls:Enable()
+		else
+			controls:Disable()
+		end
+	end)
+end
+
 Net.event(Net.Events.Cinematic).OnClientEvent:Connect(function(payload)
 	Cinematic.handle(payload)
 	-- Durante una cinematica no hay HUD: es una pelicula, no una partida.
 	if payload.sequence == "libre" then
 		Hud.setVisible(not MainMenu.open)
+		setControls(true)
 	elseif payload.sequence ~= "prompt" then
 		Hud.setVisible(false)
 		stashPhone()
+		setControls(false)
 	end
 end)
 

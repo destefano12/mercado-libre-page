@@ -249,31 +249,53 @@ function ClassroomAsset.findSeats(model: Model): { Seat }
 		return named
 	end
 
-	-- 3. Por forma: el grupo mas parecido a un aula gana.
-	local best: { Seat }? = nil
-	local bestScore = -math.huge
-	for _, group in cluster(all, C.SeatClusterRadius) do
+	-- 3. Por forma. Las salas candidatas se listan en el Output con su
+	--    numero y su posicion: si elige mal, poné el numero que quieras
+	--    en Config.Classroom.RoomIndex y no hace falta tocar nada mas.
+	local groups = cluster(all, C.SeatClusterRadius)
+	local candidates = {}
+
+	for _, group in groups do
 		local count = #group
-		local spread = footprint(group)
-
-		-- Un aula tiene entre 6 y 40 bancos y entra en unos 60 studs.
-		-- Una tribuna tiene muchos mas y ocupa el doble o el triple.
-		local score = 0
-		score += (count >= 6 and count <= 40) and 40 or -math.abs(count - 20)
-		score -= math.max(0, spread - 60) * 0.6
-		score += math.min(count, 30)
-
-		if score > bestScore then
-			bestScore, best = score, group
+		if count >= 4 then
+			local spread = footprint(group)
+			-- Un aula tiene entre 6 y 40 bancos y entra en unos 60 studs.
+			-- Una tribuna tiene muchos mas y ocupa el doble o el triple.
+			local score = 0
+			score += (count >= 6 and count <= 40) and 40 or -math.abs(count - 20)
+			score -= math.max(0, spread - 60) * 0.6
+			score += math.min(count, 30)
+			table.insert(candidates, { seats = group, score = score, spread = spread })
 		end
 	end
 
-	if best then
-		print(string.format("[Aula] Elegida la sala de %d asientos (%.0f studs de ancho) entre %d asientos de toda la escuela.",
-			#best, footprint(best), #all))
-		return best
+	if #candidates == 0 then
+		return all
 	end
-	return all
+
+	table.sort(candidates, function(a, b)
+		return a.score > b.score
+	end)
+
+	print(string.format("[Aula] Salas encontradas en la escuela (%d asientos en total):", #all))
+	for index, candidate in candidates do
+		local center = Vector3.zero
+		for _, seat in candidate.seats do
+			center += seat.Position
+		end
+		center /= #candidate.seats
+		print(string.format("[Aula]   %d) %d asientos, %.0f studs de ancho, en (%.0f, %.0f, %.0f)",
+			index, #candidate.seats, candidate.spread, center.X, center.Y, center.Z))
+	end
+
+	local picked = candidates[1]
+	if C.RoomIndex >= 1 and candidates[C.RoomIndex] then
+		picked = candidates[C.RoomIndex]
+		print(string.format("[Aula] Usando la sala %d, elegida a mano en Config.RoomIndex.", C.RoomIndex))
+	else
+		print("[Aula] Usando la sala 1. Si no es el aula de matematica, poné otro numero en Config.Classroom.RoomIndex.")
+	end
+	return picked.seats
 end
 
 --- Muebles que parecen bancos: el plan B cuando el aula no trae Seats.

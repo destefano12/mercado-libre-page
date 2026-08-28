@@ -206,8 +206,11 @@ local function buildAvatarStudent(desk: any, index: number): Student?
 		end
 	end
 
-	CharacterArt.attachHair(head, CharacterArt.HairStyles[rng:NextInteger(1, #CharacterArt.HairStyles)],
-		HAIR_COLORS[rng:NextInteger(1, #HAIR_COLORS)])
+	-- Pelo de la tienda si hay ids cargados; si no, el de partes.
+	if not CharacterArt.attachCatalogHair(model, rng) then
+		CharacterArt.attachHair(head, CharacterArt.HairStyles[rng:NextInteger(1, #CharacterArt.HairStyles)],
+			HAIR_COLORS[rng:NextInteger(1, #HAIR_COLORS)])
+	end
 
 	humanoid.DisplayName = NAMES[((index - 1) % #NAMES) + 1]
 	humanoid.NameDisplayDistance = 32
@@ -384,6 +387,7 @@ end
 function StudentNPCs.init(classroomRef: any, teacherRef: any)
 	classroom = classroomRef
 	teacher = teacherRef
+	CharacterArt.loadHairPool()
 end
 
 --- Sienta un compañero en un banco vacio.

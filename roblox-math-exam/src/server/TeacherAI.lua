@@ -194,7 +194,9 @@ function TeacherAI.new(classroom, onCatch: (Player) -> ())
 	-- contento o hecho una furia se tiene que ver desde el fondo del aula.
 	local skin = Color3.fromRGB(226, 190, 156)
 	self.face = CharacterArt.attachFace(self.head, skin)
-	CharacterArt.attachOldHair(self.head)
+	if not CharacterArt.attachCatalogHair(model) then
+		CharacterArt.attachOldHair(self.head)
+	end
 	CharacterArt.attachGlasses(self.head)
 	CharacterArt.attachSuit(model)
 	CharacterArt.attachClipboard(model)

@@ -178,6 +178,13 @@ function Cinematic.line(key: string, args: { [string]: any }?, duration: number)
 		return
 	end
 	refs.subtitle.Text = Strings.get(key, args)
+
+	-- Si hay una voz grabada para esta linea, suena. Si no, queda el
+	-- subtitulo solo, que es como estaba.
+	local voice = Config.Voices[key]
+	if voice and voice ~= "" then
+		Util.playSound(voice, workspace, 0.85)
+	end
 	TweenService:Create(refs.subtitle, TweenInfo.new(0.3), { TextTransparency = 0 }):Play()
 	local mine = token
 	task.delay(duration, function()
@@ -208,6 +215,29 @@ local function characterPivot(): CFrame?
 	return character and character:GetPivot() or nil
 end
 
+--- Encuadre seguro: la camara nunca sube tanto como para mirar el
+--- cielo, y si queda del otro lado de una pared se acerca hasta el
+--- primer obstaculo. Un plano tapado o mirando al techo arruina la
+--- escena mas rapido que cualquier otra cosa.
+local function shotAt(from: Vector3, lookAt: Vector3): CFrame
+	local target = Vector3.new(lookAt.X, lookAt.Y, lookAt.Z)
+	local origin = Vector3.new(from.X, math.min(from.Y, target.Y + 4.5), from.Z)
+
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { player.Character }
+	params.IgnoreWater = true
+
+	local delta = origin - target
+	local hit = workspace:Raycast(target, delta, params)
+	if hit then
+		-- Un poco antes del obstaculo, para no quedar adentro de el.
+		origin = target + (hit.Position - target) * 0.85
+	end
+
+	return CFrame.lookAt(origin, target)
+end
+
 -- ─────────────────────────────────────────────────────────────
 -- Secuencias
 -- ─────────────────────────────────────────────────────────────
@@ -228,23 +258,27 @@ local function playDismissal(payload: any, mine: number)
 	letterbox(true)
 	CameraRig.setMode("cine")
 
-	-- 1. El aula entera, desde atras del alumno
-	local a1 = CFrame.lookAt(pivot.Position - forward * 9 + side * 5 + Vector3.new(0, 7, 0), pivot.Position + Vector3.new(0, 2, 0))
-	local a2 = CFrame.lookAt(pivot.Position - forward * 6 + side * 2 + Vector3.new(0, 5.5, 0), pivot.Position + Vector3.new(0, 2, 0))
+	local eyes = Vector3.new(0, 2.4, 0)
+
+	-- 1. Tres cuartos sobre el hombro: se ve el aula y se ve que te parás
+	local a1 = shotAt(pivot.Position - forward * 7 + side * 4 + Vector3.new(0, 3.2, 0), pivot.Position + eyes)
+	local a2 = shotAt(pivot.Position - forward * 4.5 + side * 2.5 + Vector3.new(0, 2.8, 0), pivot.Position + eyes)
 	if not shot(a1, a2, 4.5, mine) then
 		return
 	end
 
-	-- 2. Acompañando a la salida
-	local b1 = CFrame.lookAt(pivot.Position + side * 7 + Vector3.new(0, 5, 0), exit + Vector3.new(0, 2, 0))
-	local b2 = CFrame.lookAt(exit - forward * 12 + side * 4 + Vector3.new(0, 5, 0), exit + Vector3.new(0, 2, 0))
+	-- 2. La camara se adelanta y espera, como en una pelicula: vos
+	--    caminás hacia ella.
+	local wait1 = exit - forward * 10 + side * 3
+	local b1 = shotAt(wait1 + Vector3.new(0, 3, 0), pivot.Position + eyes)
+	local b2 = shotAt(wait1 + Vector3.new(0, 2.6, 0), exit + eyes)
 	if not shot(b1, b2, 5.5, mine) then
 		return
 	end
 
-	-- 3. La puerta, mirando para afuera
-	local c1 = CFrame.lookAt(exit - forward * 5 + Vector3.new(0, 4, 0), exit + forward * 14 + Vector3.new(0, 2, 0))
-	local c2 = CFrame.lookAt(exit + forward * 3 + Vector3.new(0, 4.5, 0), exit + forward * 20 + Vector3.new(0, 2, 0))
+	-- 3. La puerta, a la altura de la cara, sin cielo
+	local c1 = shotAt(exit - forward * 6 + Vector3.new(0, 2.8, 0), exit + forward * 6 + eyes)
+	local c2 = shotAt(exit + forward * 2 + side * 2 + Vector3.new(0, 2.8, 0), exit + forward * 10 + eyes)
 	shot(c1, c2, 6, mine)
 end
 

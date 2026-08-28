@@ -142,7 +142,9 @@ local function spawnDad()
 	if head then
 		pcall(function()
 			CharacterArt.attachFace(head, Color3.fromRGB(226, 190, 156))
-			CharacterArt.attachOldHair(head, Color3.fromRGB(96, 88, 84))
+			if not CharacterArt.attachCatalogHair(model) then
+				CharacterArt.attachOldHair(head, Color3.fromRGB(96, 88, 84))
+			end
 		end)
 	end
 
@@ -173,11 +175,31 @@ function StoryService.dismissal(teacher: any)
 	for _, player in everyone() do
 		PhoneService.setOut(player, false)
 		SuspicionService.reset(player)
+
 		local character = player.Character
 		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-		if humanoid and humanoid.SeatPart then
-			humanoid.Sit = false
+		if humanoid then
+			if humanoid.SeatPart then
+				humanoid.Sit = false
+			end
+
+			-- Durante la cinematica el personaje camina solo. Antes se
+			-- quedaba clavado esperando que lo movieras vos, que es lo
+			-- que rompia la escena.
+			task.spawn(function()
+				task.wait(1.2)
+				humanoid.WalkSpeed = 11
+				local target = exit.Position + Vector3.new(
+					math.random(-4, 4), 0, math.random(-3, 3))
+				local elapsed = 0
+				while elapsed < S.DismissalDuration - 2 and humanoid.Parent do
+					humanoid:MoveTo(target)
+					elapsed += 1.2
+					task.wait(1.2)
+				end
+			end)
 		end
+
 		cinematic(player, {
 			sequence = "salida",
 			exit = exit,

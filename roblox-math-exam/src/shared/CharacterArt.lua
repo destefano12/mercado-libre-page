@@ -11,6 +11,9 @@
 	expresion no cambia una imagen, mueve las cejas y curva la boca.
 --]]
 
+local InsertService = game:GetService("InsertService")
+
+local Config = require(script.Parent:WaitForChild("Config"))
 local Util = require(script.Parent:WaitForChild("Util"))
 
 local CharacterArt = {}
@@ -354,6 +357,65 @@ function CharacterArt.attachGlasses(head: BasePart, color: Color3?)
 		CFrame.new(-w * 0.44, h * 0.06, 0), frameColor)
 	hairPiece(head, "PatillaAnteojoDer", Vector3.new(0.05, h * 0.04, d * 0.9),
 		CFrame.new(w * 0.44, h * 0.06, 0), frameColor)
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Pelo del catalogo
+-- ─────────────────────────────────────────────────────────────
+
+-- Se baja una sola vez por id y despues se clona: pedirle el mismo
+-- accesorio a Roblox veinte veces tarda una eternidad.
+local hairPool: { Accessory } = {}
+local hairLoaded = false
+
+--- Baja los pelos configurados en Config.Avatars.HairIds. Si la lista
+--- esta vacia o Roblox no los da, devuelve falso y se usa el pelo
+--- hecho con partes.
+function CharacterArt.loadHairPool(): boolean
+	if hairLoaded then
+		return #hairPool > 0
+	end
+	hairLoaded = true
+
+	for _, id in Config.Avatars.HairIds do
+		local ok, container = pcall(function()
+			return InsertService:LoadAsset(id)
+		end)
+		if ok and container then
+			local accessory = container:FindFirstChildOfClass("Accessory")
+			if accessory then
+				accessory.Parent = nil
+				table.insert(hairPool, accessory)
+			end
+			container:Destroy()
+		else
+			warn(string.format(
+				"[Aula] No se pudo bajar el pelo %d. Tiene que ser gratis y estar en tu inventario.", id))
+		end
+	end
+
+	if #hairPool > 0 then
+		print(string.format("[Aula] %d pelos del catalogo listos.", #hairPool))
+	end
+	return #hairPool > 0
+end
+
+--- Le pone un pelo del catalogo a un personaje. Devuelve falso si no
+--- hay ninguno cargado, para que el llamador use el de partes.
+function CharacterArt.attachCatalogHair(model: Model, rng: Random?): boolean
+	if #hairPool == 0 then
+		return false
+	end
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	if not humanoid then
+		return false
+	end
+
+	local index = rng and rng:NextInteger(1, #hairPool) or math.random(1, #hairPool)
+	local ok = pcall(function()
+		humanoid:AddAccessory(hairPool[index]:Clone())
+	end)
+	return ok
 end
 
 -- ─────────────────────────────────────────────────────────────

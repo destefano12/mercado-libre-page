@@ -48,11 +48,17 @@ Config.Classroom = {
 	RoomMarkerRadius = 90,
 	SeatClusterRadius = 16,         -- asientos a menos de esto son la misma sala
 
+	-- Si eligio la sala equivocada (la cocina, el salon de actos), mirá
+	-- el Output: lista todas las salas numeradas con su posicion. Poné
+	-- acá el numero de la que quieras y listo.
+	--     0 = elige sola     1, 2, 3... = esa sala de la lista
+	RoomIndex = 0,
+
 	-- La hoja va acostada en la mesa. El canvas de una SurfaceGui sobre
 	-- la cara de arriba se acomoda segun los ejes LOCALES de la parte,
 	-- asi que la hoja se gira para que el texto quede vertical.
 	-- Si te queda de costado o al reves, cambia esto por 0, 180 o 270.
-	PaperSpin = 90,
+	PaperSpin = 270,
 
 	Rows = 5,              -- filas de bancos (de adelante hacia atras)
 	Columns = 4,           -- bancos por fila
@@ -220,6 +226,25 @@ Config.Lobby = {
 	MaxPlayers = 20,
 	NameLimit = 24,
 	PasswordLimit = 16,
+}
+
+-- ─────────────────────────────────────────────────────────────
+-- VOCES Y AVATARES
+-- ─────────────────────────────────────────────────────────────
+-- Las dos cosas que necesitan assets tuyos. Vacias, el juego anda
+-- igual: sin voz y con el pelo hecho con partes.
+
+-- Voz de las lineas de la historia. Subi tus audios a Roblox y pega
+-- el id de cada uno al lado de su clave.
+--     ["story.dad.greet"] = "rbxassetid://TU_ID",
+Config.Voices = {} :: { [string]: string }
+
+Config.Avatars = {
+	-- Pelo de la tienda de Roblox. Buscá pelos en el catalogo, copiá el
+	-- numero de la URL y pegalo acá: los alumnos, el profe y tu viejo
+	-- lo van a usar en vez del pelo hecho con partes.
+	--     HairIds = { 16630147, 4819740796, 62234425 },
+	HairIds = {} :: { number },
 }
 
 Config.Penalty = {
