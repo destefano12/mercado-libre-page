@@ -1,0 +1,1324 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
+  <Item class="Folder" referent="RBX7">
+    <Properties>
+      <string name="Name">Shared</string>
+    </Properties>
+    <Item class="ModuleScript" referent="RBX1">
+      <Properties>
+        <string name="Name">Config</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Config
+	------------------------------------------------------------------
+	Todo lo que se toca sin abrir el resto del codigo vive aca.
+	Cada seccion es un `Config.X = { ... }` y las claves de primer
+	nivel llevan UN tab: tools/check.py las lee asi para verificar que
+	nadie escriba una clave que no existe.
+--]]
+
+local Config = {}
+
+-- ── Instituto ──────────────────────────────────────────────────────
+-- El mapa se arma por codigo y es modular: un pasillo central con
+-- casilleros a los dos lados y N aulas colgadas del pasillo.
+Config.Escuela = {
+	Origen = Vector3.new(0, 0, 0),
+	PasilloLargo = 190,
+	PasilloAncho = 26,
+	AlturaPiso = 15,
+	EspesorPared = 1,
+	CasillerosPorLado = 18,
+	CasilleroAncho = 3.4,
+	CasilleroAlto = 7,
+	CasilleroFondo = 2.2,
+	Aulas = 2,
+	AulaAncho = 46,
+	AulaLargo = 40,
+	FilasDePupitres = 4,
+	PupitresPorFila = 5,
+	PupitreSeparacionX = 7.2,
+	PupitreSeparacionZ = 7.6,
+	ZonaRecreoLargo = 34,
+	SalaDeCastigo = Vector3.new(150, 0, -80),
+	ColorPiso = Color3.fromRGB(196, 192, 182),
+	ColorParedes = Color3.fromRGB(222, 219, 210),
+	ColorZocalo = Color3.fromRGB(64, 76, 92),
+	ColorCasillero = Color3.fromRGB(52, 92, 128),
+	ColorPizarra = Color3.fromRGB(34, 52, 44),
+}
+
+-- ── Ciclo escolar ──────────────────────────────────────────────────
+-- Un "dia" = recreo + examen + boletin. Cinco dias = Semana Final.
+Config.Ronda = {
+	DiasPorSemana = 5,
+	SegundosRecreo = 55,
+	SegundosExamen = 165,
+	SegundosBoletin = 22,
+	SegundosIntermedio = 6,
+	MinimoJugadores = 1,
+	AvisoCampana = 10,
+	NombreDias = { "lunes", "martes", "miercoles", "jueves", "viernes" },
+	CurvaDificultad = { 1.0, 1.15, 1.35, 1.6, 2.0 },
+	SuspensosParaExpulsion = 3,
+}
+
+-- ── Examen ─────────────────────────────────────────────────────────
+Config.Examen = {
+	PreguntasBase = 8,
+	PreguntasPorDia = 2,
+	MaximoPreguntas = 18,
+	PuntosPorAcierto = 10,
+	PuntosPorError = -4,
+	PuntosSinResponder = -2,
+	ProbabilidadEscritura = 0.3,
+	LargoSecuencia = NumberRange.new(4, 7),
+	SegundosSecuencia = 6,
+	OpcionesPorPregunta = 4,
+	CopiarSegundos = 1.8,
+	CopiarAcierto = 0.72,
+	CopiarAlcance = 11,
+}
+
+-- ── Profesor (IA del servidor) ─────────────────────────────────────
+Config.Profesor = {
+	VelocidadPatrulla = 7,
+	VelocidadPersecucion = 19,
+	AlturaOjos = 1.6,
+	AnguloVision = 62,
+	DistanciaVision = 34,
+	DistanciaCercania = 12,
+	PausaEnFila = NumberRange.new(1.6, 3.4),
+	PausaEnPizarra = NumberRange.new(4, 8),
+	ProbabilidadPizarra = 0.28,
+	IntervaloRepensar = 0.35,
+	NombresPosibles = { "Sr. Vidal", "Sra. Ferrer", "Sr. Kovacs", "Sra. Nieto", "Sr. Aldana" },
+	ColorTraje = Color3.fromRGB(38, 42, 54),
+	ColorCamisa = Color3.fromRGB(232, 234, 240),
+	ColorCorbata = Color3.fromRGB(122, 32, 44),
+	ColorPiel = Color3.fromRGB(215, 176, 140),
+	RadioAlerta = 26,
+}
+
+-- ── Sospecha ───────────────────────────────────────────────────────
+-- Es por jugador, de 0 a 1. Sube por infracciones vistas y baja sola.
+Config.Sospecha = {
+	Decaimiento = 0.055,
+	DecaimientoFueraDeVista = 0.09,
+	PorLevantarse = 0.42,
+	PorLanzar = 0.5,
+	PorEspiar = 0.30,
+	PorChuleta = 0.26,
+	PorSoplar = 0.2,
+	PorCorrerEnExamen = 0.18,
+	PorSegundoEnMira = 0.06,
+	Umbral = 1.0,
+	UmbralAviso = 0.55,
+	MultiplicadorDistancia = 1.6,
+}
+
+-- ── Castigos ───────────────────────────────────────────────────────
+Config.Castigo = {
+	SegundosCono = 18,
+	PenalizacionNota = 22,
+	SegundosExpulsion = 20,
+	InfraccionesParaExpulsion = 2,
+	SegundosInmunidad = 3,
+	VelocidadReducida = 9,
+}
+
+-- ── Objetos y trampas ──────────────────────────────────────────────
+Config.Objetos = {
+	VelocidadLanzamiento = 76,
+	GravedadProyectil = 0.55,
+	VidaProyectil = 12,
+	AlcanceRecoger = 9,
+	EnfriamientoLanzar = 1.2,
+	ChuletaRevela = 3,
+	ChuletaUsos = 2,
+	SoplarAlcance = 14,
+	SoplarEnfriamiento = 8,
+	NotaCaracteres = 60,
+	AvionMultiplicador = 1.45,
+	BolitaRuido = 1,
+	CasilleroEnfriamiento = 25,
+}
+
+-- ── Notas / calificaciones ─────────────────────────────────────────
+Config.Notas = {
+	Inicial = 60,
+	Minima = 0,
+	Maxima = 100,
+	Aprobado = 60,
+	Escala = { { 90, "A" }, { 80, "B" }, { 70, "C" }, { 60, "D" }, { 0, "F" } },
+	PesoExamen = 0.75,
+	PesoConducta = 0.25,
+}
+
+-- ── Economia y guardado ────────────────────────────────────────────
+Config.Economia = {
+	ClaveDataStore = "FinalsWeek_Alumnos_v1",
+	CreditosPorAcierto = 4,
+	CreditosPorAprobar = 45,
+	CreditosPorSemana = 120,
+	CreditosSinCastigos = 30,
+	GuardadoAutomatico = 90,
+	Tienda = {
+		{ id = "chuleta", precio = 40, tipo = "objeto" },
+		{ id = "avion", precio = 25, tipo = "objeto" },
+		{ id = "bolita", precio = 15, tipo = "objeto" },
+		{ id = "nota", precio = 10, tipo = "objeto" },
+		{ id = "gorra", precio = 90, tipo = "estetica" },
+		{ id = "mochila", precio = 130, tipo = "estetica" },
+		{ id = "anteojos", precio = 75, tipo = "estetica" },
+		{ id = "campera", precio = 160, tipo = "estetica" },
+	},
+}
+
+-- ── Salas multijugador ─────────────────────────────────────────────
+Config.Salas = {
+	MapaMemoria = "FinalsWeekSalas",
+	VidaEntrada = 240,
+	Latido = 25,
+	MaximoListado = 40,
+	CapacidadPorDefecto = 8,
+	CapacidadesPosibles = { 2, 4, 6, 8, 12 },
+	LargoCodigo = 5,
+}
+
+-- ── Sonido ─────────────────────────────────────────────────────────
+-- Todo sale de los archivos que ya trae el motor: no hay que subir nada.
+Config.Sonidos = {
+	Campana = "rbxasset://sounds/electronicpingshort.wav",
+	Click = "rbxasset://sounds/switch3.wav",
+	Acierto = "rbxasset://sounds/electronicpingshort.wav",
+	Error = "rbxasset://sounds/snap.mp3",
+	Papel = "rbxasset://sounds/snap.mp3",
+	Impacto = "rbxasset://sounds/impact_water.mp3",
+	Silbato = "rbxasset://sounds/electronicpingshort.wav",
+	Casillero = "rbxasset://sounds/metal.ogg",
+	Tiza = "rbxasset://sounds/snap.mp3",
+	NotaBaja = "rbxasset://sounds/bass.wav",
+	VolumenBase = 0.45,
+}
+
+-- ── Musica (se sintetiza con los sonidos del motor) ────────────────
+Config.Musica = {
+	Habilitada = true,
+	Volumen = 0.32,
+	Bpm = { pasillo = 96, examen = 104, tension = 126, persecucion = 152 },
+	IdPersonalizado = { pasillo = "", examen = "", tension = "", persecucion = "" },
+}
+
+-- ── Camara ─────────────────────────────────────────────────────────
+Config.Camara = {
+	AlturaOjos = Vector3.new(0, 1.5, 0),
+	LlenadoHoja = 0.8,
+	SegundosTransicion = 0.85,
+	FovMinimo = 18,
+	FovMaximo = 74,
+}
+
+table.freeze(Config)
+return Config
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX2">
+      <Properties>
+        <string name="Name">Grades</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Grades
+	------------------------------------------------------------------
+	La aritmetica de las notas, en un solo lugar, porque la usan el
+	servidor (para calcular el boletin) y el cliente (para pintarla).
+--]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+
+local Grades = {}
+
+export type Boletin = {
+	examen: number,
+	conducta: number,
+	final: number,
+	letra: string,
+	aprobado: boolean,
+	aciertos: number,
+	total: number,
+	castigos: number,
+}
+
+function Grades.clamp(value: number): number
+	return math.clamp(value, Config.Notas.Minima, Config.Notas.Maxima)
+end
+
+--- Letra que le corresponde a un puntaje de 0 a 100.
+function Grades.letter(score: number): string
+	for _, tier in Config.Notas.Escala do
+		if score >= tier[1] then
+			return tier[2] :: string
+		end
+	end
+	return "F"
+end
+
+function Grades.passed(score: number): boolean
+	return score >= Config.Notas.Aprobado
+end
+
+--- Puntaje del examen a partir de aciertos / errores / sin responder.
+function Grades.examScore(correct: number, wrong: number, blank: number): number
+	local total = correct + wrong + blank
+	if total <= 0 then
+		return Config.Notas.Inicial
+	end
+	local raw = correct * Config.Examen.PuntosPorAcierto
+		+ wrong * Config.Examen.PuntosPorError
+		+ blank * Config.Examen.PuntosSinResponder
+	local best = total * Config.Examen.PuntosPorAcierto
+	return Grades.clamp((raw / best) * 100)
+end
+
+--- Nota de conducta: arranca en 100 y le restan los castigos y la sospecha.
+function Grades.behaviourScore(punishments: number, peakSuspicion: number): number
+	local score = 100 - punishments * Config.Castigo.PenalizacionNota - peakSuspicion * 18
+	return Grades.clamp(score)
+end
+
+--- El boletin del dia: examen + conducta, con los pesos de Config.
+function Grades.report(correct: number, wrong: number, blank: number, punishments: number, peak: number): Boletin
+	local examen = Grades.examScore(correct, wrong, blank)
+	local conducta = Grades.behaviourScore(punishments, peak)
+	local final = Grades.clamp(examen * Config.Notas.PesoExamen + conducta * Config.Notas.PesoConducta)
+	return {
+		examen = math.floor(examen + 0.5),
+		conducta = math.floor(conducta + 0.5),
+		final = math.floor(final + 0.5),
+		letra = Grades.letter(final),
+		aprobado = Grades.passed(final),
+		aciertos = correct,
+		total = correct + wrong + blank,
+		castigos = punishments,
+	}
+end
+
+--- Promedio del trimestre a partir de los boletines de la semana.
+function Grades.average(reports: { number }): number
+	if #reports == 0 then
+		return Config.Notas.Inicial
+	end
+	local sum = 0
+	for _, value in reports do
+		sum += value
+	end
+	return Grades.clamp(sum / #reports)
+end
+
+return Grades
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX3">
+      <Properties>
+        <string name="Name">Net</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Net
+	------------------------------------------------------------------
+	Creacion / acceso tipado a los remotes de Finals Week. El servidor llama Net.build()
+	una sola vez; el cliente usa Net.event() / Net.func() y espera solo.
+--]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Net = {}
+
+local FOLDER_NAME = "Net"
+
+local EVENTS: { [string]: string } = {
+	RoundUpdate = "RoundUpdate",     -- S->C  fase, dia, reloj, nota del trimestre
+	ExamUpdate = "ExamUpdate",       -- S->C  estado completo del examen del alumno
+	SuspicionUpdate = "SuspicionUpdate", -- S->C  barra de sospecha + cercania del profe
+	Notify = "Notify",               -- S->C  aviso corto en pantalla
+	TeacherSay = "TeacherSay",       -- S->C  el profe dice algo (burbuja 3D)
+	Punish = "Punish",               -- S->C  arranca un castigo (cono, expulsion)
+	Wallet = "Wallet",               -- S->C  creditos + objetos desbloqueados
+	Report = "Report",               -- S->C  boletin del dia / de la semana
+	Cheat = "Cheat",                 -- C->S  espiar, soplar, usar chuleta
+	Throw = "Throw",                 -- C->S  lanzar un objeto (origen + direccion)
+	NoteText = "NoteText",           -- C->S  escribir la nota que llevas en la mano
+	NoteReceived = "NoteReceived",   -- S->C  te llego una nota de un companero
+	Locker = "Locker",               -- C->S  abrir un casillero
+	Music = "Music",                 -- S->C  cambio de clima musical
+}
+
+local FUNCTIONS: { [string]: string } = {
+	GetState = "GetState",           -- C->S  estado inicial al entrar
+	SubmitAnswer = "SubmitAnswer",   -- C->S  responder una pregunta
+	SubmitSequence = "SubmitSequence", -- C->S  minijuego de escritura rapida
+	Buy = "Buy",                     -- C->S  comprar en la tienda
+	Equip = "Equip",                 -- C->S  equipar objeto / estetica
+	ChooseMode = "ChooseMode",       -- C->S  solo / amigos / publico
+	ListRooms = "ListRooms",         -- C->S  salas abiertas
+	CreateRoom = "CreateRoom",       -- C->S  abrir una sala
+	JoinRoom = "JoinRoom",           -- C->S  entrar a una sala
+}
+
+-- Se exponen como campos del modulo, pero se declaran como locales
+-- tipados para poder recorrerlos con `for _, name in ...`.
+Net.Events = EVENTS
+Net.Functions = FUNCTIONS
+
+local function getFolder(): Folder
+	local existing = ReplicatedStorage:FindFirstChild(FOLDER_NAME)
+	if existing then
+		return existing :: Folder
+	end
+	if RunService:IsServer() then
+		local folder = Instance.new("Folder")
+		folder.Name = FOLDER_NAME
+		folder.Parent = ReplicatedStorage
+		return folder
+	end
+	return ReplicatedStorage:WaitForChild(FOLDER_NAME, 30) :: Folder
+end
+
+-- Solo servidor: crea todos los remotes declarados arriba.
+function Net.build()
+	assert(RunService:IsServer(), "Net.build() es solo del servidor")
+	local folder = getFolder()
+
+	for _, name in EVENTS do
+		if not folder:FindFirstChild(name) then
+			local remote = Instance.new("RemoteEvent")
+			remote.Name = name
+			remote.Parent = folder
+		end
+	end
+
+	for _, name in FUNCTIONS do
+		if not folder:FindFirstChild(name) then
+			local remote = Instance.new("RemoteFunction")
+			remote.Name = name
+			remote.Parent = folder
+		end
+	end
+end
+
+-- Cache: RiskUpdate se dispara ~10 veces por segundo por jugador,
+-- no tiene sentido buscar el remote en el arbol cada vez.
+local cache: { [string]: Instance } = {}
+
+local function lookup(name: string, className: string): Instance
+	local cached = cache[name]
+	if cached and cached.Parent then
+		return cached
+	end
+	local folder = getFolder()
+	local remote = folder:WaitForChild(name, 30)
+	assert(remote and remote:IsA(className), ("%s %q no existe"):format(className, name))
+	cache[name] = remote
+	return remote
+end
+
+function Net.event(name: string): RemoteEvent
+	return lookup(name, "RemoteEvent") :: RemoteEvent
+end
+
+function Net.func(name: string): RemoteFunction
+	return lookup(name, "RemoteFunction") :: RemoteFunction
+end
+
+return Net
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX4">
+      <Properties>
+        <string name="Name">Strings</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Strings
+	------------------------------------------------------------------
+	Los tres idiomas del juego. El servidor NUNCA manda texto armado:
+	manda { key = "notify.passed", args = { grade = "B" } } y el cliente
+	lo dibuja con el idioma que tiene cada jugador en su Roblox.
+
+	Regla: las tres tablas tienen exactamente las mismas claves.
+	tools/check.py lo verifica antes de empaquetar.
+--]]
+
+local Strings = {}
+
+local en: { [string]: string } = {
+	-- Fases del dia
+	["phase.espera"] = "Waiting for students",
+	["phase.recreo"] = "Recess",
+	["phase.examen"] = "Exam",
+	["phase.boletin"] = "Report cards",
+	["phase.intermedio"] = "Between classes",
+	["phase.semana"] = "Finals Week",
+	["day.lunes"] = "Monday",
+	["day.martes"] = "Tuesday",
+	["day.miercoles"] = "Wednesday",
+	["day.jueves"] = "Thursday",
+	["day.viernes"] = "Friday",
+	-- HUD
+	["hud.day"] = "Day {n} - {day}",
+	["hud.suspicion"] = "SUSPICION",
+	["hud.grade"] = "TERM GRADE",
+	["hud.credits"] = "CREDITS",
+	["hud.objective"] = "OBJECTIVE",
+	["hud.close_call"] = "THE TEACHER IS WATCHING YOU",
+	["hud.locked"] = "Doors locked",
+	["hud.hint_recess"] = "Grab what you need before the bell",
+	["hud.hint_exam"] = "Answer the sheet on your desk",
+	["hud.hint_report"] = "Report cards are out",
+	["hud.detention"] = "Detention: {s}s",
+	["hud.cone"] = "Dunce cone: {s}s",
+	["hud.keys"] = "E interact - Q peek - R whisper - F throw",
+	-- Examen
+	["exam.title"] = "Exam - {subject}",
+	["exam.question"] = "Question {i} of {n}",
+	["exam.progress"] = "{done}/{total} answered",
+	["exam.answered"] = "Answered",
+	["exam.blank"] = "Blank",
+	["exam.correct"] = "Correct",
+	["exam.wrong"] = "Wrong",
+	["exam.type_prompt"] = "Type the sequence",
+	["exam.type_fail"] = "You mistyped it",
+	["exam.time_up"] = "Pencils down",
+	["exam.not_started"] = "The exam has not started",
+	["exam.prev"] = "Previous",
+	["exam.next"] = "Next",
+	["topic.math"] = "Mathematics",
+	["topic.history"] = "History",
+	["topic.science"] = "Science",
+	["topic.language"] = "Language",
+	["topic.geography"] = "Geography",
+	-- Trampas
+	["cheat.peek"] = "Peek at a classmate's sheet",
+	["cheat.peek_ok"] = "You copied question {i}",
+	["cheat.peek_fail"] = "You couldn't read anything",
+	["cheat.peek_none"] = "Nobody is sitting close enough",
+	["cheat.whisper"] = "Whisper an answer",
+	["cheat.whisper_sent"] = "You whispered question {i}",
+	["cheat.whisper_got"] = "{name} whispers: {i} is {opt}",
+	["cheat.sheet_used"] = "Cheat sheet: {n} answers revealed",
+	["cheat.sheet_empty"] = "The cheat sheet is used up",
+	["cheat.cooldown"] = "Wait a moment",
+	["cheat.seen"] = "The teacher saw you",
+	["cheat.none"] = "You have nothing to use",
+	-- Objetos
+	["item.nota"] = "Note",
+	["item.avion"] = "Paper plane",
+	["item.bolita"] = "Paper ball",
+	["item.chuleta"] = "Cheat sheet",
+	["item.gorra"] = "Cap",
+	["item.mochila"] = "Backpack",
+	["item.anteojos"] = "Glasses",
+	["item.campera"] = "Jacket",
+	["item.desc_nota"] = "Write an answer and throw it to a classmate",
+	["item.desc_avion"] = "Flies further and straighter than the ball",
+	["item.desc_bolita"] = "Throw it far away: the teacher goes to the noise",
+	["item.desc_chuleta"] = "Reveals {n} answers of the current exam",
+	["item.desc_gorra"] = "A cap. It does nothing. It looks good.",
+	["item.desc_mochila"] = "Classic school backpack",
+	["item.desc_anteojos"] = "You look like you study",
+	["item.desc_campera"] = "School jacket with the crest",
+	-- Notas de papel
+	["note.write"] = "Write your note",
+	["note.placeholder"] = "3 is B, 5 is A...",
+	["note.throw"] = "Aim and click to throw",
+	["note.sent"] = "Note thrown",
+	["note.received"] = "{name} passed you a note",
+	["note.empty"] = "The note is blank",
+	["note.read"] = "The note says:",
+	-- Tienda
+	["shop.title"] = "School store",
+	["shop.buy"] = "Buy",
+	["shop.owned"] = "Owned",
+	["shop.equip"] = "Equip",
+	["shop.equipped"] = "Equipped",
+	["shop.cannot"] = "Not enough credits",
+	["shop.bought"] = "You bought {item}",
+	["shop.closed"] = "The store only opens at recess",
+	["shop.tab_items"] = "Gear",
+	["shop.tab_looks"] = "Looks",
+	["shop.price"] = "{n} cr",
+	-- El profesor
+	["teacher.greet"] = "Sit down. Now.",
+	["teacher.start_exam"] = "You have {s} seconds. Do not talk.",
+	["teacher.silence"] = "Silence.",
+	["teacher.sit_down"] = "Back to your seat.",
+	["teacher.eyes_on_paper"] = "Eyes on your own paper.",
+	["teacher.caught"] = "I saw that, {name}.",
+	["teacher.warning"] = "Last warning.",
+	["teacher.blackboard"] = "Copy this down.",
+	["teacher.time_left"] = "{s} seconds left.",
+	["teacher.finish"] = "Pencils down. Papers up.",
+	["teacher.noise"] = "Who threw that?",
+	-- Castigos
+	["punish.cone"] = "{name} got the dunce cone",
+	["punish.grade"] = "-{n} points off your grade",
+	["punish.detention"] = "{name} was sent to detention",
+	["punish.warned"] = "Final warning",
+	["punish.back"] = "You are back in class",
+	-- Avisos
+	["notify.bell"] = "The bell rang",
+	["notify.bell_soon"] = "The bell rings in {s}s",
+	["notify.doors_locked"] = "The classroom doors locked",
+	["notify.exam_start"] = "The exam started",
+	["notify.exam_end"] = "The exam is over",
+	["notify.passed"] = "You passed: {grade}",
+	["notify.failed"] = "You failed: {grade}",
+	["notify.week_done"] = "Finals Week survived",
+	["notify.expelled"] = "The class was expelled",
+	["notify.credits"] = "+{n} credits",
+	["notify.locker"] = "You found: {item}",
+	["notify.locker_empty"] = "The locker is empty",
+	["notify.locker_wait"] = "That locker just closed",
+	["notify.hit"] = "A paper ball hit you",
+	["notify.waiting"] = "Waiting for more students",
+	["notify.seat"] = "Your desk is row {row}, seat {seat}",
+	-- Boletin
+	["report.title"] = "Report card",
+	["report.day"] = "Day {n}",
+	["report.exam"] = "Exam",
+	["report.behaviour"] = "Behaviour",
+	["report.final"] = "Final",
+	["report.correct"] = "{ok} of {n} correct",
+	["report.punishments"] = "{n} punishments",
+	["report.fails"] = "Failed days: {n}/{max}",
+	["report.week"] = "Finals Week - final average",
+	["report.next"] = "Next day starts in {s}s",
+	["report.survived"] = "You made it through the week",
+	["report.expelled"] = "Too many fails. Class expelled.",
+	-- Menu
+	["menu.title"] = "FINALS WEEK",
+	["menu.subtitle"] = "Five days. One teacher. Do not get caught.",
+	["menu.play"] = "Play",
+	["menu.rooms"] = "Rooms",
+	["menu.settings"] = "Settings",
+	["menu.credits"] = "Credits",
+	["menu.shop"] = "Store",
+	["menu.back"] = "Back",
+	["menu.close"] = "Close",
+	["menu.solo"] = "Solo",
+	["menu.solo_desc"] = "Your own classroom, nobody else",
+	["menu.friends"] = "With friends",
+	["menu.friends_desc"] = "Private room with a code",
+	["menu.public"] = "Public class",
+	["menu.public_desc"] = "Join whoever is playing",
+	["menu.brightness"] = "Brightness",
+	["menu.volume"] = "Volume",
+	["menu.music"] = "Music",
+	["menu.language"] = "Language",
+	["menu.sensitivity"] = "Camera sensitivity",
+	-- Salas
+	["room.title"] = "Rooms",
+	["room.search"] = "Search a room",
+	["room.create"] = "Create room",
+	["room.name"] = "Room name",
+	["room.password"] = "Password (optional)",
+	["room.capacity"] = "Capacity: {n}",
+	["room.join"] = "Join",
+	["room.locked"] = "Locked",
+	["room.players"] = "{n}/{max}",
+	["room.empty"] = "No open rooms",
+	["room.created"] = "Room {code} created",
+	["room.wrong_password"] = "Wrong password",
+	["room.full"] = "The room is full",
+	["room.gone"] = "That room no longer exists",
+	["room.unavailable"] = "Rooms only work in a published game",
+	["room.code"] = "Code",
+	["room.invite"] = "Invite friends",
+	["room.refresh"] = "Refresh",
+	-- Creditos
+	["credits.title"] = "Credits",
+	["credits.body"] = "Built from scratch in Luau: map, teacher AI, exams, cheating and economy.",
+	["credits.design"] = "Design and code",
+	["credits.thanks"] = "Cheating is not the answer. Studying is. But this is a game.",
+	-- Errores
+	["error.generic"] = "Something went wrong",
+	["error.not_seated"] = "Sit at your desk first",
+	["error.phase"] = "Not right now",
+	["error.save"] = "Your progress could not be saved",
+}
+
+local es: { [string]: string } = {
+	-- Fases del dia
+	["phase.espera"] = "Esperando alumnos",
+	["phase.recreo"] = "Recreo",
+	["phase.examen"] = "Examen",
+	["phase.boletin"] = "Boletines",
+	["phase.intermedio"] = "Entre clases",
+	["phase.semana"] = "Semana Final",
+	["day.lunes"] = "Lunes",
+	["day.martes"] = "Martes",
+	["day.miercoles"] = "Miercoles",
+	["day.jueves"] = "Jueves",
+	["day.viernes"] = "Viernes",
+	-- HUD
+	["hud.day"] = "Dia {n} - {day}",
+	["hud.suspicion"] = "SOSPECHA",
+	["hud.grade"] = "NOTA DEL TRIMESTRE",
+	["hud.credits"] = "CREDITOS",
+	["hud.objective"] = "OBJETIVO",
+	["hud.close_call"] = "EL PROFESOR TE ESTA MIRANDO",
+	["hud.locked"] = "Puertas trabadas",
+	["hud.hint_recess"] = "Agarra lo que necesites antes de la campana",
+	["hud.hint_exam"] = "Responde la hoja de tu pupitre",
+	["hud.hint_report"] = "Salieron los boletines",
+	["hud.detention"] = "Castigo: {s}s",
+	["hud.cone"] = "Cono de la verguenza: {s}s",
+	["hud.keys"] = "E interactuar - Q espiar - R soplar - F lanzar",
+	-- Examen
+	["exam.title"] = "Examen - {subject}",
+	["exam.question"] = "Pregunta {i} de {n}",
+	["exam.progress"] = "{done}/{total} respondidas",
+	["exam.answered"] = "Respondida",
+	["exam.blank"] = "En blanco",
+	["exam.correct"] = "Correcta",
+	["exam.wrong"] = "Incorrecta",
+	["exam.type_prompt"] = "Escribi la secuencia",
+	["exam.type_fail"] = "La erraste al escribir",
+	["exam.time_up"] = "Se acabo el tiempo",
+	["exam.not_started"] = "El examen no empezo",
+	["exam.prev"] = "Anterior",
+	["exam.next"] = "Siguiente",
+	["topic.math"] = "Matematica",
+	["topic.history"] = "Historia",
+	["topic.science"] = "Ciencias",
+	["topic.language"] = "Lengua",
+	["topic.geography"] = "Geografia",
+	-- Trampas
+	["cheat.peek"] = "Espiar la hoja del de al lado",
+	["cheat.peek_ok"] = "Copiaste la pregunta {i}",
+	["cheat.peek_fail"] = "No llegaste a leer nada",
+	["cheat.peek_none"] = "No hay nadie lo bastante cerca",
+	["cheat.whisper"] = "Soplar una respuesta",
+	["cheat.whisper_sent"] = "Soplaste la pregunta {i}",
+	["cheat.whisper_got"] = "{name} sopla: la {i} es {opt}",
+	["cheat.sheet_used"] = "Chuleta: {n} respuestas reveladas",
+	["cheat.sheet_empty"] = "La chuleta ya no da mas",
+	["cheat.cooldown"] = "Espera un momento",
+	["cheat.seen"] = "El profesor te vio",
+	["cheat.none"] = "No tenes nada para usar",
+	-- Objetos
+	["item.nota"] = "Nota",
+	["item.avion"] = "Avioncito",
+	["item.bolita"] = "Bolita de papel",
+	["item.chuleta"] = "Chuleta",
+	["item.gorra"] = "Gorra",
+	["item.mochila"] = "Mochila",
+	["item.anteojos"] = "Anteojos",
+	["item.campera"] = "Campera",
+	["item.desc_nota"] = "Escribi una respuesta y lanzasela a un companero",
+	["item.desc_avion"] = "Vuela mas lejos y mas derecho que la bolita",
+	["item.desc_bolita"] = "Lanzala lejos: el profe va hacia el ruido",
+	["item.desc_chuleta"] = "Revela {n} respuestas del examen actual",
+	["item.desc_gorra"] = "Una gorra. No hace nada. Queda bien.",
+	["item.desc_mochila"] = "Mochila de colegio clasica",
+	["item.desc_anteojos"] = "Parece que estudias",
+	["item.desc_campera"] = "Campera del colegio con el escudo",
+	-- Notas de papel
+	["note.write"] = "Escribi tu nota",
+	["note.placeholder"] = "la 3 es B, la 5 es A...",
+	["note.throw"] = "Apunta y hace clic para lanzar",
+	["note.sent"] = "Nota lanzada",
+	["note.received"] = "{name} te paso una nota",
+	["note.empty"] = "La nota esta en blanco",
+	["note.read"] = "La nota dice:",
+	-- Tienda
+	["shop.title"] = "Tienda del colegio",
+	["shop.buy"] = "Comprar",
+	["shop.owned"] = "Comprado",
+	["shop.equip"] = "Equipar",
+	["shop.equipped"] = "Equipado",
+	["shop.cannot"] = "No te alcanzan los creditos",
+	["shop.bought"] = "Compraste {item}",
+	["shop.closed"] = "La tienda solo abre en el recreo",
+	["shop.tab_items"] = "Objetos",
+	["shop.tab_looks"] = "Estetica",
+	["shop.price"] = "{n} cr",
+	-- El profesor
+	["teacher.greet"] = "Sientense. Ya.",
+	["teacher.start_exam"] = "Tienen {s} segundos. Nadie habla.",
+	["teacher.silence"] = "Silencio.",
+	["teacher.sit_down"] = "A tu asiento.",
+	["teacher.eyes_on_paper"] = "Los ojos en tu hoja.",
+	["teacher.caught"] = "Eso lo vi, {name}.",
+	["teacher.warning"] = "Ultima advertencia.",
+	["teacher.blackboard"] = "Copien esto.",
+	["teacher.time_left"] = "Quedan {s} segundos.",
+	["teacher.finish"] = "Lapices abajo. Hojas arriba.",
+	["teacher.noise"] = "Quien tiro eso?",
+	-- Castigos
+	["punish.cone"] = "{name} se gano el cono de la verguenza",
+	["punish.grade"] = "-{n} puntos de tu nota",
+	["punish.detention"] = "{name} fue a la sala de castigo",
+	["punish.warned"] = "Ultima advertencia",
+	["punish.back"] = "Volviste al aula",
+	-- Avisos
+	["notify.bell"] = "Sono la campana",
+	["notify.bell_soon"] = "La campana suena en {s}s",
+	["notify.doors_locked"] = "Se trabaron las puertas del aula",
+	["notify.exam_start"] = "Empezo el examen",
+	["notify.exam_end"] = "Se termino el examen",
+	["notify.passed"] = "Aprobaste: {grade}",
+	["notify.failed"] = "Desaprobaste: {grade}",
+	["notify.week_done"] = "Sobreviviste a la Semana Final",
+	["notify.expelled"] = "Expulsaron al curso",
+	["notify.credits"] = "+{n} creditos",
+	["notify.locker"] = "Encontraste: {item}",
+	["notify.locker_empty"] = "El casillero esta vacio",
+	["notify.locker_wait"] = "Ese casillero se acaba de cerrar",
+	["notify.hit"] = "Te pego una bolita de papel",
+	["notify.waiting"] = "Esperando mas alumnos",
+	["notify.seat"] = "Tu pupitre es fila {row}, asiento {seat}",
+	-- Boletin
+	["report.title"] = "Boletin",
+	["report.day"] = "Dia {n}",
+	["report.exam"] = "Examen",
+	["report.behaviour"] = "Conducta",
+	["report.final"] = "Final",
+	["report.correct"] = "{ok} de {n} correctas",
+	["report.punishments"] = "{n} castigos",
+	["report.fails"] = "Dias desaprobados: {n}/{max}",
+	["report.week"] = "Semana Final - promedio final",
+	["report.next"] = "El proximo dia empieza en {s}s",
+	["report.survived"] = "Zafaste toda la semana",
+	["report.expelled"] = "Demasiados suspensos. Curso expulsado.",
+	-- Menu
+	["menu.title"] = "SEMANA FINAL",
+	["menu.subtitle"] = "Cinco dias. Un profesor. Que no te pillen.",
+	["menu.play"] = "Jugar",
+	["menu.rooms"] = "Salas",
+	["menu.settings"] = "Ajustes",
+	["menu.credits"] = "Creditos",
+	["menu.shop"] = "Tienda",
+	["menu.back"] = "Volver",
+	["menu.close"] = "Cerrar",
+	["menu.solo"] = "Solo",
+	["menu.solo_desc"] = "Tu propia aula, sin nadie mas",
+	["menu.friends"] = "Con amigos",
+	["menu.friends_desc"] = "Sala privada con codigo",
+	["menu.public"] = "Curso publico",
+	["menu.public_desc"] = "Entra con quien este jugando",
+	["menu.brightness"] = "Brillo",
+	["menu.volume"] = "Volumen",
+	["menu.music"] = "Musica",
+	["menu.language"] = "Idioma",
+	["menu.sensitivity"] = "Sensibilidad de camara",
+	-- Salas
+	["room.title"] = "Salas",
+	["room.search"] = "Buscar una sala",
+	["room.create"] = "Crear sala",
+	["room.name"] = "Nombre de la sala",
+	["room.password"] = "Contrasena (opcional)",
+	["room.capacity"] = "Capacidad: {n}",
+	["room.join"] = "Entrar",
+	["room.locked"] = "Con clave",
+	["room.players"] = "{n}/{max}",
+	["room.empty"] = "No hay salas abiertas",
+	["room.created"] = "Sala {code} creada",
+	["room.wrong_password"] = "Contrasena incorrecta",
+	["room.full"] = "La sala esta llena",
+	["room.gone"] = "Esa sala ya no existe",
+	["room.unavailable"] = "Las salas solo andan en un juego publicado",
+	["room.code"] = "Codigo",
+	["room.invite"] = "Invitar amigos",
+	["room.refresh"] = "Actualizar",
+	-- Creditos
+	["credits.title"] = "Creditos",
+	["credits.body"] = "Hecho de cero en Luau: mapa, IA del profesor, examenes, trampas y economia.",
+	["credits.design"] = "Diseno y codigo",
+	["credits.thanks"] = "Copiarse no es la solucion. Estudiar si. Pero esto es un juego.",
+	-- Errores
+	["error.generic"] = "Algo salio mal",
+	["error.not_seated"] = "Primero sentate en tu pupitre",
+	["error.phase"] = "Ahora no",
+	["error.save"] = "No se pudo guardar tu progreso",
+}
+
+local pt: { [string]: string } = {
+	-- Fases del dia
+	["phase.espera"] = "Aguardando alunos",
+	["phase.recreo"] = "Recreio",
+	["phase.examen"] = "Prova",
+	["phase.boletin"] = "Boletins",
+	["phase.intermedio"] = "Entre aulas",
+	["phase.semana"] = "Semana Final",
+	["day.lunes"] = "Segunda",
+	["day.martes"] = "Terca",
+	["day.miercoles"] = "Quarta",
+	["day.jueves"] = "Quinta",
+	["day.viernes"] = "Sexta",
+	-- HUD
+	["hud.day"] = "Dia {n} - {day}",
+	["hud.suspicion"] = "SUSPEITA",
+	["hud.grade"] = "NOTA DO TRIMESTRE",
+	["hud.credits"] = "CREDITOS",
+	["hud.objective"] = "OBJETIVO",
+	["hud.close_call"] = "O PROFESSOR ESTA TE OLHANDO",
+	["hud.locked"] = "Portas trancadas",
+	["hud.hint_recess"] = "Pegue o que precisar antes do sinal",
+	["hud.hint_exam"] = "Responda a folha na sua carteira",
+	["hud.hint_report"] = "Sairam os boletins",
+	["hud.detention"] = "Castigo: {s}s",
+	["hud.cone"] = "Cone da vergonha: {s}s",
+	["hud.keys"] = "E interagir - Q espiar - R soprar - F arremessar",
+	-- Examen
+	["exam.title"] = "Prova - {subject}",
+	["exam.question"] = "Questao {i} de {n}",
+	["exam.progress"] = "{done}/{total} respondidas",
+	["exam.answered"] = "Respondida",
+	["exam.blank"] = "Em branco",
+	["exam.correct"] = "Correta",
+	["exam.wrong"] = "Errada",
+	["exam.type_prompt"] = "Digite a sequencia",
+	["exam.type_fail"] = "Voce errou ao digitar",
+	["exam.time_up"] = "Acabou o tempo",
+	["exam.not_started"] = "A prova nao comecou",
+	["exam.prev"] = "Anterior",
+	["exam.next"] = "Proxima",
+	["topic.math"] = "Matematica",
+	["topic.history"] = "Historia",
+	["topic.science"] = "Ciencias",
+	["topic.language"] = "Lingua",
+	["topic.geography"] = "Geografia",
+	-- Trampas
+	["cheat.peek"] = "Espiar a folha do colega",
+	["cheat.peek_ok"] = "Voce copiou a questao {i}",
+	["cheat.peek_fail"] = "Voce nao conseguiu ler nada",
+	["cheat.peek_none"] = "Nao ha ninguem perto o suficiente",
+	["cheat.whisper"] = "Soprar uma resposta",
+	["cheat.whisper_sent"] = "Voce soprou a questao {i}",
+	["cheat.whisper_got"] = "{name} sopra: a {i} e {opt}",
+	["cheat.sheet_used"] = "Cola: {n} respostas reveladas",
+	["cheat.sheet_empty"] = "A cola ja acabou",
+	["cheat.cooldown"] = "Espere um pouco",
+	["cheat.seen"] = "O professor te viu",
+	["cheat.none"] = "Voce nao tem nada para usar",
+	-- Objetos
+	["item.nota"] = "Bilhete",
+	["item.avion"] = "Aviaozinho",
+	["item.bolita"] = "Bolinha de papel",
+	["item.chuleta"] = "Cola",
+	["item.gorra"] = "Bone",
+	["item.mochila"] = "Mochila",
+	["item.anteojos"] = "Oculos",
+	["item.campera"] = "Jaqueta",
+	["item.desc_nota"] = "Escreva uma resposta e jogue para um colega",
+	["item.desc_avion"] = "Voa mais longe e mais reto que a bolinha",
+	["item.desc_bolita"] = "Jogue longe: o professor vai ate o barulho",
+	["item.desc_chuleta"] = "Revela {n} respostas da prova atual",
+	["item.desc_gorra"] = "Um bone. Nao faz nada. Fica bem.",
+	["item.desc_mochila"] = "Mochila escolar classica",
+	["item.desc_anteojos"] = "Parece que voce estuda",
+	["item.desc_campera"] = "Jaqueta do colegio com o brasao",
+	-- Notas de papel
+	["note.write"] = "Escreva seu bilhete",
+	["note.placeholder"] = "a 3 e B, a 5 e A...",
+	["note.throw"] = "Mire e clique para arremessar",
+	["note.sent"] = "Bilhete arremessado",
+	["note.received"] = "{name} te passou um bilhete",
+	["note.empty"] = "O bilhete esta em branco",
+	["note.read"] = "O bilhete diz:",
+	-- Tienda
+	["shop.title"] = "Loja da escola",
+	["shop.buy"] = "Comprar",
+	["shop.owned"] = "Comprado",
+	["shop.equip"] = "Equipar",
+	["shop.equipped"] = "Equipado",
+	["shop.cannot"] = "Creditos insuficientes",
+	["shop.bought"] = "Voce comprou {item}",
+	["shop.closed"] = "A loja so abre no recreio",
+	["shop.tab_items"] = "Objetos",
+	["shop.tab_looks"] = "Estetica",
+	["shop.price"] = "{n} cr",
+	-- El profesor
+	["teacher.greet"] = "Sentem-se. Agora.",
+	["teacher.start_exam"] = "Voces tem {s} segundos. Ninguem fala.",
+	["teacher.silence"] = "Silencio.",
+	["teacher.sit_down"] = "Volte para o seu lugar.",
+	["teacher.eyes_on_paper"] = "Olhos na sua folha.",
+	["teacher.caught"] = "Eu vi isso, {name}.",
+	["teacher.warning"] = "Ultimo aviso.",
+	["teacher.blackboard"] = "Copiem isto.",
+	["teacher.time_left"] = "Faltam {s} segundos.",
+	["teacher.finish"] = "Lapis na mesa. Folhas para cima.",
+	["teacher.noise"] = "Quem jogou isso?",
+	-- Castigos
+	["punish.cone"] = "{name} ganhou o cone da vergonha",
+	["punish.grade"] = "-{n} pontos da sua nota",
+	["punish.detention"] = "{name} foi para a sala de castigo",
+	["punish.warned"] = "Ultimo aviso",
+	["punish.back"] = "Voce voltou para a sala",
+	-- Avisos
+	["notify.bell"] = "O sinal tocou",
+	["notify.bell_soon"] = "O sinal toca em {s}s",
+	["notify.doors_locked"] = "As portas da sala trancaram",
+	["notify.exam_start"] = "A prova comecou",
+	["notify.exam_end"] = "A prova acabou",
+	["notify.passed"] = "Voce passou: {grade}",
+	["notify.failed"] = "Voce reprovou: {grade}",
+	["notify.week_done"] = "Voce sobreviveu a Semana Final",
+	["notify.expelled"] = "A turma foi expulsa",
+	["notify.credits"] = "+{n} creditos",
+	["notify.locker"] = "Voce achou: {item}",
+	["notify.locker_empty"] = "O armario esta vazio",
+	["notify.locker_wait"] = "Esse armario acabou de fechar",
+	["notify.hit"] = "Uma bolinha de papel te acertou",
+	["notify.waiting"] = "Aguardando mais alunos",
+	["notify.seat"] = "Sua carteira e fila {row}, lugar {seat}",
+	-- Boletin
+	["report.title"] = "Boletim",
+	["report.day"] = "Dia {n}",
+	["report.exam"] = "Prova",
+	["report.behaviour"] = "Conduta",
+	["report.final"] = "Final",
+	["report.correct"] = "{ok} de {n} corretas",
+	["report.punishments"] = "{n} castigos",
+	["report.fails"] = "Dias reprovados: {n}/{max}",
+	["report.week"] = "Semana Final - media final",
+	["report.next"] = "O proximo dia comeca em {s}s",
+	["report.survived"] = "Voce escapou a semana toda",
+	["report.expelled"] = "Reprovacoes demais. Turma expulsa.",
+	-- Menu
+	["menu.title"] = "SEMANA FINAL",
+	["menu.subtitle"] = "Cinco dias. Um professor. Nao seja pego.",
+	["menu.play"] = "Jogar",
+	["menu.rooms"] = "Salas",
+	["menu.settings"] = "Ajustes",
+	["menu.credits"] = "Creditos",
+	["menu.shop"] = "Loja",
+	["menu.back"] = "Voltar",
+	["menu.close"] = "Fechar",
+	["menu.solo"] = "Sozinho",
+	["menu.solo_desc"] = "Sua propria sala, sem mais ninguem",
+	["menu.friends"] = "Com amigos",
+	["menu.friends_desc"] = "Sala privada com codigo",
+	["menu.public"] = "Turma publica",
+	["menu.public_desc"] = "Entre com quem estiver jogando",
+	["menu.brightness"] = "Brilho",
+	["menu.volume"] = "Volume",
+	["menu.music"] = "Musica",
+	["menu.language"] = "Idioma",
+	["menu.sensitivity"] = "Sensibilidade da camera",
+	-- Salas
+	["room.title"] = "Salas",
+	["room.search"] = "Buscar uma sala",
+	["room.create"] = "Criar sala",
+	["room.name"] = "Nome da sala",
+	["room.password"] = "Senha (opcional)",
+	["room.capacity"] = "Capacidade: {n}",
+	["room.join"] = "Entrar",
+	["room.locked"] = "Com senha",
+	["room.players"] = "{n}/{max}",
+	["room.empty"] = "Nenhuma sala aberta",
+	["room.created"] = "Sala {code} criada",
+	["room.wrong_password"] = "Senha incorreta",
+	["room.full"] = "A sala esta cheia",
+	["room.gone"] = "Essa sala ja nao existe",
+	["room.unavailable"] = "As salas so funcionam num jogo publicado",
+	["room.code"] = "Codigo",
+	["room.invite"] = "Convidar amigos",
+	["room.refresh"] = "Atualizar",
+	-- Creditos
+	["credits.title"] = "Creditos",
+	["credits.body"] = "Feito do zero em Luau: mapa, IA do professor, provas, trapacas e economia.",
+	["credits.design"] = "Design e codigo",
+	["credits.thanks"] = "Colar nao e a solucao. Estudar e. Mas isto e um jogo.",
+	-- Errores
+	["error.generic"] = "Algo deu errado",
+	["error.not_seated"] = "Primeiro sente na sua carteira",
+	["error.phase"] = "Agora nao",
+	["error.save"] = "Nao foi possivel salvar seu progresso",
+}
+
+local locales: { [string]: { [string]: string } } = { en = en, es = es, pt = pt }
+
+local current = en
+local currentId = "en"
+
+--- "es-ar" -> "es". Si el idioma no esta traducido, cae en ingles.
+function Strings.setLocale(localeId: string?)
+	local short = string.lower(string.sub(localeId or "en", 1, 2))
+	current = locales[short] or en
+	currentId = locales[short] and short or "en"
+end
+
+function Strings.locale(): string
+	return currentId
+end
+
+--- Devuelve el texto de una clave, reemplazando {marcadores} por args.
+function Strings.get(key: string, args: { [string]: any }?): string
+	local text = current[key] or en[key]
+	if not text then
+		return key
+	end
+	if args then
+		text = (string.gsub(text, "{(%w+)}", function(name: string): string
+			local value = args[name]
+			return value ~= nil and tostring(value) or ("{" .. name .. "}")
+		end))
+	end
+	return text
+end
+
+--- Para textos que el servidor manda como "@clave" (elecciones, listas).
+function Strings.resolve(text: string): string
+	if string.sub(text, 1, 1) == "@" then
+		return Strings.get(string.sub(text, 2))
+	end
+	return text
+end
+
+--- Un paquete { key = ..., args = ... } que viaja por la red.
+export type Packet = { key: string, args: { [string]: any }? }
+
+function Strings.render(packet: Packet?): string
+	if not packet then
+		return ""
+	end
+	return Strings.get(packet.key, packet.args)
+end
+
+return Strings
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX5">
+      <Properties>
+        <string name="Name">Theme</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Theme
+	------------------------------------------------------------------
+	Paleta unica de todo el juego. Estetica de instituto: papel crema,
+	tinta azul, verde pizarra y el rojo de la libreta de sanciones.
+--]]
+
+local Theme = {}
+
+Theme.Font = Enum.Font.GothamMedium
+Theme.FontBold = Enum.Font.GothamBold
+Theme.FontBlack = Enum.Font.GothamBlack
+Theme.FontMono = Enum.Font.Code
+
+-- Hoja del examen sobre el pupitre.
+Theme.Paper = {
+	Background = Color3.fromRGB(249, 247, 240),
+	Ink = Color3.fromRGB(34, 38, 48),
+	InkSoft = Color3.fromRGB(112, 119, 133),
+	Line = Color3.fromRGB(204, 208, 218),
+	Accent = Color3.fromRGB(28, 92, 186),
+	Correct = Color3.fromRGB(30, 142, 84),
+	Wrong = Color3.fromRGB(198, 52, 52),
+	Highlight = Color3.fromRGB(252, 232, 140),
+}
+
+-- HUD: barra oscura translucida, tipo overlay de juego moderno.
+Theme.Hud = {
+	Panel = Color3.fromRGB(15, 16, 21),
+	PanelSoft = Color3.fromRGB(26, 28, 35),
+	Line = Color3.fromRGB(54, 58, 70),
+	Text = Color3.fromRGB(238, 241, 247),
+	Muted = Color3.fromRGB(140, 147, 160),
+	Safe = Color3.fromRGB(52, 196, 122),
+	Warn = Color3.fromRGB(242, 178, 52),
+	Danger = Color3.fromRGB(233, 62, 62),
+	Credit = Color3.fromRGB(246, 200, 84),
+	Clock = Color3.fromRGB(226, 232, 244),
+}
+
+-- Menu de inicio y tienda.
+Theme.Menu = {
+	Scrim = Color3.fromRGB(9, 10, 13),
+	Panel = Color3.fromRGB(16, 17, 22),
+	PanelAlt = Color3.fromRGB(24, 26, 33),
+	Line = Color3.fromRGB(56, 60, 71),
+	Text = Color3.fromRGB(240, 242, 246),
+	Muted = Color3.fromRGB(136, 143, 156),
+	Accent = Color3.fromRGB(226, 228, 234),
+	Locked = Color3.fromRGB(88, 93, 105),
+}
+
+Theme.Grade = {
+	A = Color3.fromRGB(52, 196, 122),
+	B = Color3.fromRGB(120, 196, 96),
+	C = Color3.fromRGB(242, 196, 68),
+	D = Color3.fromRGB(238, 146, 52),
+	F = Color3.fromRGB(233, 62, 62),
+}
+
+function Theme.suspicionColor(value: number): Color3
+	if value < 0.4 then
+		return Theme.Hud.Safe:Lerp(Theme.Hud.Warn, value / 0.4)
+	end
+	return Theme.Hud.Warn:Lerp(Theme.Hud.Danger, math.clamp((value - 0.4) / 0.6, 0, 1))
+end
+
+function Theme.gradeColor(letter: string): Color3
+	return (Theme.Grade :: any)[letter] or Theme.Hud.Muted
+end
+
+table.freeze(Theme)
+return Theme
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX6">
+      <Properties>
+        <string name="Name">Util</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Util
+	------------------------------------------------------------------
+	Azucar para construir cosas en 3D y animarlas sin repetir 40 lineas
+	de Instance.new por cada mueble del aula.
+--]]
+
+local TweenService = game:GetService("TweenService")
+
+local Util = {}
+
+--- Instance.new + props + hijos, en una sola expresion.
+function Util.new(className: string, props: { [string]: any }?, children: { Instance }?): Instance
+	local instance = Instance.new(className)
+	if props then
+		local parent = props.Parent
+		for key, value in props do
+			if key ~= "Parent" then
+				(instance :: any)[key] = value
+			end
+		end
+		if children then
+			for _, child in children do
+				child.Parent = instance
+			end
+		end
+		if parent then
+			instance.Parent = parent
+		end
+	elseif children then
+		for _, child in children do
+			child.Parent = instance
+		end
+	end
+	return instance
+end
+
+--- Bloque solido estandar del aula: anclado, sin colisiones raras.
+function Util.part(props: { [string]: any }): BasePart
+	local part = Instance.new("Part")
+	part.Anchored = true
+	part.CanCollide = true
+	part.CastShadow = true
+	part.TopSurface = Enum.SurfaceType.Smooth
+	part.BottomSurface = Enum.SurfaceType.Smooth
+	part.Material = Enum.Material.SmoothPlastic
+	for key, value in props do
+		if key ~= "Parent" then
+			(part :: any)[key] = value
+		end
+	end
+	part.Parent = props.Parent
+	return part
+end
+
+--- Suelda una parte a otra manteniendo la posicion actual.
+function Util.weld(part0: BasePart, part1: BasePart): WeldConstraint
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = part0
+	weld.Part1 = part1
+	weld.Parent = part0
+	return weld
+end
+
+function Util.tween(instance: Instance, info: TweenInfo, goal: { [string]: any }): Tween
+	local tween = TweenService:Create(instance, info, goal)
+	tween:Play()
+	return tween
+end
+
+Util.ease = function(time: number, style: Enum.EasingStyle?, direction: Enum.EasingDirection?): TweenInfo
+	return TweenInfo.new(time, style or Enum.EasingStyle.Quint, direction or Enum.EasingDirection.Out)
+end
+
+--- Redondea esquinas + borde, para las UI que van sobre superficies 3D.
+function Util.roundify(gui: GuiObject, radius: number, strokeColor: Color3?, strokeThickness: number?)
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, radius)
+	corner.Parent = gui
+	if strokeColor then
+		local stroke = Instance.new("UIStroke")
+		stroke.Color = strokeColor
+		stroke.Thickness = strokeThickness or 2
+		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		stroke.Parent = gui
+	end
+end
+
+--- Etiqueta 3D flotante (BillboardGui) — usado para nombres y burbujas.
+function Util.billboard(adornee: BasePart, size: UDim2, offset: Vector3): BillboardGui
+	local billboard = Instance.new("BillboardGui")
+	billboard.Adornee = adornee
+	billboard.Size = size
+	billboard.StudsOffsetWorldSpace = offset
+	billboard.AlwaysOnTop = false
+	billboard.MaxDistance = 60
+	billboard.LightInfluence = 0
+	return billboard
+end
+
+--- Interpola angulos evitando el salto en ±180.
+function Util.lerpAngle(from: number, to: number, alpha: number): number
+	local delta = (to - from + math.pi) % (math.pi * 2) - math.pi
+	return from + delta * alpha
+end
+
+function Util.randomInRange(range: NumberRange, rng: Random?): number
+	local generator = rng or Random.new()
+	return generator:NextNumber(range.Min, range.Max)
+end
+
+--- Toca un sonido posicional y lo limpia solo.
+function Util.playSound(soundId: string, parent: Instance, volume: number?, speed: number?)
+	if soundId == "" then
+		return
+	end
+	local sound = Instance.new("Sound")
+	sound.SoundId = soundId
+	sound.Volume = volume or 0.5
+	sound.PlaybackSpeed = speed or 1
+	sound.RollOffMaxDistance = 80
+	-- Si el cliente creo el grupo "Master", el volumen de Ajustes manda.
+	local group = game:GetService("SoundService"):FindFirstChild("Master")
+	if group and group:IsA("SoundGroup") then
+		sound.SoundGroup = group
+	end
+	sound.Parent = parent
+	sound:Play()
+	sound.Ended:Once(function()
+		sound:Destroy()
+	end)
+	task.delay(10, function()
+		if sound.Parent then
+			sound:Destroy()
+		end
+	end)
+end
+
+return Util
+]]></ProtectedString>
+      </Properties>
+    </Item>
+  </Item>
+</roblox>

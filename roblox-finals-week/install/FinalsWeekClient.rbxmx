@@ -1,0 +1,3267 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
+  <Item class="LocalScript" referent="RBX10">
+    <Properties>
+      <string name="Name">Client</string>
+      <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Cliente — arranque de Finals Week
+	------------------------------------------------------------------
+	Monta la interfaz, engancha los remotes y traduce todo al idioma
+	que el jugador tiene puesto en Roblox.
+
+	Un solo ScreenGui con ResetOnSpawn = false: si el HUD se
+	reconstruyera en cada respawn perderiamos el estado del examen
+	justo cuando mas importa.
+--]]
+
+local LocalizationService = game:GetService("LocalizationService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
+
+local Shared = ReplicatedStorage:WaitForChild("Shared", 30)
+local Net = require(Shared:WaitForChild("Net"))
+local Strings = require(Shared:WaitForChild("Strings"))
+
+local Hud = require(script:WaitForChild("Hud"))
+local ExamUI = require(script:WaitForChild("ExamUI"))
+local NoteUI = require(script:WaitForChild("NoteUI"))
+local ShopUI = require(script:WaitForChild("ShopUI"))
+local MainMenu = require(script:WaitForChild("MainMenu"))
+local LobbyUI = require(script:WaitForChild("LobbyUI"))
+local CameraDirector = require(script:WaitForChild("CameraDirector"))
+local Music = require(script:WaitForChild("Music"))
+local Poses = require(script:WaitForChild("Poses"))
+
+-- ── idioma ─────────────────────────────────────────────────────────
+-- Cada jugador ve el juego en SU idioma: el servidor manda claves.
+do
+	local ok, locale = pcall(function()
+		return LocalizationService.RobloxLocaleId
+	end)
+	Strings.setLocale(ok and locale or "en")
+end
+
+-- ── raiz de la interfaz ────────────────────────────────────────────
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "FinalsWeek"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.DisplayOrder = 10
+gui.Parent = player:WaitForChild("PlayerGui")
+
+-- Grupo de sonido para que el deslizador de volumen mande sobre todo.
+if not SoundService:FindFirstChild("Master") then
+	local group = Instance.new("SoundGroup")
+	group.Name = "Master"
+	group.Volume = 0.6
+	group.Parent = SoundService
+end
+
+CameraDirector.mount(gui)
+Poses.mount()
+Hud.mount(gui)
+ExamUI.mount(gui)
+NoteUI.mount(gui)
+ShopUI.mount(gui)
+LobbyUI.mount(gui)
+MainMenu.mount(gui)
+Music.start()
+
+ExamUI.onNotify = Hud.notify
+ShopUI.onNotify = Hud.notify
+LobbyUI.onNotify = Hud.notify
+ExamUI.onWrite = function()
+	Poses.write()
+end
+NoteUI.onThrow = function()
+	Poses.throw()
+end
+
+-- Chat de proximidad: las burbujas arriba de la cabeza son lo que hace
+-- que hablar en el pasillo se sienta cara a cara. Va en pcall porque la
+-- configuracion cambio de lugar entre versiones del motor.
+pcall(function()
+	local TextChatService = game:GetService("TextChatService")
+	local bubbles = TextChatService:FindFirstChildOfClass("BubbleChatConfiguration")
+	if bubbles then
+		bubbles.Enabled = true
+		bubbles.MaxDistance = 45
+		bubbles.TextSize = 17
+	end
+end)
+
+-- ── menu ───────────────────────────────────────────────────────────
+
+MainMenu.onVisible = function(open: boolean)
+	Hud.setVisible(not open)
+	ExamUI.setVisible(not open)
+	NoteUI.setVisible(not open)
+	if open then
+		ShopUI.close()
+		LobbyUI.close()
+	end
+end
+MainMenu.onRooms = function()
+	LobbyUI.open()
+end
+MainMenu.onShop = function()
+	ShopUI.open()
+end
+MainMenu.onMusic = function(on: boolean)
+	Music.setEnabled(on)
+end
+MainMenu.onPlay = function(_mode: string) end
+
+-- ── remotes ────────────────────────────────────────────────────────
+
+local lastPhase = "espera"
+
+Net.event(Net.Events.RoundUpdate).OnClientEvent:Connect(function(data)
+	Hud.setRound(data)
+
+	if data.fase ~= lastPhase then
+		local previous = lastPhase
+		lastPhase = data.fase
+
+		-- El fundido tapa el teletransporte al pupitre y la vuelta.
+		if data.fase == "examen" or (previous == "examen" and data.fase == "boletin") then
+			CameraDirector.transition()
+		end
+
+		if data.fase == "examen" then
+			Music.setClimate("examen")
+		elseif data.fase == "recreo" then
+			Music.setClimate("pasillo")
+		else
+			Music.setClimate("pasillo")
+		end
+	end
+end)
+
+Net.event(Net.Events.ExamUpdate).OnClientEvent:Connect(function(data)
+	ExamUI.setState(data)
+end)
+
+Net.event(Net.Events.SuspicionUpdate).OnClientEvent:Connect(function(data)
+	Hud.setSuspicion(data)
+	-- La musica sigue la sospecha: es el aviso que se escucha antes de
+	-- que el jugador llegue a mirar la barra.
+	if lastPhase == "examen" then
+		local value = data.valor or 0
+		if value >= 0.75 then
+			Music.setClimate("persecucion")
+		elseif value >= 0.45 or data.cerca then
+			Music.setClimate("tension")
+		else
+			Music.setClimate("examen")
+		end
+	end
+end)
+
+Net.event(Net.Events.Notify).OnClientEvent:Connect(function(packet)
+	Hud.notify(packet)
+end)
+
+Net.event(Net.Events.TeacherSay).OnClientEvent:Connect(function(packet)
+	Hud.teacherSay(packet)
+end)
+
+Net.event(Net.Events.Punish).OnClientEvent:Connect(function(data)
+	Hud.punish(data)
+	if data.tipo == "expulsion" then
+		CameraDirector.transition()
+		CameraDirector.shake(1.2, 0.8)
+	elseif data.tipo == "cono" then
+		CameraDirector.shake(0.8, 0.6)
+	end
+end)
+
+Net.event(Net.Events.Wallet).OnClientEvent:Connect(function(data)
+	Hud.setWallet(data)
+	ShopUI.setWallet(data)
+	if data.abrir then
+		ShopUI.open()
+	end
+end)
+
+Net.event(Net.Events.Report).OnClientEvent:Connect(function(data)
+	Hud.report(data)
+end)
+
+Net.event(Net.Events.NoteReceived).OnClientEvent:Connect(function(data)
+	NoteUI.received(data)
+end)
+
+Net.event(Net.Events.Music).OnClientEvent:Connect(function(data)
+	if data and data.clima then
+		Music.setClimate(data.clima)
+	end
+end)
+
+-- ── atajos ─────────────────────────────────────────────────────────
+
+UserInputService.InputBegan:Connect(function(input, processed)
+	if processed or MainMenu.isOpen() then
+		return
+	end
+	if input.KeyCode == Enum.KeyCode.Q then
+		Net.event(Net.Events.Cheat):FireServer("peek", ExamUI.currentIndex())
+	elseif input.KeyCode == Enum.KeyCode.R then
+		Net.event(Net.Events.Cheat):FireServer("whisper", ExamUI.currentIndex())
+	elseif input.KeyCode == Enum.KeyCode.T then
+		if ShopUI.isOpen() then
+			ShopUI.close()
+		else
+			ShopUI.open()
+		end
+	end
+end)
+
+-- ── sentado / de pie ───────────────────────────────────────────────
+
+local function watchSeat(character: Model)
+	local humanoid = character:WaitForChild("Humanoid", 10)
+	if humanoid and humanoid:IsA("Humanoid") then
+		humanoid:GetPropertyChangedSignal("SeatPart"):Connect(function()
+			CameraDirector.setSeated(humanoid.SeatPart ~= nil)
+		end)
+	end
+end
+
+if player.Character then
+	task.spawn(watchSeat, player.Character)
+end
+player.CharacterAdded:Connect(function(character)
+	task.spawn(watchSeat, character)
+end)
+
+-- ── bucle de dibujo ────────────────────────────────────────────────
+
+RunService.RenderStepped:Connect(function()
+	ExamUI.step()
+end)
+
+-- ── estado inicial ─────────────────────────────────────────────────
+
+task.spawn(function()
+	local ok, state = pcall(function()
+		return Net.func(Net.Functions.GetState):InvokeServer()
+	end)
+	if ok and state then
+		if state.billetera then
+			Hud.setWallet(state.billetera)
+			ShopUI.setWallet(state.billetera)
+		end
+		if state.examen then
+			ExamUI.setState(state.examen)
+		end
+	end
+	MainMenu.open()
+end)
+
+print(string.format("[Finals Week] Cliente listo (%s).", Strings.locale()))
+]]></ProtectedString>
+    </Properties>
+    <Item class="ModuleScript" referent="RBX1">
+      <Properties>
+        <string name="Name">CameraDirector</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	CameraDirector
+	------------------------------------------------------------------
+	La camara en las transiciones. Deliberadamente conservador: no se
+	pone en Scriptable salvo que haga falta, porque una camara tomada
+	por script que se olvida de soltarse te deja el juego injugable.
+
+	Lo que hace:
+	  * fundido a negro entre fases (tapa el teletransporte al pupitre)
+	  * al sentarte, acerca el zoom y lo limita, para que mires tu
+	    hoja y a los costados, no el techo
+	  * sacudida corta cuando te castigan, enganchada DESPUES del paso
+	    de camara del motor para que no se la pise
+--]]
+
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
+
+local player = Players.LocalPlayer
+
+local CameraDirector = {}
+
+local fade: Frame
+local shakeUntil = 0
+local shakeStrength = 0
+local seated = false
+
+local DEFAULT_MIN = 0.5
+local DEFAULT_MAX = 128
+
+function CameraDirector.mount(parent: ScreenGui)
+	fade = Instance.new("Frame")
+	fade.Name = "Fundido"
+	fade.Size = UDim2.fromScale(1, 1)
+	fade.BackgroundColor3 = Color3.new(0, 0, 0)
+	fade.BackgroundTransparency = 1
+	fade.BorderSizePixel = 0
+	fade.ZIndex = 30
+	fade.Visible = false
+	fade.Parent = parent
+
+	RunService:BindToRenderStep("FinalsWeekCamara", Enum.RenderPriority.Camera.Value + 1, function()
+		if os.clock() >= shakeUntil then
+			return
+		end
+		local camera = workspace.CurrentCamera
+		if not camera then
+			return
+		end
+		local amount = shakeStrength * ((shakeUntil - os.clock()) / 0.6)
+		camera.CFrame = camera.CFrame * CFrame.new(
+			(math.random() - 0.5) * amount,
+			(math.random() - 0.5) * amount,
+			0
+		)
+	end)
+end
+
+--- Funde a negro, corre `middle` con la pantalla tapada y vuelve.
+function CameraDirector.transition(middle: (() -> ())?)
+	if not fade then
+		if middle then
+			middle()
+		end
+		return
+	end
+	fade.Visible = true
+	TweenService:Create(fade, TweenInfo.new(0.35), { BackgroundTransparency = 0 }):Play()
+	task.delay(0.4, function()
+		if middle then
+			pcall(middle)
+		end
+		task.wait(0.25)
+		TweenService:Create(fade, TweenInfo.new(0.5), { BackgroundTransparency = 1 }):Play()
+		task.delay(0.55, function()
+			fade.Visible = false
+		end)
+	end)
+end
+
+--- Al sentarse el zoom se acerca: la mesa, la hoja y los vecinos.
+function CameraDirector.setSeated(value: boolean)
+	if seated == value then
+		return
+	end
+	seated = value
+	local ok = pcall(function()
+		if value then
+			player.CameraMaxZoomDistance = 14
+			player.CameraMinZoomDistance = 4
+		else
+			player.CameraMinZoomDistance = DEFAULT_MIN
+			player.CameraMaxZoomDistance = DEFAULT_MAX
+		end
+	end)
+	if not ok then
+		-- Si la propiedad no se puede tocar, no pasa nada: el juego
+		-- sigue con la camara por defecto.
+	end
+end
+
+function CameraDirector.shake(strength: number, seconds: number?)
+	shakeStrength = strength
+	shakeUntil = os.clock() + (seconds or 0.6)
+end
+
+return CameraDirector
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX2">
+      <Properties>
+        <string name="Name">ExamUI</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	ExamUI
+	------------------------------------------------------------------
+	La hoja del examen, en pantalla, mientras estas sentado.
+
+	Dos tipos de pregunta:
+	  opcion      cuatro alternativas, se contesta con el mouse o con
+	              las teclas 1-4
+	  escritura   una secuencia de letras que hay que teclear entera
+	              antes de que se acabe la barra: es el minijuego de
+	              "escribir rapido" y es donde mas expuesto estas,
+	              porque no podes mirar al profesor mientras tecleas
+
+	Los botones de trampa (espiar / soplar / chuleta) estan aca abajo
+	a proposito: la trampa es parte del examen, no un menu aparte.
+--]]
+
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Theme = require(Shared:WaitForChild("Theme"))
+local Strings = require(Shared:WaitForChild("Strings"))
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local ExamUI = {}
+
+local LETRAS = { "A", "B", "C", "D", "E", "F" }
+
+local root: Frame
+local titleLabel: TextLabel
+local progressLabel: TextLabel
+local questionLabel: TextLabel
+local topicLabel: TextLabel
+local optionButtons: { TextButton } = {}
+local navGrid: Frame
+local sheetButton: TextButton
+local typingPanel: Frame
+local typingLabel: TextLabel
+local typingProgress: Frame
+
+local state: any = { activo = false, preguntas = {}, respuestas = {}, reveladas = {} }
+local current = 1
+local typing: { activa: boolean, objetivo: string, escrito: string, hasta: number, indice: number } = {
+	activa = false, objetivo = "", escrito = "", hasta = 0, indice = 0,
+}
+
+local function new(class: string, props: { [string]: any }, parent: Instance?): any
+	local instance = Instance.new(class)
+	for key, value in props do
+		(instance :: any)[key] = value
+	end
+	if parent then
+		instance.Parent = parent
+	end
+	return instance
+end
+
+local function corner(gui: GuiObject, radius: number)
+	new("UICorner", { CornerRadius = UDim.new(0, radius) }, gui)
+end
+
+local function click()
+	Util.playSound(Config.Sonidos.Click, workspace :: any, 0.25, 1.2)
+end
+
+-- ── construccion ───────────────────────────────────────────────────
+
+function ExamUI.mount(parent: ScreenGui)
+	root = new("Frame", {
+		Name = "Examen",
+		Size = UDim2.new(0, 400, 0, 470),
+		Position = UDim2.new(1, -16, 0.5, 0),
+		AnchorPoint = Vector2.new(1, 0.5),
+		BackgroundColor3 = Theme.Paper.Background,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 4,
+	}, parent)
+	corner(root, 12)
+	new("UIStroke", { Color = Theme.Paper.Line, Thickness = 2 }, root)
+
+	-- Cabecera de la hoja.
+	titleLabel = new("TextLabel", {
+		Name = "Titulo",
+		Text = "",
+		Size = UDim2.new(1, -28, 0, 24),
+		Position = UDim2.new(0, 14, 0, 12),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBlack,
+		TextSize = 18,
+		TextColor3 = Theme.Paper.Ink,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 5,
+	}, root)
+	progressLabel = new("TextLabel", {
+		Name = "Progreso",
+		Text = "",
+		Size = UDim2.new(1, -28, 0, 16),
+		Position = UDim2.new(0, 14, 0, 34),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		TextSize = 12,
+		TextColor3 = Theme.Paper.InkSoft,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 5,
+	}, root)
+
+	new("Frame", {
+		Name = "Linea",
+		Size = UDim2.new(1, -28, 0, 1),
+		Position = UDim2.new(0, 14, 0, 54),
+		BackgroundColor3 = Theme.Paper.Line,
+		BorderSizePixel = 0,
+		ZIndex = 5,
+	}, root)
+
+	-- Navegador: un cuadradito por pregunta.
+	navGrid = new("Frame", {
+		Name = "Navegador",
+		Size = UDim2.new(1, -28, 0, 62),
+		Position = UDim2.new(0, 14, 0, 62),
+		BackgroundTransparency = 1,
+		ZIndex = 5,
+	}, root)
+	new("UIGridLayout", {
+		CellSize = UDim2.new(0, 26, 0, 26),
+		CellPadding = UDim2.new(0, 4, 0, 4),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, navGrid)
+
+	topicLabel = new("TextLabel", {
+		Name = "Tema",
+		Text = "",
+		Size = UDim2.new(1, -28, 0, 14),
+		Position = UDim2.new(0, 14, 0, 132),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		TextSize = 11,
+		TextColor3 = Theme.Paper.Accent,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 5,
+	}, root)
+
+	questionLabel = new("TextLabel", {
+		Name = "Enunciado",
+		Text = "",
+		Size = UDim2.new(1, -28, 0, 70),
+		Position = UDim2.new(0, 14, 0, 150),
+		BackgroundTransparency = 1,
+		Font = Theme.FontMono,
+		TextSize = 26,
+		TextColor3 = Theme.Paper.Ink,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Center,
+		TextWrapped = true,
+		ZIndex = 5,
+	}, root)
+
+	-- Las cuatro alternativas.
+	for i = 1, Config.Examen.OpcionesPorPregunta do
+		local button = new("TextButton", {
+			Name = "Opcion" .. i,
+			Text = "",
+			Size = UDim2.new(1, -28, 0, 40),
+			Position = UDim2.new(0, 14, 0, 226 + (i - 1) * 46),
+			BackgroundColor3 = Color3.fromRGB(242, 240, 232),
+			AutoButtonColor = false,
+			Font = Theme.FontBold,
+			TextSize = 16,
+			TextColor3 = Theme.Paper.Ink,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			BorderSizePixel = 0,
+			ZIndex = 5,
+		}, root)
+		corner(button, 8)
+		new("UIPadding", { PaddingLeft = UDim.new(0, 14) }, button)
+		button.MouseButton1Click:Connect(function()
+			ExamUI.answer(i)
+		end)
+		optionButtons[i] = button
+	end
+
+	-- Minijuego de escritura, se superpone a las alternativas.
+	typingPanel = new("Frame", {
+		Name = "Escritura",
+		Size = UDim2.new(1, -28, 0, 180),
+		Position = UDim2.new(0, 14, 0, 226),
+		BackgroundColor3 = Color3.fromRGB(242, 240, 232),
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 6,
+	}, root)
+	corner(typingPanel, 8)
+	new("TextLabel", {
+		Name = "Aviso",
+		Text = Strings.get("exam.type_prompt"),
+		Size = UDim2.new(1, -20, 0, 20),
+		Position = UDim2.new(0, 10, 0, 12),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		TextSize = 13,
+		TextColor3 = Theme.Paper.InkSoft,
+		ZIndex = 7,
+	}, typingPanel)
+	typingLabel = new("TextLabel", {
+		Name = "Secuencia",
+		Text = "",
+		Size = UDim2.new(1, -20, 0, 60),
+		Position = UDim2.new(0, 10, 0, 46),
+		BackgroundTransparency = 1,
+		Font = Theme.FontMono,
+		TextSize = 40,
+		TextColor3 = Theme.Paper.Ink,
+		ZIndex = 7,
+	}, typingPanel)
+	local track = new("Frame", {
+		Name = "Barra",
+		Size = UDim2.new(1, -20, 0, 10),
+		Position = UDim2.new(0, 10, 0, 128),
+		BackgroundColor3 = Theme.Paper.Line,
+		BorderSizePixel = 0,
+		ZIndex = 7,
+	}, typingPanel)
+	corner(track, 5)
+	typingProgress = new("Frame", {
+		Name = "Relleno",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Theme.Paper.Accent,
+		BorderSizePixel = 0,
+		ZIndex = 8,
+	}, track)
+	corner(typingProgress, 5)
+
+	-- Botones de trampa, en una fila abajo del todo.
+	local cheats = new("Frame", {
+		Name = "Trampas",
+		Size = UDim2.new(1, -28, 0, 32),
+		Position = UDim2.new(0, 14, 1, -44),
+		BackgroundTransparency = 1,
+		ZIndex = 5,
+	}, root)
+	new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 8),
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, cheats)
+
+	local acciones = {
+		{ key = "cheat.peek", accion = "peek", color = Theme.Paper.Accent },
+		{ key = "cheat.whisper", accion = "whisper", color = Theme.Paper.Correct },
+		{ key = "item.chuleta", accion = "sheet", color = Theme.Paper.Wrong },
+	}
+	for i, entry in acciones do
+		local button = new("TextButton", {
+			Name = "Trampa" .. i,
+			LayoutOrder = i,
+			Text = Strings.get(entry.key),
+			Size = UDim2.new(0.32, 0, 1, 0),
+			BackgroundColor3 = entry.color,
+			BackgroundTransparency = 0.86,
+			AutoButtonColor = false,
+			Font = Theme.FontBold,
+			TextSize = 12,
+			TextColor3 = entry.color,
+			BorderSizePixel = 0,
+			ZIndex = 5,
+		}, cheats)
+		corner(button, 8)
+		new("UIStroke", { Color = entry.color, Thickness = 1, Transparency = 0.5 }, button)
+		button.MouseButton1Click:Connect(function()
+			ExamUI.cheat(entry.accion)
+		end)
+		if entry.accion == "sheet" then
+			sheetButton = button
+		end
+	end
+
+	ExamUI.bindInput()
+end
+
+-- ── datos ──────────────────────────────────────────────────────────
+
+local function questionAt(index: number): any
+	return state.preguntas and state.preguntas[index]
+end
+
+local function refreshNav()
+	if not navGrid then
+		return
+	end
+	local total = state.preguntas and #state.preguntas or 0
+	for _, child in navGrid:GetChildren() do
+		if child:IsA("TextButton") then
+			child:Destroy()
+		end
+	end
+	for i = 1, total do
+		-- El servidor manda arrays densos: 0 es "sin responder".
+		local answered = (state.respuestas[i] or 0) > 0
+		local revealed = (state.reveladas[i] or 0) > 0
+		local button = new("TextButton", {
+			Name = "N" .. i,
+			LayoutOrder = i,
+			Text = tostring(i),
+			BackgroundColor3 = i == current and Theme.Paper.Ink
+				or (revealed and Theme.Paper.Highlight
+					or (answered and Theme.Paper.Accent or Color3.fromRGB(236, 234, 226))),
+			AutoButtonColor = false,
+			Font = Theme.FontBold,
+			TextSize = 12,
+			TextColor3 = (i == current or answered) and Color3.fromRGB(250, 250, 246)
+				or Theme.Paper.InkSoft,
+			BorderSizePixel = 0,
+			ZIndex = 6,
+		}, navGrid)
+		corner(button, 6)
+		button.MouseButton1Click:Connect(function()
+			click()
+			ExamUI.show(i)
+		end)
+	end
+end
+
+local function stopTyping()
+	typing.activa = false
+	typingPanel.Visible = false
+	for _, button in optionButtons do
+		button.Visible = true
+	end
+end
+
+local function startTyping(index: number, sequence: string)
+	typing.activa = true
+	typing.objetivo = string.upper(sequence)
+	typing.escrito = ""
+	typing.indice = index
+	typing.hasta = os.clock() + Config.Examen.SegundosSecuencia
+	typingPanel.Visible = true
+	typingLabel.Text = typing.objetivo
+	typingProgress.Size = UDim2.fromScale(1, 1)
+	for _, button in optionButtons do
+		button.Visible = false
+	end
+end
+
+function ExamUI.show(index: number)
+	local question = questionAt(index)
+	if not question then
+		return
+	end
+	current = index
+	stopTyping()
+
+	topicLabel.Text = string.upper(Strings.get(question.tema or "topic.math"))
+	questionLabel.Text = question.texto
+	progressLabel.Text = Strings.get("exam.question", { i = index, n = #state.preguntas })
+
+	if question.tipo == "escritura" then
+		startTyping(index, question.secuencia or question.texto)
+	else
+		for i, button in optionButtons do
+			local option = question.opciones[i]
+			button.Visible = option ~= nil
+			if option then
+				local chosen = state.respuestas[index] == i
+				local revealed = state.reveladas[index] == i
+				button.Text = string.format("%s.   %s", LETRAS[i] or "?", option)
+				button.BackgroundColor3 = revealed and Theme.Paper.Highlight
+					or (chosen and Theme.Paper.Accent or Color3.fromRGB(242, 240, 232))
+				button.TextColor3 = chosen and Color3.fromRGB(250, 250, 246) or Theme.Paper.Ink
+			end
+		end
+	end
+
+	refreshNav()
+end
+
+function ExamUI.setState(data: any)
+	state = data
+	state.respuestas = data.respuestas or {}
+	state.reveladas = data.reveladas or {}
+	state.preguntas = data.preguntas or {}
+
+	if not data.activo or #state.preguntas == 0 then
+		root.Visible = false
+		stopTyping()
+		return
+	end
+
+	root.Visible = true
+	titleLabel.Text = Strings.get("exam.title", {
+		subject = Strings.get((state.preguntas[1] and state.preguntas[1].tema) or "topic.math"),
+	})
+
+	local answered = 0
+	for i = 1, #state.preguntas do
+		if (state.respuestas[i] or 0) > 0 then
+			answered += 1
+		end
+	end
+	sheetButton.Text = string.format("%s (%d)", Strings.get("item.chuleta"), data.chuleta or 0)
+
+	current = math.clamp(current, 1, #state.preguntas)
+	ExamUI.show(current)
+	progressLabel.Text = Strings.get("exam.progress", {
+		done = answered, total = #state.preguntas,
+	})
+end
+
+--- La pregunta en la que esta parado el alumno: la usan los atajos de
+--- teclado para espiar/soplar la que esta mirando, no la primera.
+function ExamUI.currentIndex(): number
+	return current
+end
+
+function ExamUI.isOpen(): boolean
+	return root ~= nil and root.Visible
+end
+
+-- ── acciones ───────────────────────────────────────────────────────
+
+function ExamUI.answer(option: number)
+	local question = questionAt(current)
+	if not question or question.tipo ~= "opcion" then
+		return
+	end
+	click()
+	ExamUI.onWrite()
+	state.respuestas[current] = option
+	ExamUI.show(current)
+
+	task.spawn(function()
+		local ok, result = pcall(function()
+			return Net.func(Net.Functions.SubmitAnswer):InvokeServer(current, option)
+		end)
+		if ok and result and not result.ok and result.reason then
+			ExamUI.onNotify(result.reason)
+		end
+	end)
+end
+
+function ExamUI.cheat(action: string)
+	click()
+	Net.event(Net.Events.Cheat):FireServer(action, current)
+end
+
+--- Los rellena el init del cliente para no acoplar ExamUI con el HUD
+--- ni con las animaciones.
+ExamUI.onNotify = function(_packet: any) end
+ExamUI.onWrite = function() end
+
+-- ── entrada de teclado ─────────────────────────────────────────────
+
+local NUMEROS = {
+	[Enum.KeyCode.One] = 1, [Enum.KeyCode.Two] = 2,
+	[Enum.KeyCode.Three] = 3, [Enum.KeyCode.Four] = 4,
+}
+
+function ExamUI.bindInput()
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if processed or not root or not root.Visible then
+			return
+		end
+		if input.UserInputType ~= Enum.UserInputType.Keyboard then
+			return
+		end
+
+		if typing.activa then
+			local char = string.upper(tostring(input.KeyCode.Name))
+			if #char == 1 then
+				local expected = string.sub(typing.objetivo, #typing.escrito + 1, #typing.escrito + 1)
+				if char == expected then
+					ExamUI.onWrite()
+					typing.escrito ..= char
+					typingLabel.Text = string.rep(" ", 0) .. typing.objetivo
+					local done = #typing.escrito
+					typingLabel.Text = string.format('<font color="#1C5CBA">%s</font>%s',
+						string.sub(typing.objetivo, 1, done),
+						string.sub(typing.objetivo, done + 1))
+					typingLabel.RichText = true
+					if typing.escrito == typing.objetivo then
+						ExamUI.finishTyping(true)
+					end
+				else
+					ExamUI.finishTyping(false)
+				end
+			end
+			return
+		end
+
+		local option = NUMEROS[input.KeyCode]
+		if option then
+			ExamUI.answer(option)
+		elseif input.KeyCode == Enum.KeyCode.Left then
+			ExamUI.show(math.max(1, current - 1))
+		elseif input.KeyCode == Enum.KeyCode.Right then
+			ExamUI.show(math.min(#state.preguntas, current + 1))
+		end
+	end)
+end
+
+function ExamUI.finishTyping(success: boolean)
+	if not typing.activa then
+		return
+	end
+	local index = typing.indice
+	local typed = success and typing.objetivo or typing.escrito
+	typing.activa = false
+	typingPanel.Visible = false
+
+	state.respuestas[index] = success and 1 or 2
+	refreshNav()
+
+	task.spawn(function()
+		local ok, result = pcall(function()
+			return Net.func(Net.Functions.SubmitSequence):InvokeServer(index, typed)
+		end)
+		if ok and result and result.reason then
+			ExamUI.onNotify(result.reason)
+		end
+	end)
+
+	Util.playSound(success and Config.Sonidos.Acierto or Config.Sonidos.Error,
+		workspace :: any, 0.3, success and 1.4 or 0.7)
+end
+
+--- Se llama desde el RenderStepped del cliente: la barra del minijuego.
+function ExamUI.step()
+	if not typing.activa then
+		return
+	end
+	local left = typing.hasta - os.clock()
+	if left <= 0 then
+		ExamUI.finishTyping(false)
+		return
+	end
+	typingProgress.Size = UDim2.fromScale(left / Config.Examen.SegundosSecuencia, 1)
+	typingProgress.BackgroundColor3 = left < 2 and Theme.Paper.Wrong or Theme.Paper.Accent
+end
+
+function ExamUI.setVisible(visible: boolean)
+	if root then
+		root.Visible = visible and state.activo == true
+	end
+end
+
+return ExamUI
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX3">
+      <Properties>
+        <string name="Name">Hud</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Hud
+	------------------------------------------------------------------
+	La capa que ves siempre: reloj del examen, barra de sospecha, nota
+	del trimestre, creditos, avisos, lo que dice el profesor, el cono
+	tapandote la pantalla y el boletin del dia.
+
+	Todo lo que llega del servidor viene como { key = ..., args = ... }
+	y se dibuja con Strings.get: por eso el HUD entero cambia de idioma
+	con el idioma que cada jugador tenga puesto en Roblox.
+--]]
+
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Theme = require(Shared:WaitForChild("Theme"))
+local Strings = require(Shared:WaitForChild("Strings"))
+local Config = require(Shared:WaitForChild("Config"))
+
+local Hud = {}
+
+local root: ScreenGui
+local clockLabel: TextLabel
+local phaseLabel: TextLabel
+local dayLabel: TextLabel
+local gradeValue: TextLabel
+local creditLabel: TextLabel
+local suspicionFill: Frame
+local suspicionLabel: TextLabel
+local objective: TextLabel
+local warning: TextLabel
+local vignette: Frame
+local toasts: Frame
+local subtitle: Frame
+local subtitleText: TextLabel
+local coneOverlay: Frame
+local punishLabel: TextLabel
+local reportCard: Frame
+
+local state = { fase = "espera", cerca = false, valor = 0 }
+local pulse = 0
+
+-- ── helpers ────────────────────────────────────────────────────────
+
+local function new(class: string, props: { [string]: any }, parent: Instance?): any
+	local instance = Instance.new(class)
+	for key, value in props do
+		(instance :: any)[key] = value
+	end
+	if parent then
+		instance.Parent = parent
+	end
+	return instance
+end
+
+local function corner(gui: GuiObject, radius: number)
+	new("UICorner", { CornerRadius = UDim.new(0, radius) }, gui)
+end
+
+local function stroke(gui: GuiObject, color: Color3, thickness: number?)
+	new("UIStroke", {
+		Color = color,
+		Thickness = thickness or 1,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		Transparency = 0.35,
+	}, gui)
+end
+
+local function panel(parent: Instance, name: string, size: UDim2, position: UDim2,
+	anchor: Vector2): Frame
+	local frame = new("Frame", {
+		Name = name,
+		Size = size,
+		Position = position,
+		AnchorPoint = anchor,
+		BackgroundColor3 = Theme.Hud.Panel,
+		BackgroundTransparency = 0.18,
+		BorderSizePixel = 0,
+	}, parent)
+	corner(frame, 10)
+	stroke(frame, Theme.Hud.Line)
+	return frame
+end
+
+local function label(parent: Instance, name: string, text: string, size: UDim2,
+	position: UDim2, font: Enum.Font, textSize: number, color: Color3,
+	align: Enum.TextXAlignment?): TextLabel
+	return new("TextLabel", {
+		Name = name,
+		Text = text,
+		Size = size,
+		Position = position,
+		BackgroundTransparency = 1,
+		Font = font,
+		TextSize = textSize,
+		TextColor3 = color,
+		TextXAlignment = align or Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Center,
+	}, parent)
+end
+
+local function clockText(seconds: number): string
+	local minutes = math.floor(seconds / 60)
+	return string.format("%02d:%02d", minutes, math.floor(seconds % 60))
+end
+
+-- ── construccion ───────────────────────────────────────────────────
+
+--- La viñeta roja: cuatro tiras con degradado hacia adentro. No usa
+--- ninguna imagen, asi que no depende de subir ningun asset.
+local function buildVignette(parent: Instance): Frame
+	local holder = new("Frame", {
+		Name = "Vinieta",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Visible = false,
+		ZIndex = 2,
+	}, parent)
+
+	local edges = {
+		{ UDim2.new(1, 0, 0, 130), UDim2.fromScale(0, 0), Vector2.new(0, 0), 90 },
+		{ UDim2.new(1, 0, 0, 130), UDim2.fromScale(0, 1), Vector2.new(0, 1), 270 },
+		{ UDim2.new(0, 160, 1, 0), UDim2.fromScale(0, 0), Vector2.new(0, 0), 0 },
+		{ UDim2.new(0, 160, 1, 0), UDim2.fromScale(1, 0), Vector2.new(1, 0), 180 },
+	}
+	for i, edge in edges do
+		local strip = new("Frame", {
+			Name = "Borde" .. i,
+			Size = edge[1],
+			Position = edge[2],
+			AnchorPoint = edge[3],
+			BackgroundColor3 = Theme.Hud.Danger,
+			BorderSizePixel = 0,
+			ZIndex = 2,
+		}, holder)
+		new("UIGradient", {
+			Rotation = edge[4],
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.45),
+				NumberSequenceKeypoint.new(1, 1),
+			}),
+		}, strip)
+	end
+	return holder
+end
+
+--- El cono de la verguenza visto desde adentro: una franja arriba con
+--- las rayas del cono, que efectivamente te tapa parte de la pantalla.
+local function buildCone(parent: Instance): Frame
+	local holder = new("Frame", {
+		Name = "Cono",
+		Size = UDim2.new(1, 0, 0.26, 0),
+		BackgroundTransparency = 1,
+		Visible = false,
+		ZIndex = 6,
+	}, parent)
+
+	local band = new("Frame", {
+		Name = "Ala",
+		Size = UDim2.new(1.4, 0, 1, 0),
+		Position = UDim2.fromScale(0.5, 0),
+		AnchorPoint = Vector2.new(0.5, 0),
+		BackgroundColor3 = Color3.fromRGB(228, 74, 62),
+		BorderSizePixel = 0,
+		ZIndex = 6,
+	}, holder)
+	new("UICorner", { CornerRadius = UDim.new(0, 400) }, band)
+
+	-- Rayas blancas, como el cono de verdad.
+	for i = 0, 7 do
+		new("Frame", {
+			Name = "Raya" .. i,
+			Size = UDim2.new(0.06, 0, 1, 0),
+			Position = UDim2.fromScale(i * 0.14, 0),
+			BackgroundColor3 = Color3.fromRGB(246, 246, 240),
+			BorderSizePixel = 0,
+			ZIndex = 7,
+		}, band)
+	end
+
+	return holder
+end
+
+function Hud.mount(parent: ScreenGui)
+	root = parent
+
+	-- Reloj y fase, arriba al centro.
+	local top = panel(root, "Reloj", UDim2.new(0, 240, 0, 76),
+		UDim2.new(0.5, 0, 0, 12), Vector2.new(0.5, 0))
+	phaseLabel = label(top, "Fase", "", UDim2.new(1, -20, 0, 18), UDim2.new(0, 10, 0, 6),
+		Theme.FontBold, 13, Theme.Hud.Muted, Enum.TextXAlignment.Center)
+	clockLabel = label(top, "Tiempo", "00:00", UDim2.new(1, -20, 0, 34), UDim2.new(0, 10, 0, 24),
+		Theme.FontBlack, 32, Theme.Hud.Clock, Enum.TextXAlignment.Center)
+	dayLabel = label(top, "Dia", "", UDim2.new(1, -20, 0, 16), UDim2.new(0, 10, 0, 56),
+		Theme.Font, 12, Theme.Hud.Muted, Enum.TextXAlignment.Center)
+
+	-- Nota y creditos, arriba a la izquierda.
+	local left = panel(root, "Nota", UDim2.new(0, 186, 0, 76),
+		UDim2.new(0, 12, 0, 12), Vector2.new(0, 0))
+	label(left, "Titulo", Strings.get("hud.grade"),
+		UDim2.new(1, -20, 0, 16), UDim2.new(0, 12, 0, 8),
+		Theme.FontBold, 11, Theme.Hud.Muted)
+	gradeValue = label(left, "Valor", "60  D", UDim2.new(1, -20, 0, 30), UDim2.new(0, 12, 0, 24),
+		Theme.FontBlack, 26, Theme.Hud.Text)
+	creditLabel = label(left, "Creditos", "0 cr", UDim2.new(1, -20, 0, 16), UDim2.new(0, 12, 0, 54),
+		Theme.FontBold, 13, Theme.Hud.Credit)
+
+	-- Barra de sospecha, abajo al centro.
+	local bottom = panel(root, "Sospecha", UDim2.new(0, 320, 0, 52),
+		UDim2.new(0.5, 0, 1, -18), Vector2.new(0.5, 1))
+	suspicionLabel = label(bottom, "Titulo", Strings.get("hud.suspicion"),
+		UDim2.new(1, -24, 0, 14), UDim2.new(0, 12, 0, 7),
+		Theme.FontBold, 11, Theme.Hud.Muted)
+	local track = new("Frame", {
+		Name = "Barra",
+		Size = UDim2.new(1, -24, 0, 12),
+		Position = UDim2.new(0, 12, 0, 26),
+		BackgroundColor3 = Theme.Hud.PanelSoft,
+		BorderSizePixel = 0,
+	}, bottom)
+	corner(track, 6)
+	suspicionFill = new("Frame", {
+		Name = "Relleno",
+		Size = UDim2.fromScale(0, 1),
+		BackgroundColor3 = Theme.Hud.Safe,
+		BorderSizePixel = 0,
+	}, track)
+	corner(suspicionFill, 6)
+
+	-- Objetivo y teclas, abajo a la izquierda.
+	local guide = panel(root, "Objetivo", UDim2.new(0, 320, 0, 60),
+		UDim2.new(0, 12, 1, -18), Vector2.new(0, 1))
+	objective = label(guide, "Texto", "", UDim2.new(1, -24, 0, 20), UDim2.new(0, 12, 0, 8),
+		Theme.FontBold, 14, Theme.Hud.Text)
+	label(guide, "Teclas", Strings.get("hud.keys"),
+		UDim2.new(1, -24, 0, 16), UDim2.new(0, 12, 0, 32),
+		Theme.Font, 11, Theme.Hud.Muted)
+
+	-- Aviso grande de "te esta mirando".
+	warning = label(root, "Aviso", Strings.get("hud.close_call"),
+		UDim2.new(1, 0, 0, 30), UDim2.new(0, 0, 0, 100),
+		Theme.FontBlack, 22, Theme.Hud.Danger, Enum.TextXAlignment.Center)
+	warning.Visible = false
+	warning.ZIndex = 3
+
+	vignette = buildVignette(root)
+
+	-- Avisos cortos, apilados a la derecha.
+	toasts = new("Frame", {
+		Name = "Avisos",
+		Size = UDim2.new(0, 300, 0, 300),
+		Position = UDim2.new(1, -14, 0, 100),
+		AnchorPoint = Vector2.new(1, 0),
+		BackgroundTransparency = 1,
+	}, root)
+	new("UIListLayout", {
+		Padding = UDim.new(0, 6),
+		HorizontalAlignment = Enum.HorizontalAlignment.Right,
+		VerticalAlignment = Enum.VerticalAlignment.Top,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, toasts)
+
+	-- Lo que dice el profesor.
+	subtitle = panel(root, "Profesor", UDim2.new(0, 460, 0, 46),
+		UDim2.new(0.5, 0, 1, -84), Vector2.new(0.5, 1))
+	subtitle.Visible = false
+	subtitleText = label(subtitle, "Texto", "", UDim2.new(1, -24, 1, 0), UDim2.new(0, 12, 0, 0),
+		Theme.Font, 15, Theme.Hud.Text, Enum.TextXAlignment.Center)
+
+	coneOverlay = buildCone(root)
+	punishLabel = label(root, "Castigo", "", UDim2.new(1, 0, 0, 24),
+		UDim2.new(0, 0, 0, 150), Theme.FontBold, 16, Theme.Hud.Warn,
+		Enum.TextXAlignment.Center)
+	punishLabel.Visible = false
+	punishLabel.ZIndex = 7
+
+	-- El boletin.
+	reportCard = panel(root, "Boletin", UDim2.new(0, 380, 0, 300),
+		UDim2.fromScale(0.5, 0.5), Vector2.new(0.5, 0.5))
+	reportCard.BackgroundTransparency = 0.04
+	reportCard.Visible = false
+	reportCard.ZIndex = 8
+
+	RunService.RenderStepped:Connect(function(dt)
+		pulse += dt
+		if state.cerca and state.fase == "examen" then
+			local alpha = 0.5 + 0.5 * math.sin(pulse * 7)
+			vignette.Visible = true
+			for _, strip in vignette:GetChildren() do
+				if strip:IsA("Frame") then
+					strip.BackgroundTransparency = 0.25 + alpha * 0.35
+				end
+			end
+			warning.Visible = true
+			warning.TextTransparency = 0.15 + alpha * 0.5
+		else
+			vignette.Visible = false
+			warning.Visible = false
+		end
+	end)
+end
+
+-- ── actualizaciones ────────────────────────────────────────────────
+
+local OBJETIVOS = {
+	espera = "notify.waiting",
+	recreo = "hud.hint_recess",
+	examen = "hud.hint_exam",
+	boletin = "hud.hint_report",
+	intermedio = "hud.hint_report",
+}
+
+function Hud.setRound(data: any)
+	if not clockLabel then
+		return
+	end
+	state.fase = data.fase
+
+	phaseLabel.Text = Strings.get("phase." .. tostring(data.fase))
+	clockLabel.Text = clockText(data.restante or 0)
+	clockLabel.TextColor3 = (data.fase == "examen" and (data.restante or 0) <= 30)
+		and Theme.Hud.Danger or Theme.Hud.Clock
+	dayLabel.Text = Strings.get("hud.day", {
+		n = data.dia,
+		day = Strings.get(data.nombreDia or "day.lunes"),
+	})
+
+	gradeValue.Text = string.format("%d  %s", data.nota or 60, data.letra or "D")
+	gradeValue.TextColor3 = Theme.gradeColor(data.letra or "D")
+	objective.Text = Strings.get(OBJETIVOS[data.fase] or "hud.hint_recess")
+
+	if data.fase ~= "examen" then
+		subtitle.Visible = false
+	end
+end
+
+function Hud.setSuspicion(data: any)
+	if not suspicionFill then
+		return
+	end
+	local value = math.clamp(data.valor or 0, 0, 1)
+	state.valor = value
+	state.cerca = data.cerca == true
+	TweenService:Create(suspicionFill, TweenInfo.new(0.12), {
+		Size = UDim2.fromScale(value, 1),
+		BackgroundColor3 = Theme.suspicionColor(value),
+	}):Play()
+	suspicionLabel.Text = string.format("%s  %d%%",
+		Strings.get("hud.suspicion"), math.floor(value * 100 + 0.5))
+end
+
+function Hud.setWallet(data: any)
+	if not creditLabel then
+		return
+	end
+	creditLabel.Text = Strings.get("shop.price", { n = data.creditos or 0 })
+end
+
+function Hud.notify(packet: any)
+	if not toasts or not packet or not packet.key then
+		return
+	end
+	local args = packet.args
+	if args then
+		-- Los args pueden traer "@item.nota": se resuelven tambien.
+		local resolved = {}
+		for name, value in args do
+			resolved[name] = typeof(value) == "string" and Strings.resolve(value) or value
+		end
+		args = resolved
+	end
+
+	local toast = new("Frame", {
+		Size = UDim2.new(1, 0, 0, 30),
+		BackgroundColor3 = Theme.Hud.Panel,
+		BackgroundTransparency = 0.12,
+		BorderSizePixel = 0,
+		LayoutOrder = math.floor(os.clock() * 1000) % 100000,
+	}, toasts)
+	corner(toast, 8)
+	stroke(toast, Theme.Hud.Line)
+
+	local text = label(toast, "Texto", Strings.get(packet.key, args),
+		UDim2.new(1, -20, 1, 0), UDim2.new(0, 10, 0, 0),
+		Theme.Font, 13, Theme.Hud.Text, Enum.TextXAlignment.Left)
+	text.TextTruncate = Enum.TextTruncate.AtEnd
+
+	task.delay(3.6, function()
+		if not toast.Parent then
+			return
+		end
+		TweenService:Create(toast, TweenInfo.new(0.4), { BackgroundTransparency = 1 }):Play()
+		TweenService:Create(text, TweenInfo.new(0.4), { TextTransparency = 1 }):Play()
+		task.wait(0.45)
+		toast:Destroy()
+	end)
+end
+
+function Hud.teacherSay(packet: any)
+	if not subtitle or not packet then
+		return
+	end
+	subtitleText.Text = string.format("%s: %s",
+		packet.profesor or "", Strings.get(packet.key, packet.args))
+	subtitle.Visible = true
+	local token = os.clock()
+	subtitle:SetAttribute("Token", token)
+	task.delay(4, function()
+		if subtitle:GetAttribute("Token") == token then
+			subtitle.Visible = false
+		end
+	end)
+end
+
+function Hud.punish(data: any)
+	if not coneOverlay then
+		return
+	end
+	if data.tipo == "fin" then
+		coneOverlay.Visible = false
+		punishLabel.Visible = false
+		return
+	end
+
+	local seconds = math.floor(data.segundos or 0)
+	local key = data.tipo == "cono" and "hud.cone" or "hud.detention"
+	coneOverlay.Visible = data.tipo == "cono"
+	punishLabel.Visible = true
+
+	task.spawn(function()
+		for remaining = seconds, 1, -1 do
+			if not punishLabel.Visible then
+				return
+			end
+			punishLabel.Text = Strings.get(key, { s = remaining })
+			task.wait(1)
+		end
+		coneOverlay.Visible = false
+		punishLabel.Visible = false
+	end)
+end
+
+-- ── boletin ────────────────────────────────────────────────────────
+
+function Hud.report(data: any)
+	if not reportCard then
+		return
+	end
+	reportCard:ClearAllChildren()
+	corner(reportCard, 12)
+	stroke(reportCard, Theme.Hud.Line)
+
+	local title = data.semana and Strings.get("report.week")
+		or Strings.get("report.day", { n = data.dia })
+	label(reportCard, "Titulo", Strings.get("report.title"),
+		UDim2.new(1, -32, 0, 20), UDim2.new(0, 16, 0, 14),
+		Theme.FontBold, 12, Theme.Hud.Muted).ZIndex = 9
+	label(reportCard, "Subtitulo", title, UDim2.new(1, -32, 0, 26), UDim2.new(0, 16, 0, 32),
+		Theme.FontBlack, 22, Theme.Hud.Text).ZIndex = 9
+
+	local big = label(reportCard, "Nota", tostring(data.final) .. "  " .. tostring(data.letra),
+		UDim2.new(1, -32, 0, 54), UDim2.new(0, 16, 0, 64),
+		Theme.FontBlack, 46, Theme.gradeColor(data.letra))
+	big.ZIndex = 9
+
+	local rows = {
+		{ Strings.get("report.exam"), tostring(data.examen) },
+		{ Strings.get("report.behaviour"), tostring(data.conducta) },
+		{ Strings.get("report.correct", { ok = data.aciertos, n = data.total }), "" },
+		{ Strings.get("report.punishments", { n = data.castigos }), "" },
+		{ Strings.get("shop.price", { n = data.creditos }), "" },
+		{ Strings.get("report.fails", { n = data.suspensos, max = data.maxSuspensos }), "" },
+	}
+	for i, row in rows do
+		local y = 128 + (i - 1) * 22
+		local line = label(reportCard, "Fila" .. i, row[1],
+			UDim2.new(1, -32, 0, 20), UDim2.new(0, 16, 0, y),
+			Theme.Font, 14, Theme.Hud.Muted)
+		line.ZIndex = 9
+		if row[2] ~= "" then
+			local value = label(reportCard, "Valor" .. i, row[2],
+				UDim2.new(0, 60, 0, 20), UDim2.new(1, -76, 0, y),
+				Theme.FontBold, 14, Theme.Hud.Text, Enum.TextXAlignment.Right)
+			value.ZIndex = 9
+		end
+	end
+
+	local footKey = "report.next"
+	local footArgs: any = { s = Config.Ronda.SegundosBoletin }
+	if data.semana then
+		footKey = data.expulsado and "report.expelled" or "report.survived"
+		footArgs = nil
+	end
+	local foot = label(reportCard, "Pie", Strings.get(footKey, footArgs),
+		UDim2.new(1, -32, 0, 34), UDim2.new(0, 16, 1, -44),
+		Theme.FontBold, 14, data.aprobado and Theme.Hud.Safe or Theme.Hud.Danger,
+		Enum.TextXAlignment.Center)
+	foot.TextWrapped = true
+	foot.ZIndex = 9
+
+	reportCard.Visible = true
+	task.delay(Config.Ronda.SegundosBoletin, function()
+		reportCard.Visible = false
+	end)
+end
+
+--- Apaga/enciende el HUD de juego (lo usa el menu de inicio).
+local PANELES = { "Reloj", "Nota", "Sospecha", "Objetivo", "Avisos" }
+
+function Hud.setVisible(visible: boolean)
+	if not root then
+		return
+	end
+	for _, name in PANELES do
+		local child = root:FindFirstChild(name)
+		if child and child:IsA("GuiObject") then
+			child.Visible = visible
+		end
+	end
+	if not visible then
+		if subtitle then
+			subtitle.Visible = false
+		end
+		if reportCard then
+			reportCard.Visible = false
+		end
+	end
+end
+
+return Hud
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX4">
+      <Properties>
+        <string name="Name">LobbyUI</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	LobbyUI
+	------------------------------------------------------------------
+	El buscador de salas: buscar por nombre, entrar (con clave si la
+	tiene) y crear la tuya eligiendo nombre, clave y capacidad.
+
+	Todo lo pesado lo hace LobbyService en el servidor; aca solo se
+	dibuja la lista y se manda lo que el jugador escribio.
+--]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SocialService = game:GetService("SocialService")
+local Players = game:GetService("Players")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Theme = require(Shared:WaitForChild("Theme"))
+local Strings = require(Shared:WaitForChild("Strings"))
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local player = Players.LocalPlayer
+
+local LobbyUI = {}
+
+local root: Frame
+local list: ScrollingFrame
+local searchBox: TextBox
+local nameBox: TextBox
+local passwordBox: TextBox
+local joinPasswordBox: TextBox
+local capacityButton: TextButton
+local statusLabel: TextLabel
+
+local capacityIndex = 1
+local selected: string? = nil
+
+local function new(class: string, props: { [string]: any }, parent: Instance?): any
+	local instance = Instance.new(class)
+	for key, value in props do
+		(instance :: any)[key] = value
+	end
+	if parent then
+		instance.Parent = parent
+	end
+	return instance
+end
+
+local function corner(gui: GuiObject, radius: number)
+	new("UICorner", { CornerRadius = UDim.new(0, radius) }, gui)
+end
+
+local function click()
+	Util.playSound(Config.Sonidos.Click, workspace :: any, 0.25, 1.1)
+end
+
+LobbyUI.onNotify = function(_packet: any) end
+
+local function status(packet: any)
+	if statusLabel and packet then
+		statusLabel.Text = Strings.render(packet)
+	end
+end
+
+local function textBox(parent: Instance, name: string, placeholder: string,
+	size: UDim2, position: UDim2): TextBox
+	local box = new("TextBox", {
+		Name = name,
+		Text = "",
+		PlaceholderText = placeholder,
+		Size = size,
+		Position = position,
+		BackgroundColor3 = Theme.Menu.PanelAlt,
+		Font = Theme.Font,
+		TextSize = 13,
+		TextColor3 = Theme.Menu.Text,
+		PlaceholderColor3 = Theme.Menu.Muted,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ClearTextOnFocus = false,
+		BorderSizePixel = 0,
+		ZIndex = 22,
+	}, parent)
+	corner(box, 8)
+	new("UIPadding", { PaddingLeft = UDim.new(0, 10) }, box)
+	return box
+end
+
+local function actionButton(parent: Instance, name: string, text: string, color: Color3,
+	size: UDim2, position: UDim2, callback: () -> ()): TextButton
+	local button = new("TextButton", {
+		Name = name,
+		Text = text,
+		Size = size,
+		Position = position,
+		BackgroundColor3 = color,
+		BackgroundTransparency = 0.85,
+		AutoButtonColor = false,
+		Font = Theme.FontBold,
+		TextSize = 13,
+		TextColor3 = color,
+		BorderSizePixel = 0,
+		ZIndex = 22,
+	}, parent)
+	corner(button, 8)
+	new("UIStroke", { Color = color, Thickness = 1, Transparency = 0.5 }, button)
+	button.MouseButton1Click:Connect(function()
+		click()
+		callback()
+	end)
+	return button
+end
+
+-- ── lista ──────────────────────────────────────────────────────────
+
+local function drawRoom(room: any, order: number)
+	local card = new("TextButton", {
+		Name = room.code,
+		LayoutOrder = order,
+		Text = "",
+		Size = UDim2.new(1, -8, 0, 54),
+		BackgroundColor3 = selected == room.code and Theme.Menu.Line or Theme.Menu.PanelAlt,
+		AutoButtonColor = false,
+		BorderSizePixel = 0,
+		ZIndex = 22,
+	}, list)
+	corner(card, 10)
+
+	new("TextLabel", {
+		Text = room.name,
+		Size = UDim2.new(1, -140, 0, 20),
+		Position = UDim2.new(0, 14, 0, 8),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		TextSize = 14,
+		TextColor3 = Theme.Menu.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 23,
+	}, card)
+
+	new("TextLabel", {
+		Text = string.format("%s%s", room.host or "",
+			room.locked and ("  -  " .. Strings.get("room.locked")) or ""),
+		Size = UDim2.new(1, -140, 0, 16),
+		Position = UDim2.new(0, 14, 0, 28),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		TextSize = 11,
+		TextColor3 = room.locked and Theme.Hud.Warn or Theme.Menu.Muted,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 23,
+	}, card)
+
+	new("TextLabel", {
+		Text = Strings.get("room.players", { n = room.count, max = room.maxPlayers }),
+		Size = UDim2.new(0, 70, 0, 20),
+		Position = UDim2.new(1, -86, 0, 17),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		TextSize = 14,
+		TextColor3 = Theme.Menu.Text,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		ZIndex = 23,
+	}, card)
+
+	card.MouseButton1Click:Connect(function()
+		click()
+		selected = room.code
+		for _, child in list:GetChildren() do
+			if child:IsA("TextButton") then
+				child.BackgroundColor3 = child.Name == room.code
+					and Theme.Menu.Line or Theme.Menu.PanelAlt
+			end
+		end
+	end)
+end
+
+function LobbyUI.refresh()
+	if not list then
+		return
+	end
+	task.spawn(function()
+		local ok, result = pcall(function()
+			return Net.func(Net.Functions.ListRooms):InvokeServer(searchBox.Text)
+		end)
+		for _, child in list:GetChildren() do
+			if child:IsA("TextButton") then
+				child:Destroy()
+			end
+		end
+		if not ok or not result or not result.ok then
+			status(result and result.reason or { key = "room.unavailable" })
+			list.CanvasSize = UDim2.new()
+			return
+		end
+		if #result.rooms == 0 then
+			status({ key = "room.empty" })
+		else
+			status({ key = "room.title" })
+		end
+		for i, room in result.rooms do
+			drawRoom(room, i)
+		end
+		list.CanvasSize = UDim2.new(0, 0, 0, #result.rooms * 60 + 8)
+	end)
+end
+
+-- ── construccion ───────────────────────────────────────────────────
+
+function LobbyUI.mount(parent: ScreenGui)
+	root = new("Frame", {
+		Name = "Salas",
+		Size = UDim2.new(0, 720, 0, 470),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = Theme.Menu.Panel,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 21,
+	}, parent)
+	corner(root, 14)
+	new("UIStroke", { Color = Theme.Menu.Line, Thickness = 1, Transparency = 0.4 }, root)
+
+	new("TextLabel", {
+		Text = Strings.get("room.title"),
+		Size = UDim2.new(0, 200, 0, 28),
+		Position = UDim2.new(0, 18, 0, 14),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBlack,
+		TextSize = 20,
+		TextColor3 = Theme.Menu.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 22,
+	}, root)
+
+	statusLabel = new("TextLabel", {
+		Text = "",
+		Size = UDim2.new(0, 330, 0, 18),
+		Position = UDim2.new(0, 18, 0, 42),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		TextSize = 12,
+		TextColor3 = Theme.Menu.Muted,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 22,
+	}, root)
+
+	local close = new("TextButton", {
+		Text = "X",
+		Size = UDim2.new(0, 28, 0, 28),
+		Position = UDim2.new(1, -40, 0, 14),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		TextSize = 16,
+		TextColor3 = Theme.Menu.Muted,
+		ZIndex = 22,
+	}, root)
+	close.MouseButton1Click:Connect(function()
+		click()
+		LobbyUI.close()
+	end)
+
+	-- Columna izquierda: buscador y lista.
+	searchBox = textBox(root, "Buscar", Strings.get("room.search"),
+		UDim2.new(0, 300, 0, 32), UDim2.new(0, 18, 0, 68))
+	searchBox.FocusLost:Connect(function()
+		LobbyUI.refresh()
+	end)
+
+	actionButton(root, "Actualizar", Strings.get("room.refresh"), Theme.Menu.Accent,
+		UDim2.new(0, 88, 0, 32), UDim2.new(0, 326, 0, 68), function()
+			LobbyUI.refresh()
+		end)
+
+	list = new("ScrollingFrame", {
+		Name = "Lista",
+		Size = UDim2.new(0, 396, 1, -170),
+		Position = UDim2.new(0, 18, 0, 110),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 4,
+		ScrollBarImageColor3 = Theme.Menu.Line,
+		CanvasSize = UDim2.new(),
+		ZIndex = 22,
+	}, root)
+	new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, list)
+
+	joinPasswordBox = textBox(root, "ClaveEntrar", Strings.get("room.password"),
+		UDim2.new(0, 250, 0, 32), UDim2.new(0, 18, 1, -52))
+	actionButton(root, "Entrar", Strings.get("room.join"), Theme.Hud.Safe,
+		UDim2.new(0, 130, 0, 32), UDim2.new(0, 276, 1, -52), function()
+			if not selected then
+				status({ key = "room.gone" })
+				return
+			end
+			task.spawn(function()
+				local ok, result = pcall(function()
+					return Net.func(Net.Functions.JoinRoom)
+						:InvokeServer(selected, joinPasswordBox.Text)
+				end)
+				if ok and result and result.reason then
+					status(result.reason)
+					LobbyUI.onNotify(result.reason)
+				end
+			end)
+		end)
+
+	-- Columna derecha: crear sala.
+	local panel = new("Frame", {
+		Name = "Crear",
+		Size = UDim2.new(0, 260, 1, -86),
+		Position = UDim2.new(1, -278, 0, 68),
+		BackgroundColor3 = Theme.Menu.PanelAlt,
+		BorderSizePixel = 0,
+		ZIndex = 22,
+	}, root)
+	corner(panel, 12)
+
+	new("TextLabel", {
+		Text = Strings.get("room.create"),
+		Size = UDim2.new(1, -28, 0, 24),
+		Position = UDim2.new(0, 14, 0, 12),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		TextSize = 16,
+		TextColor3 = Theme.Menu.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 23,
+	}, panel)
+
+	nameBox = textBox(panel, "Nombre", Strings.get("room.name"),
+		UDim2.new(1, -28, 0, 32), UDim2.new(0, 14, 0, 46))
+	passwordBox = textBox(panel, "Clave", Strings.get("room.password"),
+		UDim2.new(1, -28, 0, 32), UDim2.new(0, 14, 0, 86))
+
+	capacityButton = actionButton(panel, "Capacidad",
+		Strings.get("room.capacity", { n = Config.Salas.CapacidadesPosibles[1] }),
+		Theme.Menu.Accent, UDim2.new(1, -28, 0, 32), UDim2.new(0, 14, 0, 126), function()
+			capacityIndex = (capacityIndex % #Config.Salas.CapacidadesPosibles) + 1
+			capacityButton.Text = Strings.get("room.capacity",
+				{ n = Config.Salas.CapacidadesPosibles[capacityIndex] })
+		end)
+
+	actionButton(panel, "Confirmar", Strings.get("room.create"), Theme.Hud.Safe,
+		UDim2.new(1, -28, 0, 36), UDim2.new(0, 14, 0, 172), function()
+			task.spawn(function()
+				local ok, result = pcall(function()
+					return Net.func(Net.Functions.CreateRoom):InvokeServer({
+						name = nameBox.Text,
+						password = passwordBox.Text,
+						maxPlayers = Config.Salas.CapacidadesPosibles[capacityIndex],
+					})
+				end)
+				if ok and result and result.reason then
+					status(result.reason)
+					LobbyUI.onNotify(result.reason)
+				end
+			end)
+		end)
+
+	actionButton(panel, "Invitar", Strings.get("room.invite"), Theme.Hud.Credit,
+		UDim2.new(1, -28, 0, 32), UDim2.new(0, 14, 0, 218), function()
+			local ok, can = pcall(function()
+				return SocialService:CanSendGameInviteAsync(player)
+			end)
+			if ok and can then
+				pcall(function()
+					SocialService:PromptGameInvite(player)
+				end)
+			end
+		end)
+
+	actionButton(panel, "Volver", Strings.get("menu.back"), Theme.Menu.Muted,
+		UDim2.new(1, -28, 0, 32), UDim2.new(0, 14, 1, -46), function()
+			LobbyUI.close()
+		end)
+end
+
+function LobbyUI.open()
+	if not root then
+		return
+	end
+	root.Visible = true
+	LobbyUI.refresh()
+end
+
+function LobbyUI.close()
+	if root then
+		root.Visible = false
+	end
+end
+
+function LobbyUI.isOpen(): boolean
+	return root ~= nil and root.Visible
+end
+
+return LobbyUI
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX5">
+      <Properties>
+        <string name="Name">MainMenu</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	MainMenu
+	------------------------------------------------------------------
+	El menu de inicio: jugar, salas, tienda, ajustes y creditos.
+
+	Se abre solo la primera vez que entras y despues con Esc/M. Mientras
+	esta abierto el HUD se apaga: el menu no es un overlay mas, es una
+	pantalla.
+--]]
+
+local Lighting = game:GetService("Lighting")
+local SoundService = game:GetService("SoundService")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Theme = require(Shared:WaitForChild("Theme"))
+local Strings = require(Shared:WaitForChild("Strings"))
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local MainMenu = {}
+
+local root: Frame
+local pages: { [string]: Frame } = {}
+
+local settings = { brillo = 2, volumen = 0.6, musica = true, sensibilidad = 0.5 }
+
+local function new(class: string, props: { [string]: any }, parent: Instance?): any
+	local instance = Instance.new(class)
+	for key, value in props do
+		(instance :: any)[key] = value
+	end
+	if parent then
+		instance.Parent = parent
+	end
+	return instance
+end
+
+local function corner(gui: GuiObject, radius: number)
+	new("UICorner", { CornerRadius = UDim.new(0, radius) }, gui)
+end
+
+local function click()
+	Util.playSound(Config.Sonidos.Click, workspace :: any, 0.3, 1.1)
+end
+
+-- Callbacks que rellena el init del cliente.
+MainMenu.onPlay = function(_mode: string) end
+MainMenu.onRooms = function() end
+MainMenu.onShop = function() end
+MainMenu.onMusic = function(_on: boolean) end
+MainMenu.onVisible = function(_open: boolean) end
+
+-- ── piezas ─────────────────────────────────────────────────────────
+
+local function bigButton(parent: Instance, order: number, key: string, descKey: string?,
+	callback: () -> ()): TextButton
+	local button = new("TextButton", {
+		Name = key,
+		LayoutOrder = order,
+		Text = "",
+		Size = UDim2.new(1, 0, 0, descKey and 58 or 44),
+		BackgroundColor3 = Theme.Menu.PanelAlt,
+		AutoButtonColor = false,
+		BorderSizePixel = 0,
+		ZIndex = 21,
+	}, parent)
+	corner(button, 10)
+	new("UIStroke", { Color = Theme.Menu.Line, Thickness = 1, Transparency = 0.55 }, button)
+
+	new("TextLabel", {
+		Text = Strings.get(key),
+		Size = UDim2.new(1, -28, 0, 22),
+		Position = UDim2.new(0, 16, 0, descKey and 10 or 11),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		TextSize = 16,
+		TextColor3 = Theme.Menu.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 22,
+	}, button)
+
+	if descKey then
+		new("TextLabel", {
+			Text = Strings.get(descKey),
+			Size = UDim2.new(1, -28, 0, 18),
+			Position = UDim2.new(0, 16, 0, 32),
+			BackgroundTransparency = 1,
+			Font = Theme.Font,
+			TextSize = 12,
+			TextColor3 = Theme.Menu.Muted,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			ZIndex = 22,
+		}, button)
+	end
+
+	button.MouseEnter:Connect(function()
+		button.BackgroundColor3 = Theme.Menu.Line
+	end)
+	button.MouseLeave:Connect(function()
+		button.BackgroundColor3 = Theme.Menu.PanelAlt
+	end)
+	button.MouseButton1Click:Connect(function()
+		click()
+		callback()
+	end)
+	return button
+end
+
+--- Un deslizador simple hecho con dos frames y arrastre del mouse.
+local function slider(parent: Instance, order: number, key: string, value: number,
+	callback: (number) -> ())
+	local holder = new("Frame", {
+		Name = key,
+		LayoutOrder = order,
+		Size = UDim2.new(1, 0, 0, 52),
+		BackgroundTransparency = 1,
+		ZIndex = 21,
+	}, parent)
+
+	local title = new("TextLabel", {
+		Text = Strings.get(key),
+		Size = UDim2.new(1, 0, 0, 18),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		TextSize = 13,
+		TextColor3 = Theme.Menu.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 22,
+	}, holder)
+
+	local track = new("TextButton", {
+		Name = "Barra",
+		Text = "",
+		Size = UDim2.new(1, 0, 0, 10),
+		Position = UDim2.new(0, 0, 0, 28),
+		BackgroundColor3 = Theme.Menu.PanelAlt,
+		AutoButtonColor = false,
+		BorderSizePixel = 0,
+		ZIndex = 22,
+	}, holder)
+	corner(track, 5)
+
+	local fill = new("Frame", {
+		Name = "Relleno",
+		Size = UDim2.fromScale(value, 1),
+		BackgroundColor3 = Theme.Menu.Accent,
+		BorderSizePixel = 0,
+		ZIndex = 23,
+	}, track)
+	corner(fill, 5)
+
+	local function setFrom(x: number)
+		local absolute = track.AbsolutePosition.X
+		local width = math.max(1, track.AbsoluteSize.X)
+		local alpha = math.clamp((x - absolute) / width, 0, 1)
+		fill.Size = UDim2.fromScale(alpha, 1)
+		title.Text = string.format("%s  %d%%", Strings.get(key), math.floor(alpha * 100 + 0.5))
+		callback(alpha)
+	end
+
+	local dragging = false
+	track.MouseButton1Down:Connect(function(x)
+		dragging = true
+		setFrom(x)
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+			setFrom(input.Position.X)
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = false
+		end
+	end)
+
+	title.Text = string.format("%s  %d%%", Strings.get(key), math.floor(value * 100 + 0.5))
+end
+
+local function page(name: string, titleKey: string): Frame
+	local frame = new("Frame", {
+		Name = name,
+		Size = UDim2.new(0, 420, 1, -160),
+		Position = UDim2.new(0.5, 0, 0, 130),
+		AnchorPoint = Vector2.new(0.5, 0),
+		BackgroundTransparency = 1,
+		Visible = false,
+		ZIndex = 21,
+	}, root)
+
+	if titleKey ~= "" then
+		new("TextLabel", {
+			Text = Strings.get(titleKey),
+			Size = UDim2.new(1, 0, 0, 26),
+			BackgroundTransparency = 1,
+			Font = Theme.FontBlack,
+			TextSize = 18,
+			TextColor3 = Theme.Menu.Text,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			ZIndex = 22,
+		}, frame)
+	end
+
+	local body = new("Frame", {
+		Name = "Cuerpo",
+		Size = UDim2.new(1, 0, 1, titleKey ~= "" and -38 or 0),
+		Position = UDim2.new(0, 0, 0, titleKey ~= "" and 38 or 0),
+		BackgroundTransparency = 1,
+		ZIndex = 21,
+	}, frame)
+	new("UIListLayout", {
+		Padding = UDim.new(0, 10),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, body)
+
+	pages[name] = frame
+	return body
+end
+
+local function goTo(name: string)
+	for id, frame in pages do
+		frame.Visible = id == name
+	end
+end
+
+-- ── construccion ───────────────────────────────────────────────────
+
+function MainMenu.mount(parent: ScreenGui)
+	root = new("Frame", {
+		Name = "Menu",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Theme.Menu.Scrim,
+		BackgroundTransparency = 0.06,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 20,
+	}, parent)
+
+	new("TextLabel", {
+		Name = "Titulo",
+		Text = Strings.get("menu.title"),
+		Size = UDim2.new(1, 0, 0, 54),
+		Position = UDim2.new(0, 0, 0, 46),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBlack,
+		TextSize = 44,
+		TextColor3 = Theme.Menu.Text,
+		ZIndex = 21,
+	}, root)
+	new("TextLabel", {
+		Name = "Subtitulo",
+		Text = Strings.get("menu.subtitle"),
+		Size = UDim2.new(1, 0, 0, 20),
+		Position = UDim2.new(0, 0, 0, 98),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		TextSize = 14,
+		TextColor3 = Theme.Menu.Muted,
+		ZIndex = 21,
+	}, root)
+
+	-- Inicio
+	local home = page("inicio", "")
+	bigButton(home, 1, "menu.play", "menu.public_desc", function()
+		MainMenu.onPlay("publico")
+		MainMenu.close()
+	end)
+	bigButton(home, 2, "menu.rooms", "menu.friends_desc", function()
+		MainMenu.onRooms()
+	end)
+	bigButton(home, 3, "menu.shop", nil, function()
+		MainMenu.onShop()
+	end)
+	bigButton(home, 4, "menu.settings", nil, function()
+		goTo("ajustes")
+	end)
+	bigButton(home, 5, "menu.credits", nil, function()
+		goTo("creditos")
+	end)
+
+	-- Ajustes
+	local options = page("ajustes", "menu.settings")
+	slider(options, 1, "menu.brightness", 0.5, function(alpha)
+		settings.brillo = alpha * 4
+		pcall(function()
+			Lighting.Brightness = settings.brillo
+		end)
+	end)
+	slider(options, 2, "menu.volume", 0.6, function(alpha)
+		settings.volumen = alpha
+		for _, name in { "Master", "Musica" } do
+			local group = SoundService:FindFirstChild(name)
+			if group and group:IsA("SoundGroup") then
+				group.Volume = name == "Musica"
+					and Config.Musica.Volumen * alpha * 2 or alpha
+			end
+		end
+	end)
+	slider(options, 3, "menu.sensitivity", 0.5, function(alpha)
+		settings.sensibilidad = alpha
+		pcall(function()
+			local userSettings = UserSettings():GetService("UserGameSettings")
+			userSettings.MouseSensitivity = 0.2 + alpha * 1.6
+		end)
+	end)
+	bigButton(options, 4, "menu.music", nil, function()
+		settings.musica = not settings.musica
+		MainMenu.onMusic(settings.musica)
+	end)
+	bigButton(options, 5, "menu.back", nil, function()
+		goTo("inicio")
+	end)
+
+	-- Creditos
+	local credits = page("creditos", "credits.title")
+	new("TextLabel", {
+		LayoutOrder = 1,
+		Text = Strings.get("credits.body"),
+		Size = UDim2.new(1, 0, 0, 70),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		TextSize = 14,
+		TextColor3 = Theme.Menu.Muted,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextWrapped = true,
+		ZIndex = 22,
+	}, credits)
+	new("TextLabel", {
+		LayoutOrder = 2,
+		Text = Strings.get("credits.thanks"),
+		Size = UDim2.new(1, 0, 0, 50),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		TextSize = 14,
+		TextColor3 = Theme.Menu.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextWrapped = true,
+		ZIndex = 22,
+	}, credits)
+	bigButton(credits, 3, "menu.back", nil, function()
+		goTo("inicio")
+	end)
+
+	goTo("inicio")
+
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if processed then
+			return
+		end
+		if input.KeyCode == Enum.KeyCode.M then
+			if root.Visible then
+				MainMenu.close()
+			else
+				MainMenu.open()
+			end
+		elseif input.KeyCode == Enum.KeyCode.Escape and root.Visible then
+			MainMenu.close()
+		end
+	end)
+end
+
+function MainMenu.open()
+	if not root then
+		return
+	end
+	goTo("inicio")
+	root.Visible = true
+	MainMenu.onVisible(true)
+end
+
+function MainMenu.close()
+	if not root then
+		return
+	end
+	root.Visible = false
+	MainMenu.onVisible(false)
+	task.spawn(function()
+		pcall(function()
+			Net.func(Net.Functions.ChooseMode):InvokeServer("publico")
+		end)
+	end)
+end
+
+function MainMenu.isOpen(): boolean
+	return root ~= nil and root.Visible
+end
+
+function MainMenu.musicEnabled(): boolean
+	return settings.musica
+end
+
+return MainMenu
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX6">
+      <Properties>
+        <string name="Name">Music</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Music
+	------------------------------------------------------------------
+	Musica sin subir un solo archivo.
+
+	Roblox trae unos pocos sonidos en rbxasset:// que existen siempre y
+	en cualquier lugar. Cambiandoles PlaybackSpeed se los puede afinar:
+	2^(n/12) es un semitono. Con eso se arma un secuenciador chiquito
+	que toca bajo, arpegio y percusion segun el clima:
+
+		pasillo      mayor, tranquilo, ritmo de recreo
+		examen       menor, lento, se siente el reloj
+		tension      menor, mas rapido, pulso en cada tiempo
+		persecucion  menor, corcheas, el profesor viene
+
+	Si algun dia queres musica de verdad, poné el id en
+	Config.Musica.IdPersonalizado y este modulo toca esa pista en loop
+	en vez de sintetizar.
+--]]
+
+local SoundService = game:GetService("SoundService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+
+local Music = {}
+
+local BAJO = "rbxasset://sounds/bass.wav"
+local LEAD = "rbxasset://sounds/electronicpingshort.wav"
+local PERC = "rbxasset://sounds/switch3.wav"
+
+-- Grados de la escala, en semitonos desde la tonica.
+local MAYOR = { 0, 2, 4, 7, 9 }
+local MENOR = { 0, 3, 5, 7, 10 }
+
+type Pattern = {
+	escala: { number },
+	raiz: number,
+	bajo: { number },      -- indice de grado por corchea, 0 = silencio
+	lead: { number },
+	perc: { number },
+	volumen: number,
+}
+
+local PATRONES: { [string]: Pattern } = {
+	pasillo = {
+		escala = MAYOR, raiz = -12,
+		bajo = { 1, 0, 0, 0, 3, 0, 0, 0 },
+		lead = { 0, 4, 0, 5, 0, 3, 0, 2 },
+		perc = { 1, 0, 1, 0, 1, 0, 1, 1 },
+		volumen = 0.75,
+	},
+	examen = {
+		escala = MENOR, raiz = -12,
+		bajo = { 1, 0, 0, 0, 0, 0, 4, 0 },
+		lead = { 0, 0, 3, 0, 0, 0, 0, 2 },
+		perc = { 1, 0, 0, 0, 1, 0, 0, 0 },
+		volumen = 0.6,
+	},
+	tension = {
+		escala = MENOR, raiz = -14,
+		bajo = { 1, 0, 1, 0, 1, 0, 1, 0 },
+		lead = { 0, 2, 0, 3, 0, 2, 0, 5 },
+		perc = { 1, 0, 1, 1, 1, 0, 1, 1 },
+		volumen = 0.85,
+	},
+	persecucion = {
+		escala = MENOR, raiz = -17,
+		bajo = { 1, 1, 4, 1, 1, 1, 5, 3 },
+		lead = { 5, 4, 3, 4, 5, 4, 2, 1 },
+		perc = { 1, 1, 1, 1, 1, 1, 1, 1 },
+		volumen = 1,
+	},
+}
+
+local group: SoundGroup
+local custom: Sound? = nil
+local climate = "pasillo"
+local enabled = true
+local running = false
+local step = 0
+
+local function semitone(n: number): number
+	return 2 ^ (n / 12)
+end
+
+local function ensureGroup(): SoundGroup
+	if group and group.Parent then
+		return group
+	end
+	local existing = SoundService:FindFirstChild("Musica")
+	if existing and existing:IsA("SoundGroup") then
+		group = existing
+		return group
+	end
+	local created = Instance.new("SoundGroup")
+	created.Name = "Musica"
+	created.Volume = Config.Musica.Volumen
+	created.Parent = SoundService
+	group = created
+	return group
+end
+
+--- Una nota suelta. Se destruye sola: a ~4 notas por segundo no vale
+--- la pena mantener un pool.
+local function note(soundId: string, pitch: number, volume: number, length: number)
+	local sound = Instance.new("Sound")
+	sound.SoundId = soundId
+	sound.PlaybackSpeed = pitch
+	sound.Volume = volume
+	sound.SoundGroup = ensureGroup()
+	sound.Parent = SoundService
+	sound:Play()
+	task.delay(length, function()
+		if sound.Parent then
+			sound:Destroy()
+		end
+	end)
+end
+
+local function playStep(pattern: Pattern, eighth: number)
+	local index = (eighth % 8) + 1
+	local scale = pattern.escala
+
+	local bass = pattern.bajo[index]
+	if bass and bass > 0 then
+		note(BAJO, semitone(pattern.raiz + scale[bass]), 0.55 * pattern.volumen, 0.7)
+	end
+
+	local lead = pattern.lead[index]
+	if lead and lead > 0 then
+		note(LEAD, semitone(pattern.raiz + 12 + scale[lead]), 0.32 * pattern.volumen, 0.5)
+	end
+
+	local perc = pattern.perc[index]
+	if perc and perc > 0 then
+		note(PERC, 0.85 + (index % 3) * 0.1, 0.2 * pattern.volumen, 0.25)
+	end
+end
+
+local function stopCustom()
+	if custom then
+		custom:Stop()
+		custom:Destroy()
+		custom = nil
+	end
+end
+
+--- Si hay un id puesto en Config, se usa esa pista y no el secuenciador.
+local function tryCustom(name: string): boolean
+	local id = Config.Musica.IdPersonalizado[name]
+	if not id or id == "" then
+		stopCustom()
+		return false
+	end
+	stopCustom()
+	local sound = Instance.new("Sound")
+	sound.SoundId = string.find(id, "://") and id or ("rbxassetid://" .. id)
+	sound.Looped = true
+	sound.Volume = 1
+	sound.SoundGroup = ensureGroup()
+	sound.Parent = SoundService
+	sound:Play()
+	custom = sound
+	return true
+end
+
+function Music.setClimate(name: string)
+	if not PATRONES[name] then
+		name = "pasillo"
+	end
+	if climate == name then
+		return
+	end
+	climate = name
+	step = 0
+	tryCustom(name)
+end
+
+function Music.setEnabled(on: boolean)
+	enabled = on
+	ensureGroup().Volume = on and Config.Musica.Volumen or 0
+	if not on then
+		stopCustom()
+	elseif custom == nil then
+		tryCustom(climate)
+	end
+end
+
+function Music.setVolume(alpha: number)
+	ensureGroup().Volume = enabled and (Config.Musica.Volumen * alpha * 2) or 0
+end
+
+function Music.start()
+	if running or not Config.Musica.Habilitada then
+		return
+	end
+	running = true
+	ensureGroup()
+	tryCustom(climate)
+
+	task.spawn(function()
+		while running do
+			local pattern = PATRONES[climate] or PATRONES.pasillo
+			local bpm = Config.Musica.Bpm[climate] or 100
+			local eighth = 30 / bpm
+
+			if enabled and custom == nil then
+				local ok, err = pcall(playStep, pattern, step)
+				if not ok then
+					warn("[Musica] " .. tostring(err))
+				end
+			end
+			step += 1
+			task.wait(eighth)
+		end
+	end)
+end
+
+function Music.stop()
+	running = false
+	stopCustom()
+end
+
+return Music
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX7">
+      <Properties>
+        <string name="Name">NoteUI</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	NoteUI
+	------------------------------------------------------------------
+	Escribir una nota y lanzarla.
+
+	La nota lleva dos cosas: un texto libre (lo que se lee al recibirla)
+	y, opcional, un par pregunta/opcion. Si trae el par, al impactar la
+	respuesta se escribe sola en la hoja del que la recibio: eso es lo
+	que hace que pasar papelitos sea util y no decorativo.
+
+	El cliente NUNCA manda una posicion de impacto: manda la direccion
+	en la que apunta la camara y el servidor hace el resto.
+--]]
+
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Theme = require(Shared:WaitForChild("Theme"))
+local Strings = require(Shared:WaitForChild("Strings"))
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+
+local player = Players.LocalPlayer
+
+local NoteUI = {}
+
+local LETRAS = { "A", "B", "C", "D" }
+
+local root: Frame
+local textBox: TextBox
+local questionLabel: TextLabel
+local optionButtons: { TextButton } = {}
+local crosshair: Frame
+local incoming: Frame
+local incomingText: TextLabel
+
+--- Lo rellena el init del cliente: dispara la animacion de lanzar.
+NoteUI.onThrow = function() end
+
+local draft = { indice = 1, opcion = 0, texto = "" }
+local equipped: Tool? = nil
+
+local function new(class: string, props: { [string]: any }, parent: Instance?): any
+	local instance = Instance.new(class)
+	for key, value in props do
+		(instance :: any)[key] = value
+	end
+	if parent then
+		instance.Parent = parent
+	end
+	return instance
+end
+
+local function corner(gui: GuiObject, radius: number)
+	new("UICorner", { CornerRadius = UDim.new(0, radius) }, gui)
+end
+
+local function send()
+	Net.event(Net.Events.NoteText):FireServer({
+		indice = draft.opcion > 0 and draft.indice or nil,
+		opcion = draft.opcion > 0 and draft.opcion or nil,
+		texto = draft.texto,
+	})
+end
+
+local function refresh()
+	questionLabel.Text = Strings.get("exam.question",
+		{ i = draft.indice, n = Config.Examen.MaximoPreguntas })
+	for i, button in optionButtons do
+		local on = draft.opcion == i
+		button.BackgroundColor3 = on and Theme.Paper.Accent or Color3.fromRGB(238, 236, 228)
+		button.TextColor3 = on and Color3.fromRGB(250, 250, 246) or Theme.Paper.Ink
+	end
+end
+
+-- ── construccion ───────────────────────────────────────────────────
+
+function NoteUI.mount(parent: ScreenGui)
+	root = new("Frame", {
+		Name = "Nota",
+		Size = UDim2.new(0, 300, 0, 196),
+		Position = UDim2.new(0, 16, 0.5, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundColor3 = Theme.Paper.Background,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 4,
+	}, parent)
+	corner(root, 12)
+	new("UIStroke", { Color = Theme.Paper.Line, Thickness = 2 }, root)
+
+	new("TextLabel", {
+		Name = "Titulo",
+		Text = Strings.get("note.write"),
+		Size = UDim2.new(1, -24, 0, 22),
+		Position = UDim2.new(0, 12, 0, 10),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBlack,
+		TextSize = 16,
+		TextColor3 = Theme.Paper.Ink,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 5,
+	}, root)
+
+	textBox = new("TextBox", {
+		Name = "Texto",
+		Text = "",
+		PlaceholderText = Strings.get("note.placeholder"),
+		Size = UDim2.new(1, -24, 0, 42),
+		Position = UDim2.new(0, 12, 0, 36),
+		BackgroundColor3 = Color3.fromRGB(240, 238, 230),
+		Font = Theme.Font,
+		TextSize = 13,
+		TextColor3 = Theme.Paper.Ink,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		ClearTextOnFocus = false,
+		MultiLine = true,
+		TextWrapped = true,
+		BorderSizePixel = 0,
+		ZIndex = 5,
+	}, root)
+	corner(textBox, 8)
+	new("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingTop = UDim.new(0, 6) }, textBox)
+	textBox:GetPropertyChangedSignal("Text"):Connect(function()
+		if #textBox.Text > Config.Objetos.NotaCaracteres then
+			textBox.Text = string.sub(textBox.Text, 1, Config.Objetos.NotaCaracteres)
+		end
+		draft.texto = textBox.Text
+		send()
+	end)
+
+	-- Selector de pregunta: dos flechas y el numero.
+	local minus = new("TextButton", {
+		Name = "Menos", Text = "-",
+		Size = UDim2.new(0, 28, 0, 28), Position = UDim2.new(0, 12, 0, 88),
+		BackgroundColor3 = Color3.fromRGB(238, 236, 228), AutoButtonColor = false,
+		Font = Theme.FontBlack, TextSize = 18, TextColor3 = Theme.Paper.Ink,
+		BorderSizePixel = 0, ZIndex = 5,
+	}, root)
+	corner(minus, 8)
+	local plus = new("TextButton", {
+		Name = "Mas", Text = "+",
+		Size = UDim2.new(0, 28, 0, 28), Position = UDim2.new(0, 168, 0, 88),
+		BackgroundColor3 = Color3.fromRGB(238, 236, 228), AutoButtonColor = false,
+		Font = Theme.FontBlack, TextSize = 18, TextColor3 = Theme.Paper.Ink,
+		BorderSizePixel = 0, ZIndex = 5,
+	}, root)
+	corner(plus, 8)
+	questionLabel = new("TextLabel", {
+		Name = "Pregunta", Text = "",
+		Size = UDim2.new(0, 120, 0, 28), Position = UDim2.new(0, 44, 0, 88),
+		BackgroundTransparency = 1, Font = Theme.FontBold, TextSize = 13,
+		TextColor3 = Theme.Paper.InkSoft, ZIndex = 5,
+	}, root)
+
+	minus.MouseButton1Click:Connect(function()
+		draft.indice = math.max(1, draft.indice - 1)
+		refresh()
+		send()
+	end)
+	plus.MouseButton1Click:Connect(function()
+		draft.indice = math.min(Config.Examen.MaximoPreguntas, draft.indice + 1)
+		refresh()
+		send()
+	end)
+
+	-- Las cuatro letras.
+	for i = 1, 4 do
+		local button = new("TextButton", {
+			Name = "Letra" .. i,
+			Text = LETRAS[i],
+			Size = UDim2.new(0, 32, 0, 32),
+			Position = UDim2.new(0, 12 + (i - 1) * 38, 0, 122),
+			BackgroundColor3 = Color3.fromRGB(238, 236, 228),
+			AutoButtonColor = false,
+			Font = Theme.FontBlack,
+			TextSize = 15,
+			TextColor3 = Theme.Paper.Ink,
+			BorderSizePixel = 0,
+			ZIndex = 5,
+		}, root)
+		corner(button, 8)
+		button.MouseButton1Click:Connect(function()
+			draft.opcion = draft.opcion == i and 0 or i
+			refresh()
+			send()
+		end)
+		optionButtons[i] = button
+	end
+
+	new("TextLabel", {
+		Name = "Pie",
+		Text = Strings.get("note.throw"),
+		Size = UDim2.new(1, -24, 0, 20),
+		Position = UDim2.new(0, 12, 1, -28),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		TextSize = 12,
+		TextColor3 = Theme.Paper.InkSoft,
+		ZIndex = 5,
+	}, root)
+
+	-- Mira: solo cuando tenes algo lanzable en la mano.
+	crosshair = new("Frame", {
+		Name = "Mira",
+		Size = UDim2.new(0, 4, 0, 4),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = Color3.fromRGB(250, 250, 246),
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 4,
+	}, parent)
+	corner(crosshair, 2)
+
+	-- La nota que te llega.
+	incoming = new("Frame", {
+		Name = "NotaRecibida",
+		Size = UDim2.new(0, 300, 0, 76),
+		Position = UDim2.new(0.5, 0, 0, 96),
+		AnchorPoint = Vector2.new(0.5, 0),
+		BackgroundColor3 = Theme.Paper.Background,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 9,
+	}, parent)
+	corner(incoming, 10)
+	new("UIStroke", { Color = Theme.Paper.Accent, Thickness = 2 }, incoming)
+	incomingText = new("TextLabel", {
+		Name = "Texto",
+		Text = "",
+		Size = UDim2.new(1, -20, 1, -12),
+		Position = UDim2.new(0, 10, 0, 6),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		TextSize = 13,
+		TextColor3 = Theme.Paper.Ink,
+		TextWrapped = true,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		ZIndex = 10,
+	}, incoming)
+
+	refresh()
+	NoteUI.watchTools()
+	NoteUI.bindInput()
+end
+
+-- ── herramienta equipada ───────────────────────────────────────────
+
+local function isThrowable(tool: Tool?): boolean
+	return tool ~= nil and tool:GetAttribute("Lanzable") == true
+end
+
+local function isWritable(tool: Tool?): boolean
+	return tool ~= nil and tool:FindFirstChild("Texto") ~= nil
+end
+
+local function onCharacter(character: Model)
+	local function check()
+		equipped = character:FindFirstChildOfClass("Tool")
+		root.Visible = isWritable(equipped)
+		crosshair.Visible = isThrowable(equipped)
+	end
+	character.ChildAdded:Connect(check)
+	character.ChildRemoved:Connect(check)
+	check()
+end
+
+function NoteUI.watchTools()
+	if player.Character then
+		onCharacter(player.Character)
+	end
+	player.CharacterAdded:Connect(onCharacter)
+end
+
+-- ── lanzar ─────────────────────────────────────────────────────────
+
+function NoteUI.throw()
+	if not isThrowable(equipped) then
+		return
+	end
+	local camera = workspace.CurrentCamera
+	if not camera then
+		return
+	end
+	NoteUI.onThrow()
+	-- Solo la direccion: el servidor decide de donde sale y a donde llega.
+	Net.event(Net.Events.Throw):FireServer(camera.CFrame.LookVector)
+end
+
+function NoteUI.bindInput()
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if processed then
+			return
+		end
+		if input.KeyCode == Enum.KeyCode.F then
+			NoteUI.throw()
+		end
+	end)
+end
+
+function NoteUI.received(data: any)
+	if not incoming then
+		return
+	end
+	local pieces = { Strings.get("note.received", { name = data.de or "?" }) }
+	if data.texto and data.texto ~= "" then
+		table.insert(pieces, Strings.get("note.read") .. " " .. data.texto)
+	end
+	if data.indice and data.opcion then
+		table.insert(pieces, string.format("%d -> %s", data.indice, LETRAS[data.opcion] or "?"))
+	end
+	incomingText.Text = table.concat(pieces, "\n")
+	incoming.Visible = true
+
+	local token = os.clock()
+	incoming:SetAttribute("Token", token)
+	task.delay(6, function()
+		if incoming:GetAttribute("Token") == token then
+			incoming.Visible = false
+		end
+	end)
+end
+
+function NoteUI.setVisible(visible: boolean)
+	if root then
+		root.Visible = visible and isWritable(equipped)
+	end
+	if crosshair then
+		crosshair.Visible = visible and isThrowable(equipped)
+	end
+end
+
+return NoteUI
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX8">
+      <Properties>
+        <string name="Name">Poses</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Poses
+	------------------------------------------------------------------
+	Animaciones propias sin subir ninguna animacion.
+
+	Roblox anima con assets, y este proyecto no depende de ninguno. La
+	alternativa es escribir el `Transform` de los Motor6D DESPUES de que
+	corra el Animator: el motor lo recalcula cada frame, asi que hay que
+	pisarlo en cada frame, con prioridad posterior a la del personaje.
+
+	Dos poses, las dos que pide el juego:
+	  escribir   el brazo derecho baja al pupitre cuando contestas
+	  lanzar     el brazo sube y va hacia adelante al tirar un papel
+
+	Funciona igual en R6 y en R15: la unica diferencia es de que parte
+	cuelga el Motor6D del hombro.
+--]]
+
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+
+local player = Players.LocalPlayer
+
+local Poses = {}
+
+local writingUntil = 0
+local throwingUntil = 0
+local phase = 0
+
+--- El Motor6D del hombro derecho, en cualquiera de los dos rigs.
+local function rightShoulder(character: Model): Motor6D?
+	local torso = character:FindFirstChild("Torso")
+	if torso then
+		local joint = torso:FindFirstChild("Right Shoulder")
+		if joint and joint:IsA("Motor6D") then
+			return joint
+		end
+	end
+	local upperArm = character:FindFirstChild("RightUpperArm")
+	if upperArm then
+		local joint = upperArm:FindFirstChild("RightShoulder")
+		if joint and joint:IsA("Motor6D") then
+			return joint
+		end
+	end
+	return nil
+end
+
+function Poses.write(seconds: number?)
+	writingUntil = os.clock() + (seconds or 0.9)
+end
+
+function Poses.throw(seconds: number?)
+	throwingUntil = os.clock() + (seconds or 0.5)
+end
+
+function Poses.mount()
+	RunService:BindToRenderStep("FinalsWeekPoses",
+		Enum.RenderPriority.Character.Value + 1, function(dt)
+			local now = os.clock()
+			local writing = now < writingUntil
+			local throwing = now < throwingUntil
+			if not writing and not throwing then
+				return
+			end
+
+			local character = player.Character
+			if not character then
+				return
+			end
+			local joint = rightShoulder(character)
+			if not joint then
+				return
+			end
+
+			phase += dt
+			if throwing then
+				-- Un latigazo hacia adelante, corto.
+				local alpha = math.clamp((throwingUntil - now) / 0.5, 0, 1)
+				joint.Transform = CFrame.Angles(-math.pi * 0.75 * alpha, 0, 0)
+			else
+				-- Escribir: el brazo abajo, con un temblorcito.
+				local wobble = math.sin(phase * 14) * 0.09
+				joint.Transform = CFrame.Angles(-1.15 + wobble, 0, 0.18)
+			end
+		end)
+end
+
+function Poses.unmount()
+	pcall(function()
+		RunService:UnbindFromRenderStep("FinalsWeekPoses")
+	end)
+end
+
+return Poses
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX9">
+      <Properties>
+        <string name="Name">ShopUI</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	ShopUI
+	------------------------------------------------------------------
+	La tienda del pasillo: dos pestanas, objetos de trampa y estetica.
+
+	El cliente solo dibuja precios y manda "quiero esto". Quien decide
+	si alcanza la plata, si ya lo tenias y si la tienda esta abierta es
+	el servidor (ShopService).
+--]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Theme = require(Shared:WaitForChild("Theme"))
+local Strings = require(Shared:WaitForChild("Strings"))
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local ShopUI = {}
+
+local root: Frame
+local creditLabel: TextLabel
+local list: ScrollingFrame
+local tabButtons: { [string]: TextButton } = {}
+local currentTab = "objeto"
+local wallet: any = { creditos = 0, comprados = {}, estetica = {}, objeto = "nota" }
+
+local function new(class: string, props: { [string]: any }, parent: Instance?): any
+	local instance = Instance.new(class)
+	for key, value in props do
+		(instance :: any)[key] = value
+	end
+	if parent then
+		instance.Parent = parent
+	end
+	return instance
+end
+
+local function corner(gui: GuiObject, radius: number)
+	new("UICorner", { CornerRadius = UDim.new(0, radius) }, gui)
+end
+
+local function click()
+	Util.playSound(Config.Sonidos.Click, workspace :: any, 0.25, 1.1)
+end
+
+ShopUI.onNotify = function(_packet: any) end
+
+-- ── filas ──────────────────────────────────────────────────────────
+
+local function row(entry: any, order: number)
+	local owned = wallet.comprados and wallet.comprados[entry.id] == true
+	local isGear = entry.tipo == "objeto"
+	local active = isGear and wallet.objeto == entry.id
+		or (not isGear and wallet.estetica and wallet.estetica[entry.id] == true)
+
+	local card = new("Frame", {
+		Name = entry.id,
+		LayoutOrder = order,
+		Size = UDim2.new(1, -8, 0, 72),
+		BackgroundColor3 = Theme.Menu.PanelAlt,
+		BorderSizePixel = 0,
+	}, list)
+	corner(card, 10)
+
+	new("TextLabel", {
+		Text = Strings.get("item." .. entry.id),
+		Size = UDim2.new(1, -120, 0, 20),
+		Position = UDim2.new(0, 14, 0, 10),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		TextSize = 15,
+		TextColor3 = Theme.Menu.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, card)
+
+	new("TextLabel", {
+		Text = Strings.get("item.desc_" .. entry.id, { n = Config.Objetos.ChuletaRevela }),
+		Size = UDim2.new(1, -130, 0, 32),
+		Position = UDim2.new(0, 14, 0, 30),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		TextSize = 12,
+		TextColor3 = Theme.Menu.Muted,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextWrapped = true,
+	}, card)
+
+	-- Un solo boton que cambia de papel: comprar, equipar o equipado.
+	local canBuy = not owned or isGear
+	local text: string
+	local color: Color3
+	if not owned then
+		text = string.format("%s  %s", Strings.get("shop.buy"),
+			Strings.get("shop.price", { n = entry.precio }))
+		color = Theme.Hud.Credit
+	elseif active then
+		text = Strings.get("shop.equipped")
+		color = Theme.Hud.Safe
+	else
+		text = Strings.get("shop.equip")
+		color = Theme.Menu.Accent
+	end
+
+	local button = new("TextButton", {
+		Name = "Accion",
+		Text = text,
+		Size = UDim2.new(0, 96, 0, 34),
+		Position = UDim2.new(1, -108, 0, 19),
+		BackgroundColor3 = color,
+		BackgroundTransparency = active and 0.82 or 0.86,
+		AutoButtonColor = false,
+		Font = Theme.FontBold,
+		TextSize = 12,
+		TextColor3 = color,
+		BorderSizePixel = 0,
+	}, card)
+	corner(button, 8)
+	new("UIStroke", { Color = color, Thickness = 1, Transparency = 0.55 }, button)
+
+	button.MouseButton1Click:Connect(function()
+		click()
+		task.spawn(function()
+			local remote = owned and Net.func(Net.Functions.Equip) or Net.func(Net.Functions.Buy)
+			local ok, result = pcall(function()
+				return remote:InvokeServer(entry.id)
+			end)
+			if ok and result and result.reason then
+				ShopUI.onNotify(result.reason)
+			end
+		end)
+	end)
+
+	if not canBuy and not owned then
+		button.Active = false
+	end
+end
+
+local function rebuild()
+	if not list then
+		return
+	end
+	for _, child in list:GetChildren() do
+		if child:IsA("Frame") then
+			child:Destroy()
+		end
+	end
+	local order = 0
+	for _, entry in Config.Economia.Tienda do
+		if entry.tipo == currentTab then
+			order += 1
+			row(entry, order)
+		end
+	end
+	list.CanvasSize = UDim2.new(0, 0, 0, order * 78 + 8)
+	creditLabel.Text = Strings.get("shop.price", { n = wallet.creditos or 0 })
+end
+
+-- ── construccion ───────────────────────────────────────────────────
+
+function ShopUI.mount(parent: ScreenGui)
+	root = new("Frame", {
+		Name = "Tienda",
+		Size = UDim2.new(0, 440, 0, 460),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = Theme.Menu.Panel,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 12,
+	}, parent)
+	corner(root, 14)
+	new("UIStroke", { Color = Theme.Menu.Line, Thickness = 1, Transparency = 0.4 }, root)
+
+	new("TextLabel", {
+		Text = Strings.get("shop.title"),
+		Size = UDim2.new(1, -120, 0, 28),
+		Position = UDim2.new(0, 18, 0, 14),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBlack,
+		TextSize = 20,
+		TextColor3 = Theme.Menu.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 13,
+	}, root)
+
+	creditLabel = new("TextLabel", {
+		Text = "0 cr",
+		Size = UDim2.new(0, 100, 0, 24),
+		Position = UDim2.new(1, -118, 0, 16),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		TextSize = 15,
+		TextColor3 = Theme.Hud.Credit,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		ZIndex = 13,
+	}, root)
+
+	local close = new("TextButton", {
+		Text = "X",
+		Size = UDim2.new(0, 28, 0, 28),
+		Position = UDim2.new(1, -40, 0, 14),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		TextSize = 16,
+		TextColor3 = Theme.Menu.Muted,
+		ZIndex = 13,
+	}, root)
+	close.MouseButton1Click:Connect(function()
+		click()
+		ShopUI.close()
+	end)
+
+	local tabs = { { "objeto", "shop.tab_items" }, { "estetica", "shop.tab_looks" } }
+	for i, tab in tabs do
+		local button = new("TextButton", {
+			Name = tab[1],
+			Text = Strings.get(tab[2]),
+			Size = UDim2.new(0, 120, 0, 30),
+			Position = UDim2.new(0, 18 + (i - 1) * 128, 0, 50),
+			BackgroundColor3 = Theme.Menu.PanelAlt,
+			AutoButtonColor = false,
+			Font = Theme.FontBold,
+			TextSize = 13,
+			TextColor3 = Theme.Menu.Muted,
+			BorderSizePixel = 0,
+			ZIndex = 13,
+		}, root)
+		corner(button, 8)
+		button.MouseButton1Click:Connect(function()
+			click()
+			currentTab = tab[1]
+			for id, other in tabButtons do
+				other.TextColor3 = id == currentTab and Theme.Menu.Text or Theme.Menu.Muted
+				other.BackgroundColor3 = id == currentTab and Theme.Menu.Line or Theme.Menu.PanelAlt
+			end
+			rebuild()
+		end)
+		tabButtons[tab[1]] = button
+	end
+	tabButtons.objeto.TextColor3 = Theme.Menu.Text
+	tabButtons.objeto.BackgroundColor3 = Theme.Menu.Line
+
+	list = new("ScrollingFrame", {
+		Name = "Lista",
+		Size = UDim2.new(1, -32, 1, -104),
+		Position = UDim2.new(0, 16, 0, 90),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 4,
+		ScrollBarImageColor3 = Theme.Menu.Line,
+		CanvasSize = UDim2.new(),
+		ZIndex = 13,
+	}, root)
+	new("UIListLayout", {
+		Padding = UDim.new(0, 6),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, list)
+end
+
+function ShopUI.setWallet(data: any)
+	wallet = data
+	if root and root.Visible then
+		rebuild()
+	elseif creditLabel then
+		creditLabel.Text = Strings.get("shop.price", { n = data.creditos or 0 })
+	end
+end
+
+function ShopUI.open()
+	if not root then
+		return
+	end
+	root.Visible = true
+	rebuild()
+end
+
+function ShopUI.close()
+	if root then
+		root.Visible = false
+	end
+end
+
+function ShopUI.isOpen(): boolean
+	return root ~= nil and root.Visible
+end
+
+return ShopUI
+]]></ProtectedString>
+      </Properties>
+    </Item>
+  </Item>
+</roblox>

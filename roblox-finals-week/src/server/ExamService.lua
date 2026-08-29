@@ -1,0 +1,588 @@
+--!strict
+--[[
+	ExamService
+	------------------------------------------------------------------
+	El examen: quien se sienta donde, que pregunta le toca a cada uno,
+	que respondio y como se copia.
+
+	Decision de diseno: todos los alumnos de un aula reciben EL MISMO
+	examen. Es lo que hace que copiar valga la pena — si cada uno
+	tuviera preguntas distintas, espiar al de al lado seria inutil y la
+	mecanica cooperativa se cae.
+
+	El servidor nunca manda la respuesta correcta al cliente. Lo unico
+	que viaja es el enunciado, las opciones y — si usaste una chuleta —
+	los indices que la chuleta te revelo.
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+local Theme = require(Shared:WaitForChild("Theme"))
+
+local QuestionBank = require(script.Parent:WaitForChild("QuestionBank"))
+local SuspicionService = require(script.Parent:WaitForChild("SuspicionService"))
+
+local X = Config.Examen
+
+local ExamService = {}
+
+export type Sitting = {
+	player: Player,
+	aula: number,
+	desk: any,               -- MapBuilder.Desk
+	answers: { [number]: number },
+	revealed: { [number]: boolean },
+	sheetUses: number,
+	lastPeek: number,
+	lastWhisper: number,
+	typing: { [number]: boolean },
+}
+
+local map: any = nil
+local exams: { [number]: { any } } = {}      -- aula -> preguntas (con respuesta)
+local sittings: { [Player]: Sitting } = {}
+-- Chuletas conseguidas en el recreo, cuando todavia no hay pupitre
+-- asignado: se cobran al sentarse. Sin esto, comprar una chuleta antes
+-- del examen (que es el unico momento en que se puede) no servia.
+local pendingSheets: { [Player]: number } = {}
+local running = false
+local currentDay = 1
+
+local LETRAS = { "A", "B", "C", "D", "E", "F" }
+
+-- ── la hoja del pupitre ────────────────────────────────────────────
+-- Se dibuja en el mundo a proposito: por eso se puede espiar.
+
+local function paperGui(desk: any): SurfaceGui
+	local paper: BasePart = desk.paper
+	local existing = paper:FindFirstChild("Hoja")
+	if existing and existing:IsA("SurfaceGui") then
+		return existing
+	end
+
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "Hoja"
+	gui.Face = Enum.NormalId.Top
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 60
+	gui.LightInfluence = 0.35
+	gui.MaxDistance = 40
+	gui.Parent = paper
+
+	local sheet = Instance.new("Frame")
+	sheet.Name = "Papel"
+	sheet.Size = UDim2.fromScale(1, 1)
+	sheet.BackgroundColor3 = Theme.Paper.Background
+	sheet.BorderSizePixel = 0
+	sheet.Parent = gui
+
+	local title = Instance.new("TextLabel")
+	title.Name = "Titulo"
+	title.Size = UDim2.new(1, -14, 0, 16)
+	title.Position = UDim2.new(0, 7, 0, 4)
+	title.BackgroundTransparency = 1
+	title.Font = Theme.FontBold
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.TextColor3 = Theme.Paper.Ink
+	title.TextScaled = true
+	title.Text = ""
+	title.Parent = sheet
+
+	local grid = Instance.new("Frame")
+	grid.Name = "Grilla"
+	grid.Size = UDim2.new(1, -14, 1, -26)
+	grid.Position = UDim2.new(0, 7, 0, 22)
+	grid.BackgroundTransparency = 1
+	grid.Parent = sheet
+
+	local layout = Instance.new("UIGridLayout")
+	layout.CellSize = UDim2.new(0, 22, 0, 13)
+	layout.CellPadding = UDim2.new(0, 3, 0, 2)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = grid
+
+	return gui
+end
+
+--- Redibuja la hoja del pupitre: numero de pregunta + letra elegida.
+local function refreshPaper(sitting: Sitting)
+	local ok = pcall(function()
+		local gui = paperGui(sitting.desk)
+		local sheet = gui:FindFirstChild("Papel") :: Frame
+		local title = sheet:FindFirstChild("Titulo") :: TextLabel
+		local grid = sheet:FindFirstChild("Grilla") :: Frame
+
+		title.Text = sitting.player.DisplayName
+
+		local questions = exams[sitting.aula] or {}
+		for i = 1, #questions do
+			local cell = grid:FindFirstChild("Q" .. i) :: TextLabel?
+			if not cell then
+				local created = Instance.new("TextLabel")
+				created.Name = "Q" .. i
+				created.LayoutOrder = i
+				created.BackgroundColor3 = Theme.Paper.Background
+				created.BackgroundTransparency = 1
+				created.Font = Theme.FontMono
+				created.TextScaled = true
+				created.TextColor3 = Theme.Paper.InkSoft
+				created.Parent = grid
+				cell = created
+			end
+			local choice = sitting.answers[i]
+			local assert_cell = cell :: TextLabel
+			assert_cell.Text = string.format("%d.%s", i, choice and (LETRAS[choice] or "?") or "_")
+			assert_cell.TextColor3 = choice and Theme.Paper.Accent or Theme.Paper.Line
+		end
+	end)
+	if not ok then
+		-- Una hoja que no se dibuja no puede tumbar el examen.
+	end
+end
+
+-- ── estado que ve el cliente ───────────────────────────────────────
+
+local function publicState(sitting: Sitting): any
+	local questions = exams[sitting.aula]
+	if not questions then
+		return { activo = false }
+	end
+	-- Arrays DENSOS, no tablas con huecos: un remote de Roblox no
+	-- serializa de forma confiable { [3] = 2, [7] = 1 }, y el cliente
+	-- recibiria basura justo en la mitad del examen. 0 = sin responder.
+	local answers = table.create(#questions, 0)
+	local revealed = table.create(#questions, 0)
+	for index = 1, #questions do
+		answers[index] = sitting.answers[index] or 0
+		if sitting.revealed[index] then
+			revealed[index] = (questions[index] :: any).respuesta
+		end
+	end
+
+	return {
+		activo = running,
+		dia = currentDay,
+		preguntas = QuestionBank.publicView(questions),
+		respuestas = answers,
+		reveladas = revealed,
+		chuleta = sitting.sheetUses,
+		fila = sitting.desk.fila,
+		asiento = sitting.desk.asiento,
+		aula = sitting.aula,
+	}
+end
+
+local function pushState(player: Player)
+	local sitting = sittings[player]
+	if not sitting then
+		Net.event(Net.Events.ExamUpdate):FireClient(player, { activo = false })
+		return
+	end
+	Net.event(Net.Events.ExamUpdate):FireClient(player, publicState(sitting))
+end
+
+function ExamService.pushState(player: Player)
+	pushState(player)
+end
+
+function ExamService.state(player: Player): any
+	local sitting = sittings[player]
+	if not sitting then
+		return { activo = false }
+	end
+	return publicState(sitting)
+end
+
+-- ── asientos ───────────────────────────────────────────────────────
+
+function ExamService.setMap(newMap: any)
+	map = newMap
+end
+
+function ExamService.sitting(player: Player): Sitting?
+	return sittings[player]
+end
+
+--- Sentado de verdad en SU pupitre (no en cualquier silla).
+function ExamService.isSeated(player: Player): boolean
+	local sitting = sittings[player]
+	if not sitting then
+		return false
+	end
+	return sitting.desk.seat.Occupant ~= nil
+		and sitting.desk.seat.Occupant.Parent == player.Character
+end
+
+--- Reparte a los jugadores por aulas y pupitres, en orden.
+function ExamService.assignSeats(players: { Player })
+	sittings = {}
+	if not map or #map.classrooms == 0 then
+		return
+	end
+
+	local rooms = map.classrooms
+	local perRoom = math.max(1, math.ceil(#players / #rooms))
+
+	for index, player in players do
+		local roomIndex = math.min(#rooms, math.floor((index - 1) / perRoom) + 1)
+		local room = rooms[roomIndex]
+		local deskIndex = ((index - 1) % #room.desks) + 1
+		local desk = room.desks[deskIndex]
+		if desk then
+			sittings[player] = {
+				player = player,
+				aula = room.index,
+				desk = desk,
+				answers = {},
+				revealed = {},
+				sheetUses = pendingSheets[player] or 0,
+				lastPeek = 0,
+				lastWhisper = 0,
+				typing = {},
+			}
+		end
+	end
+end
+
+--- Teletransporta a cada uno a su pupitre y lo sienta.
+function ExamService.seatEveryone()
+	for player, sitting in sittings do
+		local character = player.Character
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		if humanoid and root and root:IsA("BasePart") then
+			local seat = sitting.desk.seat
+			root.CFrame = seat.CFrame * CFrame.new(0, 3, 0)
+			task.defer(function()
+				-- Un intento inmediato y otro un instante despues: si el
+				-- personaje todavia estaba cayendo, el primero no prende.
+				pcall(function()
+					seat:Sit(humanoid)
+				end)
+				task.wait(0.35)
+				if seat.Occupant == nil then
+					pcall(function()
+						seat:Sit(humanoid)
+					end)
+				end
+			end)
+			Net.event(Net.Events.Notify):FireClient(player, {
+				key = "notify.seat",
+				args = { row = sitting.desk.fila, seat = sitting.desk.asiento },
+			})
+		end
+	end
+end
+
+-- ── ciclo del examen ───────────────────────────────────────────────
+
+function ExamService.begin(day: number, players: { Player })
+	currentDay = day
+	running = true
+	exams = {}
+
+	ExamService.assignSeats(players)
+
+	if map then
+		for _, room in map.classrooms do
+			exams[room.index] = QuestionBank.generate(day)
+		end
+	end
+
+	for player, sitting in sittings do
+		refreshPaper(sitting)
+		pushState(player)
+	end
+end
+
+--- Cierra el examen y devuelve el recuento de cada alumno.
+function ExamService.finish(): { [Player]: { correct: number, wrong: number, blank: number } }
+	running = false
+	local results: { [Player]: { correct: number, wrong: number, blank: number } } = {}
+
+	for player, sitting in sittings do
+		local questions = exams[sitting.aula] or {}
+		local correct, wrong, blank = 0, 0, 0
+		for i, question in questions do
+			local answer = sitting.answers[i]
+			if answer == nil then
+				blank += 1
+			elseif question.tipo == "escritura" then
+				if sitting.typing[i] then
+					correct += 1
+				else
+					wrong += 1
+				end
+			elseif answer == question.respuesta then
+				correct += 1
+			else
+				wrong += 1
+			end
+		end
+		results[player] = { correct = correct, wrong = wrong, blank = blank }
+		Net.event(Net.Events.ExamUpdate):FireClient(player, { activo = false })
+	end
+
+	-- Las hojas vuelven a estar en blanco para el dia siguiente.
+	for _, sitting in sittings do
+		pcall(function()
+			local gui = sitting.desk.paper:FindFirstChild("Hoja")
+			if gui then
+				gui:Destroy()
+			end
+		end)
+	end
+
+	return results
+end
+
+function ExamService.clear()
+	running = false
+	exams = {}
+	sittings = {}
+	pendingSheets = {}
+end
+
+function ExamService.isRunning(): boolean
+	return running
+end
+
+-- ── responder ──────────────────────────────────────────────────────
+
+function ExamService.submit(player: Player, index: number, option: number): any
+	local sitting = sittings[player]
+	if not running or not sitting then
+		return { ok = false, reason = { key = "exam.not_started" } }
+	end
+	if not ExamService.isSeated(player) then
+		return { ok = false, reason = { key = "error.not_seated" } }
+	end
+
+	local questions = exams[sitting.aula]
+	local question = questions and questions[index]
+	if not question or question.tipo ~= "opcion" then
+		return { ok = false, reason = { key = "error.generic" } }
+	end
+	if type(option) ~= "number" or option < 1 or option > #question.opciones then
+		return { ok = false, reason = { key = "error.generic" } }
+	end
+
+	sitting.answers[index] = math.floor(option)
+	refreshPaper(sitting)
+	return { ok = true }
+end
+
+--- Minijuego de escritura rapida: se valida la secuencia entera.
+function ExamService.submitSequence(player: Player, index: number, typed: string): any
+	local sitting = sittings[player]
+	if not running or not sitting then
+		return { ok = false, reason = { key = "exam.not_started" } }
+	end
+	if not ExamService.isSeated(player) then
+		return { ok = false, reason = { key = "error.not_seated" } }
+	end
+
+	local questions = exams[sitting.aula]
+	local question = questions and questions[index]
+	if not question or question.tipo ~= "escritura" then
+		return { ok = false, reason = { key = "error.generic" } }
+	end
+	if type(typed) ~= "string" or #typed > 32 then
+		return { ok = false, reason = { key = "error.generic" } }
+	end
+
+	local hit = string.upper(typed) == string.upper(question.secuencia or "")
+	sitting.answers[index] = hit and 1 or 2
+	sitting.typing[index] = hit
+	refreshPaper(sitting)
+	return { ok = true, correcto = hit, reason = { key = hit and "exam.correct" or "exam.type_fail" } }
+end
+
+-- ── trampas ────────────────────────────────────────────────────────
+
+--- El vecino sentado mas cerca dentro del alcance de copia.
+local function nearestClassmate(sitting: Sitting, range: number): Sitting?
+	local origin = sitting.desk.seat.Position
+	local best: Sitting? = nil
+	local bestDistance = range
+
+	for other, candidate in sittings do
+		if other ~= sitting.player and candidate.aula == sitting.aula then
+			local distance = (candidate.desk.seat.Position - origin).Magnitude
+			if distance < bestDistance then
+				bestDistance = distance
+				best = candidate
+			end
+		end
+	end
+	return best
+end
+
+--- Espiar: te llevas la respuesta que el otro ya escribio, con riesgo
+--- de leer mal. Si el vecino no contesto todavia, no hay nada que ver.
+function ExamService.peek(player: Player, index: number): any
+	local sitting = sittings[player]
+	if not running or not sitting then
+		return { ok = false, reason = { key = "exam.not_started" } }
+	end
+	if not ExamService.isSeated(player) then
+		return { ok = false, reason = { key = "error.not_seated" } }
+	end
+	local now = os.clock()
+	if now - sitting.lastPeek < X.CopiarSegundos then
+		return { ok = false, reason = { key = "cheat.cooldown" } }
+	end
+	sitting.lastPeek = now
+
+	local neighbour = nearestClassmate(sitting, X.CopiarAlcance)
+	if not neighbour then
+		return { ok = false, reason = { key = "cheat.peek_none" } }
+	end
+
+	-- Espiar siempre se paga: el gesto se ve, lo vea o no el profesor.
+	SuspicionService.infraction(player, Config.Sospecha.PorEspiar, "peek")
+
+	local seen = neighbour.answers[index]
+	if not seen then
+		return { ok = false, reason = { key = "cheat.peek_fail" } }
+	end
+
+	local questions = exams[sitting.aula]
+	local question = questions and questions[index]
+	if not question then
+		return { ok = false, reason = { key = "error.generic" } }
+	end
+
+	-- A veces se lee mal de reojo.
+	local value = seen
+	if math.random() > X.CopiarAcierto then
+		value = math.random(1, math.max(1, #question.opciones))
+	end
+
+	sitting.answers[index] = value
+	refreshPaper(sitting)
+	pushState(player)
+	return { ok = true, indice = index, reason = { key = "cheat.peek_ok", args = { i = index } } }
+end
+
+--- Soplar: le pasas tu respuesta a los que estan cerca.
+function ExamService.whisper(player: Player, index: number): any
+	local sitting = sittings[player]
+	if not running or not sitting then
+		return { ok = false, reason = { key = "exam.not_started" } }
+	end
+	local now = os.clock()
+	if now - sitting.lastWhisper < Config.Objetos.SoplarEnfriamiento then
+		return { ok = false, reason = { key = "cheat.cooldown" } }
+	end
+	local mine = sitting.answers[index]
+	if not mine then
+		return { ok = false, reason = { key = "cheat.none" } }
+	end
+	sitting.lastWhisper = now
+
+	SuspicionService.infraction(player, Config.Sospecha.PorSoplar, "whisper")
+
+	local origin = sitting.desk.seat.Position
+	local reached = 0
+	for other, candidate in sittings do
+		if other ~= player and candidate.aula == sitting.aula
+			and (candidate.desk.seat.Position - origin).Magnitude <= Config.Objetos.SoplarAlcance then
+			reached += 1
+			Net.event(Net.Events.Notify):FireClient(other, {
+				key = "cheat.whisper_got",
+				args = { name = player.DisplayName, i = index, opt = LETRAS[mine] or "?" },
+			})
+		end
+	end
+
+	return { ok = true, alcanzados = reached,
+		reason = { key = "cheat.whisper_sent", args = { i = index } } }
+end
+
+--- Chuleta: revela respuestas correctas al azar entre las que faltan.
+function ExamService.useSheet(player: Player): any
+	local sitting = sittings[player]
+	if not running or not sitting then
+		return { ok = false, reason = { key = "exam.not_started" } }
+	end
+	if sitting.sheetUses <= 0 then
+		return { ok = false, reason = { key = "cheat.sheet_empty" } }
+	end
+	if not ExamService.isSeated(player) then
+		return { ok = false, reason = { key = "error.not_seated" } }
+	end
+
+	local questions = exams[sitting.aula] or {}
+	local pending: { number } = {}
+	for i, question in questions do
+		if question.tipo == "opcion" and not sitting.revealed[i] and sitting.answers[i] == nil then
+			table.insert(pending, i)
+		end
+	end
+	if #pending == 0 then
+		for i, question in questions do
+			if question.tipo == "opcion" and not sitting.revealed[i] then
+				table.insert(pending, i)
+			end
+		end
+	end
+	if #pending == 0 then
+		return { ok = false, reason = { key = "cheat.sheet_empty" } }
+	end
+
+	sitting.sheetUses -= 1
+	SuspicionService.infraction(player, Config.Sospecha.PorChuleta, "sheet")
+
+	local revealed = 0
+	for _ = 1, math.min(Config.Objetos.ChuletaRevela, #pending) do
+		local pick = table.remove(pending, math.random(1, #pending))
+		if pick then
+			sitting.revealed[pick] = true
+			revealed += 1
+		end
+	end
+
+	pushState(player)
+	return { ok = true, reason = { key = "cheat.sheet_used", args = { n = revealed } } }
+end
+
+--- Suma usos de chuleta. Si todavia no hay pupitre (estamos en el
+--- recreo), quedan anotados y se cobran al sentarse.
+function ExamService.grantSheetUses(player: Player, uses: number)
+	local sitting = sittings[player]
+	if sitting then
+		sitting.sheetUses += uses
+		pushState(player)
+	else
+		pendingSheets[player] = (pendingSheets[player] or 0) + uses
+	end
+end
+
+--- Una nota recibida escribe la respuesta directamente en la hoja.
+function ExamService.applyNote(player: Player, index: number, option: number)
+	local sitting = sittings[player]
+	if not running or not sitting then
+		return
+	end
+	local questions = exams[sitting.aula]
+	local question = questions and questions[index]
+	if question and question.tipo == "opcion" and option >= 1 and option <= #question.opciones then
+		sitting.answers[index] = option
+		refreshPaper(sitting)
+		pushState(player)
+	end
+end
+
+function ExamService.start()
+	Players.PlayerRemoving:Connect(function(player)
+		sittings[player] = nil
+		pendingSheets[player] = nil
+	end)
+end
+
+return ExamService

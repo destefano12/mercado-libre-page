@@ -1,0 +1,4977 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
+  <Item class="Script" referent="RBX14">
+    <Properties>
+      <string name="Name">Server</string>
+      <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Servidor — arranque de Finals Week
+	------------------------------------------------------------------
+	El orden importa y esta pensado:
+
+		1. Net.build()          los remotes tienen que existir antes de
+		                        que cualquier cliente los busque
+		2. ServerStorage        banco de preguntas y penalizaciones,
+		                        fuera del alcance del cliente
+		3. Templates            plantillas de herramientas en
+		                        ReplicatedStorage (el cliente las lee)
+		4. MapBuilder           el instituto entero
+		5. servicios            examenes, objetos, sospecha, castigos
+		6. TeacherAI            la vision arranca ya, los profesores
+		                        aparecen al empezar cada examen
+		7. RoundManager         el bucle escolar
+
+	Cada paso va en su pcall con un print: si algo falla, el Output
+	dice exactamente cual y el resto del juego sigue de pie. Aprendido
+	a la mala: una propiedad de solo lectura al principio del arranque
+	te deja parado en el vacio sin ninguna pista.
+--]]
+
+local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+
+local MapBuilder = require(script:WaitForChild("MapBuilder"))
+local QuestionBank = require(script:WaitForChild("QuestionBank"))
+local Templates = require(script:WaitForChild("Templates"))
+local DataService = require(script:WaitForChild("DataService"))
+local CharacterService = require(script:WaitForChild("CharacterService"))
+local SuspicionService = require(script:WaitForChild("SuspicionService"))
+local ExamService = require(script:WaitForChild("ExamService"))
+local ItemService = require(script:WaitForChild("ItemService"))
+local TeacherAI = require(script:WaitForChild("TeacherAI"))
+local PunishService = require(script:WaitForChild("PunishService"))
+local ShopService = require(script:WaitForChild("ShopService"))
+local RoundManager = require(script:WaitForChild("RoundManager"))
+local LobbyService = require(script:WaitForChild("LobbyService"))
+
+local function step(label: string, fn: () -> ())
+	local ok, err = pcall(fn)
+	if ok then
+		print("[Finals Week] " .. label)
+	else
+		warn(string.format("[Finals Week] %s FALLO: %s", label, tostring(err)))
+	end
+end
+
+-- ── 1. red ─────────────────────────────────────────────────────────
+step("remotes listos", function()
+	Net.build()
+end)
+
+-- ── 2-4. contenido ─────────────────────────────────────────────────
+step("banco de preguntas en ServerStorage", function()
+	QuestionBank.install()
+end)
+
+step("plantillas de herramientas", function()
+	Templates.build()
+end)
+
+step("modelos de respaldo en ServerStorage", function()
+	CharacterService.installBackup()
+end)
+
+local map: any = nil
+step("instituto construido", function()
+	map = MapBuilder.build()
+end)
+
+-- ── 5. servicios ───────────────────────────────────────────────────
+step("datos y economia", function()
+	DataService.start()
+	ShopService.start()
+	ShopService.bindKiosk(map and map.shop)
+end)
+
+step("examenes", function()
+	ExamService.setMap(map)
+	ExamService.start()
+end)
+
+step("objetos y casilleros", function()
+	ItemService.start()
+	if map then
+		ItemService.bindLockers(map.lockers)
+	end
+	ItemService.onNoise(function(position, source)
+		TeacherAI.hearNoise(position, source)
+	end)
+end)
+
+step("sospecha", function()
+	SuspicionService.start()
+end)
+
+step("castigos", function()
+	PunishService.start()
+	PunishService.setDetention(map and map.detention)
+	TeacherAI.onPunish(function(player, teacher)
+		PunishService.apply(player, teacher)
+	end)
+end)
+
+-- ── 6. el profesor ─────────────────────────────────────────────────
+step("IA del profesor", function()
+	TeacherAI.start()
+end)
+
+-- ── 7. jugadores ───────────────────────────────────────────────────
+
+local function onCharacter(player: Player, character: Model)
+	local profile = DataService.get(player) or DataService.load(player)
+
+	local humanoid = character:WaitForChild("Humanoid", 10)
+	if humanoid and humanoid:IsA("Humanoid") then
+		humanoid.WalkSpeed = 16
+		humanoid.JumpPower = 48   -- saltar es la unica forma de dejar un Seat
+		humanoid.UseJumpPower = true
+	end
+
+	CharacterService.dressStudent(player, character, profile.estetica)
+
+	-- Aparecer en el pasillo, no en el vacio.
+	if map and #map.spawns > 0 then
+		local root = character:FindFirstChild("HumanoidRootPart")
+		if root and root:IsA("BasePart") then
+			local point = map.spawns[math.random(1, #map.spawns)]
+			root.CFrame = CFrame.new(point)
+		end
+	end
+
+	SuspicionService.setSight(player, false, math.huge)
+end
+
+step("jugadores", function()
+	Players.CharacterAutoLoads = true
+
+	local function bind(player: Player)
+		DataService.load(player)
+		DataService.push(player)
+		if player.Character then
+			task.defer(onCharacter, player, player.Character)
+		end
+		player.CharacterAdded:Connect(function(character)
+			task.defer(function()
+				local ok, err = pcall(onCharacter, player, character)
+				if not ok then
+					warn("[Finals Week] personaje: " .. tostring(err))
+				end
+			end)
+		end)
+	end
+
+	for _, player in Players:GetPlayers() do
+		task.spawn(bind, player)
+	end
+	Players.PlayerAdded:Connect(function(player)
+		task.spawn(bind, player)
+	end)
+end)
+
+-- ── 8. remotes de consulta ─────────────────────────────────────────
+step("consultas del cliente", function()
+	Net.func(Net.Functions.GetState).OnServerInvoke = function(player)
+		local profile = DataService.get(player)
+		return {
+			examen = ExamService.state(player),
+			billetera = profile and {
+				creditos = profile.creditos,
+				comprados = profile.comprados,
+				objeto = profile.objeto,
+				estetica = profile.estetica,
+				semanas = profile.semanas,
+				mejorPromedio = profile.mejorPromedio,
+			} or nil,
+			tienda = Config.Economia.Tienda,
+			salas = LobbyService.isAvailable(),
+		}
+	end
+
+	Net.func(Net.Functions.SubmitAnswer).OnServerInvoke = function(player, index, option)
+		return ExamService.submit(player, tonumber(index) or 0, tonumber(option) or 0)
+	end
+
+	Net.func(Net.Functions.SubmitSequence).OnServerInvoke = function(player, index, typed)
+		return ExamService.submitSequence(player, tonumber(index) or 0, tostring(typed))
+	end
+
+	Net.func(Net.Functions.ChooseMode).OnServerInvoke = function(player, mode)
+		-- "solo" y "publico" se juegan en este mismo servidor; "amigos"
+		-- lo resuelve el buscador de salas.
+		player:SetAttribute("Modo", tostring(mode))
+		return { ok = true }
+	end
+end)
+
+-- ── 9. salas ───────────────────────────────────────────────────────
+step("salas", function()
+	LobbyService.start()
+end)
+
+-- ── 10. bucle escolar ──────────────────────────────────────────────
+step("ciclo escolar", function()
+	RoundManager.setMap(map)
+	RoundManager.start()
+end)
+
+-- ── 11. luz ────────────────────────────────────────────────────────
+-- Al final y en pcall: Lighting.Technology es de solo lectura desde un
+-- script y va en el archivo del lugar, no aca.
+pcall(function()
+	Lighting.Brightness = 2
+	Lighting.ClockTime = 9.5
+	Lighting.Ambient = Color3.fromRGB(82, 84, 96)
+	Lighting.OutdoorAmbient = Color3.fromRGB(112, 118, 132)
+	Lighting.EnvironmentDiffuseScale = 0.55
+	Lighting.EnvironmentSpecularScale = 0.4
+	Lighting.GlobalShadows = true
+	Lighting.FogEnd = 900
+
+	if not Lighting:FindFirstChild("Atmosfera") then
+		local atmosphere = Instance.new("Atmosphere")
+		atmosphere.Name = "Atmosfera"
+		atmosphere.Density = 0.28
+		atmosphere.Haze = 0.9
+		atmosphere.Glare = 0.1
+		atmosphere.Parent = Lighting
+	end
+end)
+
+print("[Finals Week] Servidor listo.")
+]]></ProtectedString>
+    </Properties>
+    <Item class="ModuleScript" referent="RBX1">
+      <Properties>
+        <string name="Name">CharacterService</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	CharacterService
+	------------------------------------------------------------------
+	La estetica de instituto: uniforme para los alumnos, el NPC del
+	profesor armado hueso por hueso, las esteticas compradas en la
+	tienda y el cono de la verguenza.
+
+	El profesor se construye entero por codigo (rig R6 con Motor6D) en
+	vez de usar un modelo del catalogo, por dos razones:
+	  * no depende de ningun asset que pueda faltar o cambiar;
+	  * podemos animarlo a mano (los NPC no caminan solos sin un script
+	    Animate, y ese script solo existe en los avatares de jugador).
+--]]
+
+local RunService = game:GetService("RunService")
+local ServerStorage = game:GetService("ServerStorage")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Theme = require(Shared:WaitForChild("Theme"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local P = Config.Profesor
+
+local CharacterService = {}
+
+local rng = Random.new()
+
+-- ── uniforme del alumno ────────────────────────────────────────────
+
+local UNIFORME = {
+	Camisa = Color3.fromRGB(236, 238, 244),
+	Sueter = Color3.fromRGB(52, 72, 116),
+	Pantalon = Color3.fromRGB(44, 48, 60),
+	Zapato = Color3.fromRGB(28, 30, 36),
+}
+
+local TORSOS = { "Torso", "UpperTorso", "LowerTorso" }
+local BRAZOS = { "Left Arm", "Right Arm", "LeftUpperArm", "RightUpperArm",
+	"LeftLowerArm", "RightLowerArm" }
+local PIERNAS = { "Left Leg", "Right Leg", "LeftUpperLeg", "RightUpperLeg",
+	"LeftLowerLeg", "RightLowerLeg" }
+local PIES = { "LeftFoot", "RightFoot" }
+
+local function paint(character: Model, names: { string }, color: Color3)
+	for _, name in names do
+		local part = character:FindFirstChild(name)
+		if part and part:IsA("BasePart") then
+			part.Color = color
+			part.Material = Enum.Material.SmoothPlastic
+		end
+	end
+end
+
+--- Un accesorio simple soldado a una parte del personaje.
+local function attach(character: Model, anchorName: string, name: string,
+	size: Vector3, offset: CFrame, color: Color3, material: Enum.Material): BasePart?
+	local anchor = character:FindFirstChild(anchorName)
+	if not anchor or not anchor:IsA("BasePart") then
+		return nil
+	end
+	local part = Instance.new("Part")
+	part.Name = name
+	part.Size = size
+	part.Color = color
+	part.Material = material
+	part.Anchored = false
+	part.CanCollide = false
+	part.CanQuery = false
+	part.Massless = true
+	part.TopSurface = Enum.SurfaceType.Smooth
+	part.BottomSurface = Enum.SurfaceType.Smooth
+	part.CFrame = anchor.CFrame * offset
+	part.Parent = character
+
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = anchor
+	weld.Part1 = part
+	weld.Parent = part
+	return part
+end
+
+local ESTETICAS: { [string]: (Model) -> () } = {
+	gorra = function(character)
+		attach(character, "Head", "Gorra", Vector3.new(2.1, 0.55, 2.1),
+			CFrame.new(0, 0.75, 0), Color3.fromRGB(168, 42, 52), Enum.Material.Fabric)
+		attach(character, "Head", "Visera", Vector3.new(2.1, 0.16, 1.1),
+			CFrame.new(0, 0.5, -1.05), Color3.fromRGB(140, 34, 44), Enum.Material.Fabric)
+	end,
+	anteojos = function(character)
+		attach(character, "Head", "Anteojos", Vector3.new(1.9, 0.42, 0.14),
+			CFrame.new(0, 0.06, -0.62), Color3.fromRGB(30, 32, 38), Enum.Material.SmoothPlastic)
+	end,
+	mochila = function(character)
+		local anchor = character:FindFirstChild("UpperTorso") and "UpperTorso" or "Torso"
+		attach(character, anchor, "Mochila", Vector3.new(1.7, 1.9, 0.85),
+			CFrame.new(0, 0.1, 0.78), Color3.fromRGB(52, 92, 128), Enum.Material.Fabric)
+		attach(character, anchor, "Correa", Vector3.new(0.3, 1.7, 0.2),
+			CFrame.new(-0.55, 0.1, 0.42), Color3.fromRGB(38, 66, 94), Enum.Material.Fabric)
+		attach(character, anchor, "Correa", Vector3.new(0.3, 1.7, 0.2),
+			CFrame.new(0.55, 0.1, 0.42), Color3.fromRGB(38, 66, 94), Enum.Material.Fabric)
+	end,
+	campera = function(character)
+		paint(character, TORSOS, Color3.fromRGB(96, 32, 42))
+		paint(character, BRAZOS, Color3.fromRGB(96, 32, 42))
+	end,
+}
+
+--- Cartel con el nombre arriba de la cabeza, discreto.
+local function nameTag(character: Model, text: string, color: Color3)
+	local head = character:FindFirstChild("Head")
+	if not head or not head:IsA("BasePart") then
+		return
+	end
+	local existing = head:FindFirstChild("Etiqueta")
+	if existing then
+		existing:Destroy()
+	end
+	local billboard = Util.billboard(head, UDim2.new(0, 200, 0, 34), Vector3.new(0, 2.4, 0))
+	billboard.Name = "Etiqueta"
+	billboard.MaxDistance = 45
+	billboard.Parent = head
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Font = Theme.FontBold
+	label.Text = text
+	label.TextColor3 = color
+	label.TextStrokeTransparency = 0.4
+	label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+	label.TextScaled = true
+	label.Parent = billboard
+end
+
+--- Viste al alumno con el uniforme y le pone lo que tenga equipado.
+function CharacterService.dressStudent(player: Player, character: Model, estetica: { [string]: boolean }?)
+	local ok, err = pcall(function()
+		paint(character, TORSOS, UNIFORME.Sueter)
+		paint(character, BRAZOS, UNIFORME.Camisa)
+		paint(character, PIERNAS, UNIFORME.Pantalon)
+		paint(character, PIES, UNIFORME.Zapato)
+
+		-- Corbata del colegio.
+		local torso = character:FindFirstChild("UpperTorso") and "UpperTorso" or "Torso"
+		attach(character, torso, "Corbata", Vector3.new(0.34, 1.1, 0.14),
+			CFrame.new(0, 0.25, -0.55), Color3.fromRGB(122, 32, 44), Enum.Material.Fabric)
+
+		for id, on in (estetica or {}) do
+			if on and ESTETICAS[id] then
+				ESTETICAS[id](character)
+			end
+		end
+
+		nameTag(character, player.DisplayName, Color3.fromRGB(226, 232, 244))
+	end)
+	if not ok then
+		warn("[Personajes] uniforme fallo: " .. tostring(err))
+	end
+end
+
+-- ── cono de la verguenza ───────────────────────────────────────────
+
+--- Un cono hecho con discos: no depende de ningun mesh.
+function CharacterService.attachCone(character: Model)
+	local head = character:FindFirstChild("Head")
+	if not head or not head:IsA("BasePart") then
+		return
+	end
+	if character:FindFirstChild("ConoDeLaVerguenza") then
+		return
+	end
+	local cone = Instance.new("Model")
+	cone.Name = "ConoDeLaVerguenza"
+	cone.Parent = character
+
+	local layers = 6
+	for i = 0, layers - 1 do
+		local alpha = i / layers
+		local disc = Instance.new("Part")
+		disc.Name = "Anillo" .. i
+		disc.Shape = Enum.PartType.Cylinder
+		disc.Size = Vector3.new(0.42, 2.2 * (1 - alpha) + 0.25, 2.2 * (1 - alpha) + 0.25)
+		disc.Color = i % 2 == 0 and Color3.fromRGB(228, 74, 62) or Color3.fromRGB(246, 246, 240)
+		disc.Material = Enum.Material.SmoothPlastic
+		disc.CanCollide = false
+		disc.CanQuery = false
+		disc.Massless = true
+		disc.CFrame = head.CFrame * CFrame.new(0, 0.75 + i * 0.4, 0) * CFrame.Angles(0, 0, math.rad(90))
+		disc.Parent = cone
+
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = head
+		weld.Part1 = disc
+		weld.Parent = disc
+	end
+end
+
+function CharacterService.removeCone(character: Model)
+	local cone = character:FindFirstChild("ConoDeLaVerguenza")
+	if cone then
+		cone:Destroy()
+	end
+end
+
+-- ── el profesor ────────────────────────────────────────────────────
+
+local function limb(model: Model, name: string, size: Vector3, color: Color3): BasePart
+	local part = Instance.new("Part")
+	part.Name = name
+	part.Size = size
+	part.Color = color
+	part.Material = Enum.Material.SmoothPlastic
+	part.TopSurface = Enum.SurfaceType.Smooth
+	part.BottomSurface = Enum.SurfaceType.Smooth
+	part.CanCollide = false
+	part.Parent = model
+	return part
+end
+
+local function motor(parent: BasePart, child: BasePart, name: string, c0: CFrame, c1: CFrame): Motor6D
+	local joint = Instance.new("Motor6D")
+	joint.Name = name
+	joint.Part0 = parent
+	joint.Part1 = child
+	joint.C0 = c0
+	joint.C1 = c1
+	joint.Parent = parent
+	return joint
+end
+
+--- Cara enojada dibujada con partes: cejas caidas, ojos y boca torcida.
+local function angryFace(head: BasePart)
+	local function piece(name: string, size: Vector3, offset: CFrame, color: Color3)
+		local part = Instance.new("Part")
+		part.Name = name
+		part.Size = size
+		part.Color = color
+		part.Material = Enum.Material.SmoothPlastic
+		part.CanCollide = false
+		part.CanQuery = false
+		part.Massless = true
+		part.CFrame = head.CFrame * offset
+		part.Parent = head.Parent
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = head
+		weld.Part1 = part
+		weld.Parent = part
+	end
+
+	for _, side in { -1, 1 } do
+		piece("Ojo", Vector3.new(0.24, 0.24, 0.1),
+			CFrame.new(side * 0.32, 0.06, -0.52), Color3.fromRGB(22, 24, 30))
+		piece("Ceja", Vector3.new(0.5, 0.11, 0.1),
+			CFrame.new(side * 0.34, 0.3, -0.52) * CFrame.Angles(0, 0, math.rad(side * 18)),
+			Color3.fromRGB(38, 32, 28))
+	end
+	piece("Boca", Vector3.new(0.62, 0.09, 0.1),
+		CFrame.new(0, -0.3, -0.52), Color3.fromRGB(60, 34, 34))
+	piece("Anteojos", Vector3.new(1.05, 0.3, 0.08),
+		CFrame.new(0, 0.06, -0.56), Color3.fromRGB(30, 32, 38))
+end
+
+--- Arma el rig R6 completo del profesor, listo para Humanoid:MoveTo.
+function CharacterService.buildTeacher(name: string, position: Vector3): Model
+	local model = Instance.new("Model")
+	model.Name = "Profesor"
+
+	local root = limb(model, "HumanoidRootPart", Vector3.new(2, 2, 1), P.ColorTraje)
+	root.Transparency = 1
+	root.CanCollide = false
+
+	local torso = limb(model, "Torso", Vector3.new(2, 2, 1), P.ColorTraje)
+	torso.CanCollide = true
+
+	local head = limb(model, "Head", Vector3.new(2, 1, 1), P.ColorPiel)
+	local mesh = Instance.new("SpecialMesh")
+	mesh.MeshType = Enum.MeshType.Head
+	mesh.Scale = Vector3.new(1.25, 1.25, 1.25)
+	mesh.Parent = head
+
+	local leftArm = limb(model, "Left Arm", Vector3.new(1, 2, 1), P.ColorTraje)
+	local rightArm = limb(model, "Right Arm", Vector3.new(1, 2, 1), P.ColorTraje)
+	local leftLeg = limb(model, "Left Leg", Vector3.new(1, 2, 1), Color3.fromRGB(30, 33, 42))
+	local rightLeg = limb(model, "Right Leg", Vector3.new(1, 2, 1), Color3.fromRGB(30, 33, 42))
+
+	-- Como cualquier R6: todo colisiona menos la raiz. Con las piernas
+	-- atravesables el Humanoid se hunde en el piso al primer paso.
+	for _, part in { torso, head, leftArm, rightArm, leftLeg, rightLeg } do
+		part.CanCollide = true
+	end
+
+	root.CFrame = CFrame.new(position)
+	torso.CFrame = root.CFrame
+	head.CFrame = root.CFrame * CFrame.new(0, 1.5, 0)
+	leftArm.CFrame = root.CFrame * CFrame.new(-1.5, 0, 0)
+	rightArm.CFrame = root.CFrame * CFrame.new(1.5, 0, 0)
+	leftLeg.CFrame = root.CFrame * CFrame.new(-0.5, -2, 0)
+	rightLeg.CFrame = root.CFrame * CFrame.new(0.5, -2, 0)
+
+	local flip = CFrame.Angles(-math.pi / 2, 0, math.pi)
+	motor(root, torso, "RootJoint", flip, flip)
+	motor(torso, head, "Neck", CFrame.new(0, 1, 0) * flip, CFrame.new(0, -0.5, 0) * flip)
+	motor(torso, rightArm, "Right Shoulder",
+		CFrame.new(1, 0.5, 0) * CFrame.Angles(0, math.pi / 2, 0),
+		CFrame.new(-0.5, 0.5, 0) * CFrame.Angles(0, math.pi / 2, 0))
+	motor(torso, leftArm, "Left Shoulder",
+		CFrame.new(-1, 0.5, 0) * CFrame.Angles(0, -math.pi / 2, 0),
+		CFrame.new(0.5, 0.5, 0) * CFrame.Angles(0, -math.pi / 2, 0))
+	motor(torso, rightLeg, "Right Hip",
+		CFrame.new(1, -1, 0) * CFrame.Angles(0, math.pi / 2, 0),
+		CFrame.new(0.5, 1, 0) * CFrame.Angles(0, math.pi / 2, 0))
+	motor(torso, leftLeg, "Left Hip",
+		CFrame.new(-1, -1, 0) * CFrame.Angles(0, -math.pi / 2, 0),
+		CFrame.new(-0.5, 1, 0) * CFrame.Angles(0, -math.pi / 2, 0))
+
+	-- Camisa, corbata y saco: capas finas encima del torso.
+	local function layer(part: BasePart, lname: string, size: Vector3, offset: CFrame, color: Color3)
+		local piece = Instance.new("Part")
+		piece.Name = lname
+		piece.Size = size
+		piece.Color = color
+		piece.Material = Enum.Material.Fabric
+		piece.CanCollide = false
+		piece.CanQuery = false
+		piece.Massless = true
+		piece.CFrame = part.CFrame * offset
+		piece.Parent = model
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = part
+		weld.Part1 = piece
+		weld.Parent = piece
+	end
+
+	layer(torso, "Camisa", Vector3.new(0.9, 1.9, 0.14), CFrame.new(0, 0, -0.5), P.ColorCamisa)
+	layer(torso, "Corbata", Vector3.new(0.3, 1.4, 0.1), CFrame.new(0, 0.1, -0.6), P.ColorCorbata)
+	layer(torso, "Solapa", Vector3.new(0.42, 1.1, 0.1),
+		CFrame.new(-0.45, 0.4, -0.56) * CFrame.Angles(0, 0, math.rad(12)), P.ColorTraje)
+	layer(torso, "Solapa", Vector3.new(0.42, 1.1, 0.1),
+		CFrame.new(0.45, 0.4, -0.56) * CFrame.Angles(0, 0, math.rad(-12)), P.ColorTraje)
+	layer(head, "Pelo", Vector3.new(2.05, 0.42, 1.05), CFrame.new(0, 0.45, 0.02),
+		Color3.fromRGB(58, 48, 42))
+
+	angryFace(head)
+
+	local humanoid = Instance.new("Humanoid")
+	humanoid.RigType = Enum.HumanoidRigType.R6
+	humanoid.WalkSpeed = P.VelocidadPatrulla
+	humanoid.JumpPower = 0
+	humanoid.AutoRotate = true
+	humanoid.MaxHealth = 1000
+	humanoid.Health = 1000
+	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	humanoid.Parent = model
+
+	model.PrimaryPart = root
+
+	nameTag(model, name, Color3.fromRGB(244, 206, 122))
+
+	return model
+end
+
+--- Animacion procedural: sin esto el NPC se desliza rigido, porque el
+--- script Animate solo viene en los avatares de jugador.
+function CharacterService.animate(model: Model): RBXScriptConnection?
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	local torso = model:FindFirstChild("Torso")
+	if not humanoid or not torso or not torso:IsA("BasePart") then
+		return nil
+	end
+
+	local joints: { [string]: Motor6D } = {}
+	for _, name in { "Right Shoulder", "Left Shoulder", "Right Hip", "Left Hip", "Neck" } do
+		local joint = torso:FindFirstChild(name)
+		if joint and joint:IsA("Motor6D") then
+			joints[name] = joint
+		end
+	end
+
+	local base: { [string]: CFrame } = {}
+	for name, joint in joints do
+		base[name] = joint.C0
+	end
+
+	local phase = 0
+	return RunService.Heartbeat:Connect(function(dt)
+		if not model.Parent then
+			return
+		end
+		local speed = humanoid.MoveDirection.Magnitude * humanoid.WalkSpeed
+		phase += dt * math.max(1.2, speed * 0.7)
+		local swing = math.sin(phase) * math.clamp(speed / 12, 0.08, 0.75)
+
+		if joints["Right Shoulder"] then
+			joints["Right Shoulder"].C0 = base["Right Shoulder"] * CFrame.Angles(swing, 0, 0)
+		end
+		if joints["Left Shoulder"] then
+			joints["Left Shoulder"].C0 = base["Left Shoulder"] * CFrame.Angles(-swing, 0, 0)
+		end
+		if joints["Right Hip"] then
+			joints["Right Hip"].C0 = base["Right Hip"] * CFrame.Angles(-swing * 0.9, 0, 0)
+		end
+		if joints["Left Hip"] then
+			joints["Left Hip"].C0 = base["Left Hip"] * CFrame.Angles(swing * 0.9, 0, 0)
+		end
+		if joints["Neck"] then
+			-- Mira despacio de un lado al otro cuando esta quieto: da
+			-- la sensacion de que esta vigilando.
+			local idle = speed < 1 and math.sin(phase * 0.35) * 0.35 or 0
+			joints["Neck"].C0 = base["Neck"] * CFrame.Angles(0, 0, idle)
+		end
+	end)
+end
+
+--- Deja un profesor ya armado en ServerStorage/Respaldo.
+--- Clonarlo es bastante mas barato que rehacer 30 partes y 6 Motor6D
+--- cada vez que empieza un examen, y ademas cumple con tener los
+--- modelos de respaldo fuera del alcance del cliente.
+function CharacterService.installBackup()
+	local previous = ServerStorage:FindFirstChild("Respaldo")
+	if previous then
+		previous:Destroy()
+	end
+
+	local folder = Instance.new("Folder")
+	folder.Name = "Respaldo"
+	folder.Parent = ServerStorage
+
+	local ok, model = pcall(function()
+		return CharacterService.buildTeacher("...", Vector3.new(0, 500, 0))
+	end)
+	if ok and model then
+		model.Name = "ProfesorBase"
+		model.Parent = folder
+	else
+		warn("[Personajes] no se pudo guardar el profesor de respaldo: " .. tostring(model))
+	end
+end
+
+--- Un profesor listo para usar: clona el respaldo si existe, y si no,
+--- lo construye en el momento.
+function CharacterService.teacher(name: string, position: Vector3): Model
+	local backup = ServerStorage:FindFirstChild("Respaldo")
+	local template = backup and backup:FindFirstChild("ProfesorBase")
+	if template and template:IsA("Model") then
+		local clone = template:Clone()
+		clone:PivotTo(CFrame.new(position))
+		nameTag(clone, name, Color3.fromRGB(244, 206, 122))
+		return clone
+	end
+	return CharacterService.buildTeacher(name, position)
+end
+
+function CharacterService.randomTeacherName(): string
+	return P.NombresPosibles[rng:NextInteger(1, #P.NombresPosibles)]
+end
+
+--- Carpeta donde viven los personajes que no son jugadores.
+function CharacterService.folder(): Folder
+	local existing = workspace:FindFirstChild("Personajes")
+	if existing and existing:IsA("Folder") then
+		return existing
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = "Personajes"
+	folder.Parent = workspace
+	return folder
+end
+
+return CharacterService
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX2">
+      <Properties>
+        <string name="Name">DataService</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	DataService
+	------------------------------------------------------------------
+	Guardado persistente con DataStoreService: creditos, objetos
+	comprados, esteticas equipadas y el historial de semanas.
+
+	Reglas que sigue este modulo:
+	  * en Studio sin API habilitada, DataStore tira error: se juega
+	    igual con un perfil en memoria y se avisa una sola vez;
+	  * nunca se pisa un perfil que no se pudo leer (si la lectura
+	    falla, ese jugador no guarda en esa sesion);
+	  * se guarda al salir, cada Config.Economia.GuardadoAutomatico
+	    segundos, y en BindToClose antes de que cierre el servidor.
+--]]
+
+local DataStoreService = game:GetService("DataStoreService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+
+local DataService = {}
+
+export type Profile = {
+	creditos: number,
+	comprados: { [string]: boolean },
+	objeto: string,              -- el objeto equipado para la proxima ronda
+	estetica: { [string]: boolean },
+	semanas: number,
+	mejorPromedio: number,
+	guardable: boolean,          -- false si la lectura fallo: no se pisa
+}
+
+local store: DataStore? = nil
+local profiles: { [Player]: Profile } = {}
+local warned = false
+
+local function defaults(): Profile
+	return {
+		creditos = 60,
+		comprados = { nota = true, bolita = true },
+		objeto = "nota",
+		estetica = {},
+		semanas = 0,
+		mejorPromedio = 0,
+		guardable = true,
+	}
+end
+
+--- Mezcla lo leido con los valores por defecto: si manana agregamos un
+--- campo nuevo, los perfiles viejos no se rompen.
+local function merge(raw: any): Profile
+	local profile = defaults()
+	if type(raw) ~= "table" then
+		return profile
+	end
+	if type(raw.creditos) == "number" then
+		profile.creditos = math.max(0, math.floor(raw.creditos))
+	end
+	if type(raw.comprados) == "table" then
+		for id, owned in raw.comprados do
+			if type(id) == "string" and owned == true then
+				profile.comprados[id] = true
+			end
+		end
+	end
+	if type(raw.objeto) == "string" then
+		profile.objeto = raw.objeto
+	end
+	if type(raw.estetica) == "table" then
+		for id, on in raw.estetica do
+			if type(id) == "string" and on == true then
+				profile.estetica[id] = true
+			end
+		end
+	end
+	if type(raw.semanas) == "number" then
+		profile.semanas = math.floor(raw.semanas)
+	end
+	if type(raw.mejorPromedio) == "number" then
+		profile.mejorPromedio = math.floor(raw.mejorPromedio)
+	end
+	return profile
+end
+
+local function key(player: Player): string
+	return "u_" .. player.UserId
+end
+
+local function getStore(): DataStore?
+	if store then
+		return store
+	end
+	local ok, result = pcall(function()
+		return DataStoreService:GetDataStore(Config.Economia.ClaveDataStore)
+	end)
+	if ok then
+		store = result
+		return store
+	end
+	return nil
+end
+
+--- Reintenta hasta 3 veces: DataStore falla por throttling, no por error real.
+local function retry<T>(fn: () -> T): (boolean, T?)
+	for attempt = 1, 3 do
+		local ok, result = pcall(fn)
+		if ok then
+			return true, result
+		end
+		if attempt == 3 then
+			if not warned then
+				warned = true
+				warn("[Datos] DataStore no disponible (en Studio hay que habilitar "
+					.. "el acceso a la API). Se juega con progreso en memoria.")
+			end
+		else
+			task.wait(attempt * 1.5)
+		end
+	end
+	return false, nil
+end
+
+function DataService.load(player: Player): Profile
+	local existing = profiles[player]
+	if existing then
+		return existing
+	end
+
+	local profile = defaults()
+	local dataStore = getStore()
+	if dataStore and not RunService:IsStudio() then
+		local ok, raw = retry(function()
+			return dataStore:GetAsync(key(player))
+		end)
+		if ok then
+			profile = merge(raw)
+		else
+			profile.guardable = false
+		end
+	end
+
+	profiles[player] = profile
+	return profile
+end
+
+function DataService.get(player: Player): Profile?
+	return profiles[player]
+end
+
+function DataService.save(player: Player)
+	local profile = profiles[player]
+	if not profile or not profile.guardable then
+		return
+	end
+	local dataStore = getStore()
+	if not dataStore or RunService:IsStudio() then
+		return
+	end
+	retry(function()
+		dataStore:SetAsync(key(player), {
+			creditos = profile.creditos,
+			comprados = profile.comprados,
+			objeto = profile.objeto,
+			estetica = profile.estetica,
+			semanas = profile.semanas,
+			mejorPromedio = profile.mejorPromedio,
+		})
+		return true
+	end)
+end
+
+function DataService.release(player: Player)
+	DataService.save(player)
+	profiles[player] = nil
+end
+
+--- Suma creditos y avisa al cliente. Devuelve el total nuevo.
+function DataService.addCredits(player: Player, amount: number): number
+	local profile = profiles[player]
+	if not profile then
+		return 0
+	end
+	profile.creditos = math.max(0, profile.creditos + amount)
+	DataService.push(player)
+	return profile.creditos
+end
+
+--- Manda al cliente la billetera entera (creditos + inventario).
+function DataService.push(player: Player)
+	local profile = profiles[player]
+	if not profile then
+		return
+	end
+	Net.event(Net.Events.Wallet):FireClient(player, {
+		creditos = profile.creditos,
+		comprados = profile.comprados,
+		objeto = profile.objeto,
+		estetica = profile.estetica,
+		semanas = profile.semanas,
+		mejorPromedio = profile.mejorPromedio,
+	})
+end
+
+function DataService.start()
+	Players.PlayerRemoving:Connect(function(player)
+		DataService.release(player)
+	end)
+
+	task.spawn(function()
+		while true do
+			task.wait(Config.Economia.GuardadoAutomatico)
+			for player in profiles do
+				if player.Parent then
+					DataService.save(player)
+				end
+			end
+		end
+	end)
+
+	game:BindToClose(function()
+		for player in profiles do
+			DataService.save(player)
+		end
+		if not RunService:IsStudio() then
+			task.wait(2)
+		end
+	end)
+end
+
+return DataService
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX3">
+      <Properties>
+        <string name="Name">ExamService</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	ExamService
+	------------------------------------------------------------------
+	El examen: quien se sienta donde, que pregunta le toca a cada uno,
+	que respondio y como se copia.
+
+	Decision de diseno: todos los alumnos de un aula reciben EL MISMO
+	examen. Es lo que hace que copiar valga la pena — si cada uno
+	tuviera preguntas distintas, espiar al de al lado seria inutil y la
+	mecanica cooperativa se cae.
+
+	El servidor nunca manda la respuesta correcta al cliente. Lo unico
+	que viaja es el enunciado, las opciones y — si usaste una chuleta —
+	los indices que la chuleta te revelo.
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+local Theme = require(Shared:WaitForChild("Theme"))
+
+local QuestionBank = require(script.Parent:WaitForChild("QuestionBank"))
+local SuspicionService = require(script.Parent:WaitForChild("SuspicionService"))
+
+local X = Config.Examen
+
+local ExamService = {}
+
+export type Sitting = {
+	player: Player,
+	aula: number,
+	desk: any,               -- MapBuilder.Desk
+	answers: { [number]: number },
+	revealed: { [number]: boolean },
+	sheetUses: number,
+	lastPeek: number,
+	lastWhisper: number,
+	typing: { [number]: boolean },
+}
+
+local map: any = nil
+local exams: { [number]: { any } } = {}      -- aula -> preguntas (con respuesta)
+local sittings: { [Player]: Sitting } = {}
+-- Chuletas conseguidas en el recreo, cuando todavia no hay pupitre
+-- asignado: se cobran al sentarse. Sin esto, comprar una chuleta antes
+-- del examen (que es el unico momento en que se puede) no servia.
+local pendingSheets: { [Player]: number } = {}
+local running = false
+local currentDay = 1
+
+local LETRAS = { "A", "B", "C", "D", "E", "F" }
+
+-- ── la hoja del pupitre ────────────────────────────────────────────
+-- Se dibuja en el mundo a proposito: por eso se puede espiar.
+
+local function paperGui(desk: any): SurfaceGui
+	local paper: BasePart = desk.paper
+	local existing = paper:FindFirstChild("Hoja")
+	if existing and existing:IsA("SurfaceGui") then
+		return existing
+	end
+
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "Hoja"
+	gui.Face = Enum.NormalId.Top
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 60
+	gui.LightInfluence = 0.35
+	gui.MaxDistance = 40
+	gui.Parent = paper
+
+	local sheet = Instance.new("Frame")
+	sheet.Name = "Papel"
+	sheet.Size = UDim2.fromScale(1, 1)
+	sheet.BackgroundColor3 = Theme.Paper.Background
+	sheet.BorderSizePixel = 0
+	sheet.Parent = gui
+
+	local title = Instance.new("TextLabel")
+	title.Name = "Titulo"
+	title.Size = UDim2.new(1, -14, 0, 16)
+	title.Position = UDim2.new(0, 7, 0, 4)
+	title.BackgroundTransparency = 1
+	title.Font = Theme.FontBold
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.TextColor3 = Theme.Paper.Ink
+	title.TextScaled = true
+	title.Text = ""
+	title.Parent = sheet
+
+	local grid = Instance.new("Frame")
+	grid.Name = "Grilla"
+	grid.Size = UDim2.new(1, -14, 1, -26)
+	grid.Position = UDim2.new(0, 7, 0, 22)
+	grid.BackgroundTransparency = 1
+	grid.Parent = sheet
+
+	local layout = Instance.new("UIGridLayout")
+	layout.CellSize = UDim2.new(0, 22, 0, 13)
+	layout.CellPadding = UDim2.new(0, 3, 0, 2)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = grid
+
+	return gui
+end
+
+--- Redibuja la hoja del pupitre: numero de pregunta + letra elegida.
+local function refreshPaper(sitting: Sitting)
+	local ok = pcall(function()
+		local gui = paperGui(sitting.desk)
+		local sheet = gui:FindFirstChild("Papel") :: Frame
+		local title = sheet:FindFirstChild("Titulo") :: TextLabel
+		local grid = sheet:FindFirstChild("Grilla") :: Frame
+
+		title.Text = sitting.player.DisplayName
+
+		local questions = exams[sitting.aula] or {}
+		for i = 1, #questions do
+			local cell = grid:FindFirstChild("Q" .. i) :: TextLabel?
+			if not cell then
+				local created = Instance.new("TextLabel")
+				created.Name = "Q" .. i
+				created.LayoutOrder = i
+				created.BackgroundColor3 = Theme.Paper.Background
+				created.BackgroundTransparency = 1
+				created.Font = Theme.FontMono
+				created.TextScaled = true
+				created.TextColor3 = Theme.Paper.InkSoft
+				created.Parent = grid
+				cell = created
+			end
+			local choice = sitting.answers[i]
+			local assert_cell = cell :: TextLabel
+			assert_cell.Text = string.format("%d.%s", i, choice and (LETRAS[choice] or "?") or "_")
+			assert_cell.TextColor3 = choice and Theme.Paper.Accent or Theme.Paper.Line
+		end
+	end)
+	if not ok then
+		-- Una hoja que no se dibuja no puede tumbar el examen.
+	end
+end
+
+-- ── estado que ve el cliente ───────────────────────────────────────
+
+local function publicState(sitting: Sitting): any
+	local questions = exams[sitting.aula]
+	if not questions then
+		return { activo = false }
+	end
+	-- Arrays DENSOS, no tablas con huecos: un remote de Roblox no
+	-- serializa de forma confiable { [3] = 2, [7] = 1 }, y el cliente
+	-- recibiria basura justo en la mitad del examen. 0 = sin responder.
+	local answers = table.create(#questions, 0)
+	local revealed = table.create(#questions, 0)
+	for index = 1, #questions do
+		answers[index] = sitting.answers[index] or 0
+		if sitting.revealed[index] then
+			revealed[index] = (questions[index] :: any).respuesta
+		end
+	end
+
+	return {
+		activo = running,
+		dia = currentDay,
+		preguntas = QuestionBank.publicView(questions),
+		respuestas = answers,
+		reveladas = revealed,
+		chuleta = sitting.sheetUses,
+		fila = sitting.desk.fila,
+		asiento = sitting.desk.asiento,
+		aula = sitting.aula,
+	}
+end
+
+local function pushState(player: Player)
+	local sitting = sittings[player]
+	if not sitting then
+		Net.event(Net.Events.ExamUpdate):FireClient(player, { activo = false })
+		return
+	end
+	Net.event(Net.Events.ExamUpdate):FireClient(player, publicState(sitting))
+end
+
+function ExamService.pushState(player: Player)
+	pushState(player)
+end
+
+function ExamService.state(player: Player): any
+	local sitting = sittings[player]
+	if not sitting then
+		return { activo = false }
+	end
+	return publicState(sitting)
+end
+
+-- ── asientos ───────────────────────────────────────────────────────
+
+function ExamService.setMap(newMap: any)
+	map = newMap
+end
+
+function ExamService.sitting(player: Player): Sitting?
+	return sittings[player]
+end
+
+--- Sentado de verdad en SU pupitre (no en cualquier silla).
+function ExamService.isSeated(player: Player): boolean
+	local sitting = sittings[player]
+	if not sitting then
+		return false
+	end
+	return sitting.desk.seat.Occupant ~= nil
+		and sitting.desk.seat.Occupant.Parent == player.Character
+end
+
+--- Reparte a los jugadores por aulas y pupitres, en orden.
+function ExamService.assignSeats(players: { Player })
+	sittings = {}
+	if not map or #map.classrooms == 0 then
+		return
+	end
+
+	local rooms = map.classrooms
+	local perRoom = math.max(1, math.ceil(#players / #rooms))
+
+	for index, player in players do
+		local roomIndex = math.min(#rooms, math.floor((index - 1) / perRoom) + 1)
+		local room = rooms[roomIndex]
+		local deskIndex = ((index - 1) % #room.desks) + 1
+		local desk = room.desks[deskIndex]
+		if desk then
+			sittings[player] = {
+				player = player,
+				aula = room.index,
+				desk = desk,
+				answers = {},
+				revealed = {},
+				sheetUses = pendingSheets[player] or 0,
+				lastPeek = 0,
+				lastWhisper = 0,
+				typing = {},
+			}
+		end
+	end
+end
+
+--- Teletransporta a cada uno a su pupitre y lo sienta.
+function ExamService.seatEveryone()
+	for player, sitting in sittings do
+		local character = player.Character
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		if humanoid and root and root:IsA("BasePart") then
+			local seat = sitting.desk.seat
+			root.CFrame = seat.CFrame * CFrame.new(0, 3, 0)
+			task.defer(function()
+				-- Un intento inmediato y otro un instante despues: si el
+				-- personaje todavia estaba cayendo, el primero no prende.
+				pcall(function()
+					seat:Sit(humanoid)
+				end)
+				task.wait(0.35)
+				if seat.Occupant == nil then
+					pcall(function()
+						seat:Sit(humanoid)
+					end)
+				end
+			end)
+			Net.event(Net.Events.Notify):FireClient(player, {
+				key = "notify.seat",
+				args = { row = sitting.desk.fila, seat = sitting.desk.asiento },
+			})
+		end
+	end
+end
+
+-- ── ciclo del examen ───────────────────────────────────────────────
+
+function ExamService.begin(day: number, players: { Player })
+	currentDay = day
+	running = true
+	exams = {}
+
+	ExamService.assignSeats(players)
+
+	if map then
+		for _, room in map.classrooms do
+			exams[room.index] = QuestionBank.generate(day)
+		end
+	end
+
+	for player, sitting in sittings do
+		refreshPaper(sitting)
+		pushState(player)
+	end
+end
+
+--- Cierra el examen y devuelve el recuento de cada alumno.
+function ExamService.finish(): { [Player]: { correct: number, wrong: number, blank: number } }
+	running = false
+	local results: { [Player]: { correct: number, wrong: number, blank: number } } = {}
+
+	for player, sitting in sittings do
+		local questions = exams[sitting.aula] or {}
+		local correct, wrong, blank = 0, 0, 0
+		for i, question in questions do
+			local answer = sitting.answers[i]
+			if answer == nil then
+				blank += 1
+			elseif question.tipo == "escritura" then
+				if sitting.typing[i] then
+					correct += 1
+				else
+					wrong += 1
+				end
+			elseif answer == question.respuesta then
+				correct += 1
+			else
+				wrong += 1
+			end
+		end
+		results[player] = { correct = correct, wrong = wrong, blank = blank }
+		Net.event(Net.Events.ExamUpdate):FireClient(player, { activo = false })
+	end
+
+	-- Las hojas vuelven a estar en blanco para el dia siguiente.
+	for _, sitting in sittings do
+		pcall(function()
+			local gui = sitting.desk.paper:FindFirstChild("Hoja")
+			if gui then
+				gui:Destroy()
+			end
+		end)
+	end
+
+	return results
+end
+
+function ExamService.clear()
+	running = false
+	exams = {}
+	sittings = {}
+	pendingSheets = {}
+end
+
+function ExamService.isRunning(): boolean
+	return running
+end
+
+-- ── responder ──────────────────────────────────────────────────────
+
+function ExamService.submit(player: Player, index: number, option: number): any
+	local sitting = sittings[player]
+	if not running or not sitting then
+		return { ok = false, reason = { key = "exam.not_started" } }
+	end
+	if not ExamService.isSeated(player) then
+		return { ok = false, reason = { key = "error.not_seated" } }
+	end
+
+	local questions = exams[sitting.aula]
+	local question = questions and questions[index]
+	if not question or question.tipo ~= "opcion" then
+		return { ok = false, reason = { key = "error.generic" } }
+	end
+	if type(option) ~= "number" or option < 1 or option > #question.opciones then
+		return { ok = false, reason = { key = "error.generic" } }
+	end
+
+	sitting.answers[index] = math.floor(option)
+	refreshPaper(sitting)
+	return { ok = true }
+end
+
+--- Minijuego de escritura rapida: se valida la secuencia entera.
+function ExamService.submitSequence(player: Player, index: number, typed: string): any
+	local sitting = sittings[player]
+	if not running or not sitting then
+		return { ok = false, reason = { key = "exam.not_started" } }
+	end
+	if not ExamService.isSeated(player) then
+		return { ok = false, reason = { key = "error.not_seated" } }
+	end
+
+	local questions = exams[sitting.aula]
+	local question = questions and questions[index]
+	if not question or question.tipo ~= "escritura" then
+		return { ok = false, reason = { key = "error.generic" } }
+	end
+	if type(typed) ~= "string" or #typed > 32 then
+		return { ok = false, reason = { key = "error.generic" } }
+	end
+
+	local hit = string.upper(typed) == string.upper(question.secuencia or "")
+	sitting.answers[index] = hit and 1 or 2
+	sitting.typing[index] = hit
+	refreshPaper(sitting)
+	return { ok = true, correcto = hit, reason = { key = hit and "exam.correct" or "exam.type_fail" } }
+end
+
+-- ── trampas ────────────────────────────────────────────────────────
+
+--- El vecino sentado mas cerca dentro del alcance de copia.
+local function nearestClassmate(sitting: Sitting, range: number): Sitting?
+	local origin = sitting.desk.seat.Position
+	local best: Sitting? = nil
+	local bestDistance = range
+
+	for other, candidate in sittings do
+		if other ~= sitting.player and candidate.aula == sitting.aula then
+			local distance = (candidate.desk.seat.Position - origin).Magnitude
+			if distance < bestDistance then
+				bestDistance = distance
+				best = candidate
+			end
+		end
+	end
+	return best
+end
+
+--- Espiar: te llevas la respuesta que el otro ya escribio, con riesgo
+--- de leer mal. Si el vecino no contesto todavia, no hay nada que ver.
+function ExamService.peek(player: Player, index: number): any
+	local sitting = sittings[player]
+	if not running or not sitting then
+		return { ok = false, reason = { key = "exam.not_started" } }
+	end
+	if not ExamService.isSeated(player) then
+		return { ok = false, reason = { key = "error.not_seated" } }
+	end
+	local now = os.clock()
+	if now - sitting.lastPeek < X.CopiarSegundos then
+		return { ok = false, reason = { key = "cheat.cooldown" } }
+	end
+	sitting.lastPeek = now
+
+	local neighbour = nearestClassmate(sitting, X.CopiarAlcance)
+	if not neighbour then
+		return { ok = false, reason = { key = "cheat.peek_none" } }
+	end
+
+	-- Espiar siempre se paga: el gesto se ve, lo vea o no el profesor.
+	SuspicionService.infraction(player, Config.Sospecha.PorEspiar, "peek")
+
+	local seen = neighbour.answers[index]
+	if not seen then
+		return { ok = false, reason = { key = "cheat.peek_fail" } }
+	end
+
+	local questions = exams[sitting.aula]
+	local question = questions and questions[index]
+	if not question then
+		return { ok = false, reason = { key = "error.generic" } }
+	end
+
+	-- A veces se lee mal de reojo.
+	local value = seen
+	if math.random() > X.CopiarAcierto then
+		value = math.random(1, math.max(1, #question.opciones))
+	end
+
+	sitting.answers[index] = value
+	refreshPaper(sitting)
+	pushState(player)
+	return { ok = true, indice = index, reason = { key = "cheat.peek_ok", args = { i = index } } }
+end
+
+--- Soplar: le pasas tu respuesta a los que estan cerca.
+function ExamService.whisper(player: Player, index: number): any
+	local sitting = sittings[player]
+	if not running or not sitting then
+		return { ok = false, reason = { key = "exam.not_started" } }
+	end
+	local now = os.clock()
+	if now - sitting.lastWhisper < Config.Objetos.SoplarEnfriamiento then
+		return { ok = false, reason = { key = "cheat.cooldown" } }
+	end
+	local mine = sitting.answers[index]
+	if not mine then
+		return { ok = false, reason = { key = "cheat.none" } }
+	end
+	sitting.lastWhisper = now
+
+	SuspicionService.infraction(player, Config.Sospecha.PorSoplar, "whisper")
+
+	local origin = sitting.desk.seat.Position
+	local reached = 0
+	for other, candidate in sittings do
+		if other ~= player and candidate.aula == sitting.aula
+			and (candidate.desk.seat.Position - origin).Magnitude <= Config.Objetos.SoplarAlcance then
+			reached += 1
+			Net.event(Net.Events.Notify):FireClient(other, {
+				key = "cheat.whisper_got",
+				args = { name = player.DisplayName, i = index, opt = LETRAS[mine] or "?" },
+			})
+		end
+	end
+
+	return { ok = true, alcanzados = reached,
+		reason = { key = "cheat.whisper_sent", args = { i = index } } }
+end
+
+--- Chuleta: revela respuestas correctas al azar entre las que faltan.
+function ExamService.useSheet(player: Player): any
+	local sitting = sittings[player]
+	if not running or not sitting then
+		return { ok = false, reason = { key = "exam.not_started" } }
+	end
+	if sitting.sheetUses <= 0 then
+		return { ok = false, reason = { key = "cheat.sheet_empty" } }
+	end
+	if not ExamService.isSeated(player) then
+		return { ok = false, reason = { key = "error.not_seated" } }
+	end
+
+	local questions = exams[sitting.aula] or {}
+	local pending: { number } = {}
+	for i, question in questions do
+		if question.tipo == "opcion" and not sitting.revealed[i] and sitting.answers[i] == nil then
+			table.insert(pending, i)
+		end
+	end
+	if #pending == 0 then
+		for i, question in questions do
+			if question.tipo == "opcion" and not sitting.revealed[i] then
+				table.insert(pending, i)
+			end
+		end
+	end
+	if #pending == 0 then
+		return { ok = false, reason = { key = "cheat.sheet_empty" } }
+	end
+
+	sitting.sheetUses -= 1
+	SuspicionService.infraction(player, Config.Sospecha.PorChuleta, "sheet")
+
+	local revealed = 0
+	for _ = 1, math.min(Config.Objetos.ChuletaRevela, #pending) do
+		local pick = table.remove(pending, math.random(1, #pending))
+		if pick then
+			sitting.revealed[pick] = true
+			revealed += 1
+		end
+	end
+
+	pushState(player)
+	return { ok = true, reason = { key = "cheat.sheet_used", args = { n = revealed } } }
+end
+
+--- Suma usos de chuleta. Si todavia no hay pupitre (estamos en el
+--- recreo), quedan anotados y se cobran al sentarse.
+function ExamService.grantSheetUses(player: Player, uses: number)
+	local sitting = sittings[player]
+	if sitting then
+		sitting.sheetUses += uses
+		pushState(player)
+	else
+		pendingSheets[player] = (pendingSheets[player] or 0) + uses
+	end
+end
+
+--- Una nota recibida escribe la respuesta directamente en la hoja.
+function ExamService.applyNote(player: Player, index: number, option: number)
+	local sitting = sittings[player]
+	if not running or not sitting then
+		return
+	end
+	local questions = exams[sitting.aula]
+	local question = questions and questions[index]
+	if question and question.tipo == "opcion" and option >= 1 and option <= #question.opciones then
+		sitting.answers[index] = option
+		refreshPaper(sitting)
+		pushState(player)
+	end
+end
+
+function ExamService.start()
+	Players.PlayerRemoving:Connect(function(player)
+		sittings[player] = nil
+		pendingSheets[player] = nil
+	end)
+end
+
+return ExamService
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX4">
+      <Properties>
+        <string name="Name">ItemService</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	ItemService
+	------------------------------------------------------------------
+	Todo lo que se lleva en la mano: inventario, casilleros, notas
+	escritas y objetos que vuelan por el aire.
+
+	El lanzamiento es fisico de verdad, no un efecto:
+	  1. el cliente manda solo una direccion (nunca una posicion);
+	  2. el servidor la normaliza y tira un Raycast corto para no
+	     crear el proyectil dentro de una pared;
+	  3. se clona el Handle de la plantilla, se le da velocidad y se le
+	     resta gravedad con un VectorForce (Config.Objetos);
+	  4. el Touched decide: si pego a un alumno, le entrega la nota;
+	     si pego a cualquier otra cosa, hace ruido y el profesor va.
+
+	Nada de esto confia en el cliente: la direccion se valida, el
+	enfriamiento se mide en el servidor y el objeto se descuenta ahi.
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local Templates = require(script.Parent:WaitForChild("Templates"))
+local ExamService = require(script.Parent:WaitForChild("ExamService"))
+local SuspicionService = require(script.Parent:WaitForChild("SuspicionService"))
+
+local O = Config.Objetos
+
+local ItemService = {}
+
+type NotePayload = { indice: number?, opcion: number?, texto: string }
+
+local lastThrow: { [Player]: number } = {}
+local lockerCooldown: { [Model]: number } = {}
+local noiseListeners: { (Vector3, Player?) -> () } = {}
+local notes: { [Player]: NotePayload } = {}
+
+local rng = Random.new()
+
+local LOOT = { "nota", "nota", "bolita", "bolita", "avion", "chuleta" }
+
+--- Avisa a TeacherAI de que sono algo en un punto del mapa.
+function ItemService.onNoise(callback: (Vector3, Player?) -> ())
+	table.insert(noiseListeners, callback)
+end
+
+local function noise(position: Vector3, source: Player?)
+	for _, listener in noiseListeners do
+		task.spawn(listener, position, source)
+	end
+end
+
+local function projectileFolder(): Folder
+	local existing = workspace:FindFirstChild("Proyectiles")
+	if existing and existing:IsA("Folder") then
+		return existing
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = "Proyectiles"
+	folder.Parent = workspace
+	return folder
+end
+
+-- ── inventario ─────────────────────────────────────────────────────
+
+function ItemService.give(player: Player, itemId: string): Tool?
+	local tool = Templates.clone(itemId)
+	if not tool then
+		return nil
+	end
+	local backpack = player:FindFirstChildOfClass("Backpack")
+	if not backpack then
+		tool:Destroy()
+		return nil
+	end
+	tool.Parent = backpack
+
+	if itemId == "chuleta" then
+		ExamService.grantSheetUses(player, O.ChuletaUsos)
+	end
+	return tool
+end
+
+function ItemService.clearInventory(player: Player)
+	local backpack = player:FindFirstChildOfClass("Backpack")
+	if backpack then
+		for _, child in backpack:GetChildren() do
+			if child:IsA("Tool") then
+				child:Destroy()
+			end
+		end
+	end
+	local character = player.Character
+	if character then
+		for _, child in character:GetChildren() do
+			if child:IsA("Tool") then
+				child:Destroy()
+			end
+		end
+	end
+end
+
+--- Cuenta cuantos de un objeto tiene encima (mochila + mano).
+local function countItem(player: Player, itemId: string): number
+	local total = 0
+	local backpack = player:FindFirstChildOfClass("Backpack")
+	if backpack then
+		for _, child in backpack:GetChildren() do
+			if child:IsA("Tool") and child:GetAttribute("Item") == itemId then
+				total += 1
+			end
+		end
+	end
+	local character = player.Character
+	if character then
+		for _, child in character:GetChildren() do
+			if child:IsA("Tool") and child:GetAttribute("Item") == itemId then
+				total += 1
+			end
+		end
+	end
+	return total
+end
+
+--- La herramienta que tiene equipada ahora mismo (la que esta en la mano).
+local function equipped(player: Player): Tool?
+	local character = player.Character
+	if not character then
+		return nil
+	end
+	return character:FindFirstChildOfClass("Tool")
+end
+
+-- ── casilleros ─────────────────────────────────────────────────────
+
+function ItemService.bindLockers(lockers: { Model })
+	for _, locker in lockers do
+		local door = locker:FindFirstChild("Puerta")
+		local prompt = door and door:FindFirstChild("Abrir")
+		if prompt and prompt:IsA("ProximityPrompt") then
+			prompt.Triggered:Connect(function(player)
+				local now = os.clock()
+				local last = lockerCooldown[locker] or -math.huge
+				if now - last < O.CasilleroEnfriamiento then
+					Net.event(Net.Events.Notify):FireClient(player, { key = "notify.locker_wait" })
+					return
+				end
+				lockerCooldown[locker] = now
+
+				Util.playSound(Config.Sonidos.Casillero, door :: BasePart, 0.4,
+					rng:NextNumber(0.9, 1.1))
+
+				-- Un casillero de cada cuatro esta vacio: si siempre
+				-- dieran algo, no valdria la pena elegir cual abrir.
+				if rng:NextNumber() < 0.25 then
+					Net.event(Net.Events.Notify):FireClient(player, { key = "notify.locker_empty" })
+					return
+				end
+
+				local itemId = LOOT[rng:NextInteger(1, #LOOT)]
+				if ItemService.give(player, itemId) then
+					Net.event(Net.Events.Notify):FireClient(player, {
+						key = "notify.locker",
+						args = { item = "@item." .. itemId },
+					})
+				end
+			end)
+		end
+	end
+end
+
+-- ── notas escritas ─────────────────────────────────────────────────
+
+function ItemService.setNote(player: Player, payload: any)
+	if type(payload) ~= "table" then
+		return
+	end
+	local text = tostring(payload.texto or "")
+	if #text > O.NotaCaracteres then
+		text = string.sub(text, 1, O.NotaCaracteres)
+	end
+	local index = tonumber(payload.indice)
+	local option = tonumber(payload.opcion)
+	notes[player] = {
+		indice = index and math.floor(index) or nil,
+		opcion = option and math.floor(option) or nil,
+		texto = text,
+	}
+
+	local tool = equipped(player)
+	if tool then
+		local value = tool:FindFirstChild("Texto")
+		if value and value:IsA("StringValue") then
+			value.Value = text
+		end
+	end
+end
+
+-- ── lanzamiento ────────────────────────────────────────────────────
+
+local function deliver(target: Player, thrower: Player, payload: NotePayload?)
+	if not payload then
+		return
+	end
+	Net.event(Net.Events.NoteReceived):FireClient(target, {
+		de = thrower.DisplayName,
+		texto = payload.texto,
+		indice = payload.indice,
+		opcion = payload.opcion,
+	})
+	Net.event(Net.Events.Notify):FireClient(target, {
+		key = "note.received",
+		args = { name = thrower.DisplayName },
+	})
+	if payload.indice and payload.opcion then
+		ExamService.applyNote(target, payload.indice, payload.opcion)
+	end
+end
+
+--- Lanza el objeto que el jugador tiene en la mano.
+function ItemService.throw(player: Player, direction: any): any
+	local tool = equipped(player)
+	if not tool then
+		return { ok = false, reason = { key = "cheat.none" } }
+	end
+	if tool:GetAttribute("Lanzable") ~= true then
+		return { ok = false, reason = { key = "cheat.none" } }
+	end
+
+	local now = os.clock()
+	if now - (lastThrow[player] or -math.huge) < O.EnfriamientoLanzar then
+		return { ok = false, reason = { key = "cheat.cooldown" } }
+	end
+
+	if typeof(direction) ~= "Vector3" or direction.Magnitude < 0.05 then
+		return { ok = false, reason = { key = "error.generic" } }
+	end
+	local aim = direction.Unit
+
+	local character = player.Character
+	local head = character and character:FindFirstChild("Head")
+	if not head or not head:IsA("BasePart") then
+		return { ok = false, reason = { key = "error.generic" } }
+	end
+
+	lastThrow[player] = now
+
+	-- Raycast corto: si hay una pared pegada a la cara, el proyectil
+	-- nace justo antes de ella y no atraviesa el aula.
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { character, projectileFolder() }
+	local clearance = 2.2
+	local blocked = workspace:Raycast(head.Position, aim * clearance, params)
+	local origin = head.Position + aim * (blocked and math.max(0.4, blocked.Distance - 0.3) or clearance)
+
+	local handle = tool:FindFirstChild("Handle")
+	local body: BasePart
+	if handle and handle:IsA("BasePart") then
+		body = handle:Clone()
+	else
+		body = Instance.new("Part")
+		body.Size = Vector3.new(0.6, 0.6, 0.6)
+	end
+	body.Name = "Proyectil"
+	-- El Handle original puede traer welds a piezas decorativas que no
+	-- se clonan (el pliegue de la nota, las alas del avion): esas
+	-- uniones apuntarian a partes destruidas.
+	for _, child in body:GetChildren() do
+		if child:IsA("WeldConstraint") or child:IsA("Weld") or child:IsA("Motor6D") then
+			child:Destroy()
+		end
+	end
+	body.Anchored = false
+	body.CanCollide = true
+	body.CanTouch = true
+	body.Massless = false
+	body.CFrame = CFrame.lookAt(origin, origin + aim)
+	body.Parent = projectileFolder()
+
+	local reach = tonumber(tool:GetAttribute("Alcance")) or 1
+	body.AssemblyLinearVelocity = aim * O.VelocidadLanzamiento * reach
+	body.AssemblyAngularVelocity = Vector3.new(rng:NextNumber(-8, 8), rng:NextNumber(-8, 8), 0)
+
+	-- Menos gravedad: el papel flota, no cae como una piedra.
+	local attachment = Instance.new("Attachment")
+	attachment.Parent = body
+	local lift = Instance.new("VectorForce")
+	lift.Attachment0 = attachment
+	lift.RelativeTo = Enum.ActuatorRelativeTo.World
+	lift.Force = Vector3.new(0, body.AssemblyMass * workspace.Gravity * (1 - O.GravedadProyectil), 0)
+	lift.Parent = body
+
+	local payload = notes[player]
+	local isNoise = tool:GetAttribute("Ruido") ~= nil
+
+	-- Lanzar en pleno examen es la infraccion mas cara.
+	if ExamService.isRunning() then
+		SuspicionService.infraction(player, Config.Sospecha.PorLanzar, "throw")
+	end
+
+	Util.playSound(Config.Sonidos.Papel, body, 0.3, rng:NextNumber(1.1, 1.4))
+
+	local spent = false
+	local function land(position: Vector3, hitPlayer: Player?)
+		if spent then
+			return
+		end
+		spent = true
+		if hitPlayer and hitPlayer ~= player then
+			deliver(hitPlayer, player, payload)
+			Net.event(Net.Events.Notify):FireClient(hitPlayer, { key = "notify.hit" })
+		end
+		if isNoise then
+			noise(position, player)
+		end
+		Util.playSound(Config.Sonidos.Impacto, workspace :: any, 0.25, 1.6)
+		task.delay(1.2, function()
+			if body.Parent then
+				body:Destroy()
+			end
+		end)
+	end
+
+	body.Touched:Connect(function(hit)
+		if spent then
+			return
+		end
+		local model = hit:FindFirstAncestorOfClass("Model")
+		local hitPlayer = model and Players:GetPlayerFromCharacter(model) or nil
+		if hitPlayer == player then
+			return
+		end
+		land(body.Position, hitPlayer)
+	end)
+
+	task.delay(O.VidaProyectil, function()
+		if not spent then
+			land(body.Position, nil)
+		end
+		if body.Parent then
+			body:Destroy()
+		end
+	end)
+
+	tool:Destroy()
+	notes[player] = nil
+	return { ok = true, reason = { key = "note.sent" } }
+end
+
+-- ── remotes ────────────────────────────────────────────────────────
+
+function ItemService.start()
+	Net.event(Net.Events.Throw).OnServerEvent:Connect(function(player, direction)
+		local result = ItemService.throw(player, direction)
+		if not result.ok and result.reason then
+			Net.event(Net.Events.Notify):FireClient(player, result.reason)
+		end
+	end)
+
+	Net.event(Net.Events.NoteText).OnServerEvent:Connect(function(player, payload)
+		ItemService.setNote(player, payload)
+	end)
+
+	Net.event(Net.Events.Cheat).OnServerEvent:Connect(function(player, action, index)
+		local i = tonumber(index) and math.floor(tonumber(index) :: number) or 1
+		local result: any
+		if action == "peek" then
+			result = ExamService.peek(player, i)
+		elseif action == "whisper" then
+			result = ExamService.whisper(player, i)
+		elseif action == "sheet" then
+			result = ExamService.useSheet(player)
+		else
+			result = { ok = false, reason = { key = "error.generic" } }
+		end
+		if result.reason then
+			Net.event(Net.Events.Notify):FireClient(player, result.reason)
+		end
+	end)
+
+	Players.PlayerRemoving:Connect(function(player)
+		lastThrow[player] = nil
+		notes[player] = nil
+	end)
+end
+
+function ItemService.countOf(player: Player, itemId: string): number
+	return countItem(player, itemId)
+end
+
+return ItemService
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX5">
+      <Properties>
+        <string name="Name">LobbyService</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	LobbyService
+	------------------------------------------------------------------
+	Salas para jugar con amigos: crear una, buscarla por nombre y
+	entrar, con contrasena si la queres privada.
+
+	Roblox no tiene "salas", tiene servidores. Lo que hace esto:
+
+		crear  -> TeleportService:ReserveServer() devuelve el codigo de
+		          un servidor nuevo y vacio del mismo juego, y ese
+		          codigo se publica en un MemoryStore que todos los
+		          servidores del juego pueden leer
+		entrar -> se lee el codigo del MemoryStore y se teletransporta
+
+	La sala avisa que sigue viva desde adentro: el servidor reservado
+	recibe su propio codigo por TeleportData, actualiza cuanta gente
+	hay y borra el aviso al quedar vacio. Sin eso el listado se
+	llenaria de salas fantasma.
+
+	Nada de esto existe en Studio (no hay servidores que reservar): ahi
+	devuelve "no disponible" y se juega local igual.
+--]]
+
+local MemoryStoreService = game:GetService("MemoryStoreService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TeleportService = game:GetService("TeleportService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+
+local L = Config.Salas
+
+local LobbyService = {}
+
+local LIMITE_NOMBRE = 24
+local LIMITE_CLAVE = 16
+
+local UNAVAILABLE = { ok = false, reason = { key = "room.unavailable" } }
+
+local rooms: SortedMap? = nil
+local myCode: string? = nil
+
+local function store(): SortedMap?
+	if rooms then
+		return rooms
+	end
+	local ok, map = pcall(function()
+		return MemoryStoreService:GetSortedMap(L.MapaMemoria)
+	end)
+	if ok then
+		rooms = map
+	end
+	return rooms
+end
+
+local function available(): boolean
+	return game.PlaceId ~= 0 and store() ~= nil
+end
+
+local function clean(text: any, limit: number): string
+	if typeof(text) ~= "string" then
+		return ""
+	end
+	local trimmed = string.gsub(text, "^%s+", "")
+	trimmed = string.gsub(trimmed, "%s+$", "")
+	return string.sub(trimmed, 1, limit)
+end
+
+local function capacities(): (number, number)
+	local list = L.CapacidadesPosibles
+	local min, max = list[1], list[1]
+	for _, value in list do
+		min = math.min(min, value)
+		max = math.max(max, value)
+	end
+	return min, max
+end
+
+-- ── listar ─────────────────────────────────────────────────────────
+
+function LobbyService.list(_player: Player, query: any): any
+	if not available() then
+		return UNAVAILABLE
+	end
+
+	local map = store() :: SortedMap
+	local ok, entries = pcall(function()
+		return map:GetRangeAsync(Enum.SortDirection.Ascending, L.MaximoListado)
+	end)
+	if not ok then
+		return UNAVAILABLE
+	end
+
+	local needle = string.lower(clean(query, LIMITE_NOMBRE))
+	local list = {}
+
+	for _, entry in entries do
+		local room = entry.value
+		if typeof(room) == "table" and room.name then
+			local matches = needle == ""
+				or string.find(string.lower(room.name), needle, 1, true) ~= nil
+			if matches then
+				table.insert(list, {
+					code = entry.key,
+					name = room.name,
+					host = room.host,
+					count = room.count or 0,
+					maxPlayers = room.maxPlayers or L.CapacidadPorDefecto,
+					-- La clave nunca sale del servidor: solo si tiene o no.
+					locked = (room.password or "") ~= "",
+				})
+			end
+		end
+	end
+
+	table.sort(list, function(a, b)
+		return a.count > b.count
+	end)
+
+	return { ok = true, rooms = list }
+end
+
+-- ── crear ──────────────────────────────────────────────────────────
+
+function LobbyService.create(player: Player, options: any): any
+	if not available() then
+		return UNAVAILABLE
+	end
+	if typeof(options) ~= "table" then
+		return { ok = false, reason = { key = "room.name" } }
+	end
+
+	local name = clean(options.name, LIMITE_NOMBRE)
+	if name == "" then
+		return { ok = false, reason = { key = "room.name" } }
+	end
+
+	local password = clean(options.password, LIMITE_CLAVE)
+	local min, max = capacities()
+	local maxPlayers = math.clamp(
+		typeof(options.maxPlayers) == "number" and math.floor(options.maxPlayers)
+			or L.CapacidadPorDefecto,
+		min, max)
+
+	local reserved, code = pcall(function()
+		return TeleportService:ReserveServer(game.PlaceId)
+	end)
+	if not reserved then
+		return UNAVAILABLE
+	end
+
+	local map = store() :: SortedMap
+	local saved = pcall(function()
+		map:SetAsync(code, {
+			name = name,
+			host = player.DisplayName,
+			password = password,
+			maxPlayers = maxPlayers,
+			count = 0,
+		}, L.VidaEntrada)
+	end)
+	if not saved then
+		return UNAVAILABLE
+	end
+
+	return LobbyService.send(player, code)
+end
+
+-- ── entrar ─────────────────────────────────────────────────────────
+
+--- Manda al jugador al servidor de la sala, con el codigo adentro del
+--- TeleportData para que esa sala sepa cual es su propio aviso.
+function LobbyService.send(player: Player, code: string): any
+	local options = Instance.new("TeleportOptions")
+	options.ReservedServerAccessCode = code
+	options:SetTeleportData({ roomCode = code })
+
+	local sent = pcall(function()
+		TeleportService:TeleportAsync(game.PlaceId, { player }, options)
+	end)
+	if not sent then
+		return UNAVAILABLE
+	end
+	return { ok = true, code = code, reason = { key = "room.created", args = { code = code } } }
+end
+
+function LobbyService.join(player: Player, code: any, password: any): any
+	if not available() then
+		return UNAVAILABLE
+	end
+	if typeof(code) ~= "string" then
+		return { ok = false, reason = { key = "room.gone" } }
+	end
+
+	local map = store() :: SortedMap
+	local ok, room = pcall(function()
+		return map:GetAsync(code)
+	end)
+	if not ok or typeof(room) ~= "table" then
+		return { ok = false, reason = { key = "room.gone" } }
+	end
+
+	if (room.password or "") ~= "" and clean(password, LIMITE_CLAVE) ~= room.password then
+		return { ok = false, reason = { key = "room.wrong_password" } }
+	end
+	if (room.count or 0) >= (room.maxPlayers or L.CapacidadPorDefecto) then
+		return { ok = false, reason = { key = "room.full" } }
+	end
+
+	return LobbyService.send(player, code)
+end
+
+-- ── desde adentro de la sala ───────────────────────────────────────
+
+local function findMyCode(): string?
+	for _, player in Players:GetPlayers() do
+		local ok, data = pcall(function()
+			return player:GetJoinData().TeleportData
+		end)
+		if ok and typeof(data) == "table" and typeof(data.roomCode) == "string" then
+			return data.roomCode
+		end
+	end
+	return nil
+end
+
+--- Si este servidor es una sala, mantiene vivo su aviso con la gente
+--- que hay adentro, y lo borra cuando se vacia.
+function LobbyService.startHeartbeat()
+	if not available() then
+		return
+	end
+
+	task.spawn(function()
+		while true do
+			myCode = myCode or findMyCode()
+			if myCode then
+				local map = store() :: SortedMap
+				local count = #Players:GetPlayers()
+				pcall(function()
+					map:UpdateAsync(myCode :: string, function(room)
+						if typeof(room) ~= "table" then
+							return nil
+						end
+						room.count = count
+						return room
+					end, L.VidaEntrada)
+				end)
+
+				if count == 0 then
+					pcall(function()
+						map:RemoveAsync(myCode :: string)
+					end)
+					myCode = nil
+				end
+			end
+			task.wait(L.Latido)
+		end
+	end)
+end
+
+function LobbyService.isAvailable(): boolean
+	return available()
+end
+
+function LobbyService.start()
+	Net.func(Net.Functions.ListRooms).OnServerInvoke = function(player, query)
+		return LobbyService.list(player, query)
+	end
+	Net.func(Net.Functions.CreateRoom).OnServerInvoke = function(player, options)
+		return LobbyService.create(player, options)
+	end
+	Net.func(Net.Functions.JoinRoom).OnServerInvoke = function(player, code, password)
+		return LobbyService.join(player, code, password)
+	end
+	LobbyService.startHeartbeat()
+end
+
+return LobbyService
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX6">
+      <Properties>
+        <string name="Name">MapBuilder</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	MapBuilder
+	------------------------------------------------------------------
+	Arma el instituto entero por codigo, modular y en piezas nombradas
+	para que el resto del juego no tenga que adivinar donde esta nada:
+
+		Workspace/Instituto/Pasillo      casilleros + zona de recreo
+		Workspace/Instituto/Aulas/Aula1  filas fijas de pupitres,
+		                                 tarima, pizarra y puerta
+		Workspace/Instituto/Castigo      la sala de castigo
+		Workspace/Personajes             alumnos y el NPC del profesor
+		Workspace/Objetos                cosas interactivas del mapa
+		Workspace/Proyectiles            lo que vuela por el aire
+
+	Todo se construye con la geometria de Config.Escuela: cambiando
+	esos numeros cambia el colegio, no hay medidas escritas a mano.
+
+	Cada pieza va dentro de su propio pcall: si una silla explota, el
+	resto del colegio se construye igual y el Output dice cual fallo.
+--]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Theme = require(Shared:WaitForChild("Theme"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local E = Config.Escuela
+
+local MapBuilder = {}
+
+export type Desk = {
+	seat: Seat,
+	desk: BasePart,
+	paper: BasePart,
+	fila: number,
+	asiento: number,
+	aula: number,
+}
+
+export type Classroom = {
+	index: number,
+	model: Model,
+	center: Vector3,
+	dir: Vector3,          -- de la pizarra hacia el fondo del aula
+	desks: { Desk },
+	door: BasePart,
+	blackboard: BasePart,
+	podium: BasePart,
+	patrol: { Vector3 },   -- puntos de patrullaje del profesor
+	spawn: Vector3,        -- donde aparece el profesor
+}
+
+export type Map = {
+	root: Model,
+	hallway: Model,
+	classrooms: { Classroom },
+	lockers: { Model },
+	shop: BasePart,
+	detention: BasePart,
+	bell: BasePart,
+	spawns: { Vector3 },
+}
+
+-- ── helpers ────────────────────────────────────────────────────────
+
+local function block(parent: Instance, name: string, size: Vector3, cf: CFrame,
+	color: Color3, material: Enum.Material): BasePart
+	local part = Util.part({
+		Name = name,
+		Size = size,
+		CFrame = cf,
+		Color = color,
+		Material = material,
+		Parent = parent,
+	})
+	return part
+end
+
+local function safely(label: string, fn: () -> ())
+	local ok, err = pcall(fn)
+	if not ok then
+		warn(string.format("[Mapa] %s fallo: %s", label, tostring(err)))
+	end
+end
+
+--- Un cartel de texto pegado a una pared (para nombres de aula, etc).
+local function sign(parent: Instance, text: string, size: Vector2, cf: CFrame, face: Enum.NormalId)
+	local plate = block(parent, "Cartel", Vector3.new(size.X, size.Y, 0.2), cf,
+		Color3.fromRGB(28, 32, 40), Enum.Material.SmoothPlastic)
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = face
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 48
+	gui.LightInfluence = 0.2
+	gui.Parent = plate
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Font = Theme.FontBold
+	label.Text = text
+	label.TextColor3 = Color3.fromRGB(238, 240, 246)
+	label.TextScaled = true
+	label.Parent = gui
+end
+
+-- ── pasillo ────────────────────────────────────────────────────────
+
+local function buildLocker(parent: Instance, cf: CFrame, index: number): Model
+	local model = Instance.new("Model")
+	model.Name = "Casillero" .. index
+	model.Parent = parent
+
+	local body = block(model, "Cuerpo",
+		Vector3.new(E.CasilleroAncho, E.CasilleroAlto, E.CasilleroFondo), cf,
+		E.ColorCasillero, Enum.Material.Metal)
+	model.PrimaryPart = body
+
+	-- Puerta un poco mas clara, con rejilla y manija.
+	local door = block(model, "Puerta",
+		Vector3.new(E.CasilleroAncho - 0.25, E.CasilleroAlto - 0.3, 0.18),
+		cf * CFrame.new(0, 0, E.CasilleroFondo / 2 + 0.09),
+		E.ColorCasillero:Lerp(Color3.new(1, 1, 1), 0.16), Enum.Material.Metal)
+	door.CanCollide = false
+
+	block(model, "Rejilla", Vector3.new(E.CasilleroAncho - 1.4, 0.9, 0.08),
+		cf * CFrame.new(0, E.CasilleroAlto / 2 - 1.1, E.CasilleroFondo / 2 + 0.19),
+		Color3.fromRGB(24, 30, 38), Enum.Material.DiamondPlate).CanCollide = false
+
+	block(model, "Manija", Vector3.new(0.22, 1.1, 0.16),
+		cf * CFrame.new(E.CasilleroAncho / 2 - 0.55, -0.4, E.CasilleroFondo / 2 + 0.2),
+		Color3.fromRGB(206, 210, 216), Enum.Material.Metal).CanCollide = false
+
+	local number = Instance.new("SurfaceGui")
+	number.Face = Enum.NormalId.Front
+	number.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	number.PixelsPerStud = 40
+	number.Parent = door
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, 0, 0, 42)
+	label.Position = UDim2.new(0, 0, 0, 8)
+	label.BackgroundTransparency = 1
+	label.Font = Theme.FontBold
+	label.Text = string.format("%03d", index)
+	label.TextColor3 = Color3.fromRGB(224, 230, 240)
+	label.TextScaled = true
+	label.Parent = number
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "Abrir"
+	prompt.ActionText = "Abrir"
+	prompt.ObjectText = "Casillero " .. index
+	prompt.HoldDuration = 0.35
+	prompt.MaxActivationDistance = 9
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = door
+
+	model:SetAttribute("Indice", index)
+	return model
+end
+
+local function buildRecreation(parent: Instance, zStart: number): BasePart
+	local half = E.PasilloAncho / 2
+
+	-- Bancos largos contra las paredes.
+	for i = 0, 2 do
+		local z = zStart + 6 + i * 10
+		for _, side in { -1, 1 } do
+			local x = side * (half - 3)
+			block(parent, "Banco", Vector3.new(2.4, 0.4, 7),
+				CFrame.new(x, 1.8, z), Color3.fromRGB(148, 108, 62), Enum.Material.WoodPlanks)
+			block(parent, "PataBanco", Vector3.new(2, 1.6, 0.5),
+				CFrame.new(x, 0.9, z - 2.6), Color3.fromRGB(74, 78, 88), Enum.Material.Metal)
+			block(parent, "PataBanco", Vector3.new(2, 1.6, 0.5),
+				CFrame.new(x, 0.9, z + 2.6), Color3.fromRGB(74, 78, 88), Enum.Material.Metal)
+		end
+	end
+
+	-- Maquinas expendedoras.
+	for i, side in { -1, 1 } do
+		local x = side * (half - 1.6)
+		local body = block(parent, "Expendedora", Vector3.new(2.6, 8, 4.4),
+			CFrame.new(x, 4, zStart + 2 + i * 4), Color3.fromRGB(180, 46, 52), Enum.Material.Metal)
+		block(parent, "Vidrio", Vector3.new(0.2, 5.6, 3.4),
+			body.CFrame * CFrame.new(-side * 1.35, 0.6, 0),
+			Color3.fromRGB(160, 200, 220), Enum.Material.Glass).Transparency = 0.55
+	end
+
+	-- Mesa de ping pong en el centro del recreo.
+	local table_ = block(parent, "MesaPingPong", Vector3.new(9, 0.4, 5),
+		CFrame.new(0, 3, zStart + 18), Color3.fromRGB(24, 92, 62), Enum.Material.SmoothPlastic)
+	block(parent, "Red", Vector3.new(0.2, 1.1, 5),
+		table_.CFrame * CFrame.new(0, 0.75, 0), Color3.fromRGB(235, 238, 244), Enum.Material.Fabric).CanCollide = false
+	for _, dx in { -3.8, 3.8 } do
+		for _, dz in { -2, 2 } do
+			block(parent, "PataMesa", Vector3.new(0.4, 3, 0.4),
+				CFrame.new(dx, 1.5, zStart + 18 + dz), Color3.fromRGB(64, 68, 78), Enum.Material.Metal)
+		end
+	end
+
+	-- Plantas y tachos, para que el pasillo no sea un tubo vacio.
+	for i = 0, 3 do
+		local z = zStart + 4 + i * 8
+		local side = (i % 2 == 0) and -1 or 1
+		local pot = block(parent, "Maceta", Vector3.new(2, 2, 2),
+			CFrame.new(side * (half - 2.4), 1, z), Color3.fromRGB(126, 92, 68), Enum.Material.Slate)
+		local leaves = block(parent, "Planta", Vector3.new(3.4, 4, 3.4),
+			pot.CFrame * CFrame.new(0, 2.8, 0), Color3.fromRGB(56, 118, 62), Enum.Material.Grass)
+		leaves.Shape = Enum.PartType.Ball
+		leaves.CanCollide = false
+	end
+
+	-- Kiosco de la tienda: el mostrador con el prompt.
+	local counter = block(parent, "Tienda", Vector3.new(10, 4, 3),
+		CFrame.new(0, 2, zStart + 30), Color3.fromRGB(206, 168, 92), Enum.Material.WoodPlanks)
+	sign(parent, "TIENDA", Vector2.new(9, 2),
+		CFrame.new(0, 6.4, zStart + 30), Enum.NormalId.Front)
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "Tienda"
+	prompt.ActionText = "Tienda"
+	prompt.ObjectText = "Kiosco"
+	prompt.HoldDuration = 0
+	prompt.MaxActivationDistance = 12
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = counter
+
+	return counter
+end
+
+local function buildHallway(root: Model): (Model, { Model }, BasePart, BasePart, { Vector3 })
+	local hall = Instance.new("Model")
+	hall.Name = "Pasillo"
+	hall.Parent = root
+
+	local halfW = E.PasilloAncho / 2
+	local halfL = E.PasilloLargo / 2
+
+	block(hall, "Piso", Vector3.new(E.PasilloAncho, 1, E.PasilloLargo),
+		CFrame.new(0, -0.5, 0), E.ColorPiso, Enum.Material.CeramicTiles)
+	block(hall, "Techo", Vector3.new(E.PasilloAncho, 1, E.PasilloLargo),
+		CFrame.new(0, E.AlturaPiso, 0), Color3.fromRGB(238, 238, 236), Enum.Material.Plaster)
+
+	-- Paredes largas. Las aulas les abren huecos despues.
+	for _, side in { -1, 1 } do
+		block(hall, "Pared", Vector3.new(E.EspesorPared, E.AlturaPiso, E.PasilloLargo),
+			CFrame.new(side * halfW, E.AlturaPiso / 2, 0), E.ColorParedes, Enum.Material.Concrete)
+		block(hall, "Zocalo", Vector3.new(0.35, 1.2, E.PasilloLargo),
+			CFrame.new(side * (halfW - 0.6), 0.6, 0), E.ColorZocalo, Enum.Material.SmoothPlastic).CanCollide = false
+	end
+	-- Tapas de los dos extremos.
+	for _, side in { -1, 1 } do
+		block(hall, "Fondo", Vector3.new(E.PasilloAncho + 2, E.AlturaPiso, E.EspesorPared),
+			CFrame.new(0, E.AlturaPiso / 2, side * halfL), E.ColorParedes, Enum.Material.Concrete)
+	end
+
+	-- Luces de tubo cada 12 studs.
+	local lights = math.floor(E.PasilloLargo / 12)
+	for i = 0, lights do
+		local z = -halfL + 6 + i * 12
+		local tube = block(hall, "Tubo", Vector3.new(2, 0.3, 6),
+			CFrame.new(0, E.AlturaPiso - 0.7, z), Color3.fromRGB(255, 252, 238), Enum.Material.Neon)
+		tube.CanCollide = false
+		local light = Instance.new("PointLight")
+		light.Brightness = 1.1
+		light.Range = 26
+		light.Color = Color3.fromRGB(255, 250, 236)
+		light.Parent = tube
+	end
+
+	-- Casilleros: banda central del pasillo, los dos lados.
+	local lockers: { Model } = {}
+	local bandStart = -halfL + 30
+	for side_i, side in { -1, 1 } do
+		for i = 0, E.CasillerosPorLado - 1 do
+			local z = bandStart + i * (E.CasilleroAncho + 0.15)
+			local cf = CFrame.new(side * (halfW - E.CasilleroFondo / 2 - 0.6),
+				E.CasilleroAlto / 2, z)
+				* CFrame.Angles(0, side < 0 and math.rad(90) or math.rad(-90), 0)
+			local index = (side_i - 1) * E.CasillerosPorLado + i + 1
+			table.insert(lockers, buildLocker(hall, cf, index))
+		end
+	end
+
+	local shop = buildRecreation(hall, halfL - E.ZonaRecreoLargo)
+
+	-- La campana, arriba del todo, al lado de la tienda.
+	local bell = block(hall, "Campana", Vector3.new(2.2, 2.2, 2.2),
+		CFrame.new(0, E.AlturaPiso - 2.6, halfL - 4),
+		Color3.fromRGB(196, 156, 62), Enum.Material.Metal)
+	bell.Shape = Enum.PartType.Ball
+	bell.CanCollide = false
+
+	-- Puntos de aparicion, repartidos en la zona de recreo.
+	local spawns: { Vector3 } = {}
+	for i = 0, 11 do
+		local x = ((i % 4) - 1.5) * 5
+		local z = halfL - 8 - math.floor(i / 4) * 6
+		table.insert(spawns, Vector3.new(x, 4, z))
+	end
+
+	return hall, lockers, shop, bell, spawns
+end
+
+-- ── aulas ──────────────────────────────────────────────────────────
+
+local function buildDesk(parent: Instance, position: Vector3, look: Vector3,
+	aula: number, fila: number, asiento: number): Desk
+	local face = CFrame.lookAt(position, position + look)
+
+	local desk = block(parent, "Pupitre", Vector3.new(4.4, 0.28, 2.6),
+		face * CFrame.new(0, 3, -1.4), Color3.fromRGB(214, 190, 148), Enum.Material.WoodPlanks)
+	block(parent, "BordePupitre", Vector3.new(4.5, 0.35, 0.25),
+		desk.CFrame * CFrame.new(0, -0.08, -1.2), Color3.fromRGB(70, 74, 84), Enum.Material.Metal).CanCollide = false
+	for _, dx in { -1.8, 1.8 } do
+		block(parent, "PataPupitre", Vector3.new(0.22, 3, 0.22),
+			desk.CFrame * CFrame.new(dx, -1.5, -0.9), Color3.fromRGB(74, 78, 88), Enum.Material.Metal)
+		block(parent, "PataPupitre", Vector3.new(0.22, 3, 0.22),
+			desk.CFrame * CFrame.new(dx, -1.5, 0.9), Color3.fromRGB(74, 78, 88), Enum.Material.Metal)
+	end
+	-- Bandeja de abajo, donde se esconden las chuletas.
+	block(parent, "Bandeja", Vector3.new(3.8, 0.15, 2),
+		desk.CFrame * CFrame.new(0, -1.1, 0), Color3.fromRGB(160, 138, 104), Enum.Material.Wood).CanCollide = false
+
+	-- La silla: un Seat de verdad, asi Occupant nos dice quien esta sentado.
+	local seat = Instance.new("Seat")
+	seat.Name = "Asiento"
+	seat.Size = Vector3.new(2.6, 0.4, 2.6)
+	seat.CFrame = face * CFrame.new(0, 2.2, 1.1)
+	seat.Anchored = true
+	seat.CanCollide = true
+	seat.Color = Color3.fromRGB(46, 60, 84)
+	seat.Material = Enum.Material.SmoothPlastic
+	seat.TopSurface = Enum.SurfaceType.Smooth
+	seat.Parent = parent
+
+	block(parent, "Respaldo", Vector3.new(2.6, 2.6, 0.3),
+		seat.CFrame * CFrame.new(0, 1.4, 1.15), Color3.fromRGB(46, 60, 84), Enum.Material.SmoothPlastic).CanCollide = false
+	for _, dx in { -1, 1 } do
+		block(parent, "PataSilla", Vector3.new(0.2, 2.2, 0.2),
+			seat.CFrame * CFrame.new(dx, -1.1, -0.9), Color3.fromRGB(74, 78, 88), Enum.Material.Metal)
+		block(parent, "PataSilla", Vector3.new(0.2, 2.2, 0.2),
+			seat.CFrame * CFrame.new(dx, -1.1, 0.9), Color3.fromRGB(74, 78, 88), Enum.Material.Metal)
+	end
+
+	-- La hoja del examen apoyada en el pupitre. La UI la dibuja el
+	-- servidor via SurfaceGui: se ve desde afuera (por eso se puede espiar).
+	local paper = block(parent, "Hoja", Vector3.new(2.4, 0.05, 1.7),
+		desk.CFrame * CFrame.new(0, 0.17, -0.1), Color3.fromRGB(250, 248, 242), Enum.Material.SmoothPlastic)
+	paper.CanCollide = false
+	paper.CastShadow = false
+
+	seat:SetAttribute("Aula", aula)
+	seat:SetAttribute("Fila", fila)
+	seat:SetAttribute("Asiento", asiento)
+
+	return { seat = seat, desk = desk, paper = paper, fila = fila, asiento = asiento, aula = aula }
+end
+
+local function buildClassroom(root: Instance, index: number): Classroom
+	local model = Instance.new("Model")
+	model.Name = "Aula" .. index
+	model.Parent = root
+
+	-- Impares a la izquierda del pasillo, pares a la derecha; cada par
+	-- de aulas baja un tramo en Z.
+	local side = (index % 2 == 1) and -1 or 1
+	local row = math.floor((index - 1) / 2)
+	local halfW = E.AulaAncho / 2
+	local halfL = E.AulaLargo / 2
+	local cx = side * (E.PasilloAncho / 2 + halfW)
+	local cz = -25 - row * (E.AulaLargo + 10)
+	local center = Vector3.new(cx, 0, cz)
+
+	-- dir: de la pizarra hacia el fondo. La puerta da al pasillo.
+	local dir = Vector3.new(-side, 0, 0)
+	local look = -dir  -- los alumnos miran a la pizarra
+
+	block(model, "Piso", Vector3.new(E.AulaAncho, 1, E.AulaLargo),
+		CFrame.new(cx, -0.5, cz), Color3.fromRGB(178, 172, 160), Enum.Material.CeramicTiles)
+	block(model, "Techo", Vector3.new(E.AulaAncho, 1, E.AulaLargo),
+		CFrame.new(cx, E.AlturaPiso, cz), Color3.fromRGB(240, 240, 238), Enum.Material.Plaster)
+
+	-- Paredes: la del pasillo lleva el hueco de la puerta.
+	block(model, "ParedFondo", Vector3.new(E.EspesorPared, E.AlturaPiso, E.AulaLargo),
+		CFrame.new(cx - dir.X * halfW, E.AlturaPiso / 2, cz), E.ColorParedes, Enum.Material.Concrete)
+	for _, dz in { -1, 1 } do
+		block(model, "ParedLateral", Vector3.new(E.AulaAncho, E.AlturaPiso, E.EspesorPared),
+			CFrame.new(cx, E.AlturaPiso / 2, cz + dz * halfL), E.ColorParedes, Enum.Material.Concrete)
+	end
+	-- Pared del pasillo partida en dos, dejando el vano de la puerta.
+	local doorWidth, doorHeight = 8, 10
+	local wallX = cx + dir.X * halfW
+	local sidePiece = (E.AulaLargo - doorWidth) / 2
+	for _, dz in { -1, 1 } do
+		block(model, "ParedPasillo", Vector3.new(E.EspesorPared, E.AlturaPiso, sidePiece),
+			CFrame.new(wallX, E.AlturaPiso / 2, cz + dz * (doorWidth / 2 + sidePiece / 2)),
+			E.ColorParedes, Enum.Material.Concrete)
+	end
+	block(model, "Dintel", Vector3.new(E.EspesorPared, E.AlturaPiso - doorHeight, doorWidth),
+		CFrame.new(wallX, doorHeight + (E.AlturaPiso - doorHeight) / 2, cz),
+		E.ColorParedes, Enum.Material.Concrete)
+
+	-- La puerta: durante el examen se traba (CanCollide + opaca).
+	local door = block(model, "Puerta", Vector3.new(0.4, doorHeight, doorWidth),
+		CFrame.new(wallX, doorHeight / 2, cz), Color3.fromRGB(126, 92, 58), Enum.Material.WoodPlanks)
+	door.CanCollide = false
+	door.Transparency = 1
+	door:SetAttribute("Trabada", false)
+
+	sign(model, "AULA " .. index, Vector2.new(6, 1.8),
+		CFrame.new(wallX + dir.X * 0.8, doorHeight + 1.6, cz)
+			* CFrame.Angles(0, side < 0 and math.rad(90) or math.rad(-90), 0),
+		Enum.NormalId.Front)
+
+	-- Ventanas en la pared del fondo, para que entre luz.
+	for i = -1, 1 do
+		local glass = block(model, "Ventana", Vector3.new(0.3, 5, 8),
+			CFrame.new(cx - dir.X * (halfW - 0.2), 8, cz + i * 12),
+			Color3.fromRGB(190, 214, 232), Enum.Material.Glass)
+		glass.Transparency = 0.55
+		glass.CanCollide = false
+	end
+
+	-- Pizarra + tarima del profesor.
+	local boardX = cx - dir.X * (halfW - 0.7)
+	local blackboard = block(model, "Pizarra", Vector3.new(0.4, 7, 26),
+		CFrame.new(boardX, 7.5, cz), E.ColorPizarra, Enum.Material.Slate)
+	block(model, "MarcoPizarra", Vector3.new(0.5, 7.6, 26.6),
+		CFrame.new(boardX + dir.X * 0.1, 7.5, cz),
+		Color3.fromRGB(150, 116, 72), Enum.Material.Wood).CanCollide = false
+	blackboard.CFrame = CFrame.new(boardX, 7.5, cz)
+
+	local podium = block(model, "Tarima", Vector3.new(10, 1, E.AulaLargo - 8),
+		CFrame.new(boardX + dir.X * 5.5, 0.5, cz),
+		Color3.fromRGB(132, 96, 62), Enum.Material.WoodPlanks)
+
+	local deskTeacher = block(model, "EscritorioProfesor", Vector3.new(3.4, 0.35, 8),
+		CFrame.new(boardX + dir.X * 7, 4, cz), Color3.fromRGB(112, 82, 54), Enum.Material.Wood)
+	for _, dz in { -3.4, 3.4 } do
+		block(model, "PataEscritorio", Vector3.new(3, 3.4, 0.4),
+			deskTeacher.CFrame * CFrame.new(0, -1.9, dz), Color3.fromRGB(96, 70, 46), Enum.Material.Wood)
+	end
+
+	-- Filas fijas de pupitres.
+	local desks: { Desk } = {}
+	for fila = 1, E.FilasDePupitres do
+		for asiento = 1, E.PupitresPorFila do
+			local offsetX = 13 + (fila - 1) * E.PupitreSeparacionX
+			local offsetZ = (asiento - (E.PupitresPorFila + 1) / 2) * E.PupitreSeparacionZ
+			local position = Vector3.new(boardX + dir.X * offsetX, 0, cz + offsetZ)
+			safely(string.format("pupitre A%d F%d P%d", index, fila, asiento), function()
+				table.insert(desks, buildDesk(model, position, look, index, fila, asiento))
+			end)
+		end
+	end
+
+	-- Ruta de patrullaje: sube y baja por los pasillos entre filas,
+	-- mas una parada en la pizarra.
+	local patrol: { Vector3 } = {}
+	local lanes = E.FilasDePupitres
+	for fila = 1, lanes do
+		local x = boardX + dir.X * (13 + (fila - 1) * E.PupitreSeparacionX + E.PupitreSeparacionX / 2)
+		local edge = (E.PupitresPorFila / 2) * E.PupitreSeparacionZ + 1
+		local a = Vector3.new(x, 3, cz - edge)
+		local b = Vector3.new(x, 3, cz + edge)
+		if fila % 2 == 0 then
+			a, b = b, a
+		end
+		table.insert(patrol, a)
+		table.insert(patrol, b)
+	end
+
+	local spawn = Vector3.new(boardX + dir.X * 5, 4, cz)
+
+	-- Luces del aula.
+	for i = -1, 1 do
+		local tube = block(model, "Tubo", Vector3.new(8, 0.3, 2),
+			CFrame.new(cx, E.AlturaPiso - 0.7, cz + i * 12),
+			Color3.fromRGB(255, 252, 240), Enum.Material.Neon)
+		tube.CanCollide = false
+		local light = Instance.new("PointLight")
+		light.Brightness = 1.3
+		light.Range = 34
+		light.Parent = tube
+	end
+
+	model.PrimaryPart = blackboard
+
+	return {
+		index = index,
+		model = model,
+		center = center,
+		dir = dir,
+		desks = desks,
+		door = door,
+		blackboard = blackboard,
+		podium = podium,
+		patrol = patrol,
+		spawn = spawn,
+	}
+end
+
+-- ── sala de castigo ────────────────────────────────────────────────
+
+local function buildDetention(root: Instance): BasePart
+	local model = Instance.new("Model")
+	model.Name = "Castigo"
+	model.Parent = root
+
+	local c = E.SalaDeCastigo
+	local size = 24
+	block(model, "Piso", Vector3.new(size, 1, size),
+		CFrame.new(c.X, -0.5, c.Z), Color3.fromRGB(120, 118, 112), Enum.Material.Concrete)
+	block(model, "Techo", Vector3.new(size, 1, size),
+		CFrame.new(c.X, 12, c.Z), Color3.fromRGB(150, 148, 142), Enum.Material.Concrete)
+	for _, offset in { Vector3.new(size / 2, 0, 0), Vector3.new(-size / 2, 0, 0) } do
+		block(model, "Pared", Vector3.new(1, 12, size),
+			CFrame.new(c.X + offset.X, 6, c.Z), Color3.fromRGB(138, 136, 130), Enum.Material.Concrete)
+	end
+	for _, offset in { size / 2, -size / 2 } do
+		block(model, "Pared", Vector3.new(size, 12, 1),
+			CFrame.new(c.X, 6, c.Z + offset), Color3.fromRGB(138, 136, 130), Enum.Material.Concrete)
+	end
+
+	local chair = block(model, "Banquito", Vector3.new(3, 0.4, 3),
+		CFrame.new(c.X, 3, c.Z), Color3.fromRGB(96, 70, 46), Enum.Material.Wood)
+	sign(model, "SALA DE CASTIGO", Vector2.new(12, 2.4),
+		CFrame.new(c.X, 8, c.Z - size / 2 + 0.8), Enum.NormalId.Front)
+
+	local bulb = block(model, "Foco", Vector3.new(1, 1, 1),
+		CFrame.new(c.X, 10.6, c.Z), Color3.fromRGB(255, 240, 200), Enum.Material.Neon)
+	bulb.Shape = Enum.PartType.Ball
+	bulb.CanCollide = false
+	local light = Instance.new("PointLight")
+	light.Brightness = 1
+	light.Range = 20
+	light.Color = Color3.fromRGB(255, 226, 180)
+	light.Parent = bulb
+
+	return chair
+end
+
+-- ── entrada ────────────────────────────────────────────────────────
+
+function MapBuilder.build(): Map
+	local previous = workspace:FindFirstChild("Instituto")
+	if previous then
+		previous:Destroy()
+	end
+
+	local root = Instance.new("Model")
+	root.Name = "Instituto"
+	root.Parent = workspace
+
+	-- Carpetas que el resto del juego da por hechas.
+	for _, name in { "Personajes", "Objetos", "Proyectiles" } do
+		if not workspace:FindFirstChild(name) then
+			local folder = Instance.new("Folder")
+			folder.Name = name
+			folder.Parent = workspace
+		end
+	end
+
+	local hall, lockers, shop, bell, spawns = buildHallway(root)
+
+	local aulas = Instance.new("Model")
+	aulas.Name = "Aulas"
+	aulas.Parent = root
+
+	local classrooms: { Classroom } = {}
+	for i = 1, E.Aulas do
+		safely("aula " .. i, function()
+			table.insert(classrooms, buildClassroom(aulas, i))
+		end)
+	end
+
+	local detention = buildDetention(root)
+
+	-- El baseplate de emergencia del archivo del lugar ya no hace falta.
+	local baseplate = workspace:FindFirstChild("Baseplate")
+	if baseplate then
+		baseplate:Destroy()
+	end
+
+	local totalDesks = 0
+	for _, room in classrooms do
+		totalDesks += #room.desks
+	end
+	print(string.format("[Mapa] Instituto listo: %d aulas, %d pupitres, %d casilleros.",
+		#classrooms, totalDesks, #lockers))
+
+	return {
+		root = root,
+		hallway = hall,
+		classrooms = classrooms,
+		lockers = lockers,
+		shop = shop,
+		detention = detention,
+		bell = bell,
+		spawns = spawns,
+	}
+end
+
+return MapBuilder
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX7">
+      <Properties>
+        <string name="Name">PunishService</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	PunishService
+	------------------------------------------------------------------
+	Que pasa cuando el profesor te pilla. Escala: la primera vez te
+	pone el cono de la verguenza y te descuenta nota; a la segunda te
+	manda a la sala de castigo y te perdes lo que queda del examen.
+
+	Despues de cada sancion hay unos segundos de inmunidad: sin eso el
+	profesor te castigaria tres veces seguidas en el mismo lugar y el
+	juego se volveria injusto.
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local CharacterService = require(script.Parent:WaitForChild("CharacterService"))
+local SuspicionService = require(script.Parent:WaitForChild("SuspicionService"))
+local ExamService = require(script.Parent:WaitForChild("ExamService"))
+
+local C = Config.Castigo
+
+local PunishService = {}
+
+type Record = {
+	count: number,
+	penalty: number,
+	immuneUntil: number,
+	detained: boolean,
+}
+
+local records: { [Player]: Record } = {}
+local detentionPoint = Config.Escuela.SalaDeCastigo
+
+local function record(player: Player): Record
+	local existing = records[player]
+	if existing then
+		return existing
+	end
+	local created: Record = { count = 0, penalty = 0, immuneUntil = 0, detained = false }
+	records[player] = created
+	return created
+end
+
+function PunishService.setDetention(part: BasePart?)
+	if part then
+		detentionPoint = part.Position + Vector3.new(0, 4, 0)
+	end
+end
+
+function PunishService.count(player: Player): number
+	return record(player).count
+end
+
+function PunishService.penalty(player: Player): number
+	return record(player).penalty
+end
+
+function PunishService.isDetained(player: Player): boolean
+	return record(player).detained
+end
+
+function PunishService.resetAll()
+	for player in records do
+		records[player] = { count = 0, penalty = 0, immuneUntil = 0, detained = false }
+	end
+end
+
+local function slowDown(player: Player, seconds: number)
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then
+		return
+	end
+	local original = humanoid.WalkSpeed
+	humanoid.WalkSpeed = C.VelocidadReducida
+	task.delay(seconds, function()
+		if humanoid.Parent then
+			humanoid.WalkSpeed = original
+		end
+	end)
+end
+
+--- El cono: tapa parte de la pantalla y te frena. Es vergonzoso y
+--- molesto a proposito, pero no te saca del examen.
+local function coneOfShame(player: Player)
+	local character = player.Character
+	if not character then
+		return
+	end
+	CharacterService.attachCone(character)
+	slowDown(player, C.SegundosCono)
+
+	Net.event(Net.Events.Punish):FireClient(player, {
+		tipo = "cono",
+		segundos = C.SegundosCono,
+	})
+
+	task.delay(C.SegundosCono, function()
+		local current = player.Character
+		if current then
+			CharacterService.removeCone(current)
+		end
+		Net.event(Net.Events.Punish):FireClient(player, { tipo = "fin" })
+	end)
+end
+
+--- Expulsion: a la sala de castigo, y de vuelta al pupitre al volver.
+local function detention(player: Player)
+	local data = record(player)
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not root or not root:IsA("BasePart") then
+		return
+	end
+
+	data.detained = true
+	CharacterService.removeCone(character :: Model)
+	SuspicionService.setFrozen(player, true)
+
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if humanoid and humanoid.SeatPart then
+		humanoid.Sit = false
+		task.wait(0.1)
+	end
+	root.CFrame = CFrame.new(detentionPoint)
+
+	Net.event(Net.Events.Punish):FireClient(player, {
+		tipo = "expulsion",
+		segundos = C.SegundosExpulsion,
+	})
+
+	task.delay(C.SegundosExpulsion, function()
+		data.detained = false
+		local sitting = ExamService.sitting(player)
+		local current = player.Character
+		local currentRoot = current and current:FindFirstChild("HumanoidRootPart")
+		if sitting and currentRoot and currentRoot:IsA("BasePart") then
+			currentRoot.CFrame = sitting.desk.seat.CFrame * CFrame.new(0, 3, 0)
+			local currentHumanoid = current and current:FindFirstChildOfClass("Humanoid")
+			if currentHumanoid then
+				pcall(function()
+					sitting.desk.seat:Sit(currentHumanoid)
+				end)
+			end
+		end
+		SuspicionService.setFrozen(player, false)
+		SuspicionService.reset(player)
+		Net.event(Net.Events.Punish):FireClient(player, { tipo = "fin" })
+		Net.event(Net.Events.Notify):FireClient(player, { key = "punish.back" })
+	end)
+end
+
+--- La sancion completa. La llama TeacherAI cuando te alcanza.
+function PunishService.apply(player: Player, teacher: any)
+	local data = record(player)
+	local now = os.clock()
+	if now < data.immuneUntil or data.detained then
+		return
+	end
+	data.immuneUntil = now + C.SegundosExpulsion + C.SegundosInmunidad
+	data.count += 1
+	data.penalty += C.PenalizacionNota
+
+	SuspicionService.reset(player)
+
+	local teacherRoot = teacher and teacher.root
+	if teacherRoot then
+		Util.playSound(Config.Sonidos.Silbato, teacherRoot, 0.5, 0.8)
+	end
+
+	if data.count >= C.InfraccionesParaExpulsion then
+		detention(player)
+		Net.event(Net.Events.Notify):FireAllClients({
+			key = "punish.detention",
+			args = { name = player.DisplayName },
+		})
+	else
+		data.immuneUntil = now + C.SegundosCono * 0.5 + C.SegundosInmunidad
+		coneOfShame(player)
+		Net.event(Net.Events.Notify):FireAllClients({
+			key = "punish.cone",
+			args = { name = player.DisplayName },
+		})
+		Net.event(Net.Events.Notify):FireClient(player, {
+			key = "punish.grade",
+			args = { n = C.PenalizacionNota },
+		})
+	end
+end
+
+--- Limpia todo lo que quedo puesto al terminar un examen.
+function PunishService.clearVisuals()
+	for _, player in Players:GetPlayers() do
+		local character = player.Character
+		if character then
+			CharacterService.removeCone(character)
+			local humanoid = character:FindFirstChildOfClass("Humanoid")
+			if humanoid and humanoid.WalkSpeed < 16 then
+				humanoid.WalkSpeed = 16
+			end
+		end
+		Net.event(Net.Events.Punish):FireClient(player, { tipo = "fin" })
+	end
+end
+
+function PunishService.start()
+	Players.PlayerRemoving:Connect(function(player)
+		records[player] = nil
+	end)
+end
+
+return PunishService
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX8">
+      <Properties>
+        <string name="Name">QuestionBank</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	QuestionBank
+	------------------------------------------------------------------
+	El banco de preguntas vive en el servidor y nada mas: el cliente
+	recibe el enunciado y las opciones, nunca la respuesta correcta.
+	Por eso este modulo esta en ServerScriptService y ademas deja una
+	copia de las penalizaciones en ServerStorage (fuera del alcance
+	del cliente, como pide la arquitectura).
+
+	Las preguntas son procedurales y simbolicas a proposito: una cuenta
+	se lee igual en espanol, ingles y portugues, asi que el examen
+	funciona en los tres idiomas sin traducir nada.
+--]]
+
+local ServerStorage = game:GetService("ServerStorage")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+
+local QuestionBank = {}
+
+export type Question = {
+	i: number,
+	tipo: string,        -- "opcion" | "escritura"
+	texto: string,
+	opciones: { string },
+	secuencia: string?,
+	respuesta: number,   -- indice correcto (NO se manda al cliente)
+	tema: string,        -- clave de idioma: topic.math, ...
+}
+
+local TEMAS = { "topic.math", "topic.science", "topic.math", "topic.geography", "topic.language" }
+
+local rng = Random.new()
+
+-- ── generadores ────────────────────────────────────────────────────
+-- Cada uno devuelve enunciado + valor correcto. `nivel` va de 1 a ~2.
+
+local function aritmetica(nivel: number): (string, number)
+	local scale = math.floor(9 * nivel)
+	local a = rng:NextInteger(2, 9 + scale)
+	local b = rng:NextInteger(2, 6 + scale)
+	local ops = { "+", "-", "x" }
+	if nivel > 1.2 then
+		table.insert(ops, "x")
+	end
+	local op = ops[rng:NextInteger(1, #ops)]
+	if op == "+" then
+		return string.format("%d + %d", a, b), a + b
+	elseif op == "-" then
+		return string.format("%d - %d", a + b, b), a
+	end
+	return string.format("%d x %d", a, b), a * b
+end
+
+local function ecuacion(nivel: number): (string, number)
+	local x = rng:NextInteger(2, 6 + math.floor(8 * nivel))
+	local m = rng:NextInteger(2, 3 + math.floor(5 * nivel))
+	local c = rng:NextInteger(1, 9 + math.floor(10 * nivel))
+	return string.format("%dx + %d = %d    x = ?", m, c, m * x + c), x
+end
+
+local function porcentaje(nivel: number): (string, number)
+	local pct = ({ 10, 20, 25, 50, 15, 5, 40, 75 })[rng:NextInteger(1, nivel > 1.3 and 8 or 5)]
+	local base = rng:NextInteger(2, 10 + math.floor(20 * nivel)) * 20
+	return string.format("%d%% de %d", pct, base), math.floor(base * pct / 100)
+end
+
+local function secuencia(nivel: number): (string, number)
+	local start = rng:NextInteger(1, 8)
+	if nivel > 1.3 and rng:NextNumber() < 0.5 then
+		local ratio = rng:NextInteger(2, 3)
+		local values = { start }
+		for i = 2, 4 do
+			values[i] = values[i - 1] * ratio
+		end
+		return string.format("%d, %d, %d, %d, ?", values[1], values[2], values[3], values[4]),
+			values[4] * ratio
+	end
+	local step = rng:NextInteger(2, 4 + math.floor(6 * nivel))
+	local values = {}
+	for i = 1, 4 do
+		values[i] = start + (i - 1) * step
+	end
+	return string.format("%d, %d, %d, %d, ?", values[1], values[2], values[3], values[4]),
+		values[4] + step
+end
+
+local function unidades(_: number): (string, number)
+	local cases = {
+		{ "%d km = ? m", 1000 },
+		{ "%d m = ? cm", 100 },
+		{ "%d kg = ? g", 1000 },
+		{ "%d h = ? min", 60 },
+		{ "%d min = ? s", 60 },
+	}
+	local case = cases[rng:NextInteger(1, #cases)]
+	local value = rng:NextInteger(2, 12)
+	return string.format(case[1] :: string, value), value * (case[2] :: number)
+end
+
+local function potencias(nivel: number): (string, number)
+	if nivel > 1.4 and rng:NextNumber() < 0.4 then
+		local root = rng:NextInteger(4, 15)
+		return string.format("raiz(%d)", root * root), root
+	end
+	local base = rng:NextInteger(2, 9)
+	local exp = rng:NextInteger(2, nivel > 1.3 and 3 or 2)
+	return string.format("%d^%d", base, exp), base ^ exp
+end
+
+local function area(nivel: number): (string, number)
+	local w = rng:NextInteger(3, 8 + math.floor(10 * nivel))
+	local h = rng:NextInteger(3, 8 + math.floor(10 * nivel))
+	if rng:NextNumber() < 0.4 then
+		return string.format("perimetro de %d x %d", w, h), 2 * (w + h)
+	end
+	return string.format("area de %d x %d", w, h), w * h
+end
+
+local GENERADORES = { aritmetica, ecuacion, porcentaje, secuencia, unidades, potencias, area }
+
+-- ── opciones ───────────────────────────────────────────────────────
+
+--- Distractores creibles: cerca del valor bueno, sin repetirse.
+local function opciones(correct: number): ({ string }, number)
+	local values = { correct }
+	local spread = math.max(2, math.floor(math.abs(correct) * 0.25))
+	local guard = 0
+	while #values < Config.Examen.OpcionesPorPregunta and guard < 80 do
+		guard += 1
+		local delta = rng:NextInteger(1, spread) * (rng:NextNumber() < 0.5 and -1 or 1)
+		local candidate = correct + delta
+		if candidate ~= correct and candidate >= 0 then
+			local repeated = false
+			for _, value in values do
+				if value == candidate then
+					repeated = true
+					break
+				end
+			end
+			if not repeated then
+				table.insert(values, candidate)
+			end
+		end
+	end
+	-- Si el numero era muy chico y no salieron distractores, se rellena.
+	local filler = correct + 1
+	while #values < Config.Examen.OpcionesPorPregunta do
+		filler += 1
+		table.insert(values, filler)
+	end
+
+	-- Fisher-Yates, y nos guardamos donde quedo la buena.
+	for i = #values, 2, -1 do
+		local j = rng:NextInteger(1, i)
+		values[i], values[j] = values[j], values[i]
+	end
+
+	local answer = 1
+	local text = {}
+	for i, value in values do
+		text[i] = tostring(value)
+		if value == correct then
+			answer = i
+		end
+	end
+	return text, answer
+end
+
+local LETRAS = { "Q", "W", "E", "R", "T", "A", "S", "D", "F", "G", "Z", "X", "C", "V" }
+
+local function escritura(nivel: number): Question
+	local length = math.clamp(
+		math.floor(Config.Examen.LargoSecuencia.Min + (Config.Examen.LargoSecuencia.Max - Config.Examen.LargoSecuencia.Min) * (nivel - 1)),
+		Config.Examen.LargoSecuencia.Min,
+		Config.Examen.LargoSecuencia.Max
+	)
+	local letters = {}
+	for i = 1, length do
+		letters[i] = LETRAS[rng:NextInteger(1, #LETRAS)]
+	end
+	local sequence = table.concat(letters)
+	return {
+		i = 0,
+		tipo = "escritura",
+		texto = sequence,
+		opciones = {},
+		secuencia = sequence,
+		respuesta = 0,
+		tema = "topic.language",
+	}
+end
+
+-- ── entrada ────────────────────────────────────────────────────────
+
+function QuestionBank.difficulty(day: number): number
+	local curve = Config.Ronda.CurvaDificultad
+	return curve[math.clamp(day, 1, #curve)] or curve[#curve]
+end
+
+function QuestionBank.count(day: number): number
+	return math.min(
+		Config.Examen.PreguntasBase + (day - 1) * Config.Examen.PreguntasPorDia,
+		Config.Examen.MaximoPreguntas
+	)
+end
+
+--- Un examen entero para un alumno. Cada uno recibe el suyo: asi
+--- copiar tiene sentido solo si el vecino tuvo la misma pregunta.
+function QuestionBank.generate(day: number): { Question }
+	local nivel = QuestionBank.difficulty(day)
+	local total = QuestionBank.count(day)
+	local questions: { Question } = {}
+
+	for i = 1, total do
+		if rng:NextNumber() < Config.Examen.ProbabilidadEscritura then
+			local question = escritura(nivel)
+			question.i = i
+			questions[i] = question
+		else
+			local generator = GENERADORES[rng:NextInteger(1, #GENERADORES)]
+			local texto, correct = generator(nivel)
+			local text, answer = opciones(math.floor(correct))
+			questions[i] = {
+				i = i,
+				tipo = "opcion",
+				texto = texto,
+				opciones = text,
+				secuencia = nil,
+				respuesta = answer,
+				tema = TEMAS[((i - 1) % #TEMAS) + 1],
+			}
+		end
+	end
+
+	return questions
+end
+
+--- La version que puede ver el cliente: sin `respuesta`.
+function QuestionBank.publicView(questions: { Question }): { any }
+	local out = {}
+	for i, q in questions do
+		out[i] = {
+			i = q.i,
+			tipo = q.tipo,
+			texto = q.texto,
+			opciones = q.opciones,
+			secuencia = q.secuencia,
+			tema = q.tema,
+		}
+	end
+	return out
+end
+
+--- Deja en ServerStorage lo que la arquitectura pide tener fuera del
+--- alcance del cliente: penalizaciones y una marca del banco.
+function QuestionBank.install()
+	local previous = ServerStorage:FindFirstChild("BancoDePreguntas")
+	if previous then
+		previous:Destroy()
+	end
+
+	local folder = Instance.new("Folder")
+	folder.Name = "BancoDePreguntas"
+	folder:SetAttribute("Generadores", #GENERADORES)
+	folder:SetAttribute("MaximoPreguntas", Config.Examen.MaximoPreguntas)
+	folder.Parent = ServerStorage
+
+	local penalties = Instance.new("Configuration")
+	penalties.Name = "Penalizaciones"
+	penalties:SetAttribute("PenalizacionNota", Config.Castigo.PenalizacionNota)
+	penalties:SetAttribute("SegundosCono", Config.Castigo.SegundosCono)
+	penalties:SetAttribute("SegundosExpulsion", Config.Castigo.SegundosExpulsion)
+	penalties:SetAttribute("InfraccionesParaExpulsion", Config.Castigo.InfraccionesParaExpulsion)
+	penalties.Parent = ServerStorage
+end
+
+return QuestionBank
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX9">
+      <Properties>
+        <string name="Name">RoundManager</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	RoundManager
+	------------------------------------------------------------------
+	El ciclo escolar. Un dia son tres fases seguidas:
+
+		recreo   el pasillo, los casilleros, la tienda, preparate
+		examen   al pupitre, puertas trabadas, el profesor patrulla
+		boletin  la nota del dia y los creditos
+
+	Cinco dias hacen la Semana Final. Cada dia sube la dificultad
+	(mas preguntas, mas duras) y si el curso desaprueba
+	Config.Ronda.SuspensosParaExpulsion dias, se termina la partida y
+	la semana vuelve a empezar.
+
+	Este modulo es el unico que sabe en que fase estamos. Todos los
+	demas preguntan o reciben el aviso; ninguno decide por su cuenta.
+--]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+local Grades = require(Shared:WaitForChild("Grades"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local ExamService = require(script.Parent:WaitForChild("ExamService"))
+local TeacherAI = require(script.Parent:WaitForChild("TeacherAI"))
+local SuspicionService = require(script.Parent:WaitForChild("SuspicionService"))
+local PunishService = require(script.Parent:WaitForChild("PunishService"))
+local ShopService = require(script.Parent:WaitForChild("ShopService"))
+local ItemService = require(script.Parent:WaitForChild("ItemService"))
+local DataService = require(script.Parent:WaitForChild("DataService"))
+
+local R = Config.Ronda
+
+local RoundManager = {}
+
+local map: any = nil
+local phase = "espera"
+local day = 1
+local clock = 0
+local total = 0
+local fails = 0
+local history: { [Player]: { number } } = {}
+local standing: { [Player]: boolean } = {}
+local running = false
+
+-- ── difusion de estado ─────────────────────────────────────────────
+
+local function termGrade(player: Player): number
+	local list = history[player]
+	if not list or #list == 0 then
+		return Config.Notas.Inicial
+	end
+	return math.floor(Grades.average(list) + 0.5)
+end
+
+local function statePacket(player: Player?): any
+	local grade = player and termGrade(player) or Config.Notas.Inicial
+	return {
+		fase = phase,
+		dia = day,
+		dias = R.DiasPorSemana,
+		nombreDia = "day." .. (R.NombreDias[day] or "lunes"),
+		restante = math.max(0, math.floor(clock + 0.5)),
+		total = total,
+		nota = grade,
+		letra = Grades.letter(grade),
+		suspensos = fails,
+		maxSuspensos = R.SuspensosParaExpulsion,
+		jugadores = #Players:GetPlayers(),
+	}
+end
+
+local function broadcast()
+	local remote = Net.event(Net.Events.RoundUpdate)
+	for _, player in Players:GetPlayers() do
+		remote:FireClient(player, statePacket(player))
+	end
+end
+
+function RoundManager.pushTo(player: Player)
+	Net.event(Net.Events.RoundUpdate):FireClient(player, statePacket(player))
+end
+
+function RoundManager.phase(): string
+	return phase
+end
+
+function RoundManager.day(): number
+	return day
+end
+
+-- ── mapa ───────────────────────────────────────────────────────────
+
+function RoundManager.setMap(newMap: any)
+	map = newMap
+end
+
+local function lockDoors(locked: boolean)
+	if not map then
+		return
+	end
+	for _, room in map.classrooms do
+		local door: BasePart = room.door
+		door.CanCollide = locked
+		door.Transparency = locked and 0.05 or 1
+		door:SetAttribute("Trabada", locked)
+	end
+end
+
+local function ringBell()
+	if map and map.bell then
+		Util.playSound(Config.Sonidos.Campana, map.bell, 0.8, 0.7)
+		Util.playSound(Config.Sonidos.Campana, map.bell, 0.6, 1.05)
+	end
+	Net.event(Net.Events.Notify):FireAllClients({ key = "notify.bell" })
+end
+
+local function sendToHallway(player: Player)
+	if not map or #map.spawns == 0 then
+		return
+	end
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if humanoid and humanoid.SeatPart then
+		humanoid.Sit = false
+		task.wait(0.05)
+	end
+	if root and root:IsA("BasePart") then
+		local point = map.spawns[math.random(1, #map.spawns)]
+		root.CFrame = CFrame.new(point + Vector3.new(math.random(-2, 2), 0, math.random(-2, 2)))
+	end
+end
+
+-- ── vigilancia del aula ────────────────────────────────────────────
+-- Levantarse del pupitre en pleno examen es una infraccion. Se mide
+-- aca porque es el unico modulo que sabe que estamos en examen.
+
+local nextSeatCheck = 0
+
+--- Cuatro veces por segundo alcanza: levantarse de una silla no es un
+--- evento de un solo frame, y esto corre con el examen entero encima.
+local function watchSeats()
+	local now = os.clock()
+	if now < nextSeatCheck then
+		return
+	end
+	nextSeatCheck = now + 0.25
+
+	for _, player in Players:GetPlayers() do
+		local sitting = ExamService.sitting(player)
+		if not sitting or PunishService.isDetained(player) then
+			continue
+		end
+		local seated = ExamService.isSeated(player)
+		if not seated and not standing[player] then
+			standing[player] = true
+			SuspicionService.infraction(player, Config.Sospecha.PorLevantarse, "stand")
+		elseif seated and standing[player] then
+			standing[player] = false
+		end
+
+		if not seated then
+			local character = player.Character
+			local root = character and character:FindFirstChild("HumanoidRootPart")
+			if root and root:IsA("BasePart") and root.AssemblyLinearVelocity.Magnitude > 14 then
+				SuspicionService.infraction(player, Config.Sospecha.PorCorrerEnExamen * 0.1, "run")
+			end
+		end
+	end
+end
+
+-- ── fases ──────────────────────────────────────────────────────────
+
+local function runPhase(name: string, seconds: number, onTick: (() -> ())?)
+	phase = name
+	total = seconds
+	clock = seconds
+	ShopService.setPhase(name)
+	broadcast()
+
+	local warned = false
+	local lastBroadcast = 0
+	while clock > 0 do
+		local dt = RunService.Heartbeat:Wait()
+		clock -= dt
+		if onTick then
+			onTick()
+		end
+		if not warned and name == "recreo" and clock <= R.AvisoCampana then
+			warned = true
+			Net.event(Net.Events.Notify):FireAllClients({
+				key = "notify.bell_soon",
+				args = { s = R.AvisoCampana },
+			})
+		end
+		lastBroadcast += dt
+		if lastBroadcast >= 0.5 then
+			lastBroadcast = 0
+			broadcast()
+		end
+	end
+	clock = 0
+	broadcast()
+end
+
+local function phaseRecess()
+	lockDoors(false)
+	TeacherAI.setExamMode(false)
+	SuspicionService.freezeAll(true)
+	SuspicionService.resetAll()
+	PunishService.clearVisuals()
+	ExamService.clear()
+
+	for _, player in Players:GetPlayers() do
+		ItemService.clearInventory(player)
+		sendToHallway(player)
+		ShopService.grantLoadout(player)
+		standing[player] = false
+	end
+
+	runPhase("recreo", R.SegundosRecreo)
+	ringBell()
+end
+
+local function phaseExam()
+	local players = Players:GetPlayers()
+	ExamService.begin(day, players)
+
+	Net.event(Net.Events.Notify):FireAllClients({ key = "notify.doors_locked" })
+	ExamService.seatEveryone()
+	task.wait(1.2)
+	lockDoors(true)
+
+	if map then
+		for _, room in map.classrooms do
+			TeacherAI.spawn(room)
+		end
+	end
+	TeacherAI.setExamMode(true)
+	SuspicionService.freezeAll(false)
+	PunishService.resetAll()
+
+	Net.event(Net.Events.Notify):FireAllClients({ key = "notify.exam_start" })
+	Net.event(Net.Events.Music):FireAllClients({ clima = "examen" })
+
+	local halfWarned = false
+	runPhase("examen", R.SegundosExamen, function()
+		watchSeats()
+		if not halfWarned and clock <= 30 then
+			halfWarned = true
+			TeacherAI.sayAll("teacher.time_left", { s = 30 })
+			Net.event(Net.Events.Music):FireAllClients({ clima = "tension" })
+		end
+	end)
+
+	TeacherAI.sayAll("teacher.finish")
+	ringBell()
+	SuspicionService.freezeAll(true)
+	TeacherAI.setExamMode(false)
+	TeacherAI.despawnAll()
+	lockDoors(false)
+end
+
+local function phaseReport()
+	local results = ExamService.finish()
+	PunishService.clearVisuals()
+	Net.event(Net.Events.Music):FireAllClients({ clima = "pasillo" })
+
+	local sum, count = 0, 0
+	for _, player in Players:GetPlayers() do
+		local result = results[player] or { correct = 0, wrong = 0, blank = 0 }
+		local punishments = PunishService.count(player)
+		local peak = SuspicionService.peak(player)
+		local report = Grades.report(result.correct, result.wrong, result.blank, punishments, peak)
+
+		history[player] = history[player] or {}
+		table.insert(history[player], report.final)
+
+		sum += report.final
+		count += 1
+
+		local credits = ShopService.reward(player, result.correct, report.aprobado, punishments)
+
+		Net.event(Net.Events.Report):FireClient(player, {
+			dia = day,
+			dias = R.DiasPorSemana,
+			examen = report.examen,
+			conducta = report.conducta,
+			final = report.final,
+			letra = report.letra,
+			aprobado = report.aprobado,
+			aciertos = report.aciertos,
+			total = report.total,
+			castigos = punishments,
+			creditos = credits,
+			promedio = termGrade(player),
+			suspensos = fails,
+			maxSuspensos = R.SuspensosParaExpulsion,
+			semana = false,
+		})
+		Net.event(Net.Events.Notify):FireClient(player, {
+			key = report.aprobado and "notify.passed" or "notify.failed",
+			args = { grade = report.letra },
+		})
+	end
+
+	-- El curso desaprueba el dia si el promedio de la clase no llega.
+	local classAverage = count > 0 and sum / count or 0
+	if count > 0 and not Grades.passed(classAverage) then
+		fails += 1
+	end
+
+	runPhase("boletin", R.SegundosBoletin)
+end
+
+local function endOfWeek(expelled: boolean)
+	phase = "boletin"
+	for _, player in Players:GetPlayers() do
+		local average = termGrade(player)
+		local profile = DataService.get(player)
+		if profile then
+			profile.semanas += 1
+			profile.mejorPromedio = math.max(profile.mejorPromedio, average)
+			if not expelled then
+				DataService.addCredits(player, Config.Economia.CreditosPorSemana)
+			end
+			DataService.push(player)
+		end
+
+		Net.event(Net.Events.Report):FireClient(player, {
+			dia = R.DiasPorSemana,
+			dias = R.DiasPorSemana,
+			examen = average,
+			conducta = average,
+			final = average,
+			letra = Grades.letter(average),
+			aprobado = not expelled and Grades.passed(average),
+			aciertos = 0,
+			total = 0,
+			castigos = 0,
+			creditos = expelled and 0 or Config.Economia.CreditosPorSemana,
+			promedio = average,
+			suspensos = fails,
+			maxSuspensos = R.SuspensosParaExpulsion,
+			semana = true,
+			expulsado = expelled,
+		})
+		Net.event(Net.Events.Notify):FireClient(player, {
+			key = expelled and "notify.expelled" or "notify.week_done",
+		})
+	end
+
+	task.wait(R.SegundosBoletin)
+
+	day = 1
+	fails = 0
+	history = {}
+	broadcast()
+end
+
+-- ── bucle ──────────────────────────────────────────────────────────
+
+local function loop()
+	while true do
+		-- Espera a que haya alguien. Sin esto, un servidor vacio
+		-- avanzaria dias enteros solo.
+		while #Players:GetPlayers() < R.MinimoJugadores do
+			phase = "espera"
+			clock = 0
+			total = 0
+			broadcast()
+			Net.event(Net.Events.Notify):FireAllClients({ key = "notify.waiting" })
+			task.wait(3)
+		end
+
+		local ok, err = pcall(function()
+			phaseRecess()
+			phaseExam()
+			phaseReport()
+		end)
+		if not ok then
+			warn("[Ronda] " .. tostring(err))
+			-- Que se rompa un dia no puede dejar el colegio trabado:
+			-- se limpia y se sigue con el dia siguiente.
+			pcall(function()
+				TeacherAI.despawnAll()
+				ExamService.clear()
+				lockDoors(false)
+			end)
+			task.wait(2)
+		end
+
+		if fails >= R.SuspensosParaExpulsion then
+			endOfWeek(true)
+		elseif day >= R.DiasPorSemana then
+			endOfWeek(false)
+		else
+			day += 1
+			runPhase("intermedio", R.SegundosIntermedio)
+		end
+	end
+end
+
+function RoundManager.start()
+	if running then
+		return
+	end
+	running = true
+
+	Players.PlayerRemoving:Connect(function(player)
+		history[player] = nil
+		standing[player] = nil
+	end)
+
+	Players.PlayerAdded:Connect(function(player)
+		task.defer(function()
+			task.wait(1)
+			RoundManager.pushTo(player)
+		end)
+	end)
+
+	task.spawn(loop)
+end
+
+return RoundManager
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX10">
+      <Properties>
+        <string name="Name">ShopService</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	ShopService
+	------------------------------------------------------------------
+	La economia: creditos ganados por rendimiento, compras en el
+	kiosco del pasillo y esteticas equipadas.
+
+	Todo se valida en el servidor. El cliente no manda precios ni
+	saldos: manda "quiero comprar X" y el servidor decide.
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+
+local DataService = require(script.Parent:WaitForChild("DataService"))
+local ItemService = require(script.Parent:WaitForChild("ItemService"))
+local CharacterService = require(script.Parent:WaitForChild("CharacterService"))
+
+local ShopService = {}
+
+local openDuringPhase = "recreo"
+local currentPhase = "espera"
+
+local function entryOf(id: string): any
+	for _, entry in Config.Economia.Tienda do
+		if entry.id == id then
+			return entry
+		end
+	end
+	return nil
+end
+
+function ShopService.setPhase(phase: string)
+	currentPhase = phase
+end
+
+function ShopService.isOpen(): boolean
+	return currentPhase == openDuringPhase or currentPhase == "espera" or currentPhase == "boletin"
+end
+
+--- Compra: descuenta creditos y marca el objeto como propio.
+function ShopService.buy(player: Player, id: any): any
+	if type(id) ~= "string" then
+		return { ok = false, reason = { key = "error.generic" } }
+	end
+	local entry = entryOf(id)
+	if not entry then
+		return { ok = false, reason = { key = "error.generic" } }
+	end
+	if not ShopService.isOpen() then
+		return { ok = false, reason = { key = "shop.closed" } }
+	end
+
+	local profile = DataService.get(player)
+	if not profile then
+		return { ok = false, reason = { key = "error.generic" } }
+	end
+
+	-- Las esteticas se compran una vez; los objetos se pueden recomprar.
+	if entry.tipo == "estetica" and profile.comprados[id] then
+		return { ok = false, reason = { key = "shop.owned" } }
+	end
+	if profile.creditos < entry.precio then
+		return { ok = false, reason = { key = "shop.cannot" } }
+	end
+
+	profile.creditos -= entry.precio
+	profile.comprados[id] = true
+
+	if entry.tipo == "objeto" then
+		profile.objeto = id
+		-- Si estamos en el recreo, te lo llevas puesto ya mismo.
+		if currentPhase == "recreo" then
+			ItemService.give(player, id)
+		end
+	end
+
+	DataService.push(player)
+	return { ok = true, reason = { key = "shop.bought", args = { item = "@item." .. id } } }
+end
+
+--- Equipar: objetos (uno) o esteticas (varias, se alternan).
+function ShopService.equip(player: Player, id: any): any
+	if type(id) ~= "string" then
+		return { ok = false, reason = { key = "error.generic" } }
+	end
+	local entry = entryOf(id)
+	local profile = DataService.get(player)
+	if not entry or not profile then
+		return { ok = false, reason = { key = "error.generic" } }
+	end
+	if not profile.comprados[id] then
+		return { ok = false, reason = { key = "shop.cannot" } }
+	end
+
+	if entry.tipo == "objeto" then
+		profile.objeto = id
+	else
+		profile.estetica[id] = not profile.estetica[id] or nil
+		local character = player.Character
+		if character then
+			-- Repintar en caliente: se ve el cambio sin reaparecer.
+			CharacterService.dressStudent(player, character, profile.estetica)
+		end
+	end
+
+	DataService.push(player)
+	return { ok = true, reason = { key = "shop.equipped" } }
+end
+
+--- Le da a cada uno el objeto que tiene equipado. Se llama al empezar
+--- el recreo: es el "kit" con el que arrancas el dia.
+function ShopService.grantLoadout(player: Player)
+	local profile = DataService.get(player)
+	if not profile then
+		return
+	end
+	local id = profile.objeto
+	if id and profile.comprados[id] then
+		ItemService.give(player, id)
+	else
+		ItemService.give(player, "nota")
+	end
+end
+
+--- Premios al terminar el dia.
+function ShopService.reward(player: Player, correct: number, passed: boolean, punishments: number): number
+	local total = correct * Config.Economia.CreditosPorAcierto
+	if passed then
+		total += Config.Economia.CreditosPorAprobar
+	end
+	if punishments == 0 then
+		total += Config.Economia.CreditosSinCastigos
+	end
+	if total > 0 then
+		DataService.addCredits(player, total)
+		Net.event(Net.Events.Notify):FireClient(player, {
+			key = "notify.credits",
+			args = { n = total },
+		})
+	end
+	return total
+end
+
+function ShopService.bindKiosk(part: BasePart?)
+	if not part then
+		return
+	end
+	local prompt = part:FindFirstChild("Tienda")
+	if prompt and prompt:IsA("ProximityPrompt") then
+		prompt.Triggered:Connect(function(player)
+			-- La billetera lleva `abrir` para que el cliente sepa que
+			-- tiene que mostrar la tienda: asi no hace falta un remote
+			-- extra solo para eso.
+			local profile = DataService.get(player)
+			if not profile then
+				return
+			end
+			Net.event(Net.Events.Wallet):FireClient(player, {
+				creditos = profile.creditos,
+				comprados = profile.comprados,
+				objeto = profile.objeto,
+				estetica = profile.estetica,
+				semanas = profile.semanas,
+				mejorPromedio = profile.mejorPromedio,
+				abrir = true,
+				puedeComprar = ShopService.isOpen(),
+			})
+		end)
+	end
+end
+
+function ShopService.start()
+	Net.func(Net.Functions.Buy).OnServerInvoke = function(player, id)
+		return ShopService.buy(player, id)
+	end
+	Net.func(Net.Functions.Equip).OnServerInvoke = function(player, id)
+		return ShopService.equip(player, id)
+	end
+
+	Players.PlayerAdded:Connect(function(player)
+		task.defer(function()
+			DataService.load(player)
+			DataService.push(player)
+		end)
+	end)
+end
+
+return ShopService
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX11">
+      <Properties>
+        <string name="Name">SuspicionService</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	SuspicionService
+	------------------------------------------------------------------
+	La sospecha es un numero de 0 a 1 por alumno. Sube cuando el
+	profesor te ve haciendo algo que no corresponde y baja sola si te
+	portas bien un rato.
+
+	Lo importante es que una infraccion pesa segun si te vieron:
+	  * en el cono de vision  -> pesa entero, y mas si esta cerca;
+	  * fuera del cono        -> pesa un 15% (alguien pudo escucharte).
+
+	Cuando alguien cruza el umbral, este modulo no castiga: avisa.
+	El castigo lo decide PunishService, para no mezclar las dos cosas.
+--]]
+
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+
+local S = Config.Sospecha
+
+local SuspicionService = {}
+
+type Entry = {
+	value: number,
+	peak: number,
+	visible: boolean,
+	distance: number,
+	frozen: boolean,      -- durante recreo / boletin no se acumula
+	lastPush: number,
+}
+
+local entries: { [Player]: Entry } = {}
+local listeners: { (Player, string) -> () } = {}
+local active = false
+
+local function entry(player: Player): Entry
+	local existing = entries[player]
+	if existing then
+		return existing
+	end
+	local created: Entry = {
+		value = 0,
+		peak = 0,
+		visible = false,
+		distance = math.huge,
+		frozen = true,
+		lastPush = 0,
+	}
+	entries[player] = created
+	return created
+end
+
+local function push(player: Player, data: Entry)
+	Net.event(Net.Events.SuspicionUpdate):FireClient(player, {
+		valor = data.value,
+		cerca = data.distance <= Config.Profesor.DistanciaCercania,
+		visible = data.visible,
+		distancia = math.min(data.distance, 999),
+	})
+end
+
+--- Registra a quien avisar cuando alguien llega al umbral.
+function SuspicionService.onThreshold(callback: (Player, string) -> ())
+	table.insert(listeners, callback)
+end
+
+function SuspicionService.value(player: Player): number
+	return entry(player).value
+end
+
+function SuspicionService.peak(player: Player): number
+	return entry(player).peak
+end
+
+function SuspicionService.isVisible(player: Player): boolean
+	return entry(player).visible
+end
+
+function SuspicionService.distance(player: Player): number
+	return entry(player).distance
+end
+
+--- Lo llama TeacherAI en cada tick de vision.
+function SuspicionService.setSight(player: Player, visible: boolean, distance: number)
+	local data = entry(player)
+	data.visible = visible
+	data.distance = distance
+end
+
+--- Congela/descongela la acumulacion (recreo, boletin, castigo).
+function SuspicionService.setFrozen(player: Player, frozen: boolean)
+	entry(player).frozen = frozen
+end
+
+function SuspicionService.freezeAll(frozen: boolean)
+	for _, player in Players:GetPlayers() do
+		entry(player).frozen = frozen
+	end
+end
+
+function SuspicionService.reset(player: Player)
+	local data = entry(player)
+	data.value = 0
+	data.peak = 0
+	push(player, data)
+end
+
+function SuspicionService.resetAll()
+	for player in entries do
+		SuspicionService.reset(player)
+	end
+end
+
+--- Suma directa, sin mirar si lo vieron (la usa el propio profesor
+--- cuando te pilla de frente).
+function SuspicionService.add(player: Player, amount: number, reason: string)
+	local data = entry(player)
+	if data.frozen then
+		return
+	end
+	local before = data.value
+	data.value = math.clamp(data.value + amount, 0, S.Umbral)
+	data.peak = math.max(data.peak, data.value)
+	push(player, data)
+
+	if before < S.Umbral and data.value >= S.Umbral then
+		data.value = S.Umbral
+		for _, listener in listeners do
+			task.spawn(listener, player, reason)
+		end
+	end
+end
+
+--- Una infraccion: pesa segun si el profesor la vio y desde donde.
+function SuspicionService.infraction(player: Player, amount: number, reason: string)
+	local data = entry(player)
+	if data.frozen then
+		return
+	end
+	local weight = 0.15
+	if data.visible then
+		local near = math.clamp(1 - data.distance / Config.Profesor.DistanciaVision, 0, 1)
+		weight = 1 + near * (S.MultiplicadorDistancia - 1)
+	end
+	SuspicionService.add(player, amount * weight, reason)
+end
+
+function SuspicionService.start()
+	if active then
+		return
+	end
+	active = true
+
+	Players.PlayerRemoving:Connect(function(player)
+		entries[player] = nil
+	end)
+
+	RunService.Heartbeat:Connect(function(dt)
+		local now = os.clock()
+		for player, data in entries do
+			if not player.Parent then
+				entries[player] = nil
+				continue
+			end
+
+			if data.value > 0 and data.value < S.Umbral then
+				local rate = data.visible and S.Decaimiento or S.DecaimientoFueraDeVista
+				data.value = math.max(0, data.value - rate * dt)
+			end
+
+			-- Estar en el cono del profesor mientras dura el examen ya
+			-- pone nervioso: sube muy despacio y solo si estas cerca.
+			if data.visible and not data.frozen
+				and data.distance <= Config.Profesor.DistanciaCercania then
+				data.value = math.min(S.Umbral, data.value + S.PorSegundoEnMira * dt * 0.35)
+				data.peak = math.max(data.peak, data.value)
+			end
+
+			-- El HUD se refresca ~8 veces por segundo: alcanza para que
+			-- la barra se vea fluida sin inundar la red.
+			if now - data.lastPush >= 0.12 then
+				data.lastPush = now
+				push(player, data)
+			end
+		end
+	end)
+end
+
+return SuspicionService
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX12">
+      <Properties>
+        <string name="Name">TeacherAI</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	TeacherAI
+	------------------------------------------------------------------
+	Un profesor por aula, corriendo entero en el servidor.
+
+	Vision:
+	  se calcula con vectores, no con magia. Para cada alumno del aula
+	  se mide el angulo entre el frente del profesor y la direccion al
+	  alumno (producto punto), se descarta si esta fuera del cono o
+	  mas lejos de DistanciaVision, y recien ahi se tira un Raycast
+	  para confirmar que no hay una pared o un pupitre en el medio.
+
+	Cerebro (una corrutina, un estado a la vez):
+	  patrullar  camina los pasillos entre filas con PathfindingService
+	  pizarra    se da vuelta a escribir: la ventana para hacer trampa
+	  ruido      va al punto donde cayo algo
+	  perseguir  corre hacia el que se paso de la raya
+	  castigar   aplica la sancion y vuelve a patrullar
+
+	La sospecha no la calcula este modulo: la reporta. Quien castiga es
+	PunishService. Asi se puede tocar el balance sin tocar la IA.
+--]]
+
+local PathfindingService = game:GetService("PathfindingService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local CharacterService = require(script.Parent:WaitForChild("CharacterService"))
+local SuspicionService = require(script.Parent:WaitForChild("SuspicionService"))
+local ExamService = require(script.Parent:WaitForChild("ExamService"))
+
+local P = Config.Profesor
+
+local TeacherAI = {}
+
+type Teacher = {
+	aula: number,
+	name: string,
+	model: Model,
+	humanoid: Humanoid,
+	root: BasePart,
+	room: any,
+	state: string,
+	target: Vector3?,
+	chasing: Player?,
+	alive: boolean,
+	nextLine: number,
+	animation: RBXScriptConnection?,
+}
+
+local teachers: { [number]: Teacher } = {}
+local rng = Random.new()
+local vision: RBXScriptConnection? = nil
+local punishHandler: ((Player, Teacher) -> ())? = nil
+local examMode = false
+
+local COS_FOV = math.cos(math.rad(P.AnguloVision))
+
+-- ── voz ────────────────────────────────────────────────────────────
+
+local function say(teacher: Teacher, key: string, args: { [string]: any }?, only: Player?)
+	local packet = { key = key, args = args, profesor = teacher.name, aula = teacher.aula }
+	local remote = Net.event(Net.Events.TeacherSay)
+	if only then
+		remote:FireClient(only, packet)
+	else
+		remote:FireAllClients(packet)
+	end
+end
+
+-- ── pizarra ────────────────────────────────────────────────────────
+
+local CHALK = {
+	"x = (-b +- raiz(b^2 - 4ac)) / 2a",
+	"a^2 + b^2 = c^2",
+	"v = d / t",
+	"A = pi r^2",
+	"sen^2 + cos^2 = 1",
+	"E = m c^2",
+	"3x + 5 = 20",
+	"log(a b) = log a + log b",
+}
+
+local function chalkboard(room: any, text: string)
+	local board: BasePart = room.blackboard
+	local gui = board:FindFirstChild("Tiza")
+	if not gui or not gui:IsA("SurfaceGui") then
+		local created = Instance.new("SurfaceGui")
+		created.Name = "Tiza"
+		created.Face = Enum.NormalId.Right
+		created.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		created.PixelsPerStud = 26
+		created.LightInfluence = 0.3
+		created.Parent = board
+
+		local label = Instance.new("TextLabel")
+		label.Name = "Texto"
+		label.Size = UDim2.fromScale(0.9, 0.6)
+		label.Position = UDim2.fromScale(0.05, 0.2)
+		label.BackgroundTransparency = 1
+		label.Font = Enum.Font.PermanentMarker
+		label.TextColor3 = Color3.fromRGB(232, 236, 232)
+		label.TextScaled = true
+		label.TextTransparency = 0.12
+		label.Parent = created
+		gui = created
+	end
+	local label = gui:FindFirstChild("Texto")
+	if label and label:IsA("TextLabel") then
+		label.Text = text
+	end
+end
+
+--- La pizarra puede estar en la cara Right o Left segun el lado del
+--- pasillo en el que este el aula; se elige la que mira a los alumnos.
+local function orientChalkboard(room: any)
+	local gui = room.blackboard:FindFirstChild("Tiza")
+	if gui and gui:IsA("SurfaceGui") then
+		gui.Face = room.dir.X > 0 and Enum.NormalId.Right or Enum.NormalId.Left
+	end
+end
+
+-- ── vision ─────────────────────────────────────────────────────────
+
+local visionParams = RaycastParams.new()
+visionParams.FilterType = Enum.RaycastFilterType.Exclude
+
+--- ¿El profesor ve a este alumno? Angulo primero (barato), rayo despues.
+local function canSee(teacher: Teacher, character: Model): (boolean, number)
+	local head = character:FindFirstChild("Head")
+	if not head or not head:IsA("BasePart") then
+		return false, math.huge
+	end
+
+	local eye = teacher.root.Position + Vector3.new(0, P.AlturaOjos, 0)
+	local offset = head.Position - eye
+	local distance = offset.Magnitude
+	if distance > P.DistanciaVision then
+		return false, distance
+	end
+
+	local forward = teacher.root.CFrame.LookVector
+	if forward:Dot(offset.Unit) < COS_FOV then
+		return false, distance
+	end
+
+	visionParams.FilterDescendantsInstances = {
+		teacher.model, character, workspace:FindFirstChild("Proyectiles") :: any,
+	}
+	local hit = workspace:Raycast(eye, offset, visionParams)
+	if hit then
+		-- Los pupitres tapan a medias: si lo que corta el rayo es un
+		-- mueble bajo, igual te ve la cabeza.
+		local blockedHeight = hit.Position.Y
+		if blockedHeight > eye.Y - 0.6 then
+			return false, distance
+		end
+	end
+	return true, distance
+end
+
+local function playersOfRoom(aula: number): { Player }
+	local list = {}
+	for _, player in Players:GetPlayers() do
+		local sitting = ExamService.sitting(player)
+		if sitting and sitting.aula == aula then
+			table.insert(list, player)
+		elseif not sitting and not examMode then
+			table.insert(list, player)
+		end
+	end
+	return list
+end
+
+local function visionStep()
+	for _, teacher in teachers do
+		if not teacher.alive or not teacher.root.Parent then
+			continue
+		end
+		for _, player in playersOfRoom(teacher.aula) do
+			local character = player.Character
+			if character then
+				local seen, distance = canSee(teacher, character)
+				SuspicionService.setSight(player, seen, distance)
+			else
+				SuspicionService.setSight(player, false, math.huge)
+			end
+		end
+	end
+end
+
+-- ── movimiento ─────────────────────────────────────────────────────
+
+local function walkTo(teacher: Teacher, destination: Vector3, timeout: number?): boolean
+	local humanoid = teacher.humanoid
+	if not humanoid.Parent then
+		return false
+	end
+
+	local path = PathfindingService:CreatePath({
+		AgentRadius = 2.4,
+		AgentHeight = 5.5,
+		AgentCanJump = false,
+		WaypointSpacing = 4,
+	})
+
+	local ok = pcall(function()
+		path:ComputeAsync(teacher.root.Position, destination)
+	end)
+
+	local deadline = os.clock() + (timeout or 12)
+
+	if ok and path.Status == Enum.PathStatus.Success then
+		for _, waypoint in path:GetWaypoints() do
+			if not teacher.alive or os.clock() > deadline then
+				return false
+			end
+			humanoid:MoveTo(waypoint.Position)
+			local reached = humanoid.MoveToFinished:Wait()
+			if not reached then
+				break
+			end
+		end
+		return true
+	end
+
+	-- Sin ruta calculada, se va derecho: el aula es un rectangulo
+	-- vacio, casi siempre alcanza.
+	humanoid:MoveTo(destination)
+	humanoid.MoveToFinished:Wait()
+	return true
+end
+
+local function facePoint(teacher: Teacher, point: Vector3)
+	local from = teacher.root.Position
+	local flat = Vector3.new(point.X, from.Y, point.Z)
+	if (flat - from).Magnitude > 0.2 then
+		teacher.root.CFrame = CFrame.lookAt(from, flat)
+	end
+end
+
+-- ── cerebro ────────────────────────────────────────────────────────
+
+local function nearestSuspect(teacher: Teacher): (Player?, number)
+	local best: Player? = nil
+	local bestValue = Config.Sospecha.UmbralAviso
+	for _, player in playersOfRoom(teacher.aula) do
+		local value = SuspicionService.value(player)
+		if value >= bestValue then
+			bestValue = value
+			best = player
+		end
+	end
+	return best, bestValue
+end
+
+--- El punto de patrulla mas cercano a una posicion.
+local function closestPatrolPoint(room: any, position: Vector3): Vector3
+	local best = room.patrol[1]
+	local bestDistance = math.huge
+	for _, point in room.patrol do
+		local distance = (point - position).Magnitude
+		if distance < bestDistance then
+			bestDistance = distance
+			best = point
+		end
+	end
+	return best
+end
+
+local function doPatrol(teacher: Teacher)
+	local room = teacher.room
+	if #room.patrol == 0 then
+		task.wait(1)
+		return
+	end
+	local point = room.patrol[rng:NextInteger(1, #room.patrol)]
+
+	-- Si alguien ya viene raro pero todavia no cruzo el umbral, el
+	-- profesor se va acercando a esa fila. Es el aviso justo: se ve
+	-- venir y todavia se puede parar la mano.
+	local suspect = nearestSuspect(teacher)
+	if suspect then
+		local character = suspect.Character
+		local suspectRoot = character and character:FindFirstChild("HumanoidRootPart")
+		if suspectRoot and suspectRoot:IsA("BasePart") then
+			point = closestPatrolPoint(room, suspectRoot.Position)
+		end
+	end
+	teacher.humanoid.WalkSpeed = P.VelocidadPatrulla
+	walkTo(teacher, point, 14)
+	if not teacher.alive then
+		return
+	end
+
+	-- Se planta y mira la fila un momento: es cuando mas peligroso es
+	-- moverse, y le da ritmo al examen.
+	facePoint(teacher, room.center)
+	task.wait(Util.randomInRange(P.PausaEnFila, rng))
+
+	if os.clock() > teacher.nextLine and rng:NextNumber() < 0.35 then
+		teacher.nextLine = os.clock() + 18
+		local lines = { "teacher.silence", "teacher.eyes_on_paper" }
+		say(teacher, lines[rng:NextInteger(1, #lines)])
+	end
+end
+
+local function doBlackboard(teacher: Teacher)
+	local room = teacher.room
+	local spot = room.blackboard.Position + room.dir * 4.5
+	teacher.humanoid.WalkSpeed = P.VelocidadPatrulla
+	walkTo(teacher, Vector3.new(spot.X, teacher.root.Position.Y, spot.Z), 12)
+	if not teacher.alive then
+		return
+	end
+
+	-- De espaldas al aula: la ventana para copiar.
+	facePoint(teacher, room.blackboard.Position)
+	chalkboard(room, CHALK[rng:NextInteger(1, #CHALK)])
+	orientChalkboard(room)
+	say(teacher, "teacher.blackboard")
+	Util.playSound(Config.Sonidos.Tiza, room.blackboard, 0.25, 1.5)
+
+	task.wait(Util.randomInRange(P.PausaEnPizarra, rng))
+end
+
+local function doNoise(teacher: Teacher)
+	local target = teacher.target
+	if not target then
+		return
+	end
+	teacher.target = nil
+	teacher.humanoid.WalkSpeed = P.VelocidadPatrulla * 1.5
+	say(teacher, "teacher.noise")
+	walkTo(teacher, target, 10)
+	if teacher.alive then
+		facePoint(teacher, target)
+		task.wait(1.6)
+	end
+end
+
+local function doChase(teacher: Teacher)
+	local player = teacher.chasing
+	if not player or not player.Parent then
+		teacher.chasing = nil
+		return
+	end
+
+	teacher.humanoid.WalkSpeed = P.VelocidadPersecucion
+	say(teacher, "teacher.caught", { name = player.DisplayName })
+
+	local deadline = os.clock() + 9
+	while teacher.alive and os.clock() < deadline do
+		local character = player.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		if not root or not root:IsA("BasePart") then
+			break
+		end
+		local distance = (root.Position - teacher.root.Position).Magnitude
+		if distance <= 6 then
+			facePoint(teacher, root.Position)
+			local handler = punishHandler
+			if handler then
+				handler(player, teacher)
+			end
+			break
+		end
+		teacher.humanoid:MoveTo(root.Position)
+		task.wait(P.IntervaloRepensar)
+	end
+
+	teacher.chasing = nil
+	teacher.humanoid.WalkSpeed = P.VelocidadPatrulla
+end
+
+local function brain(teacher: Teacher)
+	while teacher.alive do
+		local ok, err = pcall(function()
+			if teacher.chasing then
+				doChase(teacher)
+			elseif teacher.target then
+				doNoise(teacher)
+			elseif examMode and rng:NextNumber() < P.ProbabilidadPizarra then
+				doBlackboard(teacher)
+			else
+				doPatrol(teacher)
+			end
+		end)
+		if not ok then
+			warn("[Profesor] " .. tostring(err))
+			task.wait(1)
+		end
+		task.wait(0.1)
+	end
+end
+
+-- ── entrada ────────────────────────────────────────────────────────
+
+function TeacherAI.onPunish(handler: (Player, any) -> ())
+	punishHandler = handler :: any
+end
+
+function TeacherAI.spawn(room: any)
+	TeacherAI.despawn(room.index)
+
+	local name = CharacterService.randomTeacherName()
+	local model = CharacterService.teacher(name, room.spawn)
+	model.Name = "Profesor" .. room.index
+	model.Parent = CharacterService.folder()
+
+	local humanoid = model:FindFirstChildOfClass("Humanoid") :: Humanoid
+	local root = model.PrimaryPart :: BasePart
+
+	local teacher: Teacher = {
+		aula = room.index,
+		name = name,
+		model = model,
+		humanoid = humanoid,
+		root = root,
+		room = room,
+		state = "patrullar",
+		target = nil,
+		chasing = nil,
+		alive = true,
+		nextLine = 0,
+		animation = CharacterService.animate(model),
+	}
+	teachers[room.index] = teacher
+
+	chalkboard(room, CHALK[rng:NextInteger(1, #CHALK)])
+	orientChalkboard(room)
+
+	task.spawn(brain, teacher)
+	return teacher
+end
+
+function TeacherAI.despawn(aula: number)
+	local teacher = teachers[aula]
+	if not teacher then
+		return
+	end
+	teacher.alive = false
+	if teacher.animation then
+		teacher.animation:Disconnect()
+	end
+	if teacher.model.Parent then
+		teacher.model:Destroy()
+	end
+	teachers[aula] = nil
+end
+
+function TeacherAI.despawnAll()
+	for aula in teachers do
+		TeacherAI.despawn(aula)
+	end
+end
+
+function TeacherAI.get(aula: number): any
+	return teachers[aula]
+end
+
+function TeacherAI.setExamMode(on: boolean)
+	examMode = on
+	for _, teacher in teachers do
+		if on then
+			say(teacher, "teacher.start_exam", { s = Config.Ronda.SegundosExamen })
+		end
+	end
+end
+
+--- Alguien tiro algo: el profesor del aula mas cercana va a mirar.
+function TeacherAI.hearNoise(position: Vector3, _source: Player?)
+	local best: Teacher? = nil
+	local bestDistance = P.RadioAlerta
+	for _, teacher in teachers do
+		local distance = (teacher.root.Position - position).Magnitude
+		if distance < bestDistance then
+			bestDistance = distance
+			best = teacher
+		end
+	end
+	if best and not best.chasing then
+		best.target = position
+	end
+end
+
+--- El alumno cruzo el umbral: el profesor de su aula sale a buscarlo.
+function TeacherAI.pursue(player: Player)
+	local sitting = ExamService.sitting(player)
+	local aula = sitting and sitting.aula or 1
+	local teacher = teachers[aula]
+	if not teacher then
+		for _, candidate in teachers do
+			teacher = candidate
+			break
+		end
+	end
+	if teacher and not teacher.chasing then
+		teacher.chasing = player
+		teacher.target = nil
+	end
+end
+
+function TeacherAI.sayAll(key: string, args: { [string]: any }?)
+	for _, teacher in teachers do
+		say(teacher, key, args)
+	end
+end
+
+function TeacherAI.start()
+	if vision then
+		return
+	end
+	local accumulator = 0
+	vision = RunService.Heartbeat:Connect(function(dt)
+		accumulator += dt
+		if accumulator < 0.1 then
+			return
+		end
+		accumulator = 0
+		local ok, err = pcall(visionStep)
+		if not ok then
+			warn("[Profesor] vision: " .. tostring(err))
+		end
+	end)
+
+	SuspicionService.onThreshold(function(player, _reason)
+		TeacherAI.pursue(player)
+	end)
+end
+
+return TeacherAI
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX13">
+      <Properties>
+        <string name="Name">Templates</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Templates
+	------------------------------------------------------------------
+	Las plantillas de las herramientas equipables viven en
+	ReplicatedStorage/Templates: el cliente necesita verlas para
+	dibujar la tienda y el inventario, y el servidor las clona cuando
+	un alumno saca algo del casillero o lo compra.
+
+	Ninguna plantilla lleva logica adentro: todo lo decide el servidor
+	(ItemService). Aca solo esta la forma.
+--]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+
+local Templates = {}
+
+local FOLDER = "Templates"
+
+local function handle(tool: Tool, size: Vector3, color: Color3, material: Enum.Material,
+	shape: Enum.PartType?): BasePart
+	local part = Instance.new("Part")
+	part.Name = "Handle"
+	part.Size = size
+	part.Color = color
+	part.Material = material
+	part.CanCollide = false
+	part.TopSurface = Enum.SurfaceType.Smooth
+	part.BottomSurface = Enum.SurfaceType.Smooth
+	if shape then
+		part.Shape = shape
+	end
+	part.Parent = tool
+	return part
+end
+
+local function tool(name: string, itemId: string): Tool
+	local instance = Instance.new("Tool")
+	instance.Name = name
+	instance.RequiresHandle = true
+	instance.CanBeDropped = false
+	instance.ManualActivationOnly = false
+	instance:SetAttribute("Item", itemId)
+	return instance
+end
+
+--- Papel doblado: se escribe y se lanza.
+local function buildNota(): Tool
+	local item = tool("Nota", "nota")
+	local body = handle(item, Vector3.new(0.9, 0.12, 0.7), Color3.fromRGB(250, 248, 240),
+		Enum.Material.SmoothPlastic)
+	body.Name = "Handle"
+
+	local fold = Instance.new("Part")
+	fold.Name = "Pliegue"
+	fold.Size = Vector3.new(0.9, 0.05, 0.16)
+	fold.Color = Color3.fromRGB(226, 222, 210)
+	fold.Material = Enum.Material.SmoothPlastic
+	fold.CanCollide = false
+	fold.CFrame = body.CFrame * CFrame.new(0, 0.08, 0)
+	fold.Parent = item
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = body
+	weld.Part1 = fold
+	weld.Parent = body
+
+	local text = Instance.new("StringValue")
+	text.Name = "Texto"
+	text.Value = ""
+	text.Parent = item
+
+	item:SetAttribute("Lanzable", true)
+	item:SetAttribute("Alcance", 1)
+	item.Grip = CFrame.new(0, -0.1, 0)
+	return item
+end
+
+--- Avioncito: vuela mas lejos y mas derecho.
+local function buildAvion(): Tool
+	local item = tool("Avion", "avion")
+	local wedge = Instance.new("WedgePart")
+	wedge.Name = "Handle"
+	wedge.Size = Vector3.new(0.25, 0.4, 1.6)
+	wedge.Color = Color3.fromRGB(248, 246, 238)
+	wedge.Material = Enum.Material.SmoothPlastic
+	wedge.CanCollide = false
+	wedge.Parent = item
+
+	for _, side in { -1, 1 } do
+		local wing = Instance.new("WedgePart")
+		wing.Name = "Ala"
+		wing.Size = Vector3.new(0.08, 0.5, 1.3)
+		wing.Color = Color3.fromRGB(240, 238, 230)
+		wing.Material = Enum.Material.SmoothPlastic
+		wing.CanCollide = false
+		wing.CFrame = wedge.CFrame * CFrame.new(side * 0.45, -0.05, -0.1)
+			* CFrame.Angles(0, 0, math.rad(side * 22))
+		wing.Parent = item
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = wedge
+		weld.Part1 = wing
+		weld.Parent = wedge
+	end
+
+	local text = Instance.new("StringValue")
+	text.Name = "Texto"
+	text.Value = ""
+	text.Parent = item
+
+	item:SetAttribute("Lanzable", true)
+	item:SetAttribute("Alcance", Config.Objetos.AvionMultiplicador)
+	item.Grip = CFrame.new(0, 0, 0.3)
+	return item
+end
+
+--- Bolita de papel: hace ruido donde cae y el profe va a mirar.
+local function buildBolita(): Tool
+	local item = tool("Bolita", "bolita")
+	local ball = handle(item, Vector3.new(0.6, 0.6, 0.6), Color3.fromRGB(244, 242, 234),
+		Enum.Material.Plastic, Enum.PartType.Ball)
+	ball.Reflectance = 0.02
+	item:SetAttribute("Lanzable", true)
+	item:SetAttribute("Alcance", 1)
+	item:SetAttribute("Ruido", Config.Objetos.BolitaRuido)
+	return item
+end
+
+--- Chuleta: no se lanza, se usa y revela respuestas.
+local function buildChuleta(): Tool
+	local item = tool("Chuleta", "chuleta")
+	local strip = handle(item, Vector3.new(1.3, 0.06, 0.4), Color3.fromRGB(252, 250, 236),
+		Enum.Material.SmoothPlastic)
+
+	local ink = Instance.new("SurfaceGui")
+	ink.Face = Enum.NormalId.Top
+	ink.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	ink.PixelsPerStud = 90
+	ink.Parent = strip
+	local scribble = Instance.new("TextLabel")
+	scribble.Size = UDim2.fromScale(1, 1)
+	scribble.BackgroundTransparency = 1
+	scribble.Font = Enum.Font.Code
+	scribble.Text = "1B 2A 3D 4C"
+	scribble.TextColor3 = Color3.fromRGB(40, 60, 130)
+	scribble.TextScaled = true
+	scribble.Parent = ink
+
+	item:SetAttribute("Lanzable", false)
+	item:SetAttribute("Usos", Config.Objetos.ChuletaUsos)
+	item.Grip = CFrame.new(0, -0.05, 0)
+	return item
+end
+
+local BUILDERS: { [string]: () -> Tool } = {
+	nota = buildNota,
+	avion = buildAvion,
+	bolita = buildBolita,
+	chuleta = buildChuleta,
+}
+
+function Templates.folder(): Folder
+	local existing = ReplicatedStorage:FindFirstChild(FOLDER)
+	if existing and existing:IsA("Folder") then
+		return existing
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = FOLDER
+	folder.Parent = ReplicatedStorage
+	return folder
+end
+
+function Templates.build()
+	local folder = Templates.folder()
+	folder:ClearAllChildren()
+	for id, builder in BUILDERS do
+		local ok, result = pcall(builder)
+		if ok and result then
+			result.Parent = folder
+		else
+			warn(string.format("[Templates] %q fallo: %s", id, tostring(result)))
+		end
+	end
+	print(string.format("[Templates] %d herramientas listas.", #folder:GetChildren()))
+end
+
+--- Un clon nuevo de la plantilla de `itemId`, o nil si no existe.
+function Templates.clone(itemId: string): Tool?
+	local folder = Templates.folder()
+	for _, child in folder:GetChildren() do
+		if child:IsA("Tool") and child:GetAttribute("Item") == itemId then
+			return child:Clone()
+		end
+	end
+	return nil
+end
+
+--- Los ids de objeto que se pueden llevar en la mano (no esteticos).
+function Templates.usableIds(): { string }
+	local ids = {}
+	for _, entry in Config.Economia.Tienda do
+		if entry.tipo == "objeto" then
+			table.insert(ids, entry.id :: string)
+		end
+	end
+	return ids
+end
+
+return Templates
+]]></ProtectedString>
+      </Properties>
+    </Item>
+  </Item>
+</roblox>
