@@ -50,7 +50,9 @@ end
 local gui = Instance.new("ScreenGui")
 gui.Name = "FinalsWeek"
 gui.ResetOnSpawn = false
-gui.IgnoreGuiInset = false
+-- En false, el panel del reloj (arriba y al centro, a 12 px del borde)
+-- quedaba tapado por la barra superior del propio Roblox.
+gui.IgnoreGuiInset = true
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.DisplayOrder = 10
 gui.Parent = player:WaitForChild("PlayerGui")
@@ -118,13 +120,28 @@ end
 MainMenu.onRooms = function()
 	LobbyUI.open()
 end
+-- La tienda y el lobby viven en UI.Layer.Modal (200), por encima del
+-- menu (100): se abren *sobre* el menu en vez de detras, que es lo que
+-- pasaba cuando la tienda estaba fija en ZIndex 12 y el scrim en 20.
 MainMenu.onShop = function()
 	ShopUI.open()
 end
 MainMenu.onMusic = function(on: boolean)
 	Music.setEnabled(on)
 end
-MainMenu.onPlay = function(_mode: string) end
+
+--[[
+	Antes esto era una funcion vacia: el boton "Jugar" solo cerraba el
+	menu y el modo lo elegia `MainMenu.close` por su cuenta, siempre
+	"publico". Ahora la eleccion llega hasta el servidor.
+--]]
+MainMenu.onPlay = function(mode: string)
+	task.spawn(function()
+		pcall(function()
+			Net.func(Net.Functions.ChooseMode):InvokeServer(mode)
+		end)
+	end)
+end
 
 -- ── remotes ────────────────────────────────────────────────────────
 

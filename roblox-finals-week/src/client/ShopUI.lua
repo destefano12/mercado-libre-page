@@ -7,8 +7,24 @@
 	El cliente solo dibuja precios y manda "quiero esto". Quien decide
 	si alcanza la plata, si ya lo tenias y si la tienda esta abierta es
 	el servidor (ShopService).
+
+	Lo que cambio respecto de la version anterior:
+
+	- Cada articulo tenia una tarjeta de texto plano. Ahora tiene un
+	  ViewportFrame con el modelo 3D girando (ver `shared/Previews`).
+	- El boton de precio se veia igual tuvieras o no tuvieras los
+	  creditos: te enterabas de que no alcanzaba *despues* de hacer
+	  clic, por un aviso generico. Ahora la tarjeta lo dice antes.
+	- No habia estado de "esperando al servidor": se podia disparar la
+	  compra cinco veces seguidas. Ahora el boton se apaga mientras el
+	  remote viaja.
+	- Vivia en ZIndex 12, debajo del scrim del menu (20), asi que
+	  abrirla desde el menu la dibujaba por detras. Ahora esta en
+	  UI.Layer.Modal, por encima.
 --]]
 
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -16,7 +32,8 @@ local Theme = require(Shared:WaitForChild("Theme"))
 local Strings = require(Shared:WaitForChild("Strings"))
 local Config = require(Shared:WaitForChild("Config"))
 local Net = require(Shared:WaitForChild("Net"))
-local Util = require(Shared:WaitForChild("Util"))
+local UI = require(Shared:WaitForChild("UI"))
+local Previews = require(Shared:WaitForChild("Previews"))
 
 local ShopUI = {}
 
@@ -24,118 +41,244 @@ local root: Frame
 local creditLabel: TextLabel
 local list: ScrollingFrame
 local tabButtons: { [string]: TextButton } = {}
+local tabUnderline: Frame
 local currentTab = "objeto"
 local wallet: any = { creditos = 0, comprados = {}, estetica = {}, objeto = "nota" }
 
-local function new(class: string, props: { [string]: any }, parent: Instance?): any
-	local instance = Instance.new(class)
-	for key, value in props do
-		(instance :: any)[key] = value
-	end
-	if parent then
-		instance.Parent = parent
-	end
-	return instance
-end
+-- Los modelos que hay que girar. Una sola conexion para todas las
+-- tarjetas: una por tarjeta serian trece Heartbeat en paralelo.
+local spinning: { Model } = {}
+local spinLoop: RBXScriptConnection? = nil
 
-local function corner(gui: GuiObject, radius: number)
-	new("UICorner", { CornerRadius = UDim.new(0, radius) }, gui)
-end
-
-local function click()
-	Util.playSound(Config.Sonidos.Click, workspace :: any, 0.25, 1.1)
-end
+local CARD_HEIGHT = 96
+local THUMB = 76
 
 ShopUI.onNotify = function(_packet: any) end
 
--- ── filas ──────────────────────────────────────────────────────────
+-- ── giro de las miniaturas ─────────────────────────────────────────
+
+local function startSpin()
+	if spinLoop then
+		return
+	end
+	local angle = 0
+	spinLoop = RunService.RenderStepped:Connect(function(dt: number)
+		angle += dt * 0.9
+		for index = #spinning, 1, -1 do
+			local model = spinning[index]
+			if not model.Parent then
+				table.remove(spinning, index)
+			else
+				-- Un balanceo leve en X ademas del giro: un objeto que
+				-- gira sobre un solo eje se lee como una animacion de
+				-- carga, no como un objeto.
+				model:PivotTo(CFrame.Angles(math.sin(angle * 0.6) * 0.18, angle, 0))
+			end
+		end
+	end)
+end
+
+local function stopSpin()
+	if spinLoop then
+		spinLoop:Disconnect()
+		spinLoop = nil
+	end
+	table.clear(spinning)
+end
+
+--[[
+	Un ViewportFrame con su propia camara. La camara se planta a una
+	distancia fija mirando al origen: como todos los modelos de
+	`Previews` entran en un cubo de ~2 studs, no hay que encuadrar uno
+	por uno.
+--]]
+local function thumbnail(parent: Instance, id: string, layer: number): Frame
+	local frame = UI.new("Frame", {
+		Name = "Miniatura",
+		Size = UDim2.fromOffset(THUMB, THUMB),
+		Position = UDim2.fromOffset(12, (CARD_HEIGHT - THUMB) * 0.5),
+		BackgroundColor3 = Theme.Surface.Deep,
+		BorderSizePixel = 0,
+		ZIndex = layer,
+		Parent = parent,
+	})
+	UI.corner(frame, UI.Radius.sm)
+
+	local model = Previews.build(id)
+	if not model then
+		-- Sin silueta definida cae en el icono plano. Es peor, pero no
+		-- deja un cuadrado vacio.
+		UI.icon(frame, "moneda", 34, Theme.Surface.Faint, layer + 1).Position =
+			UDim2.new(0.5, -17, 0.5, -17)
+		return frame
+	end
+
+	local viewport: ViewportFrame = UI.new("ViewportFrame", {
+		Name = "Vista",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Ambient = Color3.fromRGB(170, 175, 185),
+		LightColor = Color3.fromRGB(255, 250, 238),
+		LightDirection = Vector3.new(-0.4, -1, -0.6),
+		ZIndex = layer + 1,
+		Parent = frame,
+	})
+
+	local camera = UI.new("Camera", {
+		CFrame = CFrame.lookAt(Vector3.new(0, 0.6, 4.2), Vector3.new(0, 0, 0)),
+		FieldOfView = 42,
+		Parent = viewport,
+	})
+	viewport.CurrentCamera = camera
+	model.Parent = viewport
+	table.insert(spinning, model)
+
+	return frame
+end
+
+-- ── tarjetas ───────────────────────────────────────────────────────
 
 local function row(entry: any, order: number)
+	local layer = UI.Layer.Modal + 1
 	local owned = wallet.comprados and wallet.comprados[entry.id] == true
 	local isGear = entry.tipo == "objeto"
-	local active = isGear and wallet.objeto == entry.id
+	local active = (isGear and wallet.objeto == entry.id)
 		or (not isGear and wallet.estetica and wallet.estetica[entry.id] == true)
+	local credits = wallet.creditos or 0
+	local affordable = owned or credits >= entry.precio
 
-	local card = new("Frame", {
+	local card = UI.new("Frame", {
 		Name = entry.id,
 		LayoutOrder = order,
-		Size = UDim2.new(1, -8, 0, 72),
-		BackgroundColor3 = Theme.Menu.PanelAlt,
+		Size = UDim2.new(1, -8, 0, CARD_HEIGHT),
+		BackgroundColor3 = Theme.Surface.Raised,
+		BackgroundTransparency = affordable and 0 or 0.45,
 		BorderSizePixel = 0,
-	}, list)
-	corner(card, 10)
+		ZIndex = layer,
+		Parent = list,
+	})
+	UI.corner(card, UI.Radius.md)
+	UI.stroke(card, active and Theme.Brand.Mint or Theme.Surface.Line, 1, active and 0.2 or 0.6)
 
-	new("TextLabel", {
-		Text = Strings.get("item." .. entry.id),
-		Size = UDim2.new(1, -120, 0, 20),
-		Position = UDim2.new(0, 14, 0, 10),
-		BackgroundTransparency = 1,
-		Font = Theme.FontBold,
-		TextSize = 15,
-		TextColor3 = Theme.Menu.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-	}, card)
+	thumbnail(card, entry.id, layer + 1)
 
-	new("TextLabel", {
-		Text = Strings.get("item.desc_" .. entry.id, { n = Config.Objetos.ChuletaRevela }),
-		Size = UDim2.new(1, -130, 0, 32),
-		Position = UDim2.new(0, 14, 0, 30),
-		BackgroundTransparency = 1,
-		Font = Theme.Font,
-		TextSize = 12,
-		TextColor3 = Theme.Menu.Muted,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextYAlignment = Enum.TextYAlignment.Top,
-		TextWrapped = true,
-	}, card)
+	UI.label({
+		parent = card,
+		name = "Nombre",
+		text = Strings.get("item." .. entry.id),
+		size = UDim2.new(1, -230, 0, 22),
+		position = UDim2.fromOffset(THUMB + 26, 16),
+		font = Theme.FontBold,
+		textSize = UI.Type.subtitle,
+		color = affordable and Theme.Surface.Text or Theme.Surface.Faint,
+		layer = layer + 1,
+	})
 
-	-- Un solo boton que cambia de papel: comprar, equipar o equipado.
-	local canBuy = not owned or isGear
+	local description = UI.label({
+		parent = card,
+		name = "Detalle",
+		text = Strings.get("item.desc_" .. entry.id, { n = Config.Objetos.ChuletaRevela }),
+		size = UDim2.new(1, -240, 0, 38),
+		position = UDim2.fromOffset(THUMB + 26, 40),
+		font = Theme.Font,
+		textSize = UI.Type.small,
+		color = Theme.Surface.Muted,
+		wrapped = true,
+		layer = layer + 1,
+	})
+	description.TextYAlignment = Enum.TextYAlignment.Top
+
+	-- El precio, aparte del boton, para que se lea sin interpretar el
+	-- estado del boton. En rojo cuando no alcanza.
+	if not owned then
+		UI.label({
+			parent = card,
+			name = "Precio",
+			text = Strings.get("shop.price", { n = entry.precio }),
+			size = UDim2.fromOffset(110, 18),
+			position = UDim2.new(1, -122, 0, 14),
+			anchor = Vector2.new(0, 0),
+			font = Theme.FontBold,
+			textSize = UI.Type.small,
+			color = affordable and Theme.Hud.Credit or Theme.Brand.Tomato,
+			align = Enum.TextXAlignment.Right,
+			layer = layer + 1,
+		})
+	end
+
 	local text: string
 	local color: Color3
 	if not owned then
-		text = string.format("%s  %s", Strings.get("shop.buy"),
-			Strings.get("shop.price", { n = entry.precio }))
-		color = Theme.Hud.Credit
+		text = Strings.get("shop.buy")
+		color = affordable and Theme.Hud.Credit or Theme.Surface.Faint
 	elseif active then
 		text = Strings.get("shop.equipped")
-		color = Theme.Hud.Safe
+		color = Theme.Brand.Mint
 	else
 		text = Strings.get("shop.equip")
-		color = Theme.Menu.Accent
+		color = Theme.Brand.Teal
 	end
 
-	local button = new("TextButton", {
-		Name = "Accion",
-		Text = text,
-		Size = UDim2.new(0, 96, 0, 34),
-		Position = UDim2.new(1, -108, 0, 19),
-		BackgroundColor3 = color,
-		BackgroundTransparency = active and 0.82 or 0.86,
-		AutoButtonColor = false,
-		Font = Theme.FontBold,
-		TextSize = 12,
-		TextColor3 = color,
-		BorderSizePixel = 0,
-	}, card)
-	corner(button, 8)
-	new("UIStroke", { Color = color, Thickness = 1, Transparency = 0.55 }, button)
-
-	button.MouseButton1Click:Connect(function()
-		click()
-		task.spawn(function()
-			local remote = owned and Net.func(Net.Functions.Equip) or Net.func(Net.Functions.Buy)
-			local ok, result = pcall(function()
-				return remote:InvokeServer(entry.id)
-			end)
-			if ok and result and result.reason then
-				ShopUI.onNotify(result.reason)
+	local pending = false
+	local button: UI.Button
+	button = UI.button({
+		parent = card,
+		name = "Accion",
+		text = text,
+		size = UDim2.fromOffset(110, 34),
+		position = UDim2.new(1, -122, 0, 44),
+		color = color,
+		ghost = true,
+		textSize = UI.Type.small,
+		radius = UI.Radius.sm,
+		layer = layer + 1,
+		onClick = function()
+			if pending then
+				return
 			end
-		end)
-	end)
+			pending = true
+			button.setEnabled(false)
+			task.spawn(function()
+				local remote = owned and Net.func(Net.Functions.Equip)
+					or Net.func(Net.Functions.Buy)
+				local ok, result = pcall(function()
+					return remote:InvokeServer(entry.id)
+				end)
+				pending = false
+				if ok and result then
+					if result.reason then
+						ShopUI.onNotify(result.reason)
+					end
+					if result.ok then
+						-- Un destello verde: la lista se reconstruye
+						-- sola cuando llega la billetera nueva, pero el
+						-- servidor puede tardar y el silencio se lee
+						-- como que el clic no entro.
+						TweenService:Create(card, UI.Motion.snap, {
+							BackgroundColor3 = Theme.Brand.Mint,
+						}):Play()
+						task.delay(0.16, function()
+							if card.Parent then
+								TweenService:Create(card, UI.Motion.base, {
+									BackgroundColor3 = Theme.Surface.Raised,
+								}):Play()
+							end
+						end)
+					end
+				end
+				if card.Parent then
+					button.setEnabled(true)
+				end
+			end)
+		end,
+	})
 
-	if not canBuy and not owned then
-		button.Active = false
+	-- Ya comprado y ya equipado: no hay nada que hacer con el boton.
+	if owned and active and not isGear then
+		button.setEnabled(false)
+	end
+	if not owned and not affordable then
+		button.setEnabled(false)
 	end
 end
 
@@ -143,6 +286,7 @@ local function rebuild()
 	if not list then
 		return
 	end
+	table.clear(spinning)
 	for _, child in list:GetChildren() do
 		if child:IsA("Frame") then
 			child:Destroy()
@@ -155,110 +299,118 @@ local function rebuild()
 			row(entry, order)
 		end
 	end
-	list.CanvasSize = UDim2.new(0, 0, 0, order * 78 + 8)
 	creditLabel.Text = Strings.get("shop.price", { n = wallet.creditos or 0 })
+end
+
+local function selectTab(id: string)
+	currentTab = id
+	local target = tabButtons[id]
+	for otherId, other in tabButtons do
+		TweenService:Create(other, UI.Motion.snap, {
+			TextColor3 = otherId == id and Theme.Surface.Text or Theme.Surface.Muted,
+		}):Play()
+	end
+	if target and tabUnderline then
+		TweenService:Create(tabUnderline, UI.Motion.base, {
+			Position = UDim2.fromOffset(target.Position.X.Offset, 82),
+			Size = UDim2.fromOffset(target.Size.X.Offset, 3),
+		}):Play()
+	end
+	rebuild()
 end
 
 -- ── construccion ───────────────────────────────────────────────────
 
 function ShopUI.mount(parent: ScreenGui)
-	root = new("Frame", {
+	root = UI.new("Frame", {
 		Name = "Tienda",
-		Size = UDim2.new(0, 440, 0, 460),
+		Size = UDim2.fromOffset(560, 520),
 		Position = UDim2.fromScale(0.5, 0.5),
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = Theme.Menu.Panel,
+		BackgroundColor3 = Theme.Surface.Base,
 		BorderSizePixel = 0,
 		Visible = false,
-		ZIndex = 12,
-	}, parent)
-	corner(root, 14)
-	new("UIStroke", { Color = Theme.Menu.Line, Thickness = 1, Transparency = 0.4 }, root)
+		ZIndex = UI.Layer.Modal,
+		Parent = parent,
+	})
+	UI.corner(root, UI.Radius.lg)
+	UI.stroke(root, Theme.Surface.Line, 1, 0.35)
 
-	new("TextLabel", {
-		Text = Strings.get("shop.title"),
-		Size = UDim2.new(1, -120, 0, 28),
-		Position = UDim2.new(0, 18, 0, 14),
-		BackgroundTransparency = 1,
-		Font = Theme.FontBlack,
-		TextSize = 20,
-		TextColor3 = Theme.Menu.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		ZIndex = 13,
-	}, root)
+	UI.icon(root, "moneda", 22, Theme.Hud.Credit, UI.Layer.Modal + 1).Position =
+		UDim2.fromOffset(20, 20)
 
-	creditLabel = new("TextLabel", {
-		Text = "0 cr",
-		Size = UDim2.new(0, 100, 0, 24),
-		Position = UDim2.new(1, -118, 0, 16),
-		BackgroundTransparency = 1,
-		Font = Theme.FontBold,
-		TextSize = 15,
-		TextColor3 = Theme.Hud.Credit,
-		TextXAlignment = Enum.TextXAlignment.Right,
-		ZIndex = 13,
-	}, root)
+	UI.label({
+		parent = root,
+		name = "Titulo",
+		text = Strings.get("shop.title"),
+		size = UDim2.new(1, -220, 0, 28),
+		position = UDim2.fromOffset(52, 16),
+		font = Theme.FontBlack,
+		textSize = UI.Type.title,
+		color = Theme.Surface.Text,
+		layer = UI.Layer.Modal + 1,
+	})
 
-	local close = new("TextButton", {
-		Text = "X",
-		Size = UDim2.new(0, 28, 0, 28),
-		Position = UDim2.new(1, -40, 0, 14),
-		BackgroundTransparency = 1,
-		Font = Theme.FontBold,
-		TextSize = 16,
-		TextColor3 = Theme.Menu.Muted,
-		ZIndex = 13,
-	}, root)
-	close.MouseButton1Click:Connect(function()
-		click()
+	creditLabel = UI.label({
+		parent = root,
+		name = "Creditos",
+		text = "0 cr",
+		size = UDim2.fromOffset(120, 24),
+		position = UDim2.new(1, -172, 0, 20),
+		font = Theme.FontBold,
+		textSize = UI.Type.subtitle,
+		color = Theme.Hud.Credit,
+		align = Enum.TextXAlignment.Right,
+		layer = UI.Layer.Modal + 1,
+	})
+
+	UI.closeButton(root, UI.Layer.Modal + 1, function()
 		ShopUI.close()
 	end)
 
 	local tabs = { { "objeto", "shop.tab_items" }, { "estetica", "shop.tab_looks" } }
 	for i, tab in tabs do
-		local button = new("TextButton", {
-			Name = tab[1],
-			Text = Strings.get(tab[2]),
-			Size = UDim2.new(0, 120, 0, 30),
-			Position = UDim2.new(0, 18 + (i - 1) * 128, 0, 50),
-			BackgroundColor3 = Theme.Menu.PanelAlt,
-			AutoButtonColor = false,
-			Font = Theme.FontBold,
-			TextSize = 13,
-			TextColor3 = Theme.Menu.Muted,
-			BorderSizePixel = 0,
-			ZIndex = 13,
-		}, root)
-		corner(button, 8)
-		button.MouseButton1Click:Connect(function()
-			click()
-			currentTab = tab[1]
-			for id, other in tabButtons do
-				other.TextColor3 = id == currentTab and Theme.Menu.Text or Theme.Menu.Muted
-				other.BackgroundColor3 = id == currentTab and Theme.Menu.Line or Theme.Menu.PanelAlt
-			end
-			rebuild()
-		end)
-		tabButtons[tab[1]] = button
+		local button = UI.button({
+			parent = root,
+			name = tab[1],
+			text = Strings.get(tab[2]),
+			size = UDim2.fromOffset(130, 32),
+			position = UDim2.fromOffset(20 + (i - 1) * 138, 50),
+			color = Theme.Brand.Teal,
+			ghost = true,
+			textSize = UI.Type.small,
+			radius = UI.Radius.sm,
+			layer = UI.Layer.Modal + 1,
+			onClick = function()
+				selectTab(tab[1])
+			end,
+		})
+		button.instance.TextColor3 = Theme.Surface.Muted
+		tabButtons[tab[1]] = button.instance
 	end
-	tabButtons.objeto.TextColor3 = Theme.Menu.Text
-	tabButtons.objeto.BackgroundColor3 = Theme.Menu.Line
 
-	list = new("ScrollingFrame", {
-		Name = "Lista",
-		Size = UDim2.new(1, -32, 1, -104),
-		Position = UDim2.new(0, 16, 0, 90),
-		BackgroundTransparency = 1,
+	-- El subrayado que se desliza entre pestanas. Antes el estado de la
+	-- pestana activa se comunicaba cambiando dos colores de golpe.
+	tabUnderline = UI.new("Frame", {
+		Name = "Subrayado",
+		Size = UDim2.fromOffset(130, 3),
+		Position = UDim2.fromOffset(20, 82),
+		BackgroundColor3 = Theme.Brand.Teal,
 		BorderSizePixel = 0,
-		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = Theme.Menu.Line,
-		CanvasSize = UDim2.new(),
-		ZIndex = 13,
-	}, root)
-	new("UIListLayout", {
-		Padding = UDim.new(0, 6),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-	}, list)
+		ZIndex = UI.Layer.Modal + 2,
+		Parent = root,
+	})
+	UI.corner(tabUnderline, 2)
+
+	list = UI.scroller(
+		root,
+		UDim2.new(1, -32, 1, -112),
+		UDim2.fromOffset(16, 96),
+		UI.Layer.Modal + 1,
+		UI.Space.sm
+	)
+
+	tabButtons.objeto.TextColor3 = Theme.Surface.Text
 end
 
 function ShopUI.setWallet(data: any)
@@ -271,17 +423,20 @@ function ShopUI.setWallet(data: any)
 end
 
 function ShopUI.open()
-	if not root then
+	if not root or root.Visible then
 		return
 	end
-	root.Visible = true
 	rebuild()
+	startSpin()
+	UI.show(root)
 end
 
 function ShopUI.close()
-	if root then
-		root.Visible = false
+	if not root or not root.Visible then
+		return
 	end
+	stopSpin()
+	UI.hide(root)
 end
 
 function ShopUI.isOpen(): boolean

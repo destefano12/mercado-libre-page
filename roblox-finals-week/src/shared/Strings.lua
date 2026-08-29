@@ -239,6 +239,9 @@ local en: { [string]: string } = {
 	["menu.music"] = "Music",
 	["menu.language"] = "Language",
 	["menu.sensitivity"] = "Camera sensitivity",
+	["menu.shop_desc"] = "Spend what you earned on the exam",
+	["menu.settings_desc"] = "Brightness, volume and sensitivity",
+	["menu.credits_desc"] = "Who made this and with what",
 	-- Salas
 	["room.title"] = "Rooms",
 	["room.search"] = "Search a room",
@@ -497,6 +500,9 @@ local es: { [string]: string } = {
 	["menu.music"] = "Musica",
 	["menu.language"] = "Idioma",
 	["menu.sensitivity"] = "Sensibilidad de camara",
+	["menu.shop_desc"] = "Gasta lo que sacaste en el examen",
+	["menu.settings_desc"] = "Brillo, volumen y sensibilidad",
+	["menu.credits_desc"] = "Quien hizo esto y con que",
 	-- Salas
 	["room.title"] = "Salas",
 	["room.search"] = "Buscar una sala",
@@ -755,6 +761,9 @@ local pt: { [string]: string } = {
 	["menu.music"] = "Musica",
 	["menu.language"] = "Idioma",
 	["menu.sensitivity"] = "Sensibilidade da camera",
+	["menu.shop_desc"] = "Gaste o que voce ganhou na prova",
+	["menu.settings_desc"] = "Brilho, volume e sensibilidade",
+	["menu.credits_desc"] = "Quem fez isto e com o que",
 	-- Salas
 	["room.title"] = "Salas",
 	["room.search"] = "Buscar uma sala",

@@ -51,6 +51,31 @@ Theme.Menu = {
 	Locked = Color3.fromRGB(88, 93, 105),
 }
 
+-- Acentos de instituto noventoso. Son los unicos colores saturados
+-- del juego y estan para que la interfaz no sea una escala de grises.
+Theme.Brand = {
+	Teal = Color3.fromRGB(38, 166, 178),
+	Mustard = Color3.fromRGB(240, 186, 62),
+	Tomato = Color3.fromRGB(228, 84, 62),
+	Grape = Color3.fromRGB(126, 92, 178),
+	Mint = Color3.fromRGB(96, 198, 148),
+	Cream = Color3.fromRGB(246, 238, 214),
+	Chalk = Color3.fromRGB(232, 240, 236),
+}
+
+-- Chrome de la interfaz nueva: cinco niveles de profundidad en vez de
+-- los cinco valores sueltos de transparencia que habia antes.
+Theme.Surface = {
+	Deep = Color3.fromRGB(12, 14, 19),
+	Base = Color3.fromRGB(19, 22, 29),
+	Raised = Color3.fromRGB(28, 32, 41),
+	Hover = Color3.fromRGB(38, 43, 54),
+	Line = Color3.fromRGB(58, 64, 78),
+	Text = Color3.fromRGB(240, 243, 248),
+	Muted = Color3.fromRGB(146, 154, 168),
+	Faint = Color3.fromRGB(96, 103, 116),
+}
+
 Theme.Grade = {
 	A = Color3.fromRGB(52, 196, 122),
 	B = Color3.fromRGB(120, 196, 96),

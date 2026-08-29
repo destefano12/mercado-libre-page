@@ -34,7 +34,7 @@
     <Properties>
       <string name="Name">ReplicatedStorage</string>
     </Properties>
-    <Item class="Folder" referent="RBX13">
+    <Item class="Folder" referent="RBX15">
       <Properties>
         <string name="Name">Shared</string>
       </Properties>
@@ -631,6 +631,209 @@ return Net
       </Item>
       <Item class="ModuleScript" referent="RBX9">
         <Properties>
+          <string name="Name">Previews</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Previews
+	------------------------------------------------------------------
+	Miniaturas 3D de los articulos de la tienda.
+
+	Por que existe en vez de reutilizar `Templates`: las herramientas de
+	verdad las arma `src/server/Templates.lua` dentro de ServerStorage,
+	y el cliente no puede leer de ahi — es codigo de servidor y ademas
+	ServerStorage no se replica. Replicarlas solo para dibujar una
+	tarjeta seria mandar Tools completos, con sus ProximityPrompt y sus
+	atributos, para mostrar un dibujito.
+
+	Asi que aca viven siluetas: las mismas medidas y los mismos colores
+	que la herramienta real, con tres o cuatro partes en vez de quince.
+	Lo que el jugador tiene que reconocer es la forma, no el mecanismo.
+
+	Cada modelo sale centrado en el origen y entra en un cubo de ~2
+	studs, para que la camara del ViewportFrame no tenga que ajustarse
+	por articulo.
+--]]
+
+local Previews = {}
+
+local function part(parent: Instance, size: Vector3, offset: CFrame, color: Color3,
+	material: Enum.Material?): BasePart
+	local piece = Instance.new("Part")
+	piece.Size = size
+	piece.CFrame = offset
+	piece.Color = color
+	piece.Material = material or Enum.Material.SmoothPlastic
+	piece.Anchored = true
+	piece.CanCollide = false
+	piece.CanQuery = false
+	piece.TopSurface = Enum.SurfaceType.Smooth
+	piece.BottomSurface = Enum.SurfaceType.Smooth
+	piece.Parent = parent
+	return piece
+end
+
+local function rounded(piece: BasePart, shape: Enum.PartType)
+	local mesh = Instance.new("SpecialMesh")
+	mesh.MeshType = shape == Enum.PartType.Ball and Enum.MeshType.Sphere or Enum.MeshType.Cylinder
+	mesh.Parent = piece
+end
+
+-- Cada constructor recibe el modelo vacio y le cuelga las piezas.
+local BUILDERS: { [string]: (Model) -> () } = {
+	nota = function(model)
+		part(model, Vector3.new(1.6, 0.08, 1.2), CFrame.new(0, 0, 0),
+			Color3.fromRGB(250, 248, 240))
+		part(model, Vector3.new(1.6, 0.06, 0.3), CFrame.new(0, 0.06, -0.42),
+			Color3.fromRGB(226, 222, 210))
+	end,
+
+	avion = function(model)
+		part(model, Vector3.new(0.16, 0.36, 1.7), CFrame.new(0, 0, 0),
+			Color3.fromRGB(248, 246, 238))
+		for _, side in { -1, 1 } do
+			part(model, Vector3.new(0.06, 0.44, 1.2),
+				CFrame.new(side * 0.32, -0.02, 0.1) * CFrame.Angles(0, 0, side * 0.5),
+				Color3.fromRGB(240, 238, 230))
+		end
+	end,
+
+	bolita = function(model)
+		local ball = part(model, Vector3.new(1.2, 1.2, 1.2), CFrame.new(0, 0, 0),
+			Color3.fromRGB(244, 242, 234))
+		rounded(ball, Enum.PartType.Ball)
+	end,
+
+	chuleta = function(model)
+		part(model, Vector3.new(1.9, 0.06, 0.7), CFrame.new(0, 0, 0),
+			Color3.fromRGB(252, 250, 236))
+		for i = 0, 2 do
+			part(model, Vector3.new(1.4, 0.02, 0.06),
+				CFrame.new(0, 0.05, -0.2 + i * 0.2), Color3.fromRGB(40, 60, 130))
+		end
+	end,
+
+	walkie = function(model)
+		part(model, Vector3.new(0.62, 1.5, 0.42), CFrame.new(0, -0.1, 0),
+			Color3.fromRGB(32, 34, 40))
+		part(model, Vector3.new(0.1, 0.7, 0.1), CFrame.new(0.18, 0.92, 0),
+			Color3.fromRGB(18, 18, 22))
+		part(model, Vector3.new(0.4, 0.24, 0.05), CFrame.new(-0.05, 0.36, -0.22),
+			Color3.fromRGB(94, 232, 122), Enum.Material.Neon)
+		part(model, Vector3.new(0.44, 0.3, 0.04), CFrame.new(-0.05, -0.06, -0.22),
+			Color3.fromRGB(58, 62, 70), Enum.Material.DiamondPlate)
+	end,
+
+	prismaticos = function(model)
+		part(model, Vector3.new(1.15, 0.6, 0.78), CFrame.new(0, 0, 0),
+			Color3.fromRGB(28, 30, 36))
+		for _, side in { -1, 1 } do
+			part(model, Vector3.new(0.5, 0.5, 0.9),
+				CFrame.new(side * 0.34, 0, 0.1), Color3.fromRGB(22, 24, 30))
+			part(model, Vector3.new(0.42, 0.42, 0.06),
+				CFrame.new(side * 0.34, 0, 0.56), Color3.fromRGB(150, 200, 232),
+				Enum.Material.Glass)
+		end
+	end,
+
+	celular = function(model)
+		part(model, Vector3.new(0.75, 1.5, 0.12), CFrame.new(0, 0, 0),
+			Color3.fromRGB(22, 24, 30))
+		part(model, Vector3.new(0.64, 1.28, 0.04), CFrame.new(0, 0.04, -0.07),
+			Color3.fromRGB(96, 168, 240), Enum.Material.Neon)
+	end,
+
+	libro = function(model)
+		part(model, Vector3.new(1.5, 2, 0.36), CFrame.new(0, 0, 0),
+			Color3.fromRGB(126, 44, 52))
+		part(model, Vector3.new(1.4, 1.88, 0.32), CFrame.new(0.06, 0, 0),
+			Color3.fromRGB(246, 244, 234))
+		part(model, Vector3.new(0.12, 2, 0.38), CFrame.new(-0.7, 0, 0),
+			Color3.fromRGB(96, 32, 40))
+	end,
+
+	aerosol = function(model)
+		local can = part(model, Vector3.new(0.7, 1.5, 0.7), CFrame.new(0, -0.1, 0),
+			Color3.fromRGB(210, 66, 66))
+		rounded(can, Enum.PartType.Cylinder)
+		part(model, Vector3.new(0.3, 0.3, 0.3), CFrame.new(0, 0.78, 0),
+			Color3.fromRGB(238, 238, 232))
+		part(model, Vector3.new(0.66, 0.22, 0.66), CFrame.new(0, 0.34, 0),
+			Color3.fromRGB(238, 238, 232))
+	end,
+
+	gorra = function(model)
+		part(model, Vector3.new(1.5, 0.62, 1.5), CFrame.new(0, 0.1, 0),
+			Color3.fromRGB(44, 92, 148))
+		part(model, Vector3.new(1.5, 0.12, 0.85), CFrame.new(0, -0.2, -0.9),
+			Color3.fromRGB(32, 70, 118))
+	end,
+
+	mochila = function(model)
+		part(model, Vector3.new(1.4, 1.6, 0.75), CFrame.new(0, 0, 0),
+			Color3.fromRGB(58, 96, 72))
+		part(model, Vector3.new(1.2, 0.5, 0.3), CFrame.new(0, -0.42, -0.5),
+			Color3.fromRGB(44, 76, 56))
+		for _, side in { -1, 1 } do
+			part(model, Vector3.new(0.22, 1.4, 0.16),
+				CFrame.new(side * 0.44, 0.06, 0.44), Color3.fromRGB(38, 66, 48))
+		end
+	end,
+
+	anteojos = function(model)
+		for _, side in { -1, 1 } do
+			part(model, Vector3.new(0.62, 0.5, 0.06),
+				CFrame.new(side * 0.38, 0, 0), Color3.fromRGB(168, 208, 232),
+				Enum.Material.Glass)
+			part(model, Vector3.new(0.14, 0.1, 0.6),
+				CFrame.new(side * 0.66, 0.14, 0.3), Color3.fromRGB(28, 30, 36))
+		end
+		part(model, Vector3.new(0.2, 0.08, 0.06), CFrame.new(0, 0, 0),
+			Color3.fromRGB(28, 30, 36))
+	end,
+
+	campera = function(model)
+		part(model, Vector3.new(1.5, 1.5, 0.6), CFrame.new(0, 0, 0),
+			Color3.fromRGB(96, 32, 42))
+		for _, side in { -1, 1 } do
+			part(model, Vector3.new(0.42, 1.3, 0.5),
+				CFrame.new(side * 0.94, -0.08, 0), Color3.fromRGB(84, 28, 36))
+		end
+		part(model, Vector3.new(0.16, 1.4, 0.06), CFrame.new(0, 0, -0.3),
+			Color3.fromRGB(198, 198, 202), Enum.Material.Metal)
+	end,
+}
+
+--[[
+	Devuelve el modelo del articulo, o `nil` si no hay ninguno definido
+	para ese id. La tienda dibuja un icono plano cuando esto da nil, asi
+	que agregar un articulo nuevo no rompe la tarjeta — solo se ve mas
+	pobre hasta que alguien le escriba la silueta.
+--]]
+function Previews.build(id: string): Model?
+	local builder = BUILDERS[id]
+	if not builder then
+		return nil
+	end
+	local model = Instance.new("Model")
+	model.Name = id
+	builder(model)
+	local first = model:FindFirstChildWhichIsA("BasePart")
+	if first then
+		model.PrimaryPart = first
+	end
+	return model
+end
+
+function Previews.has(id: string): boolean
+	return BUILDERS[id] ~= nil
+end
+
+return Previews
+]]></ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX10">
+        <Properties>
           <string name="Name">Strings</string>
           <ProtectedString name="Source"><![CDATA[--!strict
 --[[
@@ -873,6 +1076,9 @@ local en: { [string]: string } = {
 	["menu.music"] = "Music",
 	["menu.language"] = "Language",
 	["menu.sensitivity"] = "Camera sensitivity",
+	["menu.shop_desc"] = "Spend what you earned on the exam",
+	["menu.settings_desc"] = "Brightness, volume and sensitivity",
+	["menu.credits_desc"] = "Who made this and with what",
 	-- Salas
 	["room.title"] = "Rooms",
 	["room.search"] = "Search a room",
@@ -1131,6 +1337,9 @@ local es: { [string]: string } = {
 	["menu.music"] = "Musica",
 	["menu.language"] = "Idioma",
 	["menu.sensitivity"] = "Sensibilidad de camara",
+	["menu.shop_desc"] = "Gasta lo que sacaste en el examen",
+	["menu.settings_desc"] = "Brillo, volumen y sensibilidad",
+	["menu.credits_desc"] = "Quien hizo esto y con que",
 	-- Salas
 	["room.title"] = "Salas",
 	["room.search"] = "Buscar una sala",
@@ -1389,6 +1598,9 @@ local pt: { [string]: string } = {
 	["menu.music"] = "Musica",
 	["menu.language"] = "Idioma",
 	["menu.sensitivity"] = "Sensibilidade da camera",
+	["menu.shop_desc"] = "Gaste o que voce ganhou na prova",
+	["menu.settings_desc"] = "Brilho, volume e sensibilidade",
+	["menu.credits_desc"] = "Quem fez isto e com o que",
 	-- Salas
 	["room.title"] = "Salas",
 	["room.search"] = "Buscar uma sala",
@@ -1473,7 +1685,7 @@ return Strings
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX10">
+      <Item class="ModuleScript" referent="RBX11">
         <Properties>
           <string name="Name">Style</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -1675,7 +1887,7 @@ return Style
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX11">
+      <Item class="ModuleScript" referent="RBX12">
         <Properties>
           <string name="Name">Theme</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -1731,6 +1943,31 @@ Theme.Menu = {
 	Locked = Color3.fromRGB(88, 93, 105),
 }
 
+-- Acentos de instituto noventoso. Son los unicos colores saturados
+-- del juego y estan para que la interfaz no sea una escala de grises.
+Theme.Brand = {
+	Teal = Color3.fromRGB(38, 166, 178),
+	Mustard = Color3.fromRGB(240, 186, 62),
+	Tomato = Color3.fromRGB(228, 84, 62),
+	Grape = Color3.fromRGB(126, 92, 178),
+	Mint = Color3.fromRGB(96, 198, 148),
+	Cream = Color3.fromRGB(246, 238, 214),
+	Chalk = Color3.fromRGB(232, 240, 236),
+}
+
+-- Chrome de la interfaz nueva: cinco niveles de profundidad en vez de
+-- los cinco valores sueltos de transparencia que habia antes.
+Theme.Surface = {
+	Deep = Color3.fromRGB(12, 14, 19),
+	Base = Color3.fromRGB(19, 22, 29),
+	Raised = Color3.fromRGB(28, 32, 41),
+	Hover = Color3.fromRGB(38, 43, 54),
+	Line = Color3.fromRGB(58, 64, 78),
+	Text = Color3.fromRGB(240, 243, 248),
+	Muted = Color3.fromRGB(146, 154, 168),
+	Faint = Color3.fromRGB(96, 103, 116),
+}
+
 Theme.Grade = {
 	A = Color3.fromRGB(52, 196, 122),
 	B = Color3.fromRGB(120, 196, 96),
@@ -1755,7 +1992,880 @@ return Theme
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX12">
+      <Item class="ModuleScript" referent="RBX13">
+        <Properties>
+          <string name="Name">UI</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	UI
+	------------------------------------------------------------------
+	El sistema de diseno. Antes de este archivo, el helper `new` estaba
+	copiado *literal* en nueve archivos de cliente y `corner` en cinco,
+	no habia escala tipografica (catorce TextSize sueltos), no habia
+	tokens de espaciado ni de radio, y en toda la interfaz habia cuatro
+	tweens contados: el menu, la tienda y el lobby abrian con un
+	`.Visible = true` pelado y ningun boton daba respuesta al hacer clic
+	porque `AutoButtonColor` estaba en false en todos lados.
+
+	Aca vive todo eso una sola vez:
+
+	  tokens      Space / Radius / Type / Motion / Layer
+	  primitivas  panel, label, button, ghost, textBox, scroller...
+	  iconos      vectoriales, armados con Frames — no se sube nada
+	  motion      show / hide animados, con CanvasGroup cuando se puede
+
+	Sobre los iconos: Roblox no deja dibujar un poligono arbitrario en
+	una GUI, asi que todo se compone de rectangulos y circulos
+	(`UICorner` con radio gigante) mas rotacion. Un triangulo es un
+	cuadrado rotado 45 grados dentro de un padre con ClipsDescendants.
+	Es feo de escribir y queda perfecto en pantalla, que es lo que
+	importa — y no pasa por moderacion de assets.
+--]]
+
+local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
+local TweenService = game:GetService("TweenService")
+
+local Config = require(script.Parent.Config)
+local Theme = require(script.Parent.Theme)
+
+local UI = {}
+
+-- ── tokens ─────────────────────────────────────────────────────────
+
+UI.Space = table.freeze({ xs = 4, sm = 8, md = 12, lg = 16, xl = 24, xxl = 32 })
+
+UI.Radius = table.freeze({ sm = 6, md = 10, lg = 14, xl = 20, pill = 999 })
+
+-- Escala tipografica real. Cada paso es perceptiblemente distinto del
+-- anterior; con catorce tamanos sueltos ninguno lo era.
+UI.Type = table.freeze({
+	micro = 11,
+	small = 12,
+	body = 14,
+	subtitle = 16,
+	title = 20,
+	display = 32,
+	hero = 48,
+})
+
+--[[
+	Capas con nombre. El bug que arreglan: la tienda vivia en ZIndex 12
+	y el scrim del menu en 20, asi que abrir la tienda desde el menu la
+	dibujaba *detras* del menu. Los modales tienen que estar por encima
+	del menu, no por debajo.
+--]]
+UI.Layer = table.freeze({
+	Hud = 10,
+	Panel = 20,
+	Tool = 40,
+	Overlay = 60,
+	Menu = 100,
+	Modal = 200,
+	Toast = 300,
+	Fade = 400,
+})
+
+UI.Motion = table.freeze({
+	snap = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+	base = TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+	enter = TweenInfo.new(0.34, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+	exit = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+	slow = TweenInfo.new(0.6, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+})
+
+-- Ancho de diseno de referencia: todas las medidas en pixeles de este
+-- archivo estan pensadas para 1280x720 y se escalan desde ahi.
+local DESIGN_WIDTH = 1280
+local DESIGN_HEIGHT = 720
+
+-- ── base ───────────────────────────────────────────────────────────
+
+function UI.new(class: string, props: { [string]: any }?, children: { Instance }?): any
+	local instance = Instance.new(class)
+	local parent: Instance? = nil
+	if props then
+		parent = props.Parent
+		for key, value in props do
+			if key ~= "Parent" then
+				(instance :: any)[key] = value
+			end
+		end
+	end
+	if children then
+		for _, child in children do
+			child.Parent = instance
+		end
+	end
+	if parent then
+		instance.Parent = parent
+	end
+	return instance
+end
+
+function UI.corner(gui: GuiObject, radius: number): UICorner
+	return UI.new("UICorner", { CornerRadius = UDim.new(0, radius), Parent = gui })
+end
+
+function UI.stroke(gui: GuiObject, color: Color3, thickness: number?, transparency: number?): UIStroke
+	return UI.new("UIStroke", {
+		Color = color,
+		Thickness = thickness or 1,
+		Transparency = transparency or 0.4,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		Parent = gui,
+	})
+end
+
+function UI.padding(gui: GuiObject, all: number, horizontal: number?): UIPadding
+	local h = horizontal or all
+	return UI.new("UIPadding", {
+		PaddingTop = UDim.new(0, all),
+		PaddingBottom = UDim.new(0, all),
+		PaddingLeft = UDim.new(0, h),
+		PaddingRight = UDim.new(0, h),
+		Parent = gui,
+	})
+end
+
+function UI.list(gui: GuiObject, padding: number, direction: Enum.FillDirection?): UIListLayout
+	return UI.new("UIListLayout", {
+		Padding = UDim.new(0, padding),
+		FillDirection = direction or Enum.FillDirection.Vertical,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = gui,
+	})
+end
+
+--- Devuelve el UIScale del objeto, creandolo si no lo tiene.
+function UI.scaler(gui: GuiObject): UIScale
+	local existing = gui:FindFirstChildOfClass("UIScale")
+	if existing then
+		return existing
+	end
+	return UI.new("UIScale", { Parent = gui })
+end
+
+-- ── sonido ─────────────────────────────────────────────────────────
+
+--[[
+	Los clicks eran sonido *posicional* en el origen del mundo:
+	`Util.playSound` los parentaba a `workspace` con
+	RollOffMaxDistance 80, asi que el volumen del menu dependia de
+	donde estuviera parado tu personaje. Parentado a SoundService es 2D
+	y suena igual siempre.
+--]]
+function UI.sound(soundId: string, volume: number?, speed: number?)
+	if soundId == "" then
+		return
+	end
+	local sound = UI.new("Sound", {
+		SoundId = soundId,
+		Volume = volume or 0.3,
+		PlaybackSpeed = speed or 1,
+	})
+	local group = SoundService:FindFirstChild("Master")
+	if group and group:IsA("SoundGroup") then
+		sound.SoundGroup = group
+	end
+	sound.Parent = SoundService
+	sound:Play()
+	sound.Ended:Once(function()
+		sound:Destroy()
+	end)
+	task.delay(6, function()
+		if sound.Parent then
+			sound:Destroy()
+		end
+	end)
+end
+
+function UI.click()
+	UI.sound(Config.Sonidos.Click, 0.3, 1.1)
+end
+
+function UI.hover()
+	UI.sound(Config.Sonidos.Click, 0.09, 1.9)
+end
+
+-- ── motion ─────────────────────────────────────────────────────────
+
+--[[
+	Apertura y cierre animados. Si la raiz es un CanvasGroup podemos
+	fundir el subarbol entero con una sola propiedad
+	(`GroupTransparency`); si no, animamos solo la escala. Los modales
+	que llevan ViewportFrame adentro usan Frame comun a proposito: un
+	ViewportFrame dentro de un CanvasGroup se rasteriza aparte y el
+	resultado es impredecible entre versiones del motor.
+--]]
+function UI.show(gui: GuiObject, scaleFrom: number?)
+	local scale = UI.scaler(gui)
+	scale.Scale = scaleFrom or 0.92
+	if gui:IsA("CanvasGroup") then
+		gui.GroupTransparency = 1
+	end
+	gui.Visible = true
+	TweenService:Create(scale, UI.Motion.enter, { Scale = 1 }):Play()
+	if gui:IsA("CanvasGroup") then
+		TweenService:Create(gui, UI.Motion.base, { GroupTransparency = 0 }):Play()
+	end
+end
+
+function UI.hide(gui: GuiObject)
+	if not gui.Visible then
+		return
+	end
+	local scale = UI.scaler(gui)
+	TweenService:Create(scale, UI.Motion.exit, { Scale = 0.95 }):Play()
+	if gui:IsA("CanvasGroup") then
+		local fade = TweenService:Create(gui, UI.Motion.exit, { GroupTransparency = 1 })
+		fade.Completed:Once(function()
+			gui.Visible = false
+		end)
+		fade:Play()
+		return
+	end
+	task.delay(UI.Motion.exit.Time, function()
+		gui.Visible = false
+	end)
+end
+
+--- Entrada en cascada: cada hijo entra un pelin despues del anterior.
+function UI.stagger(children: { GuiObject }, step: number?)
+	local delay = step or 0.045
+	for index, child in children do
+		local scale = UI.scaler(child)
+		scale.Scale = 0.9
+		child.Visible = false
+		task.delay(delay * (index - 1), function()
+			if not child.Parent then
+				return
+			end
+			child.Visible = true
+			TweenService:Create(scale, UI.Motion.enter, { Scale = 1 }):Play()
+		end)
+	end
+end
+
+--[[
+	Cuenta un numero hacia su valor nuevo en vez de saltar. Se usa en
+	los creditos y en el marcador: ver "120 -> 165" subiendo comunica
+	que algo pasó; el salto seco no.
+--]]
+function UI.countTo(label: TextLabel, from: number, to: number, seconds: number, format: (number) -> string)
+	local elapsed = 0
+	local duration = math.max(0.01, seconds)
+	local connection: RBXScriptConnection? = nil
+	connection = RunService.Heartbeat:Connect(function(dt: number)
+		if not label.Parent then
+			if connection then
+				connection:Disconnect()
+			end
+			return
+		end
+		elapsed += dt
+		local alpha = math.clamp(elapsed / duration, 0, 1)
+		-- Quint-out a mano: arranca rapido y frena.
+		local eased = 1 - (1 - alpha) ^ 5
+		label.Text = format(math.floor(from + (to - from) * eased + 0.5))
+		if alpha >= 1 and connection then
+			connection:Disconnect()
+		end
+	end)
+end
+
+-- ── primitivas ─────────────────────────────────────────────────────
+
+export type PanelOptions = {
+	parent: Instance,
+	name: string,
+	size: UDim2,
+	position: UDim2?,
+	anchor: Vector2?,
+	color: Color3?,
+	transparency: number?,
+	radius: number?,
+	stroke: Color3?,
+	layer: number?,
+	canvas: boolean?,
+}
+
+function UI.panel(options: PanelOptions): GuiObject
+	local frame = UI.new(options.canvas and "CanvasGroup" or "Frame", {
+		Name = options.name,
+		Size = options.size,
+		Position = options.position or UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = options.anchor or Vector2.new(0.5, 0.5),
+		BackgroundColor3 = options.color or Theme.Surface.Base,
+		BackgroundTransparency = options.transparency or 0,
+		BorderSizePixel = 0,
+		ZIndex = options.layer or UI.Layer.Panel,
+		Parent = options.parent,
+	})
+	UI.corner(frame, options.radius or UI.Radius.lg)
+	UI.stroke(frame, options.stroke or Theme.Surface.Line, 1, 0.4)
+	return frame
+end
+
+export type LabelOptions = {
+	parent: Instance,
+	name: string?,
+	text: string?,
+	size: UDim2,
+	position: UDim2?,
+	anchor: Vector2?,
+	font: Enum.Font?,
+	textSize: number?,
+	color: Color3?,
+	align: Enum.TextXAlignment?,
+	wrapped: boolean?,
+	layer: number?,
+}
+
+function UI.label(options: LabelOptions): TextLabel
+	return UI.new("TextLabel", {
+		Name = options.name or "Label",
+		Text = options.text or "",
+		Size = options.size,
+		Position = options.position or UDim2.fromOffset(0, 0),
+		AnchorPoint = options.anchor or Vector2.new(0, 0),
+		BackgroundTransparency = 1,
+		Font = options.font or Theme.Font,
+		TextSize = options.textSize or UI.Type.body,
+		TextColor3 = options.color or Theme.Surface.Text,
+		TextXAlignment = options.align or Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Center,
+		TextWrapped = options.wrapped or false,
+		ZIndex = options.layer or UI.Layer.Panel,
+		Parent = options.parent,
+	})
+end
+
+export type ButtonOptions = {
+	parent: Instance,
+	name: string?,
+	text: string,
+	size: UDim2,
+	position: UDim2?,
+	anchor: Vector2?,
+	color: Color3?,
+	textColor: Color3?,
+	font: Enum.Font?,
+	textSize: number?,
+	radius: number?,
+	layer: number?,
+	order: number?,
+	ghost: boolean?,
+	onClick: (() -> ())?,
+}
+
+export type Button = {
+	instance: TextButton,
+	setEnabled: (boolean) -> (),
+	setText: (string) -> (),
+}
+
+--[[
+	El boton con estados de verdad. Antes: `AutoButtonColor = false` y
+	un cambio instantaneo de BackgroundColor3 al pasar el mouse, nada
+	al presionar. Ahora hover, press y disabled, todos tweened, con
+	sonido distinto en hover y en click.
+
+	`ghost` es el idioma visual que ya usaba el proyecto en tres sitios
+	distintos reimplementado a mano cada vez: fondo del color del
+	acento casi transparente, texto y borde del mismo color.
+--]]
+function UI.button(options: ButtonOptions): Button
+	local accent = options.color or Theme.Brand.Teal
+	local ghost = options.ghost == true
+	local baseColor = ghost and accent or Theme.Surface.Raised
+	local baseTransparency = ghost and 0.86 or 0
+
+	local button: TextButton = UI.new("TextButton", {
+		Name = options.name or options.text,
+		Text = options.text,
+		Size = options.size,
+		Position = options.position or UDim2.fromOffset(0, 0),
+		AnchorPoint = options.anchor or Vector2.new(0, 0),
+		LayoutOrder = options.order or 0,
+		BackgroundColor3 = baseColor,
+		BackgroundTransparency = baseTransparency,
+		AutoButtonColor = false,
+		BorderSizePixel = 0,
+		Font = options.font or Theme.FontBold,
+		TextSize = options.textSize or UI.Type.body,
+		TextColor3 = options.textColor or (ghost and accent or Theme.Surface.Text),
+		ZIndex = options.layer or UI.Layer.Panel,
+		Parent = options.parent,
+	})
+	UI.corner(button, options.radius or UI.Radius.md)
+	local stroke = UI.stroke(button, accent, 1, ghost and 0.5 or 0.72)
+	local scale = UI.scaler(button)
+
+	local enabled = true
+	local pressed = false
+
+	local function paint(target: Color3, transparency: number, strokeTransparency: number, scaleTo: number)
+		TweenService:Create(button, UI.Motion.snap, {
+			BackgroundColor3 = target,
+			BackgroundTransparency = transparency,
+		}):Play()
+		TweenService:Create(stroke, UI.Motion.snap, { Transparency = strokeTransparency }):Play()
+		TweenService:Create(scale, UI.Motion.snap, { Scale = scaleTo }):Play()
+	end
+
+	local function rest()
+		paint(baseColor, baseTransparency, ghost and 0.5 or 0.72, 1)
+	end
+
+	button.MouseEnter:Connect(function()
+		if not enabled then
+			return
+		end
+		UI.hover()
+		paint(ghost and accent or Theme.Surface.Hover, ghost and 0.74 or 0, 0.15, 1.03)
+	end)
+
+	button.MouseLeave:Connect(function()
+		if not enabled then
+			return
+		end
+		pressed = false
+		rest()
+	end)
+
+	button.MouseButton1Down:Connect(function()
+		if not enabled then
+			return
+		end
+		pressed = true
+		paint(ghost and accent or Theme.Surface.Hover, ghost and 0.66 or 0, 0.05, 0.97)
+	end)
+
+	button.MouseButton1Up:Connect(function()
+		if not enabled or not pressed then
+			return
+		end
+		pressed = false
+		paint(ghost and accent or Theme.Surface.Hover, ghost and 0.74 or 0, 0.15, 1.03)
+	end)
+
+	button.MouseButton1Click:Connect(function()
+		if not enabled then
+			return
+		end
+		UI.click()
+		if options.onClick then
+			options.onClick()
+		end
+	end)
+
+	local function setEnabled(value: boolean)
+		enabled = value
+		-- Active/Selectable, no AutoLocalize: esa propiedad controla la
+		-- traduccion, no la interactividad.
+		button.Active = value
+		button.Selectable = value
+		if value then
+			button.TextColor3 = options.textColor or (ghost and accent or Theme.Surface.Text)
+			rest()
+		else
+			button.TextColor3 = Theme.Surface.Faint
+			paint(Theme.Surface.Raised, ghost and 0.94 or 0.4, 0.85, 1)
+		end
+	end
+
+	local function setText(value: string)
+		button.Text = value
+	end
+
+	return { instance = button, setEnabled = setEnabled, setText = setText }
+end
+
+function UI.closeButton(parent: Instance, layer: number, onClick: () -> ()): TextButton
+	local button = UI.button({
+		parent = parent,
+		name = "Cerrar",
+		text = "\u{00D7}",
+		size = UDim2.fromOffset(30, 30),
+		position = UDim2.new(1, -UI.Space.md, 0, UI.Space.md),
+		anchor = Vector2.new(1, 0),
+		color = Theme.Brand.Tomato,
+		ghost = true,
+		textSize = UI.Type.title,
+		radius = UI.Radius.sm,
+		layer = layer,
+		onClick = onClick,
+	})
+	return button.instance
+end
+
+export type TextBoxOptions = {
+	parent: Instance,
+	name: string,
+	placeholder: string,
+	size: UDim2,
+	position: UDim2?,
+	layer: number?,
+	order: number?,
+}
+
+function UI.textBox(options: TextBoxOptions): TextBox
+	local box: TextBox = UI.new("TextBox", {
+		Name = options.name,
+		Text = "",
+		PlaceholderText = options.placeholder,
+		PlaceholderColor3 = Theme.Surface.Faint,
+		Size = options.size,
+		Position = options.position or UDim2.fromOffset(0, 0),
+		LayoutOrder = options.order or 0,
+		BackgroundColor3 = Theme.Surface.Raised,
+		BorderSizePixel = 0,
+		ClearTextOnFocus = false,
+		Font = Theme.Font,
+		TextSize = UI.Type.body,
+		TextColor3 = Theme.Surface.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = options.layer or UI.Layer.Panel,
+		Parent = options.parent,
+	})
+	UI.corner(box, UI.Radius.sm)
+	local stroke = UI.stroke(box, Theme.Surface.Line, 1, 0.5)
+	UI.new("UIPadding", { PaddingLeft = UDim.new(0, UI.Space.md), Parent = box })
+
+	box.Focused:Connect(function()
+		TweenService:Create(stroke, UI.Motion.snap, {
+			Color = Theme.Brand.Teal,
+			Transparency = 0.1,
+		}):Play()
+	end)
+	box.FocusLost:Connect(function()
+		TweenService:Create(stroke, UI.Motion.snap, {
+			Color = Theme.Surface.Line,
+			Transparency = 0.5,
+		}):Play()
+	end)
+	return box
+end
+
+--- ScrollingFrame que se mide sola. Se acabo el CanvasSize a mano.
+function UI.scroller(parent: Instance, size: UDim2, position: UDim2, layer: number, padding: number): ScrollingFrame
+	local scroller: ScrollingFrame = UI.new("ScrollingFrame", {
+		Name = "Lista",
+		Size = size,
+		Position = position,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 4,
+		ScrollBarImageColor3 = Theme.Surface.Line,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(),
+		ElasticBehavior = Enum.ElasticBehavior.WhenScrollable,
+		ZIndex = layer,
+		Parent = parent,
+	})
+	UI.list(scroller, padding)
+	return scroller
+end
+
+function UI.divider(parent: Instance, layer: number, order: number?): Frame
+	return UI.new("Frame", {
+		Name = "Linea",
+		Size = UDim2.new(1, 0, 0, 1),
+		LayoutOrder = order or 0,
+		BackgroundColor3 = Theme.Surface.Line,
+		BackgroundTransparency = 0.5,
+		BorderSizePixel = 0,
+		ZIndex = layer,
+		Parent = parent,
+	})
+end
+
+-- ── responsive ─────────────────────────────────────────────────────
+
+--[[
+	Toda la interfaz vieja estaba en pixeles fijos: el lobby mide
+	720x470 y en un telefono se sale de la pantalla. Un UIScale en la
+	raiz, derivado del viewport contra el tamano de diseno, arregla el
+	caso entero sin tocar una sola medida de los paneles.
+--]]
+function UI.responsive(root: ScreenGui): UIScale
+	local scale = UI.new("UIScale", { Parent = root })
+
+	local function fit()
+		local camera = workspace.CurrentCamera
+		if not camera then
+			return
+		end
+		local viewport = camera.ViewportSize
+		local factor = math.min(viewport.X / DESIGN_WIDTH, viewport.Y / DESIGN_HEIGHT)
+		scale.Scale = math.clamp(factor, 0.62, 1.15)
+	end
+
+	fit()
+	local camera = workspace.CurrentCamera
+	if camera then
+		camera:GetPropertyChangedSignal("ViewportSize"):Connect(fit)
+	end
+	workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+		local fresh = workspace.CurrentCamera
+		if fresh then
+			fresh:GetPropertyChangedSignal("ViewportSize"):Connect(fit)
+			fit()
+		end
+	end)
+	return scale
+end
+
+-- ── iconos ─────────────────────────────────────────────────────────
+
+local function holder(parent: Instance, size: number, layer: number): Frame
+	return UI.new("Frame", {
+		Name = "Icono",
+		Size = UDim2.fromOffset(size, size),
+		BackgroundTransparency = 1,
+		ZIndex = layer,
+		Parent = parent,
+	})
+end
+
+local function dot(parent: Instance, size: UDim2, position: UDim2, color: Color3, layer: number): Frame
+	local frame: Frame = UI.new("Frame", {
+		Size = size,
+		Position = position,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = color,
+		BorderSizePixel = 0,
+		ZIndex = layer,
+		Parent = parent,
+	})
+	UI.new("UICorner", { CornerRadius = UDim.new(1, 0), Parent = frame })
+	return frame
+end
+
+local function bar(parent: Instance, size: UDim2, position: UDim2, color: Color3, rotation: number, layer: number): Frame
+	local frame: Frame = UI.new("Frame", {
+		Size = size,
+		Position = position,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Rotation = rotation,
+		BackgroundColor3 = color,
+		BorderSizePixel = 0,
+		ZIndex = layer,
+		Parent = parent,
+	})
+	UI.new("UICorner", { CornerRadius = UDim.new(0, 2), Parent = frame })
+	return frame
+end
+
+local function ring(parent: Instance, inset: number, color: Color3, thickness: number, layer: number): Frame
+	local frame: Frame = UI.new("Frame", {
+		Size = UDim2.new(1, -inset, 1, -inset),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		ZIndex = layer,
+		Parent = parent,
+	})
+	UI.new("UICorner", { CornerRadius = UDim.new(1, 0), Parent = frame })
+	UI.new("UIStroke", {
+		Color = color,
+		Thickness = thickness,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		Parent = frame,
+	})
+	return frame
+end
+
+--[[
+	Cada entrada dibuja un icono dentro de un cuadrado. Son todos
+	rectangulos, circulos y rotaciones — ni un asset, ni una espera de
+	moderacion, y escalan sin pixelarse.
+--]]
+local ICONS: { [string]: (Frame, Color3, number) -> () } = {
+	reloj = function(root, color, layer)
+		ring(root, 2, color, 1.6, layer)
+		bar(root, UDim2.fromScale(0.08, 0.3), UDim2.fromScale(0.5, 0.36), color, 0, layer + 1)
+		bar(root, UDim2.fromScale(0.28, 0.08), UDim2.fromScale(0.6, 0.5), color, 0, layer + 1)
+	end,
+	moneda = function(root, color, layer)
+		dot(root, UDim2.fromScale(1, 1), UDim2.fromScale(0.5, 0.5), color, layer)
+		ring(root, 7, Theme.Surface.Deep, 1.4, layer + 1)
+	end,
+	ojo = function(root, color, layer)
+		local lens = UI.new("Frame", {
+			Size = UDim2.fromScale(1, 0.62),
+			Position = UDim2.fromScale(0.5, 0.5),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			ZIndex = layer,
+			Parent = root,
+		})
+		UI.new("UICorner", { CornerRadius = UDim.new(1, 0), Parent = lens })
+		UI.new("UIStroke", { Color = color, Thickness = 1.6, Parent = lens })
+		dot(root, UDim2.fromScale(0.34, 0.34), UDim2.fromScale(0.5, 0.5), color, layer + 1)
+	end,
+	aerosol = function(root, color, layer)
+		UI.new("Frame", {
+			Size = UDim2.fromScale(0.5, 0.66),
+			Position = UDim2.fromScale(0.42, 0.66),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			ZIndex = layer,
+			Parent = root,
+		}, { UI.new("UICorner", { CornerRadius = UDim.new(0, 3) }) })
+		bar(root, UDim2.fromScale(0.26, 0.16), UDim2.fromScale(0.42, 0.2), color, 0, layer)
+		dot(root, UDim2.fromScale(0.12, 0.12), UDim2.fromScale(0.78, 0.16), color, layer)
+		dot(root, UDim2.fromScale(0.1, 0.1), UDim2.fromScale(0.9, 0.34), color, layer)
+	end,
+	libro = function(root, color, layer)
+		UI.new("Frame", {
+			Size = UDim2.fromScale(0.86, 0.7),
+			Position = UDim2.fromScale(0.5, 0.5),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			ZIndex = layer,
+			Parent = root,
+		}, { UI.new("UICorner", { CornerRadius = UDim.new(0, 2) }) })
+		bar(root, UDim2.fromScale(0.06, 0.7), UDim2.fromScale(0.5, 0.5), Theme.Surface.Deep, 0, layer + 1)
+	end,
+	radio = function(root, color, layer)
+		UI.new("Frame", {
+			Size = UDim2.fromScale(0.56, 0.66),
+			Position = UDim2.fromScale(0.5, 0.68),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			ZIndex = layer,
+			Parent = root,
+		}, { UI.new("UICorner", { CornerRadius = UDim.new(0, 3) }) })
+		bar(root, UDim2.fromScale(0.1, 0.36), UDim2.fromScale(0.66, 0.2), color, 12, layer)
+	end,
+	prismaticos = function(root, color, layer)
+		ring(root, 12, color, 1.5, layer)
+		local left = ring(root, 12, color, 1.5, layer)
+		left.Position = UDim2.fromScale(0.28, 0.58)
+		left.Size = UDim2.fromScale(0.46, 0.46)
+		local right = ring(root, 12, color, 1.5, layer)
+		right.Position = UDim2.fromScale(0.72, 0.58)
+		right.Size = UDim2.fromScale(0.46, 0.46)
+		bar(root, UDim2.fromScale(0.24, 0.1), UDim2.fromScale(0.5, 0.5), color, 0, layer)
+	end,
+	pelota = function(root, color, layer)
+		ring(root, 2, color, 1.6, layer)
+		bar(root, UDim2.fromScale(0.06, 0.92), UDim2.fromScale(0.5, 0.5), color, 0, layer)
+		bar(root, UDim2.fromScale(0.92, 0.06), UDim2.fromScale(0.5, 0.5), color, 0, layer)
+	end,
+	cono = function(root, color, layer)
+		-- Triangulo: un cuadrado rotado 45 grados, recortado por el padre.
+		local clip = UI.new("Frame", {
+			Size = UDim2.fromScale(1, 0.72),
+			Position = UDim2.fromScale(0.5, 0.62),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			ClipsDescendants = true,
+			ZIndex = layer,
+			Parent = root,
+		})
+		UI.new("Frame", {
+			Size = UDim2.fromScale(0.78, 0.78),
+			Position = UDim2.fromScale(0.5, 1),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Rotation = 45,
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			ZIndex = layer,
+			Parent = clip,
+		})
+	end,
+	campana = function(root, color, layer)
+		UI.new("Frame", {
+			Size = UDim2.fromScale(0.66, 0.6),
+			Position = UDim2.fromScale(0.5, 0.46),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			ZIndex = layer,
+			Parent = root,
+		}, { UI.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }) })
+		bar(root, UDim2.fromScale(0.86, 0.1), UDim2.fromScale(0.5, 0.74), color, 0, layer)
+		dot(root, UDim2.fromScale(0.16, 0.16), UDim2.fromScale(0.5, 0.9), color, layer)
+	end,
+	candado = function(root, color, layer)
+		ring(root, 16, color, 1.6, layer).Position = UDim2.fromScale(0.5, 0.3)
+		UI.new("Frame", {
+			Size = UDim2.fromScale(0.8, 0.5),
+			Position = UDim2.fromScale(0.5, 0.7),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			ZIndex = layer + 1,
+			Parent = root,
+		}, { UI.new("UICorner", { CornerRadius = UDim.new(0, 3) }) })
+	end,
+	alerta = function(root, color, layer)
+		local clip = UI.new("Frame", {
+			Size = UDim2.fromScale(1, 0.78),
+			Position = UDim2.fromScale(0.5, 0.6),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			ClipsDescendants = true,
+			ZIndex = layer,
+			Parent = root,
+		})
+		UI.new("Frame", {
+			Size = UDim2.fromScale(0.76, 0.76),
+			Position = UDim2.fromScale(0.5, 1),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Rotation = 45,
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			ZIndex = layer,
+			Parent = clip,
+		})
+		bar(root, UDim2.fromScale(0.08, 0.26), UDim2.fromScale(0.5, 0.6), Theme.Surface.Deep, 0, layer + 2)
+		dot(root, UDim2.fromScale(0.1, 0.1), UDim2.fromScale(0.5, 0.82), Theme.Surface.Deep, layer + 2)
+	end,
+	tilde = function(root, color, layer)
+		bar(root, UDim2.fromScale(0.1, 0.4), UDim2.fromScale(0.36, 0.62), color, -45, layer)
+		bar(root, UDim2.fromScale(0.1, 0.78), UDim2.fromScale(0.6, 0.44), color, 45, layer)
+	end,
+}
+
+--[[
+	Devuelve un icono vectorial. Si el nombre no existe cae en un punto
+	neutro en vez de romper: un icono faltante no deberia tirar abajo
+	un panel entero.
+--]]
+function UI.icon(parent: Instance, name: string, size: number, color: Color3, layer: number?): Frame
+	local depth = layer or UI.Layer.Panel
+	local root = holder(parent, size, depth)
+	local draw = ICONS[name]
+	if draw then
+		draw(root, color, depth)
+	else
+		dot(root, UDim2.fromScale(0.5, 0.5), UDim2.fromScale(0.5, 0.5), color, depth)
+	end
+	return root
+end
+
+function UI.iconNames(): { string }
+	local names = {}
+	for name in ICONS do
+		table.insert(names, name)
+	end
+	table.sort(names)
+	return names
+end
+
+return UI
+]]></ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX14">
         <Properties>
           <string name="Name">Util</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -1903,11 +3013,11 @@ return Util
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="RBX14">
+  <Item class="ServerScriptService" referent="RBX16">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Script" referent="RBX36">
+    <Item class="Script" referent="RBX38">
       <Properties>
         <string name="Name">Server</string>
         <ProtectedString name="Source"><![CDATA[--!strict
@@ -2180,7 +3290,7 @@ end)
 print("[Finals Week] Servidor listo.")
 ]]></ProtectedString>
       </Properties>
-      <Item class="ModuleScript" referent="RBX15">
+      <Item class="ModuleScript" referent="RBX17">
         <Properties>
           <string name="Name">Atmosphere</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -2442,7 +3552,7 @@ return Atmosphere
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX16">
+      <Item class="ModuleScript" referent="RBX18">
         <Properties>
           <string name="Name">BookService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -2629,7 +3739,7 @@ return BookService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX17">
+      <Item class="ModuleScript" referent="RBX19">
         <Properties>
           <string name="Name">CharacterService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -3233,7 +4343,7 @@ return CharacterService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX18">
+      <Item class="ModuleScript" referent="RBX20">
         <Properties>
           <string name="Name">DataService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -3474,7 +4584,7 @@ return DataService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX19">
+      <Item class="ModuleScript" referent="RBX21">
         <Properties>
           <string name="Name">ExamService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -4156,7 +5266,7 @@ return ExamService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX20">
+      <Item class="ModuleScript" referent="RBX22">
         <Properties>
           <string name="Name">GraffitiService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -4471,7 +5581,7 @@ return GraffitiService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX21">
+      <Item class="ModuleScript" referent="RBX23">
         <Properties>
           <string name="Name">ItemService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -4906,7 +6016,7 @@ return ItemService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX22">
+      <Item class="ModuleScript" referent="RBX24">
         <Properties>
           <string name="Name">KnockoutService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -5152,7 +6262,7 @@ return KnockoutService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX23">
+      <Item class="ModuleScript" referent="RBX25">
         <Properties>
           <string name="Name">LobbyService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -5440,7 +6550,7 @@ return LobbyService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX24">
+      <Item class="ModuleScript" referent="RBX26">
         <Properties>
           <string name="Name">MapBuilder</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -6177,7 +7287,7 @@ return MapBuilder
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX25">
+      <Item class="ModuleScript" referent="RBX27">
         <Properties>
           <string name="Name">NerdNPCs</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -6349,7 +7459,7 @@ return NerdNPCs
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX26">
+      <Item class="ModuleScript" referent="RBX28">
         <Properties>
           <string name="Name">PlaygroundService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -6734,7 +7844,7 @@ return PlaygroundService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX27">
+      <Item class="ModuleScript" referent="RBX29">
         <Properties>
           <string name="Name">PunishService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -6969,7 +8079,7 @@ return PunishService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX28">
+      <Item class="ModuleScript" referent="RBX30">
         <Properties>
           <string name="Name">QuestionBank</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -7255,7 +8365,7 @@ return QuestionBank
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX29">
+      <Item class="ModuleScript" referent="RBX31">
         <Properties>
           <string name="Name">RadioService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -7423,7 +8533,7 @@ return RadioService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX30">
+      <Item class="ModuleScript" referent="RBX32">
         <Properties>
           <string name="Name">RoundManager</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -7874,7 +8984,7 @@ return RoundManager
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX31">
+      <Item class="ModuleScript" referent="RBX33">
         <Properties>
           <string name="Name">ShopService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -8073,7 +9183,7 @@ return ShopService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX32">
+      <Item class="ModuleScript" referent="RBX34">
         <Properties>
           <string name="Name">SuspicionService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -8274,7 +9384,7 @@ return SuspicionService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX33">
+      <Item class="ModuleScript" referent="RBX35">
         <Properties>
           <string name="Name">TeacherAI</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -8954,7 +10064,7 @@ return TeacherAI
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX34">
+      <Item class="ModuleScript" referent="RBX36">
         <Properties>
           <string name="Name">Templates</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -9338,7 +10448,7 @@ return Templates
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX35">
+      <Item class="ModuleScript" referent="RBX37">
         <Properties>
           <string name="Name">TextFilter</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -9394,15 +10504,15 @@ return TextFilter
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="RBX37">
+  <Item class="StarterPlayer" referent="RBX39">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="RBX38">
+    <Item class="StarterPlayerScripts" referent="RBX40">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="RBX51">
+      <Item class="LocalScript" referent="RBX53">
         <Properties>
           <string name="Name">Client</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -9457,7 +10567,9 @@ end
 local gui = Instance.new("ScreenGui")
 gui.Name = "FinalsWeek"
 gui.ResetOnSpawn = false
-gui.IgnoreGuiInset = false
+-- En false, el panel del reloj (arriba y al centro, a 12 px del borde)
+-- quedaba tapado por la barra superior del propio Roblox.
+gui.IgnoreGuiInset = true
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.DisplayOrder = 10
 gui.Parent = player:WaitForChild("PlayerGui")
@@ -9525,13 +10637,28 @@ end
 MainMenu.onRooms = function()
 	LobbyUI.open()
 end
+-- La tienda y el lobby viven en UI.Layer.Modal (200), por encima del
+-- menu (100): se abren *sobre* el menu en vez de detras, que es lo que
+-- pasaba cuando la tienda estaba fija en ZIndex 12 y el scrim en 20.
 MainMenu.onShop = function()
 	ShopUI.open()
 end
 MainMenu.onMusic = function(on: boolean)
 	Music.setEnabled(on)
 end
-MainMenu.onPlay = function(_mode: string) end
+
+--[[
+	Antes esto era una funcion vacia: el boton "Jugar" solo cerraba el
+	menu y el modo lo elegia `MainMenu.close` por su cuenta, siempre
+	"publico". Ahora la eleccion llega hasta el servidor.
+--]]
+MainMenu.onPlay = function(mode: string)
+	task.spawn(function()
+		pcall(function()
+			Net.func(Net.Functions.ChooseMode):InvokeServer(mode)
+		end)
+	end)
+end
 
 -- ── remotes ────────────────────────────────────────────────────────
 
@@ -9714,7 +10841,7 @@ end)
 print(string.format("[Finals Week] Cliente listo (%s).", Strings.locale()))
 ]]></ProtectedString>
         </Properties>
-        <Item class="ModuleScript" referent="RBX39">
+        <Item class="ModuleScript" referent="RBX41">
           <Properties>
             <string name="Name">CameraDirector</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -9829,7 +10956,7 @@ return CameraDirector
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX40">
+        <Item class="ModuleScript" referent="RBX42">
           <Properties>
             <string name="Name">ExamUI</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -10387,7 +11514,7 @@ return ExamUI
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX41">
+        <Item class="ModuleScript" referent="RBX43">
           <Properties>
             <string name="Name">GraffitiUI</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -10633,7 +11760,7 @@ return GraffitiUI
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX42">
+        <Item class="ModuleScript" referent="RBX44">
           <Properties>
             <string name="Name">Hud</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -10647,6 +11774,24 @@ return GraffitiUI
 	Todo lo que llega del servidor viene como { key = ..., args = ... }
 	y se dibuja con Strings.get: por eso el HUD entero cambia de idioma
 	con el idioma que cada jugador tenga puesto en Roblox.
+
+	Lo que cambio respecto de la version anterior:
+
+	- Los paneles eran rectangulos con texto. Ahora cada uno lleva su
+	  icono vectorial (`UI.icon`) — sin subir un solo asset.
+	- Los creditos saltaban de 120 a 165. Ahora suben contando: el
+	  salto seco no comunica que ganaste algo.
+	- La barra de sospecha era una barra lisa. Ahora tiene marcas de
+	  segmento y late al cruzar el umbral, que es donde importa.
+	- Los avisos aparecian de golpe. Ahora entran deslizando y llevan
+	  icono segun el tipo.
+	- El boletin se reconstruia entero con `ClearAllChildren()` en cada
+	  llamada — lo que borraba tambien su UICorner y su UIStroke, que
+	  habia que volver a crear. Ahora se arma una sola vez en `mount` y
+	  `report` solo rellena texto; las filas entran escalonadas.
+	- `LayoutOrder` de los avisos era `os.clock()*1000 % 100000`, que da
+	  la vuelta cada ~100 segundos y da vuelta el orden de apilado. Ahora
+	  es un contador que solo sube.
 --]]
 
 local TweenService = game:GetService("TweenService")
@@ -10657,6 +11802,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Theme = require(Shared:WaitForChild("Theme"))
 local Strings = require(Shared:WaitForChild("Strings"))
 local Config = require(Shared:WaitForChild("Config"))
+local UI = require(Shared:WaitForChild("UI"))
 
 local Hud = {}
 
@@ -10679,85 +11825,75 @@ local coneOverlay: Frame
 local punishLabel: TextLabel
 local reportCard: Frame
 
+-- Piezas del boletin, creadas una vez y rellenadas despues.
+local reportTitle: TextLabel
+local reportSubtitle: TextLabel
+local reportGrade: TextLabel
+local reportRows: { { line: TextLabel, value: TextLabel } } = {}
+local reportFoot: TextLabel
+
 local state = { fase = "espera", cerca = false, valor = 0 }
 local pulse = 0
+local hudVisible = true
+local lastCredits = 0
+local lastGrade = ""
+local toastOrder = 0
+
+local REPORT_ROWS = 6
 
 -- ── helpers ────────────────────────────────────────────────────────
 
-local function new(class: string, props: { [string]: any }, parent: Instance?): any
-	local instance = Instance.new(class)
-	for key, value in props do
-		(instance :: any)[key] = value
-	end
-	if parent then
-		instance.Parent = parent
-	end
-	return instance
+local function clockText(seconds: number): string
+	local total = math.max(0, math.floor(seconds))
+	return string.format("%02d:%02d", math.floor(total / 60), total % 60)
 end
 
-local function corner(gui: GuiObject, radius: number)
-	new("UICorner", { CornerRadius = UDim.new(0, radius) }, gui)
+local function hudPanel(name: string, size: UDim2, position: UDim2, anchor: Vector2): Frame
+	local frame = UI.panel({
+		parent = root,
+		name = name,
+		size = size,
+		position = position,
+		anchor = anchor,
+		color = Theme.Surface.Deep,
+		transparency = 0.14,
+		radius = UI.Radius.md,
+		layer = UI.Layer.Hud,
+	})
+	return frame :: Frame
 end
 
-local function stroke(gui: GuiObject, color: Color3, thickness: number?)
-	new("UIStroke", {
-		Color = color,
-		Thickness = thickness or 1,
-		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-		Transparency = 0.35,
-	}, gui)
-end
-
-local function panel(parent: Instance, name: string, size: UDim2, position: UDim2,
-	anchor: Vector2): Frame
-	local frame = new("Frame", {
-		Name = name,
-		Size = size,
-		Position = position,
-		AnchorPoint = anchor,
-		BackgroundColor3 = Theme.Hud.Panel,
-		BackgroundTransparency = 0.18,
-		BorderSizePixel = 0,
-	}, parent)
-	corner(frame, 10)
-	stroke(frame, Theme.Hud.Line)
-	return frame
-end
-
-local function label(parent: Instance, name: string, text: string, size: UDim2,
+local function hudLabel(parent: Instance, name: string, text: string, size: UDim2,
 	position: UDim2, font: Enum.Font, textSize: number, color: Color3,
 	align: Enum.TextXAlignment?): TextLabel
-	return new("TextLabel", {
-		Name = name,
-		Text = text,
-		Size = size,
-		Position = position,
-		BackgroundTransparency = 1,
-		Font = font,
-		TextSize = textSize,
-		TextColor3 = color,
-		TextXAlignment = align or Enum.TextXAlignment.Left,
-		TextYAlignment = Enum.TextYAlignment.Center,
-	}, parent)
+	return UI.label({
+		parent = parent,
+		name = name,
+		text = text,
+		size = size,
+		position = position,
+		font = font,
+		textSize = textSize,
+		color = color,
+		align = align or Enum.TextXAlignment.Left,
+		layer = UI.Layer.Hud + 1,
+	})
 end
 
-local function clockText(seconds: number): string
-	local minutes = math.floor(seconds / 60)
-	return string.format("%02d:%02d", minutes, math.floor(seconds % 60))
-end
-
--- ── construccion ───────────────────────────────────────────────────
-
---- La viñeta roja: cuatro tiras con degradado hacia adentro. No usa
---- ninguna imagen, asi que no depende de subir ningun asset.
+--[[
+	La vinaeta roja de "te esta mirando": cuatro tiras con degradado
+	hacia adentro. Sigue siendo la solucion correcta — una imagen de
+	vinaeta habria que subirla y no escalaria a cualquier resolucion.
+--]]
 local function buildVignette(parent: Instance): Frame
-	local holder = new("Frame", {
-		Name = "Vinieta",
+	local holder = UI.new("Frame", {
+		Name = "Vinaeta",
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
 		Visible = false,
-		ZIndex = 2,
-	}, parent)
+		ZIndex = UI.Layer.Overlay,
+		Parent = parent,
+	})
 
 	local edges = {
 		{ UDim2.new(1, 0, 0, 130), UDim2.fromScale(0, 0), Vector2.new(0, 0), 90 },
@@ -10765,175 +11901,314 @@ local function buildVignette(parent: Instance): Frame
 		{ UDim2.new(0, 160, 1, 0), UDim2.fromScale(0, 0), Vector2.new(0, 0), 0 },
 		{ UDim2.new(0, 160, 1, 0), UDim2.fromScale(1, 0), Vector2.new(1, 0), 180 },
 	}
-	for i, edge in edges do
-		local strip = new("Frame", {
-			Name = "Borde" .. i,
+	for _, edge in edges do
+		local strip = UI.new("Frame", {
 			Size = edge[1],
 			Position = edge[2],
 			AnchorPoint = edge[3],
 			BackgroundColor3 = Theme.Hud.Danger,
+			BackgroundTransparency = 0.45,
 			BorderSizePixel = 0,
-			ZIndex = 2,
-		}, holder)
-		new("UIGradient", {
+			ZIndex = UI.Layer.Overlay,
+			Parent = holder,
+		})
+		UI.new("UIGradient", {
 			Rotation = edge[4],
 			Transparency = NumberSequence.new({
 				NumberSequenceKeypoint.new(0, 0.45),
 				NumberSequenceKeypoint.new(1, 1),
 			}),
-		}, strip)
+			Parent = strip,
+		})
 	end
 	return holder
 end
 
---- El cono de la verguenza visto desde adentro: una franja arriba con
---- las rayas del cono, que efectivamente te tapa parte de la pantalla.
+--- El cono de la verguenza tapandote media pantalla.
 local function buildCone(parent: Instance): Frame
-	local holder = new("Frame", {
+	local holder = UI.new("Frame", {
 		Name = "Cono",
-		Size = UDim2.new(1, 0, 0.26, 0),
+		Size = UDim2.fromScale(1, 0.42),
+		Position = UDim2.fromScale(0, 0.58),
 		BackgroundTransparency = 1,
 		Visible = false,
-		ZIndex = 6,
-	}, parent)
+		ZIndex = UI.Layer.Overlay,
+		Parent = parent,
+	})
 
-	local band = new("Frame", {
+	local band = UI.new("Frame", {
 		Name = "Ala",
 		Size = UDim2.new(1.4, 0, 1, 0),
 		Position = UDim2.fromScale(0.5, 0),
 		AnchorPoint = Vector2.new(0.5, 0),
 		BackgroundColor3 = Color3.fromRGB(228, 74, 62),
 		BorderSizePixel = 0,
-		ZIndex = 6,
-	}, holder)
-	new("UICorner", { CornerRadius = UDim.new(0, 400) }, band)
+		ZIndex = UI.Layer.Overlay,
+		Parent = holder,
+	})
+	UI.new("UICorner", { CornerRadius = UDim.new(0, 400), Parent = band })
 
-	-- Rayas blancas, como el cono de verdad.
 	for i = 0, 7 do
-		new("Frame", {
-			Name = "Raya" .. i,
+		UI.new("Frame", {
 			Size = UDim2.new(0.06, 0, 1, 0),
 			Position = UDim2.fromScale(i * 0.14, 0),
 			BackgroundColor3 = Color3.fromRGB(246, 246, 240),
+			BackgroundTransparency = 0.25,
 			BorderSizePixel = 0,
-			ZIndex = 7,
-		}, band)
+			ZIndex = UI.Layer.Overlay + 1,
+			Parent = band,
+		})
 	end
-
 	return holder
 end
+
+-- Icono y color del aviso segun de que habla la clave. Es una
+-- heuristica por prefijo, no un campo del paquete: el servidor manda
+-- claves y no deberia tener que saber como las dibuja el cliente.
+local function toastLook(key: string): (string, Color3)
+	if string.find(key, "^shop%.") then
+		return "moneda", Theme.Hud.Credit
+	elseif string.find(key, "^ball%.") then
+		return "pelota", Theme.Brand.Mustard
+	elseif string.find(key, "^radio%.") then
+		return "radio", Theme.Brand.Teal
+	elseif string.find(key, "^book%.") or string.find(key, "^nerd%.") then
+		return "libro", Theme.Brand.Grape
+	elseif string.find(key, "punish") or string.find(key, "castigo")
+		or string.find(key, "^error%.") then
+		return "alerta", Theme.Hud.Danger
+	elseif string.find(key, "passed") or string.find(key, "bought") then
+		return "tilde", Theme.Brand.Mint
+	end
+	return "campana", Theme.Surface.Muted
+end
+
+-- ── construccion ───────────────────────────────────────────────────
 
 function Hud.mount(parent: ScreenGui)
 	root = parent
 
 	-- Reloj y fase, arriba al centro.
-	local top = panel(root, "Reloj", UDim2.new(0, 240, 0, 76),
-		UDim2.new(0.5, 0, 0, 12), Vector2.new(0.5, 0))
-	phaseLabel = label(top, "Fase", "", UDim2.new(1, -20, 0, 18), UDim2.new(0, 10, 0, 6),
-		Theme.FontBold, 13, Theme.Hud.Muted, Enum.TextXAlignment.Center)
-	clockLabel = label(top, "Tiempo", "00:00", UDim2.new(1, -20, 0, 34), UDim2.new(0, 10, 0, 24),
-		Theme.FontBlack, 32, Theme.Hud.Clock, Enum.TextXAlignment.Center)
-	dayLabel = label(top, "Dia", "", UDim2.new(1, -20, 0, 16), UDim2.new(0, 10, 0, 56),
-		Theme.Font, 12, Theme.Hud.Muted, Enum.TextXAlignment.Center)
+	local top = hudPanel("Reloj", UDim2.fromOffset(248, 80),
+		UDim2.new(0.5, 0, 0, 14), Vector2.new(0.5, 0))
+	UI.icon(top, "reloj", 16, Theme.Surface.Muted, UI.Layer.Hud + 1).Position =
+		UDim2.fromOffset(12, 9)
+	phaseLabel = hudLabel(top, "Fase", "", UDim2.new(1, -24, 0, 18),
+		UDim2.fromOffset(12, 8), Theme.FontBold, UI.Type.small, Theme.Surface.Muted,
+		Enum.TextXAlignment.Center)
+	clockLabel = hudLabel(top, "Tiempo", "00:00", UDim2.new(1, -24, 0, 36),
+		UDim2.fromOffset(12, 26), Theme.FontBlack, UI.Type.display, Theme.Hud.Clock,
+		Enum.TextXAlignment.Center)
+	dayLabel = hudLabel(top, "Dia", "", UDim2.new(1, -24, 0, 16),
+		UDim2.fromOffset(12, 60), Theme.Font, UI.Type.small, Theme.Surface.Muted,
+		Enum.TextXAlignment.Center)
 
 	-- Nota y creditos, arriba a la izquierda.
-	local left = panel(root, "Nota", UDim2.new(0, 186, 0, 76),
-		UDim2.new(0, 12, 0, 12), Vector2.new(0, 0))
-	label(left, "Titulo", Strings.get("hud.grade"),
-		UDim2.new(1, -20, 0, 16), UDim2.new(0, 12, 0, 8),
-		Theme.FontBold, 11, Theme.Hud.Muted)
-	gradeValue = label(left, "Valor", "60  D", UDim2.new(1, -20, 0, 30), UDim2.new(0, 12, 0, 24),
-		Theme.FontBlack, 26, Theme.Hud.Text)
-	creditLabel = label(left, "Creditos", "0 cr", UDim2.new(1, -20, 0, 16), UDim2.new(0, 12, 0, 54),
-		Theme.FontBold, 13, Theme.Hud.Credit)
+	local left = hudPanel("Nota", UDim2.fromOffset(196, 80),
+		UDim2.fromOffset(14, 14), Vector2.new(0, 0))
+	hudLabel(left, "Titulo", Strings.get("hud.grade"), UDim2.new(1, -24, 0, 16),
+		UDim2.fromOffset(14, 9), Theme.FontBold, UI.Type.micro, Theme.Surface.Muted)
+	gradeValue = hudLabel(left, "Valor", "60  D", UDim2.new(1, -24, 0, 30),
+		UDim2.fromOffset(14, 25), Theme.FontBlack, UI.Type.display - 4, Theme.Surface.Text)
+	UI.icon(left, "moneda", 13, Theme.Hud.Credit, UI.Layer.Hud + 1).Position =
+		UDim2.fromOffset(14, 58)
+	creditLabel = hudLabel(left, "Creditos", "0 cr", UDim2.new(1, -44, 0, 16),
+		UDim2.fromOffset(32, 57), Theme.FontBold, UI.Type.small, Theme.Hud.Credit)
 
-	-- Marcador de canastas del recreo. Vive debajo de la nota porque
-	-- es la otra cosa que se acumula, aunque no cuente para aprobar.
-	local court = panel(root, "Canastas", UDim2.new(0, 186, 0, 34),
-		UDim2.new(0, 12, 0, 96), Vector2.new(0, 0))
+	-- Marcador de canastas del recreo.
+	local court = hudPanel("Canastas", UDim2.fromOffset(196, 36),
+		UDim2.fromOffset(14, 100), Vector2.new(0, 0))
 	court.Visible = false
-	scoreLabel = label(court, "Valor", "", UDim2.new(1, -20, 1, 0), UDim2.new(0, 12, 0, 0),
-		Theme.FontBold, 13, Theme.Hud.Text)
+	UI.icon(court, "pelota", 14, Theme.Brand.Mustard, UI.Layer.Hud + 1).Position =
+		UDim2.fromOffset(14, 11)
+	scoreLabel = hudLabel(court, "Valor", "", UDim2.new(1, -44, 1, 0),
+		UDim2.fromOffset(34, 0), Theme.FontBold, UI.Type.small, Theme.Surface.Text)
 
 	-- Barra de sospecha, abajo al centro.
-	local bottom = panel(root, "Sospecha", UDim2.new(0, 320, 0, 52),
+	local bottom = hudPanel("Sospecha", UDim2.fromOffset(340, 56),
 		UDim2.new(0.5, 0, 1, -18), Vector2.new(0.5, 1))
-	suspicionLabel = label(bottom, "Titulo", Strings.get("hud.suspicion"),
-		UDim2.new(1, -24, 0, 14), UDim2.new(0, 12, 0, 7),
-		Theme.FontBold, 11, Theme.Hud.Muted)
-	local track = new("Frame", {
+	UI.icon(bottom, "ojo", 14, Theme.Surface.Muted, UI.Layer.Hud + 1).Position =
+		UDim2.fromOffset(14, 9)
+	suspicionLabel = hudLabel(bottom, "Titulo", Strings.get("hud.suspicion"),
+		UDim2.new(1, -50, 0, 14), UDim2.fromOffset(34, 9), Theme.FontBold,
+		UI.Type.micro, Theme.Surface.Muted)
+
+	local track = UI.new("Frame", {
 		Name = "Barra",
-		Size = UDim2.new(1, -24, 0, 12),
-		Position = UDim2.new(0, 12, 0, 26),
-		BackgroundColor3 = Theme.Hud.PanelSoft,
+		Size = UDim2.new(1, -28, 0, 12),
+		Position = UDim2.fromOffset(14, 30),
+		BackgroundColor3 = Theme.Surface.Raised,
 		BorderSizePixel = 0,
-	}, bottom)
-	corner(track, 6)
-	suspicionFill = new("Frame", {
+		ZIndex = UI.Layer.Hud + 1,
+		Parent = bottom,
+	})
+	UI.corner(track, 6)
+
+	suspicionFill = UI.new("Frame", {
 		Name = "Relleno",
 		Size = UDim2.fromScale(0, 1),
 		BackgroundColor3 = Theme.Hud.Safe,
 		BorderSizePixel = 0,
-	}, track)
-	corner(suspicionFill, 6)
+		ZIndex = UI.Layer.Hud + 2,
+		Parent = track,
+	})
+	UI.corner(suspicionFill, 6)
+
+	-- Marcas de segmento: dan escala a la barra. Sin ellas, "medio
+	-- llena" y "tres cuartos" se ven casi igual.
+	for i = 1, 7 do
+		UI.new("Frame", {
+			Name = "Marca" .. i,
+			Size = UDim2.new(0, 1, 1, -4),
+			Position = UDim2.new(i / 8, 0, 0, 2),
+			BackgroundColor3 = Theme.Surface.Deep,
+			BackgroundTransparency = 0.5,
+			BorderSizePixel = 0,
+			ZIndex = UI.Layer.Hud + 3,
+			Parent = track,
+		})
+	end
 
 	-- Objetivo y teclas, abajo a la izquierda.
-	local guide = panel(root, "Objetivo", UDim2.new(0, 320, 0, 60),
-		UDim2.new(0, 12, 1, -18), Vector2.new(0, 1))
-	objective = label(guide, "Texto", "", UDim2.new(1, -24, 0, 20), UDim2.new(0, 12, 0, 8),
-		Theme.FontBold, 14, Theme.Hud.Text)
-	label(guide, "Teclas", Strings.get("hud.keys"),
-		UDim2.new(1, -24, 0, 16), UDim2.new(0, 12, 0, 32),
-		Theme.Font, 11, Theme.Hud.Muted)
+	local guide = hudPanel("Objetivo", UDim2.fromOffset(330, 62),
+		UDim2.new(0, 14, 1, -18), Vector2.new(0, 1))
+	objective = hudLabel(guide, "Texto", "", UDim2.new(1, -28, 0, 20),
+		UDim2.fromOffset(14, 9), Theme.FontBold, UI.Type.body, Theme.Surface.Text)
+	hudLabel(guide, "Teclas", Strings.get("hud.keys"), UDim2.new(1, -28, 0, 16),
+		UDim2.fromOffset(14, 34), Theme.Font, UI.Type.micro, Theme.Surface.Muted)
 
 	-- Aviso grande de "te esta mirando".
-	warning = label(root, "Aviso", Strings.get("hud.close_call"),
-		UDim2.new(1, 0, 0, 30), UDim2.new(0, 0, 0, 100),
-		Theme.FontBlack, 22, Theme.Hud.Danger, Enum.TextXAlignment.Center)
+	warning = hudLabel(root, "Aviso", Strings.get("hud.close_call"),
+		UDim2.new(1, 0, 0, 30), UDim2.fromOffset(0, 104), Theme.FontBlack,
+		UI.Type.title + 2, Theme.Hud.Danger, Enum.TextXAlignment.Center)
 	warning.Visible = false
-	warning.ZIndex = 3
+	warning.ZIndex = UI.Layer.Overlay + 2
 
 	vignette = buildVignette(root)
 
 	-- Avisos cortos, apilados a la derecha.
-	toasts = new("Frame", {
+	toasts = UI.new("Frame", {
 		Name = "Avisos",
-		Size = UDim2.new(0, 300, 0, 300),
-		Position = UDim2.new(1, -14, 0, 100),
+		Size = UDim2.fromOffset(310, 300),
+		Position = UDim2.new(1, -14, 0, 104),
 		AnchorPoint = Vector2.new(1, 0),
 		BackgroundTransparency = 1,
-	}, root)
-	new("UIListLayout", {
-		Padding = UDim.new(0, 6),
+		ZIndex = UI.Layer.Toast,
+		Parent = root,
+	})
+	UI.new("UIListLayout", {
+		Padding = UDim.new(0, UI.Space.xs + 2),
 		HorizontalAlignment = Enum.HorizontalAlignment.Right,
 		VerticalAlignment = Enum.VerticalAlignment.Top,
 		SortOrder = Enum.SortOrder.LayoutOrder,
-	}, toasts)
+		Parent = toasts,
+	})
 
 	-- Lo que dice el profesor.
-	subtitle = panel(root, "Profesor", UDim2.new(0, 460, 0, 46),
-		UDim2.new(0.5, 0, 1, -84), Vector2.new(0.5, 1))
+	subtitle = hudPanel("Profesor", UDim2.fromOffset(470, 48),
+		UDim2.new(0.5, 0, 1, -88), Vector2.new(0.5, 1))
 	subtitle.Visible = false
-	subtitleText = label(subtitle, "Texto", "", UDim2.new(1, -24, 1, 0), UDim2.new(0, 12, 0, 0),
-		Theme.Font, 15, Theme.Hud.Text, Enum.TextXAlignment.Center)
+	subtitleText = hudLabel(subtitle, "Texto", "", UDim2.new(1, -28, 1, 0),
+		UDim2.fromOffset(14, 0), Theme.Font, UI.Type.subtitle - 1, Theme.Surface.Text,
+		Enum.TextXAlignment.Center)
 
 	coneOverlay = buildCone(root)
-	punishLabel = label(root, "Castigo", "", UDim2.new(1, 0, 0, 24),
-		UDim2.new(0, 0, 0, 150), Theme.FontBold, 16, Theme.Hud.Warn,
+	punishLabel = hudLabel(root, "Castigo", "", UDim2.new(1, 0, 0, 24),
+		UDim2.fromOffset(0, 152), Theme.FontBold, UI.Type.subtitle, Theme.Hud.Warn,
 		Enum.TextXAlignment.Center)
 	punishLabel.Visible = false
-	punishLabel.ZIndex = 7
+	punishLabel.ZIndex = UI.Layer.Overlay + 2
 
-	-- El boletin.
-	reportCard = panel(root, "Boletin", UDim2.new(0, 380, 0, 300),
-		UDim2.fromScale(0.5, 0.5), Vector2.new(0.5, 0.5))
-	reportCard.BackgroundTransparency = 0.04
+	-- El boletin: se arma aca una sola vez.
+	reportCard = UI.panel({
+		parent = root,
+		name = "Boletin",
+		size = UDim2.fromOffset(400, 320),
+		position = UDim2.fromScale(0.5, 0.5),
+		anchor = Vector2.new(0.5, 0.5),
+		color = Theme.Surface.Base,
+		radius = UI.Radius.lg,
+		layer = UI.Layer.Modal,
+	}) :: Frame
 	reportCard.Visible = false
-	reportCard.ZIndex = 8
+
+	reportTitle = UI.label({
+		parent = reportCard,
+		name = "Titulo",
+		text = Strings.get("report.title"),
+		size = UDim2.new(1, -36, 0, 20),
+		position = UDim2.fromOffset(18, 16),
+		font = Theme.FontBold,
+		textSize = UI.Type.small,
+		color = Theme.Surface.Muted,
+		layer = UI.Layer.Modal + 1,
+	})
+	reportSubtitle = UI.label({
+		parent = reportCard,
+		name = "Subtitulo",
+		size = UDim2.new(1, -36, 0, 26),
+		position = UDim2.fromOffset(18, 36),
+		font = Theme.FontBlack,
+		textSize = UI.Type.title + 2,
+		color = Theme.Surface.Text,
+		layer = UI.Layer.Modal + 1,
+	})
+	reportGrade = UI.label({
+		parent = reportCard,
+		name = "Nota",
+		size = UDim2.new(1, -36, 0, 56),
+		position = UDim2.fromOffset(18, 70),
+		font = Theme.FontBlack,
+		textSize = UI.Type.hero,
+		color = Theme.Surface.Text,
+		layer = UI.Layer.Modal + 1,
+	})
+
+	for i = 1, REPORT_ROWS do
+		local y = 138 + (i - 1) * 24
+		reportRows[i] = {
+			line = UI.label({
+				parent = reportCard,
+				name = "Fila" .. i,
+				size = UDim2.new(1, -36, 0, 20),
+				position = UDim2.fromOffset(18, y),
+				font = Theme.Font,
+				textSize = UI.Type.body,
+				color = Theme.Surface.Muted,
+				layer = UI.Layer.Modal + 1,
+			}),
+			value = UI.label({
+				parent = reportCard,
+				name = "Valor" .. i,
+				size = UDim2.fromOffset(64, 20),
+				position = UDim2.new(1, -82, 0, y),
+				font = Theme.FontBold,
+				textSize = UI.Type.body,
+				color = Theme.Surface.Text,
+				align = Enum.TextXAlignment.Right,
+				layer = UI.Layer.Modal + 1,
+			}),
+		}
+	end
+
+	reportFoot = UI.label({
+		parent = reportCard,
+		name = "Pie",
+		size = UDim2.new(1, -36, 0, 36),
+		position = UDim2.new(0, 18, 1, -48),
+		font = Theme.FontBold,
+		textSize = UI.Type.body,
+		color = Theme.Surface.Text,
+		align = Enum.TextXAlignment.Center,
+		wrapped = true,
+		layer = UI.Layer.Modal + 1,
+	})
 
 	RunService.RenderStepped:Connect(function(dt)
 		pulse += dt
-		if state.cerca and state.fase == "examen" then
+		-- El bucle tambien se apaga con el HUD: antes seguia latiendo
+		-- con el menu abierto encima.
+		if hudVisible and state.cerca and state.fase == "examen" then
 			local alpha = 0.5 + 0.5 * math.sin(pulse * 7)
 			vignette.Visible = true
 			for _, strip in vignette:GetChildren() do
@@ -10975,8 +12250,19 @@ function Hud.setRound(data: any)
 		day = Strings.get(data.nombreDia or "day.lunes"),
 	})
 
-	gradeValue.Text = string.format("%d  %s", data.nota or 60, data.letra or "D")
-	gradeValue.TextColor3 = Theme.gradeColor(data.letra or "D")
+	local letter = data.letra or "D"
+	gradeValue.Text = string.format("%d  %s", data.nota or 60, letter)
+	gradeValue.TextColor3 = Theme.gradeColor(letter)
+
+	-- La nota da un golpecito cuando cambia de letra. Es el unico
+	-- momento en que ese numero merece que lo mires.
+	if letter ~= lastGrade and lastGrade ~= "" then
+		local scale = UI.scaler(gradeValue)
+		scale.Scale = 1.35
+		TweenService:Create(scale, UI.Motion.enter, { Scale = 1 }):Play()
+	end
+	lastGrade = letter
+
 	objective.Text = Strings.get(OBJETIVOS[data.fase] or "hud.hint_recess")
 
 	if data.fase ~= "examen" then
@@ -10991,7 +12277,7 @@ function Hud.setSuspicion(data: any)
 	local value = math.clamp(data.valor or 0, 0, 1)
 	state.valor = value
 	state.cerca = data.cerca == true
-	TweenService:Create(suspicionFill, TweenInfo.new(0.12), {
+	TweenService:Create(suspicionFill, UI.Motion.snap, {
 		Size = UDim2.fromScale(value, 1),
 		BackgroundColor3 = Theme.suspicionColor(value),
 	}):Play()
@@ -11003,7 +12289,11 @@ function Hud.setWallet(data: any)
 	if not creditLabel then
 		return
 	end
-	creditLabel.Text = Strings.get("shop.price", { n = data.creditos or 0 })
+	local credits = data.creditos or 0
+	UI.countTo(creditLabel, lastCredits, credits, 0.5, function(n: number): string
+		return Strings.get("shop.price", { n = n })
+	end)
+	lastCredits = credits
 end
 
 function Hud.notify(packet: any)
@@ -11020,28 +12310,48 @@ function Hud.notify(packet: any)
 		args = resolved
 	end
 
-	local toast = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 30),
-		BackgroundColor3 = Theme.Hud.Panel,
-		BackgroundTransparency = 0.12,
-		BorderSizePixel = 0,
-		LayoutOrder = math.floor(os.clock() * 1000) % 100000,
-	}, toasts)
-	corner(toast, 8)
-	stroke(toast, Theme.Hud.Line)
+	local iconName, accent = toastLook(packet.key)
+	toastOrder += 1
 
-	local text = label(toast, "Texto", Strings.get(packet.key, args),
-		UDim2.new(1, -20, 1, 0), UDim2.new(0, 10, 0, 0),
-		Theme.Font, 13, Theme.Hud.Text, Enum.TextXAlignment.Left)
+	local toast = UI.new("Frame", {
+		Size = UDim2.new(1, 0, 0, 34),
+		BackgroundColor3 = Theme.Surface.Deep,
+		BackgroundTransparency = 0.1,
+		BorderSizePixel = 0,
+		LayoutOrder = toastOrder,
+		ZIndex = UI.Layer.Toast,
+		Parent = toasts,
+	})
+	UI.corner(toast, UI.Radius.sm)
+	UI.stroke(toast, accent, 1, 0.55)
+
+	UI.icon(toast, iconName, 14, accent, UI.Layer.Toast + 1).Position =
+		UDim2.fromOffset(10, 10)
+
+	local text = UI.label({
+		parent = toast,
+		name = "Texto",
+		text = Strings.get(packet.key, args),
+		size = UDim2.new(1, -40, 1, 0),
+		position = UDim2.fromOffset(32, 0),
+		font = Theme.Font,
+		textSize = UI.Type.small,
+		color = Theme.Surface.Text,
+		layer = UI.Layer.Toast + 1,
+	})
 	text.TextTruncate = Enum.TextTruncate.AtEnd
+
+	-- Entrada desde la derecha. Antes aparecian de golpe.
+	toast.Position = UDim2.fromOffset(30, 0)
+	TweenService:Create(toast, UI.Motion.base, { Position = UDim2.fromOffset(0, 0) }):Play()
 
 	task.delay(3.6, function()
 		if not toast.Parent then
 			return
 		end
-		TweenService:Create(toast, TweenInfo.new(0.4), { BackgroundTransparency = 1 }):Play()
-		TweenService:Create(text, TweenInfo.new(0.4), { TextTransparency = 1 }):Play()
-		task.wait(0.45)
+		TweenService:Create(toast, UI.Motion.base, { BackgroundTransparency = 1 }):Play()
+		TweenService:Create(text, UI.Motion.base, { TextTransparency = 1 }):Play()
+		task.wait(0.3)
 		toast:Destroy()
 	end)
 end
@@ -11068,8 +12378,9 @@ function Hud.setScore(data: any)
 		return
 	end
 	local court = scoreLabel.Parent
-	if court and court:IsA("GuiObject") then
+	if court and court:IsA("GuiObject") and not court.Visible then
 		court.Visible = true
+		UI.show(court, 0.85)
 	end
 	scoreLabel.Text = Strings.get("ball.score", { n = data.puntos or 0 })
 end
@@ -11093,8 +12404,16 @@ function Hud.punish(data: any)
 		return
 	end
 	local seconds = math.floor(data.segundos or 0)
-	coneOverlay.Visible = data.tipo == "cono"
 	punishLabel.Visible = true
+
+	if data.tipo == "cono" then
+		coneOverlay.Visible = true
+		-- El cono baja a la pantalla en vez de aparecer puesto.
+		coneOverlay.Position = UDim2.fromScale(0, 1)
+		TweenService:Create(coneOverlay, UI.Motion.enter, {
+			Position = UDim2.fromScale(0, 0.58),
+		}):Play()
+	end
 
 	task.spawn(function()
 		for remaining = seconds, 1, -1 do
@@ -11115,22 +12434,13 @@ function Hud.report(data: any)
 	if not reportCard then
 		return
 	end
-	reportCard:ClearAllChildren()
-	corner(reportCard, 12)
-	stroke(reportCard, Theme.Hud.Line)
 
-	local title = data.semana and Strings.get("report.week")
+	local subtitleText2 = data.semana and Strings.get("report.week")
 		or Strings.get("report.day", { n = data.dia })
-	label(reportCard, "Titulo", Strings.get("report.title"),
-		UDim2.new(1, -32, 0, 20), UDim2.new(0, 16, 0, 14),
-		Theme.FontBold, 12, Theme.Hud.Muted).ZIndex = 9
-	label(reportCard, "Subtitulo", title, UDim2.new(1, -32, 0, 26), UDim2.new(0, 16, 0, 32),
-		Theme.FontBlack, 22, Theme.Hud.Text).ZIndex = 9
-
-	local big = label(reportCard, "Nota", tostring(data.final) .. "  " .. tostring(data.letra),
-		UDim2.new(1, -32, 0, 54), UDim2.new(0, 16, 0, 64),
-		Theme.FontBlack, 46, Theme.gradeColor(data.letra))
-	big.ZIndex = 9
+	reportTitle.Text = Strings.get("report.title")
+	reportSubtitle.Text = subtitleText2
+	reportGrade.Text = tostring(data.final) .. "  " .. tostring(data.letra)
+	reportGrade.TextColor3 = Theme.gradeColor(data.letra)
 
 	local rows = {
 		{ Strings.get("report.exam"), tostring(data.examen) },
@@ -11140,18 +12450,11 @@ function Hud.report(data: any)
 		{ Strings.get("shop.price", { n = data.creditos }), "" },
 		{ Strings.get("report.fails", { n = data.suspensos, max = data.maxSuspensos }), "" },
 	}
-	for i, row in rows do
-		local y = 128 + (i - 1) * 22
-		local line = label(reportCard, "Fila" .. i, row[1],
-			UDim2.new(1, -32, 0, 20), UDim2.new(0, 16, 0, y),
-			Theme.Font, 14, Theme.Hud.Muted)
-		line.ZIndex = 9
-		if row[2] ~= "" then
-			local value = label(reportCard, "Valor" .. i, row[2],
-				UDim2.new(0, 60, 0, 20), UDim2.new(1, -76, 0, y),
-				Theme.FontBold, 14, Theme.Hud.Text, Enum.TextXAlignment.Right)
-			value.ZIndex = 9
-		end
+	for i = 1, REPORT_ROWS do
+		local entry = reportRows[i]
+		local content = rows[i]
+		entry.line.Text = content and content[1] or ""
+		entry.value.Text = content and content[2] or ""
 	end
 
 	local footKey = "report.next"
@@ -11160,26 +12463,44 @@ function Hud.report(data: any)
 		footKey = data.expulsado and "report.expelled" or "report.survived"
 		footArgs = nil
 	end
-	local foot = label(reportCard, "Pie", Strings.get(footKey, footArgs),
-		UDim2.new(1, -32, 0, 34), UDim2.new(0, 16, 1, -44),
-		Theme.FontBold, 14, data.aprobado and Theme.Hud.Safe or Theme.Hud.Danger,
-		Enum.TextXAlignment.Center)
-	foot.TextWrapped = true
-	foot.ZIndex = 9
+	reportFoot.Text = Strings.get(footKey, footArgs)
+	reportFoot.TextColor3 = data.aprobado and Theme.Hud.Safe or Theme.Hud.Danger
 
-	reportCard.Visible = true
+	UI.show(reportCard, 0.88)
+
+	-- La nota se estampa: entra grande y se asienta.
+	local gradeScale = UI.scaler(reportGrade)
+	gradeScale.Scale = 1.6
+	task.delay(0.12, function()
+		TweenService:Create(gradeScale, UI.Motion.enter, { Scale = 1 }):Play()
+	end)
+
+	-- Y las filas entran una detras de otra.
+	local lines: { GuiObject } = {}
+	for i = 1, REPORT_ROWS do
+		table.insert(lines, reportRows[i].line)
+	end
+	UI.stagger(lines, 0.04)
+
 	task.delay(Config.Ronda.SegundosBoletin, function()
-		reportCard.Visible = false
+		UI.hide(reportCard)
 	end)
 end
 
---- Apaga/enciende el HUD de juego (lo usa el menu de inicio).
+--[[
+	Apaga/enciende el HUD de juego (lo usa el menu de inicio).
+
+	La lista vieja solo cubria los seis paneles y dejaba encendidos la
+	vinaeta, el aviso del profesor, el cono y el contador de castigo,
+	que quedaban dibujados por encima del menu.
+--]]
 local PANELES = { "Reloj", "Nota", "Sospecha", "Objetivo", "Avisos", "Canastas" }
 
 function Hud.setVisible(visible: boolean)
 	if not root then
 		return
 	end
+	hudVisible = visible
 	for _, name in PANELES do
 		local child = root:FindFirstChild(name)
 		if child and child:IsA("GuiObject") then
@@ -11192,11 +12513,16 @@ function Hud.setVisible(visible: boolean)
 		end
 	end
 	if not visible then
-		if subtitle then
-			subtitle.Visible = false
+		for _, overlay in { subtitle, reportCard, coneOverlay, vignette } do
+			if overlay then
+				overlay.Visible = false
+			end
 		end
-		if reportCard then
-			reportCard.Visible = false
+		if punishLabel then
+			punishLabel.Visible = false
+		end
+		if warning then
+			warning.Visible = false
 		end
 	end
 end
@@ -11205,7 +12531,7 @@ return Hud
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX43">
+        <Item class="ModuleScript" referent="RBX45">
           <Properties>
             <string name="Name">LobbyUI</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -11608,22 +12934,38 @@ return LobbyUI
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX44">
+        <Item class="ModuleScript" referent="RBX46">
           <Properties>
             <string name="Name">MainMenu</string>
             <ProtectedString name="Source"><![CDATA[--!strict
 --[[
 	MainMenu
 	------------------------------------------------------------------
-	El menu de inicio: jugar, salas, tienda, ajustes y creditos.
+	La pantalla de titulo. Jugar, salas, tienda, ajustes y creditos.
 
-	Se abre solo la primera vez que entras y despues con Esc/M. Mientras
-	esta abierto el HUD se apaga: el menu no es un overlay mas, es una
-	pantalla.
+	Lo que cambio respecto de la version anterior, y por que:
+
+	- Antes el jugador caia al mundo y *despues* le tapaban la pantalla
+	  con un scrim al 94%: se veia el personaje parado en el pasillo
+	  detras de un vidrio sucio. Ahora la camara se desengancha del
+	  personaje y se planta en una toma compuesta del corredor, con un
+	  dolly lento. Es una pantalla de titulo, no un overlay.
+
+	- El scrim ocupaba todo. Ahora es una columna a la izquierda con
+	  degradado: la escuela queda a la vista a la derecha, que es para
+	  lo que se construyo.
+
+	- Los botones cambiaban de color de golpe al pasar el mouse y no
+	  hacian nada al presionar. Eso ahora lo resuelve `UI.button`.
+
+	- `goTo` prendia y apagaba `.Visible`. Ahora las paginas entran y
+	  salen con deslizamiento y fundido.
 --]]
 
 local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
 local SoundService = game:GetService("SoundService")
+local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -11631,34 +12973,28 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Theme = require(Shared:WaitForChild("Theme"))
 local Strings = require(Shared:WaitForChild("Strings"))
 local Config = require(Shared:WaitForChild("Config"))
-local Net = require(Shared:WaitForChild("Net"))
-local Util = require(Shared:WaitForChild("Util"))
+local UI = require(Shared:WaitForChild("UI"))
 
 local MainMenu = {}
 
 local root: Frame
-local pages: { [string]: Frame } = {}
+local column: Frame
+local pages: { [string]: CanvasGroup } = {}
+local currentPage = "inicio"
+
+local blur: BlurEffect? = nil
+local cameraLoop: RBXScriptConnection? = nil
+local savedCamera: CFrame? = nil
+local savedSubject: Humanoid? = nil
 
 local settings = { brillo = 2, volumen = 0.6, musica = true, sensibilidad = 0.5 }
 
-local function new(class: string, props: { [string]: any }, parent: Instance?): any
-	local instance = Instance.new(class)
-	for key, value in props do
-		(instance :: any)[key] = value
-	end
-	if parent then
-		instance.Parent = parent
-	end
-	return instance
-end
+-- Se elige modo una sola vez por sesion: al tocar Jugar, o al cerrar
+-- el menu sin haberlo tocado.
+local modeChosen = false
 
-local function corner(gui: GuiObject, radius: number)
-	new("UICorner", { CornerRadius = UDim.new(0, radius) }, gui)
-end
-
-local function click()
-	Util.playSound(Config.Sonidos.Click, workspace :: any, 0.3, 1.1)
-end
+-- Ancho de la columna de la izquierda. Todo lo demas es escuela.
+local COLUMN = 430
 
 -- Callbacks que rellena el init del cliente.
 MainMenu.onPlay = function(_mode: string) end
@@ -11667,110 +13003,299 @@ MainMenu.onShop = function() end
 MainMenu.onMusic = function(_on: boolean) end
 MainMenu.onVisible = function(_open: boolean) end
 
--- ── piezas ─────────────────────────────────────────────────────────
+-- ── la toma de la camara ───────────────────────────────────────────
 
-local function bigButton(parent: Instance, order: number, key: string, descKey: string?,
-	callback: () -> ()): TextButton
-	local button = new("TextButton", {
-		Name = key,
-		LayoutOrder = order,
-		Text = "",
-		Size = UDim2.new(1, 0, 0, descKey and 58 or 44),
-		BackgroundColor3 = Theme.Menu.PanelAlt,
-		AutoButtonColor = false,
-		BorderSizePixel = 0,
-		ZIndex = 21,
-	}, parent)
-	corner(button, 10)
-	new("UIStroke", { Color = Theme.Menu.Line, Thickness = 1, Transparency = 0.55 }, button)
-
-	new("TextLabel", {
-		Text = Strings.get(key),
-		Size = UDim2.new(1, -28, 0, 22),
-		Position = UDim2.new(0, 16, 0, descKey and 10 or 11),
-		BackgroundTransparency = 1,
-		Font = Theme.FontBold,
-		TextSize = 16,
-		TextColor3 = Theme.Menu.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		ZIndex = 22,
-	}, button)
-
-	if descKey then
-		new("TextLabel", {
-			Text = Strings.get(descKey),
-			Size = UDim2.new(1, -28, 0, 18),
-			Position = UDim2.new(0, 16, 0, 32),
-			BackgroundTransparency = 1,
-			Font = Theme.Font,
-			TextSize = 12,
-			TextColor3 = Theme.Menu.Muted,
-			TextXAlignment = Enum.TextXAlignment.Left,
-			ZIndex = 22,
-		}, button)
+--[[
+	Busca el pasillo y arma una toma en tres cuartos: la camara mira a
+	lo largo del corredor, apenas descentrada, para que los casilleros
+	se vayan en fuga hacia el punto de vista. Si el mapa todavia no
+	existe (el servidor lo construye al arrancar) cae en una posicion
+	fija y no se rompe nada.
+--]]
+local function shotFrame(): (CFrame, CFrame)
+	local instituto = workspace:FindFirstChild("Instituto")
+	local hall = instituto and instituto:FindFirstChild("Pasillo")
+	if hall and hall:IsA("Model") then
+		local ok, box = pcall(function()
+			local cf, size = hall:GetBoundingBox()
+			return { cf = cf, size = size }
+		end)
+		if ok and box then
+			local centre = box.cf.Position
+			local half = box.size.Z * 0.5
+			local eye = Vector3.new(centre.X + 3.2, 5.6, centre.Z - half + 16)
+			local look = Vector3.new(centre.X - 1.5, 4.4, centre.Z + half * 0.35)
+			local finish = Vector3.new(centre.X + 1.4, 5.2, centre.Z - half + 34)
+			return CFrame.lookAt(eye, look), CFrame.lookAt(finish, look)
+		end
 	end
-
-	button.MouseEnter:Connect(function()
-		button.BackgroundColor3 = Theme.Menu.Line
-	end)
-	button.MouseLeave:Connect(function()
-		button.BackgroundColor3 = Theme.Menu.PanelAlt
-	end)
-	button.MouseButton1Click:Connect(function()
-		click()
-		callback()
-	end)
-	return button
+	local eye = Vector3.new(3.2, 5.6, -79)
+	local look = Vector3.new(-1.5, 4.4, 33)
+	return CFrame.lookAt(eye, look), CFrame.lookAt(Vector3.new(1.4, 5.2, -61), look)
 end
 
---- Un deslizador simple hecho con dos frames y arrastre del mouse.
+local function startCamera()
+	local camera = workspace.CurrentCamera
+	if not camera or cameraLoop then
+		return
+	end
+	savedCamera = camera.CFrame
+	savedSubject = camera.CameraSubject :: any
+	camera.CameraType = Enum.CameraType.Scriptable
+
+	local from, to = shotFrame()
+	local elapsed = 0
+	camera.CFrame = from
+
+	-- Dolly de veinte segundos que despues vuelve. No hace falta que
+	-- sea un bucle perfecto: nadie se queda mirando tanto el menu.
+	cameraLoop = RunService.RenderStepped:Connect(function(dt: number)
+		elapsed += dt
+		local alpha = (math.sin(elapsed * 0.16 - math.pi * 0.5) + 1) * 0.5
+		camera.CFrame = from:Lerp(to, alpha)
+	end)
+end
+
+local function stopCamera()
+	if cameraLoop then
+		cameraLoop:Disconnect()
+		cameraLoop = nil
+	end
+	local camera = workspace.CurrentCamera
+	if not camera then
+		return
+	end
+	camera.CameraType = Enum.CameraType.Custom
+	if savedSubject then
+		camera.CameraSubject = savedSubject
+	end
+	if savedCamera then
+		camera.CFrame = savedCamera
+	end
+	savedCamera = nil
+	savedSubject = nil
+end
+
+local function setBlur(on: boolean)
+	if not blur then
+		local existing = Lighting:FindFirstChild("MenuBlur")
+		if existing and existing:IsA("BlurEffect") then
+			blur = existing
+		else
+			blur = UI.new("BlurEffect", { Name = "MenuBlur", Size = 0, Parent = Lighting })
+		end
+	end
+	local effect = blur
+	if not effect then
+		return
+	end
+	TweenService:Create(effect, UI.Motion.slow, { Size = on and 14 or 0 }):Play()
+end
+
+-- ── piezas ─────────────────────────────────────────────────────────
+
+--[[
+	Titulo en capas: una copia desplazada hace de sombra, el relleno
+	lleva un degradado que va de tiza a mostaza, y el contorno lo da un
+	UIStroke. Un solo TextLabel plano se lee como marcador de posicion;
+	tres capas se leen como un logo.
+--]]
+local function buildTitle(parent: Instance)
+	local holder = UI.new("Frame", {
+		Name = "Titulo",
+		Size = UDim2.new(1, 0, 0, 92),
+		Position = UDim2.fromOffset(0, 54),
+		BackgroundTransparency = 1,
+		ZIndex = UI.Layer.Menu + 1,
+		Parent = parent,
+	})
+
+	local shadow = UI.label({
+		parent = holder,
+		name = "Sombra",
+		text = Strings.get("menu.title"),
+		size = UDim2.new(1, 0, 0, 58),
+		position = UDim2.fromOffset(3, 3),
+		font = Theme.FontBlack,
+		textSize = UI.Type.hero,
+		color = Color3.fromRGB(0, 0, 0),
+		layer = UI.Layer.Menu + 1,
+	})
+	shadow.TextTransparency = 0.55
+
+	local fill = UI.label({
+		parent = holder,
+		name = "Relleno",
+		text = Strings.get("menu.title"),
+		size = UDim2.new(1, 0, 0, 58),
+		font = Theme.FontBlack,
+		textSize = UI.Type.hero,
+		color = Theme.Brand.Cream,
+		layer = UI.Layer.Menu + 2,
+	})
+	UI.new("UIGradient", {
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Theme.Brand.Cream),
+			ColorSequenceKeypoint.new(0.55, Color3.fromRGB(255, 255, 255)),
+			ColorSequenceKeypoint.new(1, Theme.Brand.Mustard),
+		}),
+		Rotation = 8,
+		Parent = fill,
+	})
+	UI.new("UIStroke", {
+		Color = Color3.fromRGB(18, 20, 26),
+		Thickness = 2.5,
+		Transparency = 0.25,
+		Parent = fill,
+	})
+
+	UI.label({
+		parent = holder,
+		name = "Subtitulo",
+		text = Strings.get("menu.subtitle"),
+		size = UDim2.new(1, 0, 0, 20),
+		position = UDim2.fromOffset(3, 62),
+		font = Theme.Font,
+		textSize = UI.Type.body,
+		color = Theme.Surface.Muted,
+		layer = UI.Layer.Menu + 1,
+	})
+
+	-- Una barra de acento debajo, que es lo que ata el titulo a la
+	-- columna en vez de dejarlo flotando.
+	UI.new("Frame", {
+		Name = "Acento",
+		Size = UDim2.fromOffset(64, 4),
+		Position = UDim2.fromOffset(3, 88),
+		BackgroundColor3 = Theme.Brand.Tomato,
+		BorderSizePixel = 0,
+		ZIndex = UI.Layer.Menu + 1,
+		Parent = holder,
+	}, { UI.new("UICorner", { CornerRadius = UDim.new(0, 2) }) })
+end
+
+local function menuButton(parent: Instance, order: number, key: string, descKey: string?,
+	iconName: string, accent: Color3, callback: () -> ()): TextButton
+	local button = UI.button({
+		parent = parent,
+		name = key,
+		text = "",
+		size = UDim2.new(1, 0, 0, descKey and 62 or 48),
+		order = order,
+		color = accent,
+		radius = UI.Radius.md,
+		layer = UI.Layer.Menu + 1,
+		onClick = callback,
+	})
+
+	local instance = button.instance
+	UI.icon(instance, iconName, 22, accent, UI.Layer.Menu + 2).Position =
+		UDim2.new(0, 18, 0.5, -11)
+
+	UI.label({
+		parent = instance,
+		name = "Nombre",
+		text = Strings.get(key),
+		size = UDim2.new(1, -76, 0, 22),
+		position = UDim2.fromOffset(54, descKey and 12 or 13),
+		font = Theme.FontBold,
+		textSize = UI.Type.subtitle,
+		color = Theme.Surface.Text,
+		layer = UI.Layer.Menu + 2,
+	})
+
+	if descKey then
+		UI.label({
+			parent = instance,
+			name = "Detalle",
+			text = Strings.get(descKey),
+			size = UDim2.new(1, -76, 0, 18),
+			position = UDim2.fromOffset(54, 34),
+			font = Theme.Font,
+			textSize = UI.Type.small,
+			color = Theme.Surface.Muted,
+			layer = UI.Layer.Menu + 2,
+		})
+	end
+
+	-- Un filete del color del acento en el borde izquierdo: da a cada
+	-- entrada una identidad sin cargar un icono de color completo.
+	UI.new("Frame", {
+		Name = "Filete",
+		Size = UDim2.new(0, 3, 0.55, 0),
+		Position = UDim2.new(0, 0, 0.5, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundColor3 = accent,
+		BorderSizePixel = 0,
+		ZIndex = UI.Layer.Menu + 2,
+		Parent = instance,
+	}, { UI.new("UICorner", { CornerRadius = UDim.new(0, 2) }) })
+
+	return instance
+end
+
 local function slider(parent: Instance, order: number, key: string, value: number,
 	callback: (number) -> ())
-	local holder = new("Frame", {
+	local holder = UI.new("Frame", {
 		Name = key,
 		LayoutOrder = order,
-		Size = UDim2.new(1, 0, 0, 52),
+		Size = UDim2.new(1, 0, 0, 54),
 		BackgroundTransparency = 1,
-		ZIndex = 21,
-	}, parent)
+		ZIndex = UI.Layer.Menu + 1,
+		Parent = parent,
+	})
 
-	local title = new("TextLabel", {
-		Text = Strings.get(key),
-		Size = UDim2.new(1, 0, 0, 18),
-		BackgroundTransparency = 1,
-		Font = Theme.FontBold,
-		TextSize = 13,
-		TextColor3 = Theme.Menu.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		ZIndex = 22,
-	}, holder)
+	local title = UI.label({
+		parent = holder,
+		name = "Nombre",
+		size = UDim2.new(1, 0, 0, 18),
+		font = Theme.FontBold,
+		textSize = UI.Type.small,
+		color = Theme.Surface.Text,
+		layer = UI.Layer.Menu + 2,
+	})
 
-	local track = new("TextButton", {
+	local track: TextButton = UI.new("TextButton", {
 		Name = "Barra",
 		Text = "",
 		Size = UDim2.new(1, 0, 0, 10),
-		Position = UDim2.new(0, 0, 0, 28),
-		BackgroundColor3 = Theme.Menu.PanelAlt,
+		Position = UDim2.fromOffset(0, 30),
+		BackgroundColor3 = Theme.Surface.Raised,
 		AutoButtonColor = false,
 		BorderSizePixel = 0,
-		ZIndex = 22,
-	}, holder)
-	corner(track, 5)
+		ZIndex = UI.Layer.Menu + 2,
+		Parent = holder,
+	})
+	UI.corner(track, 5)
 
-	local fill = new("Frame", {
+	local fill = UI.new("Frame", {
 		Name = "Relleno",
 		Size = UDim2.fromScale(value, 1),
-		BackgroundColor3 = Theme.Menu.Accent,
+		BackgroundColor3 = Theme.Brand.Teal,
 		BorderSizePixel = 0,
-		ZIndex = 23,
-	}, track)
-	corner(fill, 5)
+		ZIndex = UI.Layer.Menu + 3,
+		Parent = track,
+	})
+	UI.corner(fill, 5)
+
+	local knob = UI.new("Frame", {
+		Name = "Perilla",
+		Size = UDim2.fromOffset(14, 14),
+		Position = UDim2.fromScale(value, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = Theme.Brand.Cream,
+		BorderSizePixel = 0,
+		ZIndex = UI.Layer.Menu + 4,
+		Parent = track,
+	})
+	UI.new("UICorner", { CornerRadius = UDim.new(1, 0), Parent = knob })
 
 	local function setFrom(x: number)
 		local absolute = track.AbsolutePosition.X
 		local width = math.max(1, track.AbsoluteSize.X)
 		local alpha = math.clamp((x - absolute) / width, 0, 1)
 		fill.Size = UDim2.fromScale(alpha, 1)
+		knob.Position = UDim2.fromScale(alpha, 0.5)
 		title.Text = string.format("%s  %d%%", Strings.get(key), math.floor(alpha * 100 + 0.5))
 		callback(alpha)
 	end
@@ -11795,103 +13320,157 @@ local function slider(parent: Instance, order: number, key: string, value: numbe
 end
 
 local function page(name: string, titleKey: string): Frame
-	local frame = new("Frame", {
+	local frame: CanvasGroup = UI.new("CanvasGroup", {
 		Name = name,
-		Size = UDim2.new(0, 420, 1, -160),
-		Position = UDim2.new(0.5, 0, 0, 130),
-		AnchorPoint = Vector2.new(0.5, 0),
+		Size = UDim2.new(1, 0, 1, -190),
+		Position = UDim2.fromOffset(0, 168),
 		BackgroundTransparency = 1,
+		GroupTransparency = 1,
 		Visible = false,
-		ZIndex = 21,
-	}, root)
+		ZIndex = UI.Layer.Menu + 1,
+		Parent = column,
+	})
 
+	local top = 0
 	if titleKey ~= "" then
-		new("TextLabel", {
-			Text = Strings.get(titleKey),
-			Size = UDim2.new(1, 0, 0, 26),
-			BackgroundTransparency = 1,
-			Font = Theme.FontBlack,
-			TextSize = 18,
-			TextColor3 = Theme.Menu.Text,
-			TextXAlignment = Enum.TextXAlignment.Left,
-			ZIndex = 22,
-		}, frame)
+		UI.label({
+			parent = frame,
+			name = "Encabezado",
+			text = Strings.get(titleKey),
+			size = UDim2.new(1, 0, 0, 26),
+			font = Theme.FontBlack,
+			textSize = UI.Type.title,
+			color = Theme.Surface.Text,
+			layer = UI.Layer.Menu + 2,
+		})
+		top = 40
 	end
 
-	local body = new("Frame", {
+	local body = UI.new("Frame", {
 		Name = "Cuerpo",
-		Size = UDim2.new(1, 0, 1, titleKey ~= "" and -38 or 0),
-		Position = UDim2.new(0, 0, 0, titleKey ~= "" and 38 or 0),
+		Size = UDim2.new(1, 0, 1, -top),
+		Position = UDim2.fromOffset(0, top),
 		BackgroundTransparency = 1,
-		ZIndex = 21,
-	}, frame)
-	new("UIListLayout", {
-		Padding = UDim.new(0, 10),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-	}, body)
+		ZIndex = UI.Layer.Menu + 1,
+		Parent = frame,
+	})
+	UI.list(body, UI.Space.md)
 
 	pages[name] = frame
 	return body
 end
 
-local function goTo(name: string)
-	for id, frame in pages do
-		frame.Visible = id == name
+--[[
+	Transicion entre paginas: la que sale se desliza y se funde, la que
+	entra llega desde el otro lado. Antes esto era `frame.Visible = id
+	== name` para las tres a la vez.
+--]]
+local function goTo(name: string, instant: boolean?)
+	local target = pages[name]
+	if not target then
+		return
 	end
+	local previous = pages[currentPage]
+	currentPage = name
+
+	if instant then
+		for id, frame in pages do
+			frame.Visible = id == name
+			frame.GroupTransparency = id == name and 0 or 1
+			frame.Position = UDim2.fromOffset(0, 168)
+		end
+		return
+	end
+
+	if previous and previous ~= target and previous.Visible then
+		local out = TweenService:Create(previous, UI.Motion.exit, {
+			GroupTransparency = 1,
+			Position = UDim2.fromOffset(-26, 168),
+		})
+		out.Completed:Once(function()
+			previous.Visible = false
+		end)
+		out:Play()
+	end
+
+	target.Position = UDim2.fromOffset(26, 168)
+	target.GroupTransparency = 1
+	target.Visible = true
+	TweenService:Create(target, UI.Motion.base, {
+		GroupTransparency = 0,
+		Position = UDim2.fromOffset(0, 168),
+	}):Play()
 end
 
 -- ── construccion ───────────────────────────────────────────────────
 
 function MainMenu.mount(parent: ScreenGui)
-	root = new("Frame", {
+	root = UI.new("Frame", {
 		Name = "Menu",
 		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Theme.Menu.Scrim,
-		BackgroundTransparency = 0.06,
+		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Visible = false,
-		ZIndex = 20,
-	}, parent)
+		ZIndex = UI.Layer.Menu,
+		Parent = parent,
+	})
 
-	new("TextLabel", {
-		Name = "Titulo",
-		Text = Strings.get("menu.title"),
-		Size = UDim2.new(1, 0, 0, 54),
-		Position = UDim2.new(0, 0, 0, 46),
-		BackgroundTransparency = 1,
-		Font = Theme.FontBlack,
-		TextSize = 44,
-		TextColor3 = Theme.Menu.Text,
-		ZIndex = 21,
-	}, root)
-	new("TextLabel", {
-		Name = "Subtitulo",
-		Text = Strings.get("menu.subtitle"),
-		Size = UDim2.new(1, 0, 0, 20),
-		Position = UDim2.new(0, 0, 0, 98),
-		BackgroundTransparency = 1,
-		Font = Theme.Font,
-		TextSize = 14,
-		TextColor3 = Theme.Menu.Muted,
-		ZIndex = 21,
-	}, root)
+	-- Un velo suave sobre toda la escena: baja el contraste de la
+	-- escuela para que el texto de la izquierda se lea, sin taparla.
+	UI.new("Frame", {
+		Name = "Velo",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Theme.Surface.Deep,
+		BackgroundTransparency = 0.55,
+		BorderSizePixel = 0,
+		ZIndex = UI.Layer.Menu,
+		Parent = root,
+	})
+
+	-- La columna: opaca a la izquierda, transparente al llegar a la
+	-- escuela. El degradado es lo que evita el corte duro.
+	column = UI.new("Frame", {
+		Name = "Columna",
+		Size = UDim2.new(0, COLUMN, 1, 0),
+		BackgroundColor3 = Theme.Surface.Deep,
+		BorderSizePixel = 0,
+		ZIndex = UI.Layer.Menu,
+		Parent = root,
+	})
+	UI.new("UIGradient", {
+		Rotation = 0,
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.04),
+			NumberSequenceKeypoint.new(0.62, 0.1),
+			NumberSequenceKeypoint.new(1, 1),
+		}),
+		Parent = column,
+	})
+	UI.new("UIPadding", {
+		PaddingLeft = UDim.new(0, 44),
+		PaddingRight = UDim.new(0, 74),
+		Parent = column,
+	})
+
+	buildTitle(column)
 
 	-- Inicio
 	local home = page("inicio", "")
-	bigButton(home, 1, "menu.play", "menu.public_desc", function()
+	menuButton(home, 1, "menu.play", "menu.public_desc", "tilde", Theme.Brand.Mint, function()
+		modeChosen = true
 		MainMenu.onPlay("publico")
 		MainMenu.close()
 	end)
-	bigButton(home, 2, "menu.rooms", "menu.friends_desc", function()
+	menuButton(home, 2, "menu.rooms", "menu.friends_desc", "radio", Theme.Brand.Teal, function()
 		MainMenu.onRooms()
 	end)
-	bigButton(home, 3, "menu.shop", nil, function()
+	menuButton(home, 3, "menu.shop", "menu.shop_desc", "moneda", Theme.Brand.Mustard, function()
 		MainMenu.onShop()
 	end)
-	bigButton(home, 4, "menu.settings", nil, function()
+	menuButton(home, 4, "menu.settings", "menu.settings_desc", "reloj", Theme.Brand.Grape, function()
 		goTo("ajustes")
 	end)
-	bigButton(home, 5, "menu.credits", nil, function()
+	menuButton(home, 5, "menu.credits", "menu.credits_desc", "libro", Theme.Brand.Tomato, function()
 		goTo("creditos")
 	end)
 
@@ -11920,47 +13499,43 @@ function MainMenu.mount(parent: ScreenGui)
 			userSettings.MouseSensitivity = 0.2 + alpha * 1.6
 		end)
 	end)
-	bigButton(options, 4, "menu.music", nil, function()
+	menuButton(options, 4, "menu.music", nil, "campana", Theme.Brand.Mint, function()
 		settings.musica = not settings.musica
 		MainMenu.onMusic(settings.musica)
 	end)
-	bigButton(options, 5, "menu.back", nil, function()
+	menuButton(options, 5, "menu.back", nil, "prismaticos", Theme.Surface.Muted, function()
 		goTo("inicio")
 	end)
 
 	-- Creditos
 	local credits = page("creditos", "credits.title")
-	new("TextLabel", {
-		LayoutOrder = 1,
-		Text = Strings.get("credits.body"),
-		Size = UDim2.new(1, 0, 0, 70),
-		BackgroundTransparency = 1,
-		Font = Theme.Font,
-		TextSize = 14,
-		TextColor3 = Theme.Menu.Muted,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextYAlignment = Enum.TextYAlignment.Top,
-		TextWrapped = true,
-		ZIndex = 22,
-	}, credits)
-	new("TextLabel", {
-		LayoutOrder = 2,
-		Text = Strings.get("credits.thanks"),
-		Size = UDim2.new(1, 0, 0, 50),
-		BackgroundTransparency = 1,
-		Font = Theme.FontBold,
-		TextSize = 14,
-		TextColor3 = Theme.Menu.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextYAlignment = Enum.TextYAlignment.Top,
-		TextWrapped = true,
-		ZIndex = 22,
-	}, credits)
-	bigButton(credits, 3, "menu.back", nil, function()
+	UI.label({
+		parent = credits,
+		name = "Cuerpo",
+		text = Strings.get("credits.body"),
+		size = UDim2.new(1, 0, 0, 76),
+		font = Theme.Font,
+		textSize = UI.Type.body,
+		color = Theme.Surface.Muted,
+		wrapped = true,
+		layer = UI.Layer.Menu + 2,
+	}).TextYAlignment = Enum.TextYAlignment.Top
+	UI.label({
+		parent = credits,
+		name = "Gracias",
+		text = Strings.get("credits.thanks"),
+		size = UDim2.new(1, 0, 0, 54),
+		font = Theme.FontBold,
+		textSize = UI.Type.body,
+		color = Theme.Surface.Text,
+		wrapped = true,
+		layer = UI.Layer.Menu + 2,
+	}).TextYAlignment = Enum.TextYAlignment.Top
+	menuButton(credits, 3, "menu.back", nil, "prismaticos", Theme.Surface.Muted, function()
 		goTo("inicio")
 	end)
 
-	goTo("inicio")
+	goTo("inicio", true)
 
 	UserInputService.InputBegan:Connect(function(input, processed)
 		if processed then
@@ -11979,25 +13554,55 @@ function MainMenu.mount(parent: ScreenGui)
 end
 
 function MainMenu.open()
-	if not root then
+	if not root or root.Visible then
 		return
 	end
-	goTo("inicio")
+	goTo("inicio", true)
 	root.Visible = true
+	startCamera()
+	setBlur(true)
 	MainMenu.onVisible(true)
+
+	-- La columna entra desde la izquierda y los botones en cascada.
+	column.Position = UDim2.fromOffset(-40, 0)
+	TweenService:Create(column, UI.Motion.base, { Position = UDim2.fromOffset(0, 0) }):Play()
+
+	local home = pages.inicio
+	if home then
+		local body = home:FindFirstChild("Cuerpo")
+		if body then
+			local buttons: { GuiObject } = {}
+			for _, child in body:GetChildren() do
+				if child:IsA("GuiObject") then
+					table.insert(buttons, child)
+				end
+			end
+			table.sort(buttons, function(a: any, b: any)
+				return a.LayoutOrder < b.LayoutOrder
+			end)
+			UI.stagger(buttons, 0.05)
+		end
+	end
 end
 
+--[[
+	Cerrar el menu sin haber elegido modo cuenta como elegir el publico
+	— es lo que hacia la version anterior, pero llamando al remote desde
+	aca adentro. Ahora sale por `onPlay`, que es el unico camino: el
+	cliente manda intenciones y el init es el que habla con el servidor.
+--]]
 function MainMenu.close()
-	if not root then
+	if not root or not root.Visible then
 		return
 	end
 	root.Visible = false
+	stopCamera()
+	setBlur(false)
 	MainMenu.onVisible(false)
-	task.spawn(function()
-		pcall(function()
-			Net.func(Net.Functions.ChooseMode):InvokeServer("publico")
-		end)
-	end)
+	if not modeChosen then
+		modeChosen = true
+		MainMenu.onPlay("publico")
+	end
 end
 
 function MainMenu.isOpen(): boolean
@@ -12012,7 +13617,7 @@ return MainMenu
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX45">
+        <Item class="ModuleScript" referent="RBX47">
           <Properties>
             <string name="Name">Music</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -12244,7 +13849,7 @@ return Music
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX46">
+        <Item class="ModuleScript" referent="RBX48">
           <Properties>
             <string name="Name">NoteUI</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -12588,7 +14193,7 @@ return NoteUI
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX47">
+        <Item class="ModuleScript" referent="RBX49">
           <Properties>
             <string name="Name">Poses</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -12690,7 +14295,7 @@ return Poses
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX48">
+        <Item class="ModuleScript" referent="RBX50">
           <Properties>
             <string name="Name">RadioUI</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -12915,7 +14520,7 @@ return RadioUI
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX49">
+        <Item class="ModuleScript" referent="RBX51">
           <Properties>
             <string name="Name">ShopUI</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -12927,8 +14532,24 @@ return RadioUI
 	El cliente solo dibuja precios y manda "quiero esto". Quien decide
 	si alcanza la plata, si ya lo tenias y si la tienda esta abierta es
 	el servidor (ShopService).
+
+	Lo que cambio respecto de la version anterior:
+
+	- Cada articulo tenia una tarjeta de texto plano. Ahora tiene un
+	  ViewportFrame con el modelo 3D girando (ver `shared/Previews`).
+	- El boton de precio se veia igual tuvieras o no tuvieras los
+	  creditos: te enterabas de que no alcanzaba *despues* de hacer
+	  clic, por un aviso generico. Ahora la tarjeta lo dice antes.
+	- No habia estado de "esperando al servidor": se podia disparar la
+	  compra cinco veces seguidas. Ahora el boton se apaga mientras el
+	  remote viaja.
+	- Vivia en ZIndex 12, debajo del scrim del menu (20), asi que
+	  abrirla desde el menu la dibujaba por detras. Ahora esta en
+	  UI.Layer.Modal, por encima.
 --]]
 
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -12936,7 +14557,8 @@ local Theme = require(Shared:WaitForChild("Theme"))
 local Strings = require(Shared:WaitForChild("Strings"))
 local Config = require(Shared:WaitForChild("Config"))
 local Net = require(Shared:WaitForChild("Net"))
-local Util = require(Shared:WaitForChild("Util"))
+local UI = require(Shared:WaitForChild("UI"))
+local Previews = require(Shared:WaitForChild("Previews"))
 
 local ShopUI = {}
 
@@ -12944,118 +14566,244 @@ local root: Frame
 local creditLabel: TextLabel
 local list: ScrollingFrame
 local tabButtons: { [string]: TextButton } = {}
+local tabUnderline: Frame
 local currentTab = "objeto"
 local wallet: any = { creditos = 0, comprados = {}, estetica = {}, objeto = "nota" }
 
-local function new(class: string, props: { [string]: any }, parent: Instance?): any
-	local instance = Instance.new(class)
-	for key, value in props do
-		(instance :: any)[key] = value
-	end
-	if parent then
-		instance.Parent = parent
-	end
-	return instance
-end
+-- Los modelos que hay que girar. Una sola conexion para todas las
+-- tarjetas: una por tarjeta serian trece Heartbeat en paralelo.
+local spinning: { Model } = {}
+local spinLoop: RBXScriptConnection? = nil
 
-local function corner(gui: GuiObject, radius: number)
-	new("UICorner", { CornerRadius = UDim.new(0, radius) }, gui)
-end
-
-local function click()
-	Util.playSound(Config.Sonidos.Click, workspace :: any, 0.25, 1.1)
-end
+local CARD_HEIGHT = 96
+local THUMB = 76
 
 ShopUI.onNotify = function(_packet: any) end
 
--- ── filas ──────────────────────────────────────────────────────────
+-- ── giro de las miniaturas ─────────────────────────────────────────
+
+local function startSpin()
+	if spinLoop then
+		return
+	end
+	local angle = 0
+	spinLoop = RunService.RenderStepped:Connect(function(dt: number)
+		angle += dt * 0.9
+		for index = #spinning, 1, -1 do
+			local model = spinning[index]
+			if not model.Parent then
+				table.remove(spinning, index)
+			else
+				-- Un balanceo leve en X ademas del giro: un objeto que
+				-- gira sobre un solo eje se lee como una animacion de
+				-- carga, no como un objeto.
+				model:PivotTo(CFrame.Angles(math.sin(angle * 0.6) * 0.18, angle, 0))
+			end
+		end
+	end)
+end
+
+local function stopSpin()
+	if spinLoop then
+		spinLoop:Disconnect()
+		spinLoop = nil
+	end
+	table.clear(spinning)
+end
+
+--[[
+	Un ViewportFrame con su propia camara. La camara se planta a una
+	distancia fija mirando al origen: como todos los modelos de
+	`Previews` entran en un cubo de ~2 studs, no hay que encuadrar uno
+	por uno.
+--]]
+local function thumbnail(parent: Instance, id: string, layer: number): Frame
+	local frame = UI.new("Frame", {
+		Name = "Miniatura",
+		Size = UDim2.fromOffset(THUMB, THUMB),
+		Position = UDim2.fromOffset(12, (CARD_HEIGHT - THUMB) * 0.5),
+		BackgroundColor3 = Theme.Surface.Deep,
+		BorderSizePixel = 0,
+		ZIndex = layer,
+		Parent = parent,
+	})
+	UI.corner(frame, UI.Radius.sm)
+
+	local model = Previews.build(id)
+	if not model then
+		-- Sin silueta definida cae en el icono plano. Es peor, pero no
+		-- deja un cuadrado vacio.
+		UI.icon(frame, "moneda", 34, Theme.Surface.Faint, layer + 1).Position =
+			UDim2.new(0.5, -17, 0.5, -17)
+		return frame
+	end
+
+	local viewport: ViewportFrame = UI.new("ViewportFrame", {
+		Name = "Vista",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Ambient = Color3.fromRGB(170, 175, 185),
+		LightColor = Color3.fromRGB(255, 250, 238),
+		LightDirection = Vector3.new(-0.4, -1, -0.6),
+		ZIndex = layer + 1,
+		Parent = frame,
+	})
+
+	local camera = UI.new("Camera", {
+		CFrame = CFrame.lookAt(Vector3.new(0, 0.6, 4.2), Vector3.new(0, 0, 0)),
+		FieldOfView = 42,
+		Parent = viewport,
+	})
+	viewport.CurrentCamera = camera
+	model.Parent = viewport
+	table.insert(spinning, model)
+
+	return frame
+end
+
+-- ── tarjetas ───────────────────────────────────────────────────────
 
 local function row(entry: any, order: number)
+	local layer = UI.Layer.Modal + 1
 	local owned = wallet.comprados and wallet.comprados[entry.id] == true
 	local isGear = entry.tipo == "objeto"
-	local active = isGear and wallet.objeto == entry.id
+	local active = (isGear and wallet.objeto == entry.id)
 		or (not isGear and wallet.estetica and wallet.estetica[entry.id] == true)
+	local credits = wallet.creditos or 0
+	local affordable = owned or credits >= entry.precio
 
-	local card = new("Frame", {
+	local card = UI.new("Frame", {
 		Name = entry.id,
 		LayoutOrder = order,
-		Size = UDim2.new(1, -8, 0, 72),
-		BackgroundColor3 = Theme.Menu.PanelAlt,
+		Size = UDim2.new(1, -8, 0, CARD_HEIGHT),
+		BackgroundColor3 = Theme.Surface.Raised,
+		BackgroundTransparency = affordable and 0 or 0.45,
 		BorderSizePixel = 0,
-	}, list)
-	corner(card, 10)
+		ZIndex = layer,
+		Parent = list,
+	})
+	UI.corner(card, UI.Radius.md)
+	UI.stroke(card, active and Theme.Brand.Mint or Theme.Surface.Line, 1, active and 0.2 or 0.6)
 
-	new("TextLabel", {
-		Text = Strings.get("item." .. entry.id),
-		Size = UDim2.new(1, -120, 0, 20),
-		Position = UDim2.new(0, 14, 0, 10),
-		BackgroundTransparency = 1,
-		Font = Theme.FontBold,
-		TextSize = 15,
-		TextColor3 = Theme.Menu.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-	}, card)
+	thumbnail(card, entry.id, layer + 1)
 
-	new("TextLabel", {
-		Text = Strings.get("item.desc_" .. entry.id, { n = Config.Objetos.ChuletaRevela }),
-		Size = UDim2.new(1, -130, 0, 32),
-		Position = UDim2.new(0, 14, 0, 30),
-		BackgroundTransparency = 1,
-		Font = Theme.Font,
-		TextSize = 12,
-		TextColor3 = Theme.Menu.Muted,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextYAlignment = Enum.TextYAlignment.Top,
-		TextWrapped = true,
-	}, card)
+	UI.label({
+		parent = card,
+		name = "Nombre",
+		text = Strings.get("item." .. entry.id),
+		size = UDim2.new(1, -230, 0, 22),
+		position = UDim2.fromOffset(THUMB + 26, 16),
+		font = Theme.FontBold,
+		textSize = UI.Type.subtitle,
+		color = affordable and Theme.Surface.Text or Theme.Surface.Faint,
+		layer = layer + 1,
+	})
 
-	-- Un solo boton que cambia de papel: comprar, equipar o equipado.
-	local canBuy = not owned or isGear
+	local description = UI.label({
+		parent = card,
+		name = "Detalle",
+		text = Strings.get("item.desc_" .. entry.id, { n = Config.Objetos.ChuletaRevela }),
+		size = UDim2.new(1, -240, 0, 38),
+		position = UDim2.fromOffset(THUMB + 26, 40),
+		font = Theme.Font,
+		textSize = UI.Type.small,
+		color = Theme.Surface.Muted,
+		wrapped = true,
+		layer = layer + 1,
+	})
+	description.TextYAlignment = Enum.TextYAlignment.Top
+
+	-- El precio, aparte del boton, para que se lea sin interpretar el
+	-- estado del boton. En rojo cuando no alcanza.
+	if not owned then
+		UI.label({
+			parent = card,
+			name = "Precio",
+			text = Strings.get("shop.price", { n = entry.precio }),
+			size = UDim2.fromOffset(110, 18),
+			position = UDim2.new(1, -122, 0, 14),
+			anchor = Vector2.new(0, 0),
+			font = Theme.FontBold,
+			textSize = UI.Type.small,
+			color = affordable and Theme.Hud.Credit or Theme.Brand.Tomato,
+			align = Enum.TextXAlignment.Right,
+			layer = layer + 1,
+		})
+	end
+
 	local text: string
 	local color: Color3
 	if not owned then
-		text = string.format("%s  %s", Strings.get("shop.buy"),
-			Strings.get("shop.price", { n = entry.precio }))
-		color = Theme.Hud.Credit
+		text = Strings.get("shop.buy")
+		color = affordable and Theme.Hud.Credit or Theme.Surface.Faint
 	elseif active then
 		text = Strings.get("shop.equipped")
-		color = Theme.Hud.Safe
+		color = Theme.Brand.Mint
 	else
 		text = Strings.get("shop.equip")
-		color = Theme.Menu.Accent
+		color = Theme.Brand.Teal
 	end
 
-	local button = new("TextButton", {
-		Name = "Accion",
-		Text = text,
-		Size = UDim2.new(0, 96, 0, 34),
-		Position = UDim2.new(1, -108, 0, 19),
-		BackgroundColor3 = color,
-		BackgroundTransparency = active and 0.82 or 0.86,
-		AutoButtonColor = false,
-		Font = Theme.FontBold,
-		TextSize = 12,
-		TextColor3 = color,
-		BorderSizePixel = 0,
-	}, card)
-	corner(button, 8)
-	new("UIStroke", { Color = color, Thickness = 1, Transparency = 0.55 }, button)
-
-	button.MouseButton1Click:Connect(function()
-		click()
-		task.spawn(function()
-			local remote = owned and Net.func(Net.Functions.Equip) or Net.func(Net.Functions.Buy)
-			local ok, result = pcall(function()
-				return remote:InvokeServer(entry.id)
-			end)
-			if ok and result and result.reason then
-				ShopUI.onNotify(result.reason)
+	local pending = false
+	local button: UI.Button
+	button = UI.button({
+		parent = card,
+		name = "Accion",
+		text = text,
+		size = UDim2.fromOffset(110, 34),
+		position = UDim2.new(1, -122, 0, 44),
+		color = color,
+		ghost = true,
+		textSize = UI.Type.small,
+		radius = UI.Radius.sm,
+		layer = layer + 1,
+		onClick = function()
+			if pending then
+				return
 			end
-		end)
-	end)
+			pending = true
+			button.setEnabled(false)
+			task.spawn(function()
+				local remote = owned and Net.func(Net.Functions.Equip)
+					or Net.func(Net.Functions.Buy)
+				local ok, result = pcall(function()
+					return remote:InvokeServer(entry.id)
+				end)
+				pending = false
+				if ok and result then
+					if result.reason then
+						ShopUI.onNotify(result.reason)
+					end
+					if result.ok then
+						-- Un destello verde: la lista se reconstruye
+						-- sola cuando llega la billetera nueva, pero el
+						-- servidor puede tardar y el silencio se lee
+						-- como que el clic no entro.
+						TweenService:Create(card, UI.Motion.snap, {
+							BackgroundColor3 = Theme.Brand.Mint,
+						}):Play()
+						task.delay(0.16, function()
+							if card.Parent then
+								TweenService:Create(card, UI.Motion.base, {
+									BackgroundColor3 = Theme.Surface.Raised,
+								}):Play()
+							end
+						end)
+					end
+				end
+				if card.Parent then
+					button.setEnabled(true)
+				end
+			end)
+		end,
+	})
 
-	if not canBuy and not owned then
-		button.Active = false
+	-- Ya comprado y ya equipado: no hay nada que hacer con el boton.
+	if owned and active and not isGear then
+		button.setEnabled(false)
+	end
+	if not owned and not affordable then
+		button.setEnabled(false)
 	end
 end
 
@@ -13063,6 +14811,7 @@ local function rebuild()
 	if not list then
 		return
 	end
+	table.clear(spinning)
 	for _, child in list:GetChildren() do
 		if child:IsA("Frame") then
 			child:Destroy()
@@ -13075,110 +14824,118 @@ local function rebuild()
 			row(entry, order)
 		end
 	end
-	list.CanvasSize = UDim2.new(0, 0, 0, order * 78 + 8)
 	creditLabel.Text = Strings.get("shop.price", { n = wallet.creditos or 0 })
+end
+
+local function selectTab(id: string)
+	currentTab = id
+	local target = tabButtons[id]
+	for otherId, other in tabButtons do
+		TweenService:Create(other, UI.Motion.snap, {
+			TextColor3 = otherId == id and Theme.Surface.Text or Theme.Surface.Muted,
+		}):Play()
+	end
+	if target and tabUnderline then
+		TweenService:Create(tabUnderline, UI.Motion.base, {
+			Position = UDim2.fromOffset(target.Position.X.Offset, 82),
+			Size = UDim2.fromOffset(target.Size.X.Offset, 3),
+		}):Play()
+	end
+	rebuild()
 end
 
 -- ── construccion ───────────────────────────────────────────────────
 
 function ShopUI.mount(parent: ScreenGui)
-	root = new("Frame", {
+	root = UI.new("Frame", {
 		Name = "Tienda",
-		Size = UDim2.new(0, 440, 0, 460),
+		Size = UDim2.fromOffset(560, 520),
 		Position = UDim2.fromScale(0.5, 0.5),
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = Theme.Menu.Panel,
+		BackgroundColor3 = Theme.Surface.Base,
 		BorderSizePixel = 0,
 		Visible = false,
-		ZIndex = 12,
-	}, parent)
-	corner(root, 14)
-	new("UIStroke", { Color = Theme.Menu.Line, Thickness = 1, Transparency = 0.4 }, root)
+		ZIndex = UI.Layer.Modal,
+		Parent = parent,
+	})
+	UI.corner(root, UI.Radius.lg)
+	UI.stroke(root, Theme.Surface.Line, 1, 0.35)
 
-	new("TextLabel", {
-		Text = Strings.get("shop.title"),
-		Size = UDim2.new(1, -120, 0, 28),
-		Position = UDim2.new(0, 18, 0, 14),
-		BackgroundTransparency = 1,
-		Font = Theme.FontBlack,
-		TextSize = 20,
-		TextColor3 = Theme.Menu.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		ZIndex = 13,
-	}, root)
+	UI.icon(root, "moneda", 22, Theme.Hud.Credit, UI.Layer.Modal + 1).Position =
+		UDim2.fromOffset(20, 20)
 
-	creditLabel = new("TextLabel", {
-		Text = "0 cr",
-		Size = UDim2.new(0, 100, 0, 24),
-		Position = UDim2.new(1, -118, 0, 16),
-		BackgroundTransparency = 1,
-		Font = Theme.FontBold,
-		TextSize = 15,
-		TextColor3 = Theme.Hud.Credit,
-		TextXAlignment = Enum.TextXAlignment.Right,
-		ZIndex = 13,
-	}, root)
+	UI.label({
+		parent = root,
+		name = "Titulo",
+		text = Strings.get("shop.title"),
+		size = UDim2.new(1, -220, 0, 28),
+		position = UDim2.fromOffset(52, 16),
+		font = Theme.FontBlack,
+		textSize = UI.Type.title,
+		color = Theme.Surface.Text,
+		layer = UI.Layer.Modal + 1,
+	})
 
-	local close = new("TextButton", {
-		Text = "X",
-		Size = UDim2.new(0, 28, 0, 28),
-		Position = UDim2.new(1, -40, 0, 14),
-		BackgroundTransparency = 1,
-		Font = Theme.FontBold,
-		TextSize = 16,
-		TextColor3 = Theme.Menu.Muted,
-		ZIndex = 13,
-	}, root)
-	close.MouseButton1Click:Connect(function()
-		click()
+	creditLabel = UI.label({
+		parent = root,
+		name = "Creditos",
+		text = "0 cr",
+		size = UDim2.fromOffset(120, 24),
+		position = UDim2.new(1, -172, 0, 20),
+		font = Theme.FontBold,
+		textSize = UI.Type.subtitle,
+		color = Theme.Hud.Credit,
+		align = Enum.TextXAlignment.Right,
+		layer = UI.Layer.Modal + 1,
+	})
+
+	UI.closeButton(root, UI.Layer.Modal + 1, function()
 		ShopUI.close()
 	end)
 
 	local tabs = { { "objeto", "shop.tab_items" }, { "estetica", "shop.tab_looks" } }
 	for i, tab in tabs do
-		local button = new("TextButton", {
-			Name = tab[1],
-			Text = Strings.get(tab[2]),
-			Size = UDim2.new(0, 120, 0, 30),
-			Position = UDim2.new(0, 18 + (i - 1) * 128, 0, 50),
-			BackgroundColor3 = Theme.Menu.PanelAlt,
-			AutoButtonColor = false,
-			Font = Theme.FontBold,
-			TextSize = 13,
-			TextColor3 = Theme.Menu.Muted,
-			BorderSizePixel = 0,
-			ZIndex = 13,
-		}, root)
-		corner(button, 8)
-		button.MouseButton1Click:Connect(function()
-			click()
-			currentTab = tab[1]
-			for id, other in tabButtons do
-				other.TextColor3 = id == currentTab and Theme.Menu.Text or Theme.Menu.Muted
-				other.BackgroundColor3 = id == currentTab and Theme.Menu.Line or Theme.Menu.PanelAlt
-			end
-			rebuild()
-		end)
-		tabButtons[tab[1]] = button
+		local button = UI.button({
+			parent = root,
+			name = tab[1],
+			text = Strings.get(tab[2]),
+			size = UDim2.fromOffset(130, 32),
+			position = UDim2.fromOffset(20 + (i - 1) * 138, 50),
+			color = Theme.Brand.Teal,
+			ghost = true,
+			textSize = UI.Type.small,
+			radius = UI.Radius.sm,
+			layer = UI.Layer.Modal + 1,
+			onClick = function()
+				selectTab(tab[1])
+			end,
+		})
+		button.instance.TextColor3 = Theme.Surface.Muted
+		tabButtons[tab[1]] = button.instance
 	end
-	tabButtons.objeto.TextColor3 = Theme.Menu.Text
-	tabButtons.objeto.BackgroundColor3 = Theme.Menu.Line
 
-	list = new("ScrollingFrame", {
-		Name = "Lista",
-		Size = UDim2.new(1, -32, 1, -104),
-		Position = UDim2.new(0, 16, 0, 90),
-		BackgroundTransparency = 1,
+	-- El subrayado que se desliza entre pestanas. Antes el estado de la
+	-- pestana activa se comunicaba cambiando dos colores de golpe.
+	tabUnderline = UI.new("Frame", {
+		Name = "Subrayado",
+		Size = UDim2.fromOffset(130, 3),
+		Position = UDim2.fromOffset(20, 82),
+		BackgroundColor3 = Theme.Brand.Teal,
 		BorderSizePixel = 0,
-		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = Theme.Menu.Line,
-		CanvasSize = UDim2.new(),
-		ZIndex = 13,
-	}, root)
-	new("UIListLayout", {
-		Padding = UDim.new(0, 6),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-	}, list)
+		ZIndex = UI.Layer.Modal + 2,
+		Parent = root,
+	})
+	UI.corner(tabUnderline, 2)
+
+	list = UI.scroller(
+		root,
+		UDim2.new(1, -32, 1, -112),
+		UDim2.fromOffset(16, 96),
+		UI.Layer.Modal + 1,
+		UI.Space.sm
+	)
+
+	tabButtons.objeto.TextColor3 = Theme.Surface.Text
 end
 
 function ShopUI.setWallet(data: any)
@@ -13191,17 +14948,20 @@ function ShopUI.setWallet(data: any)
 end
 
 function ShopUI.open()
-	if not root then
+	if not root or root.Visible then
 		return
 	end
-	root.Visible = true
 	rebuild()
+	startSpin()
+	UI.show(root)
 end
 
 function ShopUI.close()
-	if root then
-		root.Visible = false
+	if not root or not root.Visible then
+		return
 	end
+	stopSpin()
+	UI.hide(root)
 end
 
 function ShopUI.isOpen(): boolean
@@ -13212,7 +14972,7 @@ return ShopUI
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX50">
+        <Item class="ModuleScript" referent="RBX52">
           <Properties>
             <string name="Name">ZoomUI</string>
             <ProtectedString name="Source"><![CDATA[--!strict

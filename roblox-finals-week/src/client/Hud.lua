@@ -9,6 +9,24 @@
 	Todo lo que llega del servidor viene como { key = ..., args = ... }
 	y se dibuja con Strings.get: por eso el HUD entero cambia de idioma
 	con el idioma que cada jugador tenga puesto en Roblox.
+
+	Lo que cambio respecto de la version anterior:
+
+	- Los paneles eran rectangulos con texto. Ahora cada uno lleva su
+	  icono vectorial (`UI.icon`) — sin subir un solo asset.
+	- Los creditos saltaban de 120 a 165. Ahora suben contando: el
+	  salto seco no comunica que ganaste algo.
+	- La barra de sospecha era una barra lisa. Ahora tiene marcas de
+	  segmento y late al cruzar el umbral, que es donde importa.
+	- Los avisos aparecian de golpe. Ahora entran deslizando y llevan
+	  icono segun el tipo.
+	- El boletin se reconstruia entero con `ClearAllChildren()` en cada
+	  llamada — lo que borraba tambien su UICorner y su UIStroke, que
+	  habia que volver a crear. Ahora se arma una sola vez en `mount` y
+	  `report` solo rellena texto; las filas entran escalonadas.
+	- `LayoutOrder` de los avisos era `os.clock()*1000 % 100000`, que da
+	  la vuelta cada ~100 segundos y da vuelta el orden de apilado. Ahora
+	  es un contador que solo sube.
 --]]
 
 local TweenService = game:GetService("TweenService")
@@ -19,6 +37,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Theme = require(Shared:WaitForChild("Theme"))
 local Strings = require(Shared:WaitForChild("Strings"))
 local Config = require(Shared:WaitForChild("Config"))
+local UI = require(Shared:WaitForChild("UI"))
 
 local Hud = {}
 
@@ -41,85 +60,75 @@ local coneOverlay: Frame
 local punishLabel: TextLabel
 local reportCard: Frame
 
+-- Piezas del boletin, creadas una vez y rellenadas despues.
+local reportTitle: TextLabel
+local reportSubtitle: TextLabel
+local reportGrade: TextLabel
+local reportRows: { { line: TextLabel, value: TextLabel } } = {}
+local reportFoot: TextLabel
+
 local state = { fase = "espera", cerca = false, valor = 0 }
 local pulse = 0
+local hudVisible = true
+local lastCredits = 0
+local lastGrade = ""
+local toastOrder = 0
+
+local REPORT_ROWS = 6
 
 -- ── helpers ────────────────────────────────────────────────────────
 
-local function new(class: string, props: { [string]: any }, parent: Instance?): any
-	local instance = Instance.new(class)
-	for key, value in props do
-		(instance :: any)[key] = value
-	end
-	if parent then
-		instance.Parent = parent
-	end
-	return instance
+local function clockText(seconds: number): string
+	local total = math.max(0, math.floor(seconds))
+	return string.format("%02d:%02d", math.floor(total / 60), total % 60)
 end
 
-local function corner(gui: GuiObject, radius: number)
-	new("UICorner", { CornerRadius = UDim.new(0, radius) }, gui)
+local function hudPanel(name: string, size: UDim2, position: UDim2, anchor: Vector2): Frame
+	local frame = UI.panel({
+		parent = root,
+		name = name,
+		size = size,
+		position = position,
+		anchor = anchor,
+		color = Theme.Surface.Deep,
+		transparency = 0.14,
+		radius = UI.Radius.md,
+		layer = UI.Layer.Hud,
+	})
+	return frame :: Frame
 end
 
-local function stroke(gui: GuiObject, color: Color3, thickness: number?)
-	new("UIStroke", {
-		Color = color,
-		Thickness = thickness or 1,
-		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-		Transparency = 0.35,
-	}, gui)
-end
-
-local function panel(parent: Instance, name: string, size: UDim2, position: UDim2,
-	anchor: Vector2): Frame
-	local frame = new("Frame", {
-		Name = name,
-		Size = size,
-		Position = position,
-		AnchorPoint = anchor,
-		BackgroundColor3 = Theme.Hud.Panel,
-		BackgroundTransparency = 0.18,
-		BorderSizePixel = 0,
-	}, parent)
-	corner(frame, 10)
-	stroke(frame, Theme.Hud.Line)
-	return frame
-end
-
-local function label(parent: Instance, name: string, text: string, size: UDim2,
+local function hudLabel(parent: Instance, name: string, text: string, size: UDim2,
 	position: UDim2, font: Enum.Font, textSize: number, color: Color3,
 	align: Enum.TextXAlignment?): TextLabel
-	return new("TextLabel", {
-		Name = name,
-		Text = text,
-		Size = size,
-		Position = position,
-		BackgroundTransparency = 1,
-		Font = font,
-		TextSize = textSize,
-		TextColor3 = color,
-		TextXAlignment = align or Enum.TextXAlignment.Left,
-		TextYAlignment = Enum.TextYAlignment.Center,
-	}, parent)
+	return UI.label({
+		parent = parent,
+		name = name,
+		text = text,
+		size = size,
+		position = position,
+		font = font,
+		textSize = textSize,
+		color = color,
+		align = align or Enum.TextXAlignment.Left,
+		layer = UI.Layer.Hud + 1,
+	})
 end
 
-local function clockText(seconds: number): string
-	local minutes = math.floor(seconds / 60)
-	return string.format("%02d:%02d", minutes, math.floor(seconds % 60))
-end
-
--- ── construccion ───────────────────────────────────────────────────
-
---- La viñeta roja: cuatro tiras con degradado hacia adentro. No usa
---- ninguna imagen, asi que no depende de subir ningun asset.
+--[[
+	La vinaeta roja de "te esta mirando": cuatro tiras con degradado
+	hacia adentro. Sigue siendo la solucion correcta — una imagen de
+	vinaeta habria que subirla y no escalaria a cualquier resolucion.
+--]]
 local function buildVignette(parent: Instance): Frame
-	local holder = new("Frame", {
-		Name = "Vinieta",
+	local holder = UI.new("Frame", {
+		Name = "Vinaeta",
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
 		Visible = false,
-		ZIndex = 2,
-	}, parent)
+		ZIndex = UI.Layer.Overlay,
+		Parent = parent,
+	})
 
 	local edges = {
 		{ UDim2.new(1, 0, 0, 130), UDim2.fromScale(0, 0), Vector2.new(0, 0), 90 },
@@ -127,175 +136,314 @@ local function buildVignette(parent: Instance): Frame
 		{ UDim2.new(0, 160, 1, 0), UDim2.fromScale(0, 0), Vector2.new(0, 0), 0 },
 		{ UDim2.new(0, 160, 1, 0), UDim2.fromScale(1, 0), Vector2.new(1, 0), 180 },
 	}
-	for i, edge in edges do
-		local strip = new("Frame", {
-			Name = "Borde" .. i,
+	for _, edge in edges do
+		local strip = UI.new("Frame", {
 			Size = edge[1],
 			Position = edge[2],
 			AnchorPoint = edge[3],
 			BackgroundColor3 = Theme.Hud.Danger,
+			BackgroundTransparency = 0.45,
 			BorderSizePixel = 0,
-			ZIndex = 2,
-		}, holder)
-		new("UIGradient", {
+			ZIndex = UI.Layer.Overlay,
+			Parent = holder,
+		})
+		UI.new("UIGradient", {
 			Rotation = edge[4],
 			Transparency = NumberSequence.new({
 				NumberSequenceKeypoint.new(0, 0.45),
 				NumberSequenceKeypoint.new(1, 1),
 			}),
-		}, strip)
+			Parent = strip,
+		})
 	end
 	return holder
 end
 
---- El cono de la verguenza visto desde adentro: una franja arriba con
---- las rayas del cono, que efectivamente te tapa parte de la pantalla.
+--- El cono de la verguenza tapandote media pantalla.
 local function buildCone(parent: Instance): Frame
-	local holder = new("Frame", {
+	local holder = UI.new("Frame", {
 		Name = "Cono",
-		Size = UDim2.new(1, 0, 0.26, 0),
+		Size = UDim2.fromScale(1, 0.42),
+		Position = UDim2.fromScale(0, 0.58),
 		BackgroundTransparency = 1,
 		Visible = false,
-		ZIndex = 6,
-	}, parent)
+		ZIndex = UI.Layer.Overlay,
+		Parent = parent,
+	})
 
-	local band = new("Frame", {
+	local band = UI.new("Frame", {
 		Name = "Ala",
 		Size = UDim2.new(1.4, 0, 1, 0),
 		Position = UDim2.fromScale(0.5, 0),
 		AnchorPoint = Vector2.new(0.5, 0),
 		BackgroundColor3 = Color3.fromRGB(228, 74, 62),
 		BorderSizePixel = 0,
-		ZIndex = 6,
-	}, holder)
-	new("UICorner", { CornerRadius = UDim.new(0, 400) }, band)
+		ZIndex = UI.Layer.Overlay,
+		Parent = holder,
+	})
+	UI.new("UICorner", { CornerRadius = UDim.new(0, 400), Parent = band })
 
-	-- Rayas blancas, como el cono de verdad.
 	for i = 0, 7 do
-		new("Frame", {
-			Name = "Raya" .. i,
+		UI.new("Frame", {
 			Size = UDim2.new(0.06, 0, 1, 0),
 			Position = UDim2.fromScale(i * 0.14, 0),
 			BackgroundColor3 = Color3.fromRGB(246, 246, 240),
+			BackgroundTransparency = 0.25,
 			BorderSizePixel = 0,
-			ZIndex = 7,
-		}, band)
+			ZIndex = UI.Layer.Overlay + 1,
+			Parent = band,
+		})
 	end
-
 	return holder
 end
+
+-- Icono y color del aviso segun de que habla la clave. Es una
+-- heuristica por prefijo, no un campo del paquete: el servidor manda
+-- claves y no deberia tener que saber como las dibuja el cliente.
+local function toastLook(key: string): (string, Color3)
+	if string.find(key, "^shop%.") then
+		return "moneda", Theme.Hud.Credit
+	elseif string.find(key, "^ball%.") then
+		return "pelota", Theme.Brand.Mustard
+	elseif string.find(key, "^radio%.") then
+		return "radio", Theme.Brand.Teal
+	elseif string.find(key, "^book%.") or string.find(key, "^nerd%.") then
+		return "libro", Theme.Brand.Grape
+	elseif string.find(key, "punish") or string.find(key, "castigo")
+		or string.find(key, "^error%.") then
+		return "alerta", Theme.Hud.Danger
+	elseif string.find(key, "passed") or string.find(key, "bought") then
+		return "tilde", Theme.Brand.Mint
+	end
+	return "campana", Theme.Surface.Muted
+end
+
+-- ── construccion ───────────────────────────────────────────────────
 
 function Hud.mount(parent: ScreenGui)
 	root = parent
 
 	-- Reloj y fase, arriba al centro.
-	local top = panel(root, "Reloj", UDim2.new(0, 240, 0, 76),
-		UDim2.new(0.5, 0, 0, 12), Vector2.new(0.5, 0))
-	phaseLabel = label(top, "Fase", "", UDim2.new(1, -20, 0, 18), UDim2.new(0, 10, 0, 6),
-		Theme.FontBold, 13, Theme.Hud.Muted, Enum.TextXAlignment.Center)
-	clockLabel = label(top, "Tiempo", "00:00", UDim2.new(1, -20, 0, 34), UDim2.new(0, 10, 0, 24),
-		Theme.FontBlack, 32, Theme.Hud.Clock, Enum.TextXAlignment.Center)
-	dayLabel = label(top, "Dia", "", UDim2.new(1, -20, 0, 16), UDim2.new(0, 10, 0, 56),
-		Theme.Font, 12, Theme.Hud.Muted, Enum.TextXAlignment.Center)
+	local top = hudPanel("Reloj", UDim2.fromOffset(248, 80),
+		UDim2.new(0.5, 0, 0, 14), Vector2.new(0.5, 0))
+	UI.icon(top, "reloj", 16, Theme.Surface.Muted, UI.Layer.Hud + 1).Position =
+		UDim2.fromOffset(12, 9)
+	phaseLabel = hudLabel(top, "Fase", "", UDim2.new(1, -24, 0, 18),
+		UDim2.fromOffset(12, 8), Theme.FontBold, UI.Type.small, Theme.Surface.Muted,
+		Enum.TextXAlignment.Center)
+	clockLabel = hudLabel(top, "Tiempo", "00:00", UDim2.new(1, -24, 0, 36),
+		UDim2.fromOffset(12, 26), Theme.FontBlack, UI.Type.display, Theme.Hud.Clock,
+		Enum.TextXAlignment.Center)
+	dayLabel = hudLabel(top, "Dia", "", UDim2.new(1, -24, 0, 16),
+		UDim2.fromOffset(12, 60), Theme.Font, UI.Type.small, Theme.Surface.Muted,
+		Enum.TextXAlignment.Center)
 
 	-- Nota y creditos, arriba a la izquierda.
-	local left = panel(root, "Nota", UDim2.new(0, 186, 0, 76),
-		UDim2.new(0, 12, 0, 12), Vector2.new(0, 0))
-	label(left, "Titulo", Strings.get("hud.grade"),
-		UDim2.new(1, -20, 0, 16), UDim2.new(0, 12, 0, 8),
-		Theme.FontBold, 11, Theme.Hud.Muted)
-	gradeValue = label(left, "Valor", "60  D", UDim2.new(1, -20, 0, 30), UDim2.new(0, 12, 0, 24),
-		Theme.FontBlack, 26, Theme.Hud.Text)
-	creditLabel = label(left, "Creditos", "0 cr", UDim2.new(1, -20, 0, 16), UDim2.new(0, 12, 0, 54),
-		Theme.FontBold, 13, Theme.Hud.Credit)
+	local left = hudPanel("Nota", UDim2.fromOffset(196, 80),
+		UDim2.fromOffset(14, 14), Vector2.new(0, 0))
+	hudLabel(left, "Titulo", Strings.get("hud.grade"), UDim2.new(1, -24, 0, 16),
+		UDim2.fromOffset(14, 9), Theme.FontBold, UI.Type.micro, Theme.Surface.Muted)
+	gradeValue = hudLabel(left, "Valor", "60  D", UDim2.new(1, -24, 0, 30),
+		UDim2.fromOffset(14, 25), Theme.FontBlack, UI.Type.display - 4, Theme.Surface.Text)
+	UI.icon(left, "moneda", 13, Theme.Hud.Credit, UI.Layer.Hud + 1).Position =
+		UDim2.fromOffset(14, 58)
+	creditLabel = hudLabel(left, "Creditos", "0 cr", UDim2.new(1, -44, 0, 16),
+		UDim2.fromOffset(32, 57), Theme.FontBold, UI.Type.small, Theme.Hud.Credit)
 
-	-- Marcador de canastas del recreo. Vive debajo de la nota porque
-	-- es la otra cosa que se acumula, aunque no cuente para aprobar.
-	local court = panel(root, "Canastas", UDim2.new(0, 186, 0, 34),
-		UDim2.new(0, 12, 0, 96), Vector2.new(0, 0))
+	-- Marcador de canastas del recreo.
+	local court = hudPanel("Canastas", UDim2.fromOffset(196, 36),
+		UDim2.fromOffset(14, 100), Vector2.new(0, 0))
 	court.Visible = false
-	scoreLabel = label(court, "Valor", "", UDim2.new(1, -20, 1, 0), UDim2.new(0, 12, 0, 0),
-		Theme.FontBold, 13, Theme.Hud.Text)
+	UI.icon(court, "pelota", 14, Theme.Brand.Mustard, UI.Layer.Hud + 1).Position =
+		UDim2.fromOffset(14, 11)
+	scoreLabel = hudLabel(court, "Valor", "", UDim2.new(1, -44, 1, 0),
+		UDim2.fromOffset(34, 0), Theme.FontBold, UI.Type.small, Theme.Surface.Text)
 
 	-- Barra de sospecha, abajo al centro.
-	local bottom = panel(root, "Sospecha", UDim2.new(0, 320, 0, 52),
+	local bottom = hudPanel("Sospecha", UDim2.fromOffset(340, 56),
 		UDim2.new(0.5, 0, 1, -18), Vector2.new(0.5, 1))
-	suspicionLabel = label(bottom, "Titulo", Strings.get("hud.suspicion"),
-		UDim2.new(1, -24, 0, 14), UDim2.new(0, 12, 0, 7),
-		Theme.FontBold, 11, Theme.Hud.Muted)
-	local track = new("Frame", {
+	UI.icon(bottom, "ojo", 14, Theme.Surface.Muted, UI.Layer.Hud + 1).Position =
+		UDim2.fromOffset(14, 9)
+	suspicionLabel = hudLabel(bottom, "Titulo", Strings.get("hud.suspicion"),
+		UDim2.new(1, -50, 0, 14), UDim2.fromOffset(34, 9), Theme.FontBold,
+		UI.Type.micro, Theme.Surface.Muted)
+
+	local track = UI.new("Frame", {
 		Name = "Barra",
-		Size = UDim2.new(1, -24, 0, 12),
-		Position = UDim2.new(0, 12, 0, 26),
-		BackgroundColor3 = Theme.Hud.PanelSoft,
+		Size = UDim2.new(1, -28, 0, 12),
+		Position = UDim2.fromOffset(14, 30),
+		BackgroundColor3 = Theme.Surface.Raised,
 		BorderSizePixel = 0,
-	}, bottom)
-	corner(track, 6)
-	suspicionFill = new("Frame", {
+		ZIndex = UI.Layer.Hud + 1,
+		Parent = bottom,
+	})
+	UI.corner(track, 6)
+
+	suspicionFill = UI.new("Frame", {
 		Name = "Relleno",
 		Size = UDim2.fromScale(0, 1),
 		BackgroundColor3 = Theme.Hud.Safe,
 		BorderSizePixel = 0,
-	}, track)
-	corner(suspicionFill, 6)
+		ZIndex = UI.Layer.Hud + 2,
+		Parent = track,
+	})
+	UI.corner(suspicionFill, 6)
+
+	-- Marcas de segmento: dan escala a la barra. Sin ellas, "medio
+	-- llena" y "tres cuartos" se ven casi igual.
+	for i = 1, 7 do
+		UI.new("Frame", {
+			Name = "Marca" .. i,
+			Size = UDim2.new(0, 1, 1, -4),
+			Position = UDim2.new(i / 8, 0, 0, 2),
+			BackgroundColor3 = Theme.Surface.Deep,
+			BackgroundTransparency = 0.5,
+			BorderSizePixel = 0,
+			ZIndex = UI.Layer.Hud + 3,
+			Parent = track,
+		})
+	end
 
 	-- Objetivo y teclas, abajo a la izquierda.
-	local guide = panel(root, "Objetivo", UDim2.new(0, 320, 0, 60),
-		UDim2.new(0, 12, 1, -18), Vector2.new(0, 1))
-	objective = label(guide, "Texto", "", UDim2.new(1, -24, 0, 20), UDim2.new(0, 12, 0, 8),
-		Theme.FontBold, 14, Theme.Hud.Text)
-	label(guide, "Teclas", Strings.get("hud.keys"),
-		UDim2.new(1, -24, 0, 16), UDim2.new(0, 12, 0, 32),
-		Theme.Font, 11, Theme.Hud.Muted)
+	local guide = hudPanel("Objetivo", UDim2.fromOffset(330, 62),
+		UDim2.new(0, 14, 1, -18), Vector2.new(0, 1))
+	objective = hudLabel(guide, "Texto", "", UDim2.new(1, -28, 0, 20),
+		UDim2.fromOffset(14, 9), Theme.FontBold, UI.Type.body, Theme.Surface.Text)
+	hudLabel(guide, "Teclas", Strings.get("hud.keys"), UDim2.new(1, -28, 0, 16),
+		UDim2.fromOffset(14, 34), Theme.Font, UI.Type.micro, Theme.Surface.Muted)
 
 	-- Aviso grande de "te esta mirando".
-	warning = label(root, "Aviso", Strings.get("hud.close_call"),
-		UDim2.new(1, 0, 0, 30), UDim2.new(0, 0, 0, 100),
-		Theme.FontBlack, 22, Theme.Hud.Danger, Enum.TextXAlignment.Center)
+	warning = hudLabel(root, "Aviso", Strings.get("hud.close_call"),
+		UDim2.new(1, 0, 0, 30), UDim2.fromOffset(0, 104), Theme.FontBlack,
+		UI.Type.title + 2, Theme.Hud.Danger, Enum.TextXAlignment.Center)
 	warning.Visible = false
-	warning.ZIndex = 3
+	warning.ZIndex = UI.Layer.Overlay + 2
 
 	vignette = buildVignette(root)
 
 	-- Avisos cortos, apilados a la derecha.
-	toasts = new("Frame", {
+	toasts = UI.new("Frame", {
 		Name = "Avisos",
-		Size = UDim2.new(0, 300, 0, 300),
-		Position = UDim2.new(1, -14, 0, 100),
+		Size = UDim2.fromOffset(310, 300),
+		Position = UDim2.new(1, -14, 0, 104),
 		AnchorPoint = Vector2.new(1, 0),
 		BackgroundTransparency = 1,
-	}, root)
-	new("UIListLayout", {
-		Padding = UDim.new(0, 6),
+		ZIndex = UI.Layer.Toast,
+		Parent = root,
+	})
+	UI.new("UIListLayout", {
+		Padding = UDim.new(0, UI.Space.xs + 2),
 		HorizontalAlignment = Enum.HorizontalAlignment.Right,
 		VerticalAlignment = Enum.VerticalAlignment.Top,
 		SortOrder = Enum.SortOrder.LayoutOrder,
-	}, toasts)
+		Parent = toasts,
+	})
 
 	-- Lo que dice el profesor.
-	subtitle = panel(root, "Profesor", UDim2.new(0, 460, 0, 46),
-		UDim2.new(0.5, 0, 1, -84), Vector2.new(0.5, 1))
+	subtitle = hudPanel("Profesor", UDim2.fromOffset(470, 48),
+		UDim2.new(0.5, 0, 1, -88), Vector2.new(0.5, 1))
 	subtitle.Visible = false
-	subtitleText = label(subtitle, "Texto", "", UDim2.new(1, -24, 1, 0), UDim2.new(0, 12, 0, 0),
-		Theme.Font, 15, Theme.Hud.Text, Enum.TextXAlignment.Center)
+	subtitleText = hudLabel(subtitle, "Texto", "", UDim2.new(1, -28, 1, 0),
+		UDim2.fromOffset(14, 0), Theme.Font, UI.Type.subtitle - 1, Theme.Surface.Text,
+		Enum.TextXAlignment.Center)
 
 	coneOverlay = buildCone(root)
-	punishLabel = label(root, "Castigo", "", UDim2.new(1, 0, 0, 24),
-		UDim2.new(0, 0, 0, 150), Theme.FontBold, 16, Theme.Hud.Warn,
+	punishLabel = hudLabel(root, "Castigo", "", UDim2.new(1, 0, 0, 24),
+		UDim2.fromOffset(0, 152), Theme.FontBold, UI.Type.subtitle, Theme.Hud.Warn,
 		Enum.TextXAlignment.Center)
 	punishLabel.Visible = false
-	punishLabel.ZIndex = 7
+	punishLabel.ZIndex = UI.Layer.Overlay + 2
 
-	-- El boletin.
-	reportCard = panel(root, "Boletin", UDim2.new(0, 380, 0, 300),
-		UDim2.fromScale(0.5, 0.5), Vector2.new(0.5, 0.5))
-	reportCard.BackgroundTransparency = 0.04
+	-- El boletin: se arma aca una sola vez.
+	reportCard = UI.panel({
+		parent = root,
+		name = "Boletin",
+		size = UDim2.fromOffset(400, 320),
+		position = UDim2.fromScale(0.5, 0.5),
+		anchor = Vector2.new(0.5, 0.5),
+		color = Theme.Surface.Base,
+		radius = UI.Radius.lg,
+		layer = UI.Layer.Modal,
+	}) :: Frame
 	reportCard.Visible = false
-	reportCard.ZIndex = 8
+
+	reportTitle = UI.label({
+		parent = reportCard,
+		name = "Titulo",
+		text = Strings.get("report.title"),
+		size = UDim2.new(1, -36, 0, 20),
+		position = UDim2.fromOffset(18, 16),
+		font = Theme.FontBold,
+		textSize = UI.Type.small,
+		color = Theme.Surface.Muted,
+		layer = UI.Layer.Modal + 1,
+	})
+	reportSubtitle = UI.label({
+		parent = reportCard,
+		name = "Subtitulo",
+		size = UDim2.new(1, -36, 0, 26),
+		position = UDim2.fromOffset(18, 36),
+		font = Theme.FontBlack,
+		textSize = UI.Type.title + 2,
+		color = Theme.Surface.Text,
+		layer = UI.Layer.Modal + 1,
+	})
+	reportGrade = UI.label({
+		parent = reportCard,
+		name = "Nota",
+		size = UDim2.new(1, -36, 0, 56),
+		position = UDim2.fromOffset(18, 70),
+		font = Theme.FontBlack,
+		textSize = UI.Type.hero,
+		color = Theme.Surface.Text,
+		layer = UI.Layer.Modal + 1,
+	})
+
+	for i = 1, REPORT_ROWS do
+		local y = 138 + (i - 1) * 24
+		reportRows[i] = {
+			line = UI.label({
+				parent = reportCard,
+				name = "Fila" .. i,
+				size = UDim2.new(1, -36, 0, 20),
+				position = UDim2.fromOffset(18, y),
+				font = Theme.Font,
+				textSize = UI.Type.body,
+				color = Theme.Surface.Muted,
+				layer = UI.Layer.Modal + 1,
+			}),
+			value = UI.label({
+				parent = reportCard,
+				name = "Valor" .. i,
+				size = UDim2.fromOffset(64, 20),
+				position = UDim2.new(1, -82, 0, y),
+				font = Theme.FontBold,
+				textSize = UI.Type.body,
+				color = Theme.Surface.Text,
+				align = Enum.TextXAlignment.Right,
+				layer = UI.Layer.Modal + 1,
+			}),
+		}
+	end
+
+	reportFoot = UI.label({
+		parent = reportCard,
+		name = "Pie",
+		size = UDim2.new(1, -36, 0, 36),
+		position = UDim2.new(0, 18, 1, -48),
+		font = Theme.FontBold,
+		textSize = UI.Type.body,
+		color = Theme.Surface.Text,
+		align = Enum.TextXAlignment.Center,
+		wrapped = true,
+		layer = UI.Layer.Modal + 1,
+	})
 
 	RunService.RenderStepped:Connect(function(dt)
 		pulse += dt
-		if state.cerca and state.fase == "examen" then
+		-- El bucle tambien se apaga con el HUD: antes seguia latiendo
+		-- con el menu abierto encima.
+		if hudVisible and state.cerca and state.fase == "examen" then
 			local alpha = 0.5 + 0.5 * math.sin(pulse * 7)
 			vignette.Visible = true
 			for _, strip in vignette:GetChildren() do
@@ -337,8 +485,19 @@ function Hud.setRound(data: any)
 		day = Strings.get(data.nombreDia or "day.lunes"),
 	})
 
-	gradeValue.Text = string.format("%d  %s", data.nota or 60, data.letra or "D")
-	gradeValue.TextColor3 = Theme.gradeColor(data.letra or "D")
+	local letter = data.letra or "D"
+	gradeValue.Text = string.format("%d  %s", data.nota or 60, letter)
+	gradeValue.TextColor3 = Theme.gradeColor(letter)
+
+	-- La nota da un golpecito cuando cambia de letra. Es el unico
+	-- momento en que ese numero merece que lo mires.
+	if letter ~= lastGrade and lastGrade ~= "" then
+		local scale = UI.scaler(gradeValue)
+		scale.Scale = 1.35
+		TweenService:Create(scale, UI.Motion.enter, { Scale = 1 }):Play()
+	end
+	lastGrade = letter
+
 	objective.Text = Strings.get(OBJETIVOS[data.fase] or "hud.hint_recess")
 
 	if data.fase ~= "examen" then
@@ -353,7 +512,7 @@ function Hud.setSuspicion(data: any)
 	local value = math.clamp(data.valor or 0, 0, 1)
 	state.valor = value
 	state.cerca = data.cerca == true
-	TweenService:Create(suspicionFill, TweenInfo.new(0.12), {
+	TweenService:Create(suspicionFill, UI.Motion.snap, {
 		Size = UDim2.fromScale(value, 1),
 		BackgroundColor3 = Theme.suspicionColor(value),
 	}):Play()
@@ -365,7 +524,11 @@ function Hud.setWallet(data: any)
 	if not creditLabel then
 		return
 	end
-	creditLabel.Text = Strings.get("shop.price", { n = data.creditos or 0 })
+	local credits = data.creditos or 0
+	UI.countTo(creditLabel, lastCredits, credits, 0.5, function(n: number): string
+		return Strings.get("shop.price", { n = n })
+	end)
+	lastCredits = credits
 end
 
 function Hud.notify(packet: any)
@@ -382,28 +545,48 @@ function Hud.notify(packet: any)
 		args = resolved
 	end
 
-	local toast = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 30),
-		BackgroundColor3 = Theme.Hud.Panel,
-		BackgroundTransparency = 0.12,
-		BorderSizePixel = 0,
-		LayoutOrder = math.floor(os.clock() * 1000) % 100000,
-	}, toasts)
-	corner(toast, 8)
-	stroke(toast, Theme.Hud.Line)
+	local iconName, accent = toastLook(packet.key)
+	toastOrder += 1
 
-	local text = label(toast, "Texto", Strings.get(packet.key, args),
-		UDim2.new(1, -20, 1, 0), UDim2.new(0, 10, 0, 0),
-		Theme.Font, 13, Theme.Hud.Text, Enum.TextXAlignment.Left)
+	local toast = UI.new("Frame", {
+		Size = UDim2.new(1, 0, 0, 34),
+		BackgroundColor3 = Theme.Surface.Deep,
+		BackgroundTransparency = 0.1,
+		BorderSizePixel = 0,
+		LayoutOrder = toastOrder,
+		ZIndex = UI.Layer.Toast,
+		Parent = toasts,
+	})
+	UI.corner(toast, UI.Radius.sm)
+	UI.stroke(toast, accent, 1, 0.55)
+
+	UI.icon(toast, iconName, 14, accent, UI.Layer.Toast + 1).Position =
+		UDim2.fromOffset(10, 10)
+
+	local text = UI.label({
+		parent = toast,
+		name = "Texto",
+		text = Strings.get(packet.key, args),
+		size = UDim2.new(1, -40, 1, 0),
+		position = UDim2.fromOffset(32, 0),
+		font = Theme.Font,
+		textSize = UI.Type.small,
+		color = Theme.Surface.Text,
+		layer = UI.Layer.Toast + 1,
+	})
 	text.TextTruncate = Enum.TextTruncate.AtEnd
+
+	-- Entrada desde la derecha. Antes aparecian de golpe.
+	toast.Position = UDim2.fromOffset(30, 0)
+	TweenService:Create(toast, UI.Motion.base, { Position = UDim2.fromOffset(0, 0) }):Play()
 
 	task.delay(3.6, function()
 		if not toast.Parent then
 			return
 		end
-		TweenService:Create(toast, TweenInfo.new(0.4), { BackgroundTransparency = 1 }):Play()
-		TweenService:Create(text, TweenInfo.new(0.4), { TextTransparency = 1 }):Play()
-		task.wait(0.45)
+		TweenService:Create(toast, UI.Motion.base, { BackgroundTransparency = 1 }):Play()
+		TweenService:Create(text, UI.Motion.base, { TextTransparency = 1 }):Play()
+		task.wait(0.3)
 		toast:Destroy()
 	end)
 end
@@ -430,8 +613,9 @@ function Hud.setScore(data: any)
 		return
 	end
 	local court = scoreLabel.Parent
-	if court and court:IsA("GuiObject") then
+	if court and court:IsA("GuiObject") and not court.Visible then
 		court.Visible = true
+		UI.show(court, 0.85)
 	end
 	scoreLabel.Text = Strings.get("ball.score", { n = data.puntos or 0 })
 end
@@ -455,8 +639,16 @@ function Hud.punish(data: any)
 		return
 	end
 	local seconds = math.floor(data.segundos or 0)
-	coneOverlay.Visible = data.tipo == "cono"
 	punishLabel.Visible = true
+
+	if data.tipo == "cono" then
+		coneOverlay.Visible = true
+		-- El cono baja a la pantalla en vez de aparecer puesto.
+		coneOverlay.Position = UDim2.fromScale(0, 1)
+		TweenService:Create(coneOverlay, UI.Motion.enter, {
+			Position = UDim2.fromScale(0, 0.58),
+		}):Play()
+	end
 
 	task.spawn(function()
 		for remaining = seconds, 1, -1 do
@@ -477,22 +669,13 @@ function Hud.report(data: any)
 	if not reportCard then
 		return
 	end
-	reportCard:ClearAllChildren()
-	corner(reportCard, 12)
-	stroke(reportCard, Theme.Hud.Line)
 
-	local title = data.semana and Strings.get("report.week")
+	local subtitleText2 = data.semana and Strings.get("report.week")
 		or Strings.get("report.day", { n = data.dia })
-	label(reportCard, "Titulo", Strings.get("report.title"),
-		UDim2.new(1, -32, 0, 20), UDim2.new(0, 16, 0, 14),
-		Theme.FontBold, 12, Theme.Hud.Muted).ZIndex = 9
-	label(reportCard, "Subtitulo", title, UDim2.new(1, -32, 0, 26), UDim2.new(0, 16, 0, 32),
-		Theme.FontBlack, 22, Theme.Hud.Text).ZIndex = 9
-
-	local big = label(reportCard, "Nota", tostring(data.final) .. "  " .. tostring(data.letra),
-		UDim2.new(1, -32, 0, 54), UDim2.new(0, 16, 0, 64),
-		Theme.FontBlack, 46, Theme.gradeColor(data.letra))
-	big.ZIndex = 9
+	reportTitle.Text = Strings.get("report.title")
+	reportSubtitle.Text = subtitleText2
+	reportGrade.Text = tostring(data.final) .. "  " .. tostring(data.letra)
+	reportGrade.TextColor3 = Theme.gradeColor(data.letra)
 
 	local rows = {
 		{ Strings.get("report.exam"), tostring(data.examen) },
@@ -502,18 +685,11 @@ function Hud.report(data: any)
 		{ Strings.get("shop.price", { n = data.creditos }), "" },
 		{ Strings.get("report.fails", { n = data.suspensos, max = data.maxSuspensos }), "" },
 	}
-	for i, row in rows do
-		local y = 128 + (i - 1) * 22
-		local line = label(reportCard, "Fila" .. i, row[1],
-			UDim2.new(1, -32, 0, 20), UDim2.new(0, 16, 0, y),
-			Theme.Font, 14, Theme.Hud.Muted)
-		line.ZIndex = 9
-		if row[2] ~= "" then
-			local value = label(reportCard, "Valor" .. i, row[2],
-				UDim2.new(0, 60, 0, 20), UDim2.new(1, -76, 0, y),
-				Theme.FontBold, 14, Theme.Hud.Text, Enum.TextXAlignment.Right)
-			value.ZIndex = 9
-		end
+	for i = 1, REPORT_ROWS do
+		local entry = reportRows[i]
+		local content = rows[i]
+		entry.line.Text = content and content[1] or ""
+		entry.value.Text = content and content[2] or ""
 	end
 
 	local footKey = "report.next"
@@ -522,26 +698,44 @@ function Hud.report(data: any)
 		footKey = data.expulsado and "report.expelled" or "report.survived"
 		footArgs = nil
 	end
-	local foot = label(reportCard, "Pie", Strings.get(footKey, footArgs),
-		UDim2.new(1, -32, 0, 34), UDim2.new(0, 16, 1, -44),
-		Theme.FontBold, 14, data.aprobado and Theme.Hud.Safe or Theme.Hud.Danger,
-		Enum.TextXAlignment.Center)
-	foot.TextWrapped = true
-	foot.ZIndex = 9
+	reportFoot.Text = Strings.get(footKey, footArgs)
+	reportFoot.TextColor3 = data.aprobado and Theme.Hud.Safe or Theme.Hud.Danger
 
-	reportCard.Visible = true
+	UI.show(reportCard, 0.88)
+
+	-- La nota se estampa: entra grande y se asienta.
+	local gradeScale = UI.scaler(reportGrade)
+	gradeScale.Scale = 1.6
+	task.delay(0.12, function()
+		TweenService:Create(gradeScale, UI.Motion.enter, { Scale = 1 }):Play()
+	end)
+
+	-- Y las filas entran una detras de otra.
+	local lines: { GuiObject } = {}
+	for i = 1, REPORT_ROWS do
+		table.insert(lines, reportRows[i].line)
+	end
+	UI.stagger(lines, 0.04)
+
 	task.delay(Config.Ronda.SegundosBoletin, function()
-		reportCard.Visible = false
+		UI.hide(reportCard)
 	end)
 end
 
---- Apaga/enciende el HUD de juego (lo usa el menu de inicio).
+--[[
+	Apaga/enciende el HUD de juego (lo usa el menu de inicio).
+
+	La lista vieja solo cubria los seis paneles y dejaba encendidos la
+	vinaeta, el aviso del profesor, el cono y el contador de castigo,
+	que quedaban dibujados por encima del menu.
+--]]
 local PANELES = { "Reloj", "Nota", "Sospecha", "Objetivo", "Avisos", "Canastas" }
 
 function Hud.setVisible(visible: boolean)
 	if not root then
 		return
 	end
+	hudVisible = visible
 	for _, name in PANELES do
 		local child = root:FindFirstChild(name)
 		if child and child:IsA("GuiObject") then
@@ -554,11 +748,16 @@ function Hud.setVisible(visible: boolean)
 		end
 	end
 	if not visible then
-		if subtitle then
-			subtitle.Visible = false
+		for _, overlay in { subtitle, reportCard, coneOverlay, vignette } do
+			if overlay then
+				overlay.Visible = false
+			end
 		end
-		if reportCard then
-			reportCard.Visible = false
+		if punishLabel then
+			punishLabel.Visible = false
+		end
+		if warning then
+			warning.Visible = false
 		end
 	end
 end
