@@ -29,6 +29,7 @@ local Config = require(Shared:WaitForChild("Config"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local Strings = require(Shared:WaitForChild("Strings"))
 local Net = require(Shared:WaitForChild("Net"))
+local UI = require(Shared:WaitForChild("UI"))
 
 local player = Players.LocalPlayer
 
@@ -47,15 +48,17 @@ ZoomUI.currentIndex = function(): number
 	return 1
 end
 
+--[[
+	Adaptador al constructor compartido. Mantiene la firma posicional
+	(class, props, parent) que usan las llamadas de este archivo, pero
+	la logica vive una sola vez, en UI.new — antes este mismo bucle
+	estaba copiado literal en nueve archivos.
+--]]
 local function new(class: string, props: { [string]: any }, parent: Instance?): any
-	local instance = Instance.new(class)
-	for key, value in props do
-		(instance :: any)[key] = value
-	end
 	if parent then
-		instance.Parent = parent
+		props.Parent = parent
 	end
-	return instance
+	return UI.new(class, props)
 end
 
 function ZoomUI.mount(parent: ScreenGui)
@@ -64,7 +67,7 @@ function ZoomUI.mount(parent: ScreenGui)
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
 		Visible = false,
-		ZIndex = 14,
+		ZIndex = UI.Layer.Overlay,
 	}, parent)
 
 	-- Cuatro bandas negras dejan al descubierto una franja central, y
@@ -81,7 +84,7 @@ function ZoomUI.mount(parent: ScreenGui)
 			AnchorPoint = edge[3],
 			BackgroundColor3 = Color3.new(0, 0, 0),
 			BorderSizePixel = 0,
-			ZIndex = 14,
+			ZIndex = UI.Layer.Overlay,
 		}, mask)
 	end
 
@@ -92,7 +95,7 @@ function ZoomUI.mount(parent: ScreenGui)
 			Position = UDim2.fromScale(0.5 + side * 0.16, 0.5),
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			BackgroundTransparency = 1,
-			ZIndex = 15,
+			ZIndex = UI.Layer.Overlay + 1,
 		}, mask)
 		new("UICorner", { CornerRadius = UDim.new(1, 0) }, ring)
 		new("UIStroke", { Color = Color3.new(0, 0, 0), Thickness = 90, Transparency = 0.05 }, ring)
@@ -106,7 +109,7 @@ function ZoomUI.mount(parent: ScreenGui)
 		BackgroundColor3 = Color3.fromRGB(210, 230, 210),
 		BackgroundTransparency = 0.4,
 		BorderSizePixel = 0,
-		ZIndex = 16,
+		ZIndex = UI.Layer.Overlay + 2,
 	}, mask)
 	new("Frame", {
 		Size = UDim2.fromOffset(26, 1),
@@ -115,7 +118,7 @@ function ZoomUI.mount(parent: ScreenGui)
 		BackgroundColor3 = Color3.fromRGB(210, 230, 210),
 		BackgroundTransparency = 0.4,
 		BorderSizePixel = 0,
-		ZIndex = 16,
+		ZIndex = UI.Layer.Overlay + 2,
 	}, mask)
 
 	hint = new("TextLabel", {
@@ -126,7 +129,7 @@ function ZoomUI.mount(parent: ScreenGui)
 		Font = Theme.FontBold,
 		TextSize = 13,
 		TextColor3 = Theme.Hud.Text,
-		ZIndex = 16,
+		ZIndex = UI.Layer.Overlay + 2,
 	}, mask)
 
 	ZoomUI.bind()

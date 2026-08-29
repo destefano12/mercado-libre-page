@@ -19,6 +19,7 @@ local Config = require(Shared:WaitForChild("Config"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local Strings = require(Shared:WaitForChild("Strings"))
 local Net = require(Shared:WaitForChild("Net"))
+local UI = require(Shared:WaitForChild("UI"))
 
 local player = Players.LocalPlayer
 
@@ -31,15 +32,17 @@ local box: TextBox
 local kind: string? = nil
 local entries = 0
 
+--[[
+	Adaptador al constructor compartido. Mantiene la firma posicional
+	(class, props, parent) que usan las llamadas de este archivo, pero
+	la logica vive una sola vez, en UI.new — antes este mismo bucle
+	estaba copiado literal en nueve archivos.
+--]]
 local function new(class: string, props: { [string]: any }, parent: Instance?): any
-	local instance = Instance.new(class)
-	for key, value in props do
-		(instance :: any)[key] = value
-	end
 	if parent then
-		instance.Parent = parent
+		props.Parent = parent
 	end
-	return instance
+	return UI.new(class, props)
 end
 
 function RadioUI.mount(parent: ScreenGui)
@@ -52,7 +55,7 @@ function RadioUI.mount(parent: ScreenGui)
 		BackgroundTransparency = 0.12,
 		BorderSizePixel = 0,
 		Visible = false,
-		ZIndex = 5,
+		ZIndex = UI.Layer.Tool,
 	}, parent)
 	new("UICorner", { CornerRadius = UDim.new(0, 10) }, root)
 	new("UIStroke", { Color = Theme.Hud.Line, Thickness = 1, Transparency = 0.4 }, root)
@@ -66,7 +69,7 @@ function RadioUI.mount(parent: ScreenGui)
 		TextSize = 14,
 		TextColor3 = Theme.Hud.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		ZIndex = 6,
+		ZIndex = UI.Layer.Tool + 1,
 	}, root)
 
 	log = new("ScrollingFrame", {
@@ -78,7 +81,7 @@ function RadioUI.mount(parent: ScreenGui)
 		ScrollBarThickness = 3,
 		ScrollBarImageColor3 = Theme.Hud.Line,
 		CanvasSize = UDim2.new(),
-		ZIndex = 6,
+		ZIndex = UI.Layer.Tool + 1,
 	}, root)
 	new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }, log)
 
@@ -96,7 +99,7 @@ function RadioUI.mount(parent: ScreenGui)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		ClearTextOnFocus = false,
 		BorderSizePixel = 0,
-		ZIndex = 6,
+		ZIndex = UI.Layer.Tool + 1,
 	}, root)
 	new("UICorner", { CornerRadius = UDim.new(0, 8) }, box)
 	new("UIPadding", { PaddingLeft = UDim.new(0, 8) }, box)
@@ -113,7 +116,7 @@ function RadioUI.mount(parent: ScreenGui)
 		TextSize = 12,
 		TextColor3 = Theme.Hud.Safe,
 		BorderSizePixel = 0,
-		ZIndex = 6,
+		ZIndex = UI.Layer.Tool + 1,
 	}, root)
 	new("UICorner", { CornerRadius = UDim.new(0, 8) }, send)
 	new("UIStroke", { Color = Theme.Hud.Safe, Thickness = 1, Transparency = 0.5 }, send)
@@ -169,7 +172,7 @@ function RadioUI.receive(data: any)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		TextWrapped = true,
-		ZIndex = 7,
+		ZIndex = UI.Layer.Tool + 2,
 	}, log)
 
 	local children = log:GetChildren()

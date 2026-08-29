@@ -18,7 +18,7 @@ local Theme = require(Shared:WaitForChild("Theme"))
 local Strings = require(Shared:WaitForChild("Strings"))
 local Config = require(Shared:WaitForChild("Config"))
 local Net = require(Shared:WaitForChild("Net"))
-local Util = require(Shared:WaitForChild("Util"))
+local UI = require(Shared:WaitForChild("UI"))
 
 local player = Players.LocalPlayer
 
@@ -36,23 +36,25 @@ local statusLabel: TextLabel
 local capacityIndex = 1
 local selected: string? = nil
 
+--[[
+	Adaptador al constructor compartido. Mantiene la firma posicional
+	(class, props, parent) que usan las llamadas de este archivo, pero
+	la logica vive una sola vez, en UI.new — antes este mismo bucle
+	estaba copiado literal en nueve archivos.
+--]]
 local function new(class: string, props: { [string]: any }, parent: Instance?): any
-	local instance = Instance.new(class)
-	for key, value in props do
-		(instance :: any)[key] = value
-	end
 	if parent then
-		instance.Parent = parent
+		props.Parent = parent
 	end
-	return instance
+	return UI.new(class, props)
 end
 
 local function corner(gui: GuiObject, radius: number)
-	new("UICorner", { CornerRadius = UDim.new(0, radius) }, gui)
+	UI.corner(gui, radius)
 end
 
 local function click()
-	Util.playSound(Config.Sonidos.Click, workspace :: any, 0.25, 1.1)
+	UI.click()
 end
 
 LobbyUI.onNotify = function(_packet: any) end
@@ -79,7 +81,7 @@ local function textBox(parent: Instance, name: string, placeholder: string,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		ClearTextOnFocus = false,
 		BorderSizePixel = 0,
-		ZIndex = 22,
+		ZIndex = UI.Layer.Modal + 1,
 	}, parent)
 	corner(box, 8)
 	new("UIPadding", { PaddingLeft = UDim.new(0, 10) }, box)
@@ -100,7 +102,7 @@ local function actionButton(parent: Instance, name: string, text: string, color:
 		TextSize = 13,
 		TextColor3 = color,
 		BorderSizePixel = 0,
-		ZIndex = 22,
+		ZIndex = UI.Layer.Modal + 1,
 	}, parent)
 	corner(button, 8)
 	new("UIStroke", { Color = color, Thickness = 1, Transparency = 0.5 }, button)
@@ -122,7 +124,7 @@ local function drawRoom(room: any, order: number)
 		BackgroundColor3 = selected == room.code and Theme.Menu.Line or Theme.Menu.PanelAlt,
 		AutoButtonColor = false,
 		BorderSizePixel = 0,
-		ZIndex = 22,
+		ZIndex = UI.Layer.Modal + 1,
 	}, list)
 	corner(card, 10)
 
@@ -135,7 +137,7 @@ local function drawRoom(room: any, order: number)
 		TextSize = 14,
 		TextColor3 = Theme.Menu.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		ZIndex = 23,
+		ZIndex = UI.Layer.Modal + 2,
 	}, card)
 
 	new("TextLabel", {
@@ -148,7 +150,7 @@ local function drawRoom(room: any, order: number)
 		TextSize = 11,
 		TextColor3 = room.locked and Theme.Hud.Warn or Theme.Menu.Muted,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		ZIndex = 23,
+		ZIndex = UI.Layer.Modal + 2,
 	}, card)
 
 	new("TextLabel", {
@@ -160,7 +162,7 @@ local function drawRoom(room: any, order: number)
 		TextSize = 14,
 		TextColor3 = Theme.Menu.Text,
 		TextXAlignment = Enum.TextXAlignment.Right,
-		ZIndex = 23,
+		ZIndex = UI.Layer.Modal + 2,
 	}, card)
 
 	card.MouseButton1Click:Connect(function()
@@ -216,7 +218,7 @@ function LobbyUI.mount(parent: ScreenGui)
 		BackgroundColor3 = Theme.Menu.Panel,
 		BorderSizePixel = 0,
 		Visible = false,
-		ZIndex = 21,
+		ZIndex = UI.Layer.Modal,
 	}, parent)
 	corner(root, 14)
 	new("UIStroke", { Color = Theme.Menu.Line, Thickness = 1, Transparency = 0.4 }, root)
@@ -230,7 +232,7 @@ function LobbyUI.mount(parent: ScreenGui)
 		TextSize = 20,
 		TextColor3 = Theme.Menu.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		ZIndex = 22,
+		ZIndex = UI.Layer.Modal + 1,
 	}, root)
 
 	statusLabel = new("TextLabel", {
@@ -242,7 +244,7 @@ function LobbyUI.mount(parent: ScreenGui)
 		TextSize = 12,
 		TextColor3 = Theme.Menu.Muted,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		ZIndex = 22,
+		ZIndex = UI.Layer.Modal + 1,
 	}, root)
 
 	local close = new("TextButton", {
@@ -253,7 +255,7 @@ function LobbyUI.mount(parent: ScreenGui)
 		Font = Theme.FontBold,
 		TextSize = 16,
 		TextColor3 = Theme.Menu.Muted,
-		ZIndex = 22,
+		ZIndex = UI.Layer.Modal + 1,
 	}, root)
 	close.MouseButton1Click:Connect(function()
 		click()
@@ -281,7 +283,7 @@ function LobbyUI.mount(parent: ScreenGui)
 		ScrollBarThickness = 4,
 		ScrollBarImageColor3 = Theme.Menu.Line,
 		CanvasSize = UDim2.new(),
-		ZIndex = 22,
+		ZIndex = UI.Layer.Modal + 1,
 	}, root)
 	new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, list)
 
@@ -312,7 +314,7 @@ function LobbyUI.mount(parent: ScreenGui)
 		Position = UDim2.new(1, -278, 0, 68),
 		BackgroundColor3 = Theme.Menu.PanelAlt,
 		BorderSizePixel = 0,
-		ZIndex = 22,
+		ZIndex = UI.Layer.Modal + 1,
 	}, root)
 	corner(panel, 12)
 
@@ -325,7 +327,7 @@ function LobbyUI.mount(parent: ScreenGui)
 		TextSize = 16,
 		TextColor3 = Theme.Menu.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		ZIndex = 23,
+		ZIndex = UI.Layer.Modal + 2,
 	}, panel)
 
 	nameBox = textBox(panel, "Nombre", Strings.get("room.name"),
@@ -377,16 +379,16 @@ function LobbyUI.mount(parent: ScreenGui)
 end
 
 function LobbyUI.open()
-	if not root then
+	if not root or root.Visible then
 		return
 	end
-	root.Visible = true
 	LobbyUI.refresh()
+	UI.show(root)
 end
 
 function LobbyUI.close()
-	if root then
-		root.Visible = false
+	if root and root.Visible then
+		UI.hide(root)
 	end
 end
 

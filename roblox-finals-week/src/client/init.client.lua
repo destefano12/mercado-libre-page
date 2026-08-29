@@ -22,6 +22,7 @@ local player = Players.LocalPlayer
 local Shared = ReplicatedStorage:WaitForChild("Shared", 30)
 local Net = require(Shared:WaitForChild("Net"))
 local Strings = require(Shared:WaitForChild("Strings"))
+local UI = require(Shared:WaitForChild("UI"))
 
 local Hud = require(script:WaitForChild("Hud"))
 local ExamUI = require(script:WaitForChild("ExamUI"))
@@ -56,6 +57,11 @@ gui.IgnoreGuiInset = true
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.DisplayOrder = 10
 gui.Parent = player:WaitForChild("PlayerGui")
+
+-- Toda la interfaz esta medida en pixeles contra un diseno de 1280x720.
+-- Este UIScale la ajusta al viewport real: sin el, el lobby de 720 px de
+-- ancho se sale de la pantalla en un telefono.
+UI.responsive(gui)
 
 -- Grupo de sonido para que el deslizador de volumen mande sobre todo.
 if not SoundService:FindFirstChild("Master") then

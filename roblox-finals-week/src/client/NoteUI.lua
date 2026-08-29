@@ -22,6 +22,7 @@ local Theme = require(Shared:WaitForChild("Theme"))
 local Strings = require(Shared:WaitForChild("Strings"))
 local Config = require(Shared:WaitForChild("Config"))
 local Net = require(Shared:WaitForChild("Net"))
+local UI = require(Shared:WaitForChild("UI"))
 
 local player = Players.LocalPlayer
 
@@ -43,19 +44,21 @@ NoteUI.onThrow = function() end
 local draft = { indice = 1, opcion = 0, texto = "" }
 local equipped: Tool? = nil
 
+--[[
+	Adaptador al constructor compartido. Mantiene la firma posicional
+	(class, props, parent) que usan las llamadas de este archivo, pero
+	la logica vive una sola vez, en UI.new — antes este mismo bucle
+	estaba copiado literal en nueve archivos.
+--]]
 local function new(class: string, props: { [string]: any }, parent: Instance?): any
-	local instance = Instance.new(class)
-	for key, value in props do
-		(instance :: any)[key] = value
-	end
 	if parent then
-		instance.Parent = parent
+		props.Parent = parent
 	end
-	return instance
+	return UI.new(class, props)
 end
 
 local function corner(gui: GuiObject, radius: number)
-	new("UICorner", { CornerRadius = UDim.new(0, radius) }, gui)
+	UI.corner(gui, radius)
 end
 
 local function send()
@@ -87,7 +90,7 @@ function NoteUI.mount(parent: ScreenGui)
 		BackgroundColor3 = Theme.Paper.Background,
 		BorderSizePixel = 0,
 		Visible = false,
-		ZIndex = 4,
+		ZIndex = UI.Layer.Panel,
 	}, parent)
 	corner(root, 12)
 	new("UIStroke", { Color = Theme.Paper.Line, Thickness = 2 }, root)
@@ -102,7 +105,7 @@ function NoteUI.mount(parent: ScreenGui)
 		TextSize = 16,
 		TextColor3 = Theme.Paper.Ink,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		ZIndex = 5,
+		ZIndex = UI.Layer.Panel + 1,
 	}, root)
 
 	textBox = new("TextBox", {
@@ -121,7 +124,7 @@ function NoteUI.mount(parent: ScreenGui)
 		MultiLine = true,
 		TextWrapped = true,
 		BorderSizePixel = 0,
-		ZIndex = 5,
+		ZIndex = UI.Layer.Panel + 1,
 	}, root)
 	corner(textBox, 8)
 	new("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingTop = UDim.new(0, 6) }, textBox)
@@ -139,7 +142,7 @@ function NoteUI.mount(parent: ScreenGui)
 		Size = UDim2.new(0, 28, 0, 28), Position = UDim2.new(0, 12, 0, 88),
 		BackgroundColor3 = Color3.fromRGB(238, 236, 228), AutoButtonColor = false,
 		Font = Theme.FontBlack, TextSize = 18, TextColor3 = Theme.Paper.Ink,
-		BorderSizePixel = 0, ZIndex = 5,
+		BorderSizePixel = 0, ZIndex = UI.Layer.Panel + 1,
 	}, root)
 	corner(minus, 8)
 	local plus = new("TextButton", {
@@ -147,14 +150,14 @@ function NoteUI.mount(parent: ScreenGui)
 		Size = UDim2.new(0, 28, 0, 28), Position = UDim2.new(0, 168, 0, 88),
 		BackgroundColor3 = Color3.fromRGB(238, 236, 228), AutoButtonColor = false,
 		Font = Theme.FontBlack, TextSize = 18, TextColor3 = Theme.Paper.Ink,
-		BorderSizePixel = 0, ZIndex = 5,
+		BorderSizePixel = 0, ZIndex = UI.Layer.Panel + 1,
 	}, root)
 	corner(plus, 8)
 	questionLabel = new("TextLabel", {
 		Name = "Pregunta", Text = "",
 		Size = UDim2.new(0, 120, 0, 28), Position = UDim2.new(0, 44, 0, 88),
 		BackgroundTransparency = 1, Font = Theme.FontBold, TextSize = 13,
-		TextColor3 = Theme.Paper.InkSoft, ZIndex = 5,
+		TextColor3 = Theme.Paper.InkSoft, ZIndex = UI.Layer.Panel + 1,
 	}, root)
 
 	minus.MouseButton1Click:Connect(function()
@@ -181,7 +184,7 @@ function NoteUI.mount(parent: ScreenGui)
 			TextSize = 15,
 			TextColor3 = Theme.Paper.Ink,
 			BorderSizePixel = 0,
-			ZIndex = 5,
+			ZIndex = UI.Layer.Panel + 1,
 		}, root)
 		corner(button, 8)
 		button.MouseButton1Click:Connect(function()
@@ -201,7 +204,7 @@ function NoteUI.mount(parent: ScreenGui)
 		Font = Theme.Font,
 		TextSize = 12,
 		TextColor3 = Theme.Paper.InkSoft,
-		ZIndex = 5,
+		ZIndex = UI.Layer.Panel + 1,
 	}, root)
 
 	-- Mira: solo cuando tenes algo lanzable en la mano.
@@ -213,7 +216,7 @@ function NoteUI.mount(parent: ScreenGui)
 		BackgroundColor3 = Color3.fromRGB(250, 250, 246),
 		BorderSizePixel = 0,
 		Visible = false,
-		ZIndex = 4,
+		ZIndex = UI.Layer.Panel,
 	}, parent)
 	corner(crosshair, 2)
 
@@ -226,7 +229,7 @@ function NoteUI.mount(parent: ScreenGui)
 		BackgroundColor3 = Theme.Paper.Background,
 		BorderSizePixel = 0,
 		Visible = false,
-		ZIndex = 9,
+		ZIndex = UI.Layer.Overlay,
 	}, parent)
 	corner(incoming, 10)
 	new("UIStroke", { Color = Theme.Paper.Accent, Thickness = 2 }, incoming)
@@ -241,7 +244,7 @@ function NoteUI.mount(parent: ScreenGui)
 		TextColor3 = Theme.Paper.Ink,
 		TextWrapped = true,
 		TextYAlignment = Enum.TextYAlignment.Top,
-		ZIndex = 10,
+		ZIndex = UI.Layer.Overlay + 1,
 	}, incoming)
 
 	refresh()

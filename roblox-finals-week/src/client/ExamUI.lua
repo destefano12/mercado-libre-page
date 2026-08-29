@@ -14,8 +14,17 @@
 
 	Los botones de trampa (espiar / soplar / chuleta) estan aca abajo
 	a proposito: la trampa es parte del examen, no un menu aparte.
+
+	Lo que cambio respecto de la version anterior: era un rectangulo
+	color crema con texto encima. Ahora es una hoja — renglones, margen
+	rojo y grano de papel, todo con degradados y Frames, sin subir
+	ninguna imagen. Las alternativas llevan su letra en una chapita y
+	se marcan con un tilde en vez de solo cambiar de color de fondo. Y
+	el navegador de preguntas dejo de destruir y recrear todos sus
+	botones en cada `show`: ahora reusa los que ya existen.
 --]]
 
+local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -24,19 +33,26 @@ local Theme = require(Shared:WaitForChild("Theme"))
 local Strings = require(Shared:WaitForChild("Strings"))
 local Config = require(Shared:WaitForChild("Config"))
 local Net = require(Shared:WaitForChild("Net"))
-local Util = require(Shared:WaitForChild("Util"))
+local UI = require(Shared:WaitForChild("UI"))
 
 local ExamUI = {}
 
 local LETRAS = { "A", "B", "C", "D", "E", "F" }
+
+-- Color del papel manchado, un punto mas calido que el fondo. No esta
+-- en Theme porque solo lo usa esta hoja.
+local PAPER_WARM = Color3.fromRGB(242, 237, 222)
+local RULE = Color3.fromRGB(206, 214, 228)
+local MARGIN_RED = Color3.fromRGB(216, 128, 124)
 
 local root: Frame
 local titleLabel: TextLabel
 local progressLabel: TextLabel
 local questionLabel: TextLabel
 local topicLabel: TextLabel
-local optionButtons: { TextButton } = {}
+local optionRows: { { button: TextButton, badge: Frame, letter: TextLabel, text: TextLabel, tick: Frame } } = {}
 local navGrid: Frame
+local navButtons: { TextButton } = {}
 local sheetButton: TextButton
 local typingPanel: Frame
 local typingLabel: TextLabel
@@ -48,235 +64,353 @@ local typing: { activa: boolean, objetivo: string, escrito: string, hasta: numbe
 	activa = false, objetivo = "", escrito = "", hasta = 0, indice = 0,
 }
 
-local function new(class: string, props: { [string]: any }, parent: Instance?): any
-	local instance = Instance.new(class)
-	for key, value in props do
-		(instance :: any)[key] = value
+local OPTION_TOP = 238
+local OPTION_STEP = 50
+
+-- ── el papel ───────────────────────────────────────────────────────
+
+--[[
+	Renglones y margen. Van en un contenedor de fondo con ZIndex por
+	debajo del contenido, y `ClipsDescendants` para que las lineas no se
+	salgan de las esquinas redondeadas.
+--]]
+local function buildPaper(parent: Frame)
+	local sheet = UI.new("Frame", {
+		Name = "Papel",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		ClipsDescendants = true,
+		ZIndex = UI.Layer.Panel,
+		Parent = parent,
+	})
+
+	-- Grano: un degradado diagonal muy leve entre dos cremas. Es lo que
+	-- evita que la hoja se lea como un rectangulo de color plano.
+	local grain = UI.new("Frame", {
+		Name = "Grano",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = PAPER_WARM,
+		BackgroundTransparency = 0.5,
+		BorderSizePixel = 0,
+		ZIndex = UI.Layer.Panel,
+		Parent = sheet,
+	})
+	UI.new("UIGradient", {
+		Rotation = 32,
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.35),
+			NumberSequenceKeypoint.new(0.5, 0.75),
+			NumberSequenceKeypoint.new(1, 0.4),
+		}),
+		Parent = grain,
+	})
+
+	-- Renglones cada 24 px, desde debajo de la cabecera.
+	for y = 150, 470, 24 do
+		UI.new("Frame", {
+			Name = "Renglon",
+			Size = UDim2.new(1, -60, 0, 1),
+			Position = UDim2.fromOffset(46, y),
+			BackgroundColor3 = RULE,
+			BackgroundTransparency = 0.55,
+			BorderSizePixel = 0,
+			ZIndex = UI.Layer.Panel,
+			Parent = sheet,
+		})
 	end
-	if parent then
-		instance.Parent = parent
+
+	-- El margen rojo de toda hoja de cuaderno.
+	UI.new("Frame", {
+		Name = "Margen",
+		Size = UDim2.new(0, 1, 1, -70),
+		Position = UDim2.fromOffset(40, 62),
+		BackgroundColor3 = MARGIN_RED,
+		BackgroundTransparency = 0.35,
+		BorderSizePixel = 0,
+		ZIndex = UI.Layer.Panel,
+		Parent = sheet,
+	})
+
+	-- Dos agujeros de carpeta arriba a la izquierda.
+	for _, y in { 92, 300 } do
+		local hole = UI.new("Frame", {
+			Name = "Agujero",
+			Size = UDim2.fromOffset(13, 13),
+			Position = UDim2.fromOffset(14, y),
+			BackgroundColor3 = Color3.fromRGB(222, 216, 200),
+			BorderSizePixel = 0,
+			ZIndex = UI.Layer.Panel,
+			Parent = sheet,
+		})
+		UI.new("UICorner", { CornerRadius = UDim.new(1, 0), Parent = hole })
 	end
-	return instance
 end
 
-local function corner(gui: GuiObject, radius: number)
-	new("UICorner", { CornerRadius = UDim.new(0, radius) }, gui)
-end
+--- Una alternativa: chapita con la letra, el texto, y un tilde.
+local function buildOption(index: number)
+	local layer = UI.Layer.Panel + 1
+	local button: TextButton = UI.new("TextButton", {
+		Name = "Opcion" .. index,
+		Text = "",
+		Size = UDim2.new(1, -60, 0, 44),
+		Position = UDim2.fromOffset(46, OPTION_TOP + (index - 1) * OPTION_STEP),
+		BackgroundColor3 = Color3.fromRGB(246, 243, 233),
+		BackgroundTransparency = 0.25,
+		AutoButtonColor = false,
+		BorderSizePixel = 0,
+		ZIndex = layer,
+		Parent = root,
+	})
+	UI.corner(button, UI.Radius.sm)
+	UI.stroke(button, Theme.Paper.Line, 1, 0.35)
 
-local function click()
-	Util.playSound(Config.Sonidos.Click, workspace :: any, 0.25, 1.2)
+	local badge = UI.new("Frame", {
+		Name = "Chapa",
+		Size = UDim2.fromOffset(26, 26),
+		Position = UDim2.fromOffset(9, 9),
+		BackgroundColor3 = Color3.fromRGB(232, 228, 216),
+		BorderSizePixel = 0,
+		ZIndex = layer + 1,
+		Parent = button,
+	})
+	UI.new("UICorner", { CornerRadius = UDim.new(1, 0), Parent = badge })
+
+	local letter = UI.label({
+		parent = badge,
+		name = "Letra",
+		size = UDim2.fromScale(1, 1),
+		font = Theme.FontBold,
+		textSize = UI.Type.small,
+		color = Theme.Paper.InkSoft,
+		align = Enum.TextXAlignment.Center,
+		layer = layer + 2,
+	})
+
+	local text = UI.label({
+		parent = button,
+		name = "Texto",
+		size = UDim2.new(1, -84, 1, 0),
+		position = UDim2.fromOffset(46, 0),
+		font = Theme.FontBold,
+		textSize = UI.Type.subtitle,
+		color = Theme.Paper.Ink,
+		layer = layer + 1,
+	})
+
+	local tick = UI.icon(button, "tilde", 18, Theme.Paper.Correct, layer + 1)
+	tick.Name = "Tilde"
+	tick.Position = UDim2.new(1, -30, 0.5, -9)
+	tick.Visible = false
+
+	button.MouseEnter:Connect(function()
+		TweenService:Create(button, UI.Motion.snap, { BackgroundTransparency = 0.05 }):Play()
+	end)
+	button.MouseLeave:Connect(function()
+		local chosen = state.respuestas and state.respuestas[current] == index
+		TweenService:Create(button, UI.Motion.snap, {
+			BackgroundTransparency = chosen and 0 or 0.25,
+		}):Play()
+	end)
+	button.MouseButton1Click:Connect(function()
+		ExamUI.answer(index)
+	end)
+
+	optionRows[index] = {
+		button = button, badge = badge, letter = letter, text = text, tick = tick,
+	}
 end
 
 -- ── construccion ───────────────────────────────────────────────────
 
 function ExamUI.mount(parent: ScreenGui)
-	root = new("Frame", {
+	root = UI.new("Frame", {
 		Name = "Examen",
-		Size = UDim2.new(0, 400, 0, 470),
-		Position = UDim2.new(1, -16, 0.5, 0),
+		Size = UDim2.fromOffset(430, 500),
+		Position = UDim2.new(1, -18, 0.5, 0),
 		AnchorPoint = Vector2.new(1, 0.5),
 		BackgroundColor3 = Theme.Paper.Background,
 		BorderSizePixel = 0,
 		Visible = false,
-		ZIndex = 4,
-	}, parent)
-	corner(root, 12)
-	new("UIStroke", { Color = Theme.Paper.Line, Thickness = 2 }, root)
+		ZIndex = UI.Layer.Panel,
+		Parent = parent,
+	})
+	UI.corner(root, UI.Radius.md)
+	UI.stroke(root, Theme.Paper.Line, 2, 0.1)
 
-	-- Cabecera de la hoja.
-	titleLabel = new("TextLabel", {
-		Name = "Titulo",
-		Text = "",
-		Size = UDim2.new(1, -28, 0, 24),
-		Position = UDim2.new(0, 14, 0, 12),
-		BackgroundTransparency = 1,
-		Font = Theme.FontBlack,
-		TextSize = 18,
-		TextColor3 = Theme.Paper.Ink,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		ZIndex = 5,
-	}, root)
-	progressLabel = new("TextLabel", {
-		Name = "Progreso",
-		Text = "",
-		Size = UDim2.new(1, -28, 0, 16),
-		Position = UDim2.new(0, 14, 0, 34),
-		BackgroundTransparency = 1,
-		Font = Theme.Font,
-		TextSize = 12,
-		TextColor3 = Theme.Paper.InkSoft,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		ZIndex = 5,
-	}, root)
+	buildPaper(root)
 
-	new("Frame", {
+	titleLabel = UI.label({
+		parent = root,
+		name = "Titulo",
+		size = UDim2.new(1, -60, 0, 24),
+		position = UDim2.fromOffset(46, 14),
+		font = Theme.FontBlack,
+		textSize = UI.Type.title,
+		color = Theme.Paper.Ink,
+		layer = UI.Layer.Panel + 1,
+	})
+	progressLabel = UI.label({
+		parent = root,
+		name = "Progreso",
+		size = UDim2.new(1, -60, 0, 16),
+		position = UDim2.fromOffset(46, 38),
+		font = Theme.Font,
+		textSize = UI.Type.small,
+		color = Theme.Paper.InkSoft,
+		layer = UI.Layer.Panel + 1,
+	})
+
+	UI.new("Frame", {
 		Name = "Linea",
-		Size = UDim2.new(1, -28, 0, 1),
-		Position = UDim2.new(0, 14, 0, 54),
+		Size = UDim2.new(1, -60, 0, 1),
+		Position = UDim2.fromOffset(46, 60),
 		BackgroundColor3 = Theme.Paper.Line,
 		BorderSizePixel = 0,
-		ZIndex = 5,
-	}, root)
+		ZIndex = UI.Layer.Panel + 1,
+		Parent = root,
+	})
 
 	-- Navegador: un cuadradito por pregunta.
-	navGrid = new("Frame", {
+	navGrid = UI.new("Frame", {
 		Name = "Navegador",
-		Size = UDim2.new(1, -28, 0, 62),
-		Position = UDim2.new(0, 14, 0, 62),
+		Size = UDim2.new(1, -60, 0, 62),
+		Position = UDim2.fromOffset(46, 70),
 		BackgroundTransparency = 1,
-		ZIndex = 5,
-	}, root)
-	new("UIGridLayout", {
-		CellSize = UDim2.new(0, 26, 0, 26),
-		CellPadding = UDim2.new(0, 4, 0, 4),
+		ZIndex = UI.Layer.Panel + 1,
+		Parent = root,
+	})
+	UI.new("UIGridLayout", {
+		CellSize = UDim2.fromOffset(26, 26),
+		CellPadding = UDim2.fromOffset(5, 5),
 		SortOrder = Enum.SortOrder.LayoutOrder,
-	}, navGrid)
+		Parent = navGrid,
+	})
 
-	topicLabel = new("TextLabel", {
-		Name = "Tema",
-		Text = "",
-		Size = UDim2.new(1, -28, 0, 14),
-		Position = UDim2.new(0, 14, 0, 132),
-		BackgroundTransparency = 1,
-		Font = Theme.FontBold,
-		TextSize = 11,
-		TextColor3 = Theme.Paper.Accent,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		ZIndex = 5,
-	}, root)
+	topicLabel = UI.label({
+		parent = root,
+		name = "Tema",
+		size = UDim2.new(1, -60, 0, 14),
+		position = UDim2.fromOffset(46, 140),
+		font = Theme.FontBold,
+		textSize = UI.Type.micro,
+		color = Theme.Paper.Accent,
+		layer = UI.Layer.Panel + 1,
+	})
 
-	questionLabel = new("TextLabel", {
-		Name = "Enunciado",
-		Text = "",
-		Size = UDim2.new(1, -28, 0, 70),
-		Position = UDim2.new(0, 14, 0, 150),
-		BackgroundTransparency = 1,
-		Font = Theme.FontMono,
-		TextSize = 26,
-		TextColor3 = Theme.Paper.Ink,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextYAlignment = Enum.TextYAlignment.Center,
-		TextWrapped = true,
-		ZIndex = 5,
-	}, root)
+	questionLabel = UI.label({
+		parent = root,
+		name = "Enunciado",
+		size = UDim2.new(1, -60, 0, 72),
+		position = UDim2.fromOffset(46, 158),
+		font = Theme.FontMono,
+		textSize = UI.Type.display - 4,
+		color = Theme.Paper.Ink,
+		wrapped = true,
+		layer = UI.Layer.Panel + 1,
+	})
 
-	-- Las cuatro alternativas.
 	for i = 1, Config.Examen.OpcionesPorPregunta do
-		local button = new("TextButton", {
-			Name = "Opcion" .. i,
-			Text = "",
-			Size = UDim2.new(1, -28, 0, 40),
-			Position = UDim2.new(0, 14, 0, 226 + (i - 1) * 46),
-			BackgroundColor3 = Color3.fromRGB(242, 240, 232),
-			AutoButtonColor = false,
-			Font = Theme.FontBold,
-			TextSize = 16,
-			TextColor3 = Theme.Paper.Ink,
-			TextXAlignment = Enum.TextXAlignment.Left,
-			BorderSizePixel = 0,
-			ZIndex = 5,
-		}, root)
-		corner(button, 8)
-		new("UIPadding", { PaddingLeft = UDim.new(0, 14) }, button)
-		button.MouseButton1Click:Connect(function()
-			ExamUI.answer(i)
-		end)
-		optionButtons[i] = button
+		buildOption(i)
 	end
 
 	-- Minijuego de escritura, se superpone a las alternativas.
-	typingPanel = new("Frame", {
+	typingPanel = UI.new("Frame", {
 		Name = "Escritura",
-		Size = UDim2.new(1, -28, 0, 180),
-		Position = UDim2.new(0, 14, 0, 226),
-		BackgroundColor3 = Color3.fromRGB(242, 240, 232),
+		Size = UDim2.new(1, -60, 0, 186),
+		Position = UDim2.fromOffset(46, OPTION_TOP),
+		BackgroundColor3 = Color3.fromRGB(244, 241, 231),
 		BorderSizePixel = 0,
 		Visible = false,
-		ZIndex = 6,
-	}, root)
-	corner(typingPanel, 8)
-	new("TextLabel", {
-		Name = "Aviso",
-		Text = Strings.get("exam.type_prompt"),
-		Size = UDim2.new(1, -20, 0, 20),
-		Position = UDim2.new(0, 10, 0, 12),
-		BackgroundTransparency = 1,
-		Font = Theme.FontBold,
-		TextSize = 13,
-		TextColor3 = Theme.Paper.InkSoft,
-		ZIndex = 7,
-	}, typingPanel)
-	typingLabel = new("TextLabel", {
-		Name = "Secuencia",
-		Text = "",
-		Size = UDim2.new(1, -20, 0, 60),
-		Position = UDim2.new(0, 10, 0, 46),
-		BackgroundTransparency = 1,
-		Font = Theme.FontMono,
-		TextSize = 40,
-		TextColor3 = Theme.Paper.Ink,
-		ZIndex = 7,
-	}, typingPanel)
-	local track = new("Frame", {
+		ZIndex = UI.Layer.Panel + 3,
+		Parent = root,
+	})
+	UI.corner(typingPanel, UI.Radius.sm)
+	UI.stroke(typingPanel, Theme.Paper.Accent, 1, 0.6)
+
+	UI.label({
+		parent = typingPanel,
+		name = "Aviso",
+		text = Strings.get("exam.type_prompt"),
+		size = UDim2.new(1, -20, 0, 20),
+		position = UDim2.fromOffset(10, 12),
+		font = Theme.FontBold,
+		textSize = UI.Type.small,
+		color = Theme.Paper.InkSoft,
+		align = Enum.TextXAlignment.Center,
+		layer = UI.Layer.Panel + 4,
+	})
+	typingLabel = UI.label({
+		parent = typingPanel,
+		name = "Secuencia",
+		size = UDim2.new(1, -20, 0, 62),
+		position = UDim2.fromOffset(10, 48),
+		font = Theme.FontMono,
+		textSize = UI.Type.hero - 8,
+		color = Theme.Paper.Ink,
+		align = Enum.TextXAlignment.Center,
+		layer = UI.Layer.Panel + 4,
+	})
+
+	local track = UI.new("Frame", {
 		Name = "Barra",
 		Size = UDim2.new(1, -20, 0, 10),
-		Position = UDim2.new(0, 10, 0, 128),
+		Position = UDim2.fromOffset(10, 132),
 		BackgroundColor3 = Theme.Paper.Line,
 		BorderSizePixel = 0,
-		ZIndex = 7,
-	}, typingPanel)
-	corner(track, 5)
-	typingProgress = new("Frame", {
+		ZIndex = UI.Layer.Panel + 4,
+		Parent = typingPanel,
+	})
+	UI.corner(track, 5)
+	typingProgress = UI.new("Frame", {
 		Name = "Relleno",
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = Theme.Paper.Accent,
 		BorderSizePixel = 0,
-		ZIndex = 8,
-	}, track)
-	corner(typingProgress, 5)
+		ZIndex = UI.Layer.Panel + 5,
+		Parent = track,
+	})
+	UI.corner(typingProgress, 5)
 
 	-- Botones de trampa, en una fila abajo del todo.
-	local cheats = new("Frame", {
+	local cheats = UI.new("Frame", {
 		Name = "Trampas",
-		Size = UDim2.new(1, -28, 0, 32),
-		Position = UDim2.new(0, 14, 1, -44),
+		Size = UDim2.new(1, -60, 0, 34),
+		Position = UDim2.new(0, 46, 1, -46),
 		BackgroundTransparency = 1,
-		ZIndex = 5,
-	}, root)
-	new("UIListLayout", {
+		ZIndex = UI.Layer.Panel + 1,
+		Parent = root,
+	})
+	UI.new("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
-		Padding = UDim.new(0, 8),
+		Padding = UDim.new(0, UI.Space.sm),
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		SortOrder = Enum.SortOrder.LayoutOrder,
-	}, cheats)
+		Parent = cheats,
+	})
 
 	local acciones = {
-		{ key = "cheat.peek", accion = "peek", color = Theme.Paper.Accent },
-		{ key = "cheat.whisper", accion = "whisper", color = Theme.Paper.Correct },
-		{ key = "item.chuleta", accion = "sheet", color = Theme.Paper.Wrong },
+		{ key = "cheat.peek", accion = "peek", color = Theme.Paper.Accent, icon = "ojo" },
+		{ key = "cheat.whisper", accion = "whisper", color = Theme.Paper.Correct, icon = "radio" },
+		{ key = "item.chuleta", accion = "sheet", color = Theme.Paper.Wrong, icon = "libro" },
 	}
 	for i, entry in acciones do
-		local button = new("TextButton", {
-			Name = "Trampa" .. i,
-			LayoutOrder = i,
-			Text = Strings.get(entry.key),
-			Size = UDim2.new(0.32, 0, 1, 0),
-			BackgroundColor3 = entry.color,
-			BackgroundTransparency = 0.86,
-			AutoButtonColor = false,
-			Font = Theme.FontBold,
-			TextSize = 12,
-			TextColor3 = entry.color,
-			BorderSizePixel = 0,
-			ZIndex = 5,
-		}, cheats)
-		corner(button, 8)
-		new("UIStroke", { Color = entry.color, Thickness = 1, Transparency = 0.5 }, button)
-		button.MouseButton1Click:Connect(function()
-			ExamUI.cheat(entry.accion)
-		end)
+		local button = UI.button({
+			parent = cheats,
+			name = "Trampa" .. i,
+			text = Strings.get(entry.key),
+			size = UDim2.new(0.32, 0, 1, 0),
+			order = i,
+			color = entry.color,
+			ghost = true,
+			textSize = UI.Type.small,
+			radius = UI.Radius.sm,
+			layer = UI.Layer.Panel + 1,
+			onClick = function()
+				ExamUI.cheat(entry.accion)
+			end,
+		})
 		if entry.accion == "sheet" then
-			sheetButton = button
+			sheetButton = button.instance
 		end
 	end
 
@@ -289,48 +423,62 @@ local function questionAt(index: number): any
 	return state.preguntas and state.preguntas[index]
 end
 
+--[[
+	Refresca el navegador reusando los botones. Antes destruia todos y
+	los volvia a crear en cada `show`, que ademas de tirar basura hacia
+	parpadear la fila entera al cambiar de pregunta.
+--]]
 local function refreshNav()
 	if not navGrid then
 		return
 	end
 	local total = state.preguntas and #state.preguntas or 0
-	for _, child in navGrid:GetChildren() do
-		if child:IsA("TextButton") then
-			child:Destroy()
-		end
-	end
+
 	for i = 1, total do
+		local button = navButtons[i]
+		if not button then
+			button = UI.new("TextButton", {
+				Name = "N" .. i,
+				LayoutOrder = i,
+				Text = tostring(i),
+				AutoButtonColor = false,
+				Font = Theme.FontBold,
+				TextSize = UI.Type.small,
+				BorderSizePixel = 0,
+				ZIndex = UI.Layer.Panel + 2,
+				Parent = navGrid,
+			})
+			UI.corner(button, UI.Radius.sm)
+			local index = i
+			button.MouseButton1Click:Connect(function()
+				UI.click()
+				ExamUI.show(index)
+			end)
+			navButtons[i] = button
+		end
+
 		-- El servidor manda arrays densos: 0 es "sin responder".
 		local answered = (state.respuestas[i] or 0) > 0
 		local revealed = (state.reveladas[i] or 0) > 0
-		local button = new("TextButton", {
-			Name = "N" .. i,
-			LayoutOrder = i,
-			Text = tostring(i),
-			BackgroundColor3 = i == current and Theme.Paper.Ink
-				or (revealed and Theme.Paper.Highlight
-					or (answered and Theme.Paper.Accent or Color3.fromRGB(236, 234, 226))),
-			AutoButtonColor = false,
-			Font = Theme.FontBold,
-			TextSize = 12,
-			TextColor3 = (i == current or answered) and Color3.fromRGB(250, 250, 246)
-				or Theme.Paper.InkSoft,
-			BorderSizePixel = 0,
-			ZIndex = 6,
-		}, navGrid)
-		corner(button, 6)
-		button.MouseButton1Click:Connect(function()
-			click()
-			ExamUI.show(i)
-		end)
+		button.Visible = true
+		button.BackgroundColor3 = i == current and Theme.Paper.Ink
+			or (revealed and Theme.Paper.Highlight
+				or (answered and Theme.Paper.Accent or Color3.fromRGB(236, 234, 226)))
+		button.TextColor3 = (i == current or answered) and Color3.fromRGB(250, 250, 246)
+			or Theme.Paper.InkSoft
+	end
+
+	-- Los sobrantes de un examen mas largo se esconden, no se destruyen.
+	for i = total + 1, #navButtons do
+		navButtons[i].Visible = false
 	end
 end
 
 local function stopTyping()
 	typing.activa = false
 	typingPanel.Visible = false
-	for _, button in optionButtons do
-		button.Visible = true
+	for _, row in optionRows do
+		row.button.Visible = true
 	end
 end
 
@@ -341,11 +489,36 @@ local function startTyping(index: number, sequence: string)
 	typing.indice = index
 	typing.hasta = os.clock() + Config.Examen.SegundosSecuencia
 	typingPanel.Visible = true
+	typingLabel.RichText = false
 	typingLabel.Text = typing.objetivo
 	typingProgress.Size = UDim2.fromScale(1, 1)
-	for _, button in optionButtons do
-		button.Visible = false
+	for _, row in optionRows do
+		row.button.Visible = false
 	end
+end
+
+--- Pinta una alternativa segun su estado.
+local function paintOption(index: number, option: string?, chosen: boolean, revealed: boolean)
+	local row = optionRows[index]
+	if not row then
+		return
+	end
+	row.button.Visible = option ~= nil
+	if not option then
+		return
+	end
+	row.letter.Text = LETRAS[index] or "?"
+	row.text.Text = option
+	row.tick.Visible = chosen
+
+	local fill = revealed and Theme.Paper.Highlight
+		or (chosen and Theme.Paper.Accent or Color3.fromRGB(246, 243, 233))
+	row.button.BackgroundColor3 = fill
+	row.button.BackgroundTransparency = (chosen or revealed) and 0 or 0.25
+	row.text.TextColor3 = chosen and Color3.fromRGB(250, 250, 246) or Theme.Paper.Ink
+	row.badge.BackgroundColor3 = chosen and Color3.fromRGB(250, 250, 246)
+		or Color3.fromRGB(232, 228, 216)
+	row.letter.TextColor3 = chosen and Theme.Paper.Accent or Theme.Paper.InkSoft
 end
 
 function ExamUI.show(index: number)
@@ -363,17 +536,9 @@ function ExamUI.show(index: number)
 	if question.tipo == "escritura" then
 		startTyping(index, question.secuencia or question.texto)
 	else
-		for i, button in optionButtons do
-			local option = question.opciones[i]
-			button.Visible = option ~= nil
-			if option then
-				local chosen = state.respuestas[index] == i
-				local revealed = state.reveladas[index] == i
-				button.Text = string.format("%s.   %s", LETRAS[i] or "?", option)
-				button.BackgroundColor3 = revealed and Theme.Paper.Highlight
-					or (chosen and Theme.Paper.Accent or Color3.fromRGB(242, 240, 232))
-				button.TextColor3 = chosen and Color3.fromRGB(250, 250, 246) or Theme.Paper.Ink
-			end
+		for i = 1, #optionRows do
+			paintOption(i, question.opciones[i],
+				state.respuestas[index] == i, state.reveladas[index] == i)
 		end
 	end
 
@@ -392,7 +557,9 @@ function ExamUI.setState(data: any)
 		return
 	end
 
-	root.Visible = true
+	if not root.Visible then
+		UI.show(root, 0.94)
+	end
 	titleLabel.Text = Strings.get("exam.title", {
 		subject = Strings.get((state.preguntas[1] and state.preguntas[1].tema) or "topic.math"),
 	})
@@ -429,10 +596,19 @@ function ExamUI.answer(option: number)
 	if not question or question.tipo ~= "opcion" then
 		return
 	end
-	click()
+	UI.click()
 	ExamUI.onWrite()
 	state.respuestas[current] = option
 	ExamUI.show(current)
+
+	-- La chapita de la letra da un golpecito: confirma el clic sin
+	-- esperar la respuesta del servidor.
+	local row = optionRows[option]
+	if row then
+		local scale = UI.scaler(row.badge)
+		scale.Scale = 1.4
+		TweenService:Create(scale, UI.Motion.enter, { Scale = 1 }):Play()
+	end
 
 	task.spawn(function()
 		local ok, result = pcall(function()
@@ -445,7 +621,6 @@ function ExamUI.answer(option: number)
 end
 
 function ExamUI.cheat(action: string)
-	click()
 	Net.event(Net.Events.Cheat):FireServer(action, current)
 end
 
@@ -477,12 +652,11 @@ function ExamUI.bindInput()
 				if char == expected then
 					ExamUI.onWrite()
 					typing.escrito ..= char
-					typingLabel.Text = string.rep(" ", 0) .. typing.objetivo
 					local done = #typing.escrito
+					typingLabel.RichText = true
 					typingLabel.Text = string.format('<font color="#1C5CBA">%s</font>%s',
 						string.sub(typing.objetivo, 1, done),
 						string.sub(typing.objetivo, done + 1))
-					typingLabel.RichText = true
 					if typing.escrito == typing.objetivo then
 						ExamUI.finishTyping(true)
 					end
@@ -525,8 +699,8 @@ function ExamUI.finishTyping(success: boolean)
 		end
 	end)
 
-	Util.playSound(success and Config.Sonidos.Acierto or Config.Sonidos.Error,
-		workspace :: any, 0.3, success and 1.4 or 0.7)
+	UI.sound(success and Config.Sonidos.Acierto or Config.Sonidos.Error,
+		0.3, success and 1.4 or 0.7)
 end
 
 --- Se llama desde el RenderStepped del cliente: la barra del minijuego.

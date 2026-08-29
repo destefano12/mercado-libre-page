@@ -17,6 +17,9 @@
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local UI = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UI"))
 
 local player = Players.LocalPlayer
 
@@ -37,7 +40,7 @@ function CameraDirector.mount(parent: ScreenGui)
 	fade.BackgroundColor3 = Color3.new(0, 0, 0)
 	fade.BackgroundTransparency = 1
 	fade.BorderSizePixel = 0
-	fade.ZIndex = 30
+	fade.ZIndex = UI.Layer.Fade
 	fade.Visible = false
 	fade.Parent = parent
 

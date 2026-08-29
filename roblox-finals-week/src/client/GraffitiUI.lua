@@ -26,6 +26,7 @@ local Config = require(Shared:WaitForChild("Config"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local Strings = require(Shared:WaitForChild("Strings"))
 local Net = require(Shared:WaitForChild("Net"))
+local UI = require(Shared:WaitForChild("UI"))
 
 local player = Players.LocalPlayer
 
@@ -44,15 +45,17 @@ local painting = false
 local lastSend = 0
 local equipped = false
 
+--[[
+	Adaptador al constructor compartido. Mantiene la firma posicional
+	(class, props, parent) que usan las llamadas de este archivo, pero
+	la logica vive una sola vez, en UI.new — antes este mismo bucle
+	estaba copiado literal en nueve archivos.
+--]]
 local function new(class: string, props: { [string]: any }, parent: Instance?): any
-	local instance = Instance.new(class)
-	for key, value in props do
-		(instance :: any)[key] = value
-	end
 	if parent then
-		instance.Parent = parent
+		props.Parent = parent
 	end
-	return instance
+	return UI.new(class, props)
 end
 
 local function refresh()
@@ -82,7 +85,7 @@ function GraffitiUI.mount(parent: ScreenGui)
 		BackgroundTransparency = 0.15,
 		BorderSizePixel = 0,
 		Visible = false,
-		ZIndex = 5,
+		ZIndex = UI.Layer.Tool,
 	}, parent)
 	new("UICorner", { CornerRadius = UDim.new(0, 10) }, root)
 	new("UIStroke", { Color = Theme.Hud.Line, Thickness = 1, Transparency = 0.4 }, root)
@@ -96,7 +99,7 @@ function GraffitiUI.mount(parent: ScreenGui)
 		TextSize = 11,
 		TextColor3 = Theme.Hud.Muted,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		ZIndex = 6,
+		ZIndex = UI.Layer.Tool + 1,
 	}, root)
 
 	local strip = new("Frame", {
@@ -104,7 +107,7 @@ function GraffitiUI.mount(parent: ScreenGui)
 		Size = UDim2.new(1, -20, 0, 32),
 		Position = UDim2.new(0, 10, 0, 26),
 		BackgroundTransparency = 1,
-		ZIndex = 6,
+		ZIndex = UI.Layer.Tool + 1,
 	}, root)
 	new("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
@@ -122,7 +125,7 @@ function GraffitiUI.mount(parent: ScreenGui)
 			BackgroundColor3 = color,
 			AutoButtonColor = false,
 			BorderSizePixel = 0,
-			ZIndex = 7,
+			ZIndex = UI.Layer.Tool + 2,
 		}, strip)
 		new("UICorner", { CornerRadius = UDim.new(1, 0) }, button)
 		new("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 2, Transparency = 0.75 }, button)
@@ -142,7 +145,7 @@ function GraffitiUI.mount(parent: ScreenGui)
 		TextSize = 12,
 		TextColor3 = Theme.Hud.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		ZIndex = 6,
+		ZIndex = UI.Layer.Tool + 1,
 	}, root)
 
 	preview = new("Frame", {
@@ -152,7 +155,7 @@ function GraffitiUI.mount(parent: ScreenGui)
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundColor3 = G.Paleta[1],
 		BorderSizePixel = 0,
-		ZIndex = 7,
+		ZIndex = UI.Layer.Tool + 2,
 	}, root)
 	new("UICorner", { CornerRadius = UDim.new(1, 0) }, preview)
 
