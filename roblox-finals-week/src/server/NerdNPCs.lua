@@ -126,9 +126,22 @@ function NerdNPCs.spawn(map: any)
 	local halfW = Config.Escuela.PasilloAncho / 2
 	local halfL = Config.Escuela.PasilloLargo / 2
 
+	--[[
+		La franja donde se paran, derivada de la config en vez de las
+		constantes 46 y 86 que habia antes: esas estaban calibradas a
+		mano contra un pasillo de 190 de largo y al reproporcionar el
+		atrio dejaban a los empollones encimados o fuera del piso.
+
+		Van entre la pared del fondo y donde arranca la zona de recreo,
+		pegados a los casilleros.
+	--]]
+	local bandStart = -halfL + 24
+	local bandEnd = halfL - Config.Escuela.ZonaRecreoLargo - 8
+	local step = (bandEnd - bandStart) / math.max(1, E.Cantidad)
+
 	for i = 1, E.Cantidad do
 		local side = (i % 2 == 0) and 1 or -1
-		local z = -halfL + 46 + (i - 1) * ((Config.Escuela.PasilloLargo - 86) / E.Cantidad)
+		local z = bandStart + (i - 0.5) * step
 		local position = Vector3.new(side * (halfW - 5.5), 3, z)
 
 		local ok, err = pcall(function()

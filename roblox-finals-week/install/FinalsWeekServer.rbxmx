@@ -333,12 +333,13 @@ end
 
 local function buildSky()
 	local sky = replace("Sky", "Cielo") :: Sky
-	-- Sin textura propia queda el cielo por defecto; la Atmosphere y
-	-- las nubes lo apagan hasta que lee como dia nublado. Si subis un
-	-- skybox propio, sus seis caras van en este objeto.
+	-- Antes la Atmosphere y las nubes apagaban el cielo hasta dejarlo
+	-- encapotado. Ahora al reves: dia despejado y soleado, que es lo que
+	-- entra por el ventanal del aula. Si subis un skybox propio, sus
+	-- seis caras van en este objeto.
 	sky.CelestialBodiesShown = true
 	sky.StarCount = 0
-	sky.SunAngularSize = 9
+	sky.SunAngularSize = 16
 	sky.MoonAngularSize = 0
 end
 
@@ -366,26 +367,34 @@ local function buildClouds()
 	local clouds = Instance.new("Clouds")
 	clouds.Cover = E.Nubes.cobertura
 	clouds.Density = E.Nubes.densidad
-	clouds.Color = Color3.fromRGB(206, 208, 214)
+	clouds.Color = Color3.fromRGB(255, 255, 255)
 	clouds.Enabled = true
 	clouds.Parent = terrain
 end
 
 -- ── post-proceso ───────────────────────────────────────────────────
 
+--[[
+	El post-proceso de la version anterior estaba armado para un look
+	cinematografico: bloom fuerte, profundidad de campo marcada y rayos
+	de sol. La referencia del juego real no tiene nada de eso — es una
+	imagen limpia y plana, como un dibujo.
+
+	Asi que el bloom queda casi apagado (solo para que el ventanal
+	respire) y la profundidad de campo **se elimina del todo**: era lo
+	que mas delataba que esto no era un juego caricaturesco.
+--]]
 local function buildPost()
 	local bloom = replace("BloomEffect", "Bloom") :: BloomEffect
-	-- Umbral alto: solo los tubos fluorescentes y el neon florecen.
-	-- Con el umbral bajo se lava todo y vuelve el look de juguete.
 	bloom.Intensity = E.Bloom.intensidad
 	bloom.Size = E.Bloom.tamano
 	bloom.Threshold = E.Bloom.umbral
 
-	local dof = replace("DepthOfFieldEffect", "Profundidad") :: DepthOfFieldEffect
-	dof.FarIntensity = E.Profundidad.lejos
-	dof.FocusDistance = E.Profundidad.foco
-	dof.InFocusRadius = E.Profundidad.radio
-	dof.NearIntensity = E.Profundidad.cerca
+	-- Si quedaba una de una version anterior del lugar, se va.
+	local stale = Lighting:FindFirstChild("Profundidad")
+	if stale then
+		stale:Destroy()
+	end
 
 	local rays = replace("SunRaysEffect", "RayosSol") :: SunRaysEffect
 	rays.Intensity = E.RayosSol.intensidad
@@ -457,8 +466,10 @@ function Atmosphere.troffer(parent: Instance, cframe: CFrame, width: number,
 	light.Face = Enum.NormalId.Bottom
 	light.Angle = 110
 	light.Range = 30
-	light.Brightness = 1.35
-	light.Color = Style.Color.LuzFria
+	light.Brightness = 1.6
+	-- Luz calida, no fluorescente frio: era el tinte azulado el que
+	-- daba la sensacion de instituto publico deprimente.
+	light.Color = Style.Color.LuzCalida
 	-- Solo algunas proyectan sombra: en Future cada luz con sombra
 	-- cuesta, y con todas encendidas el colegio no corre en una
 	-- maquina modesta.
@@ -501,9 +512,15 @@ function Atmosphere.apply()
 	Lighting.EnvironmentDiffuseScale = E.DifusaEntorno
 	Lighting.EnvironmentSpecularScale = E.EspecularEntorno
 	Lighting.GlobalShadows = true
-	Lighting.Ambient = Color3.fromRGB(28, 30, 34)
-	Lighting.OutdoorAmbient = Color3.fromRGB(86, 92, 104)
-	Lighting.FogEnd = 1200
+	--[[
+		El ambiente era casi negro (28,30,34): las sombras caian a
+		oscuridad total, que es el look realista y duro. Subirlo mucho es
+		lo que aplana la imagen y la acerca al dibujo — una sombra que no
+		llega a negro se lee como un tono pintado, no como falta de luz.
+	--]]
+	Lighting.Ambient = Color3.fromRGB(126, 122, 130)
+	Lighting.OutdoorAmbient = Color3.fromRGB(168, 174, 186)
+	Lighting.FogEnd = 2400
 
 	pcall(function()
 		-- Solo existe con Future; con ShadowMap no molesta.
@@ -525,7 +542,7 @@ function Atmosphere.apply()
 				.. "desde un script y sin eso no hay sombras reales.",
 			technology, E.Tecnologia))
 	else
-		print(string.format("[Luz] %s, nubes al %d%%, look desaturado.",
+		print(string.format("[Luz] %s, nubes al %d%%, sombreado plano.",
 			technology, math.floor(E.Nubes.cobertura * 100)))
 	end
 end
@@ -694,10 +711,16 @@ function BookService.build(map: any)
 
 	-- Repartidos a lo largo del pasillo, alternando de lado: obliga a
 	-- caminar para juntarlos.
+	-- Misma correccion que en NerdNPCs: la franja sale de la config, no
+	-- de las constantes 40 y 70 calibradas contra el pasillo viejo.
 	local spots = 6
+	local bandStart = -halfL + 18
+	local bandEnd = halfL - Config.Escuela.ZonaRecreoLargo - 6
+	local step = (bandEnd - bandStart) / spots
+
 	for i = 1, spots do
 		local side = (i % 2 == 0) and 1 or -1
-		local z = -halfL + 40 + (i - 1) * ((Config.Escuela.PasilloLargo - 70) / spots)
+		local z = bandStart + (i - 0.5) * step
 		local cf = CFrame.new(side * (halfW - 4.2), 2.3, z)
 			* CFrame.Angles(0, math.rad(20 * i), 0)
 		local ok, err = pcall(function()
@@ -3679,28 +3702,34 @@ local function tiledFloor(parent: Instance, center: Vector3, width: number, leng
 	local originX = center.X - (cols * side) / 2 + side / 2
 	local originZ = center.Z - (rows * side) / 2 + side / 2
 
+	--[[
+		Damero limpio. La version anterior gastaba una baldosa de cada
+		doce y le tiraba manchas de roce encima: en la referencia el piso
+		esta impecable, y la mugre era justo lo que empujaba el look
+		hacia lo realista.
+	--]]
 	for i = 0, cols - 1 do
 		for j = 0, rows - 1 do
 			local checker = (i + j) % 2 == 0
-			local color = checker and C.Baldosa or C.BaldosaAlterna
-			local material = M.Piso
-			local roll = rng:NextNumber()
-			if roll < 0.085 then
-				color = C.BaldosaGastada
-				material = M.PisoGastado
-			end
 			local tile = block(parent, "Baldosa", Vector3.new(side, 1, side),
 				CFrame.new(originX + i * side, center.Y - 0.5, originZ + j * side),
-				color, material, Style.Reflectance.Piso)
+				checker and C.Baldosa or C.BaldosaAlterna, M.Piso, Style.Reflectance.Piso)
 			tile.CastShadow = false
-
-			if roll > 0.972 then
-				-- Mancha de roce: una lamina finita, apenas mas oscura.
-				decor(parent, "Mancha", Vector3.new(side * 0.7, 0.06, side * 0.55),
-					tile.CFrame * CFrame.new(0, 0.53, 0) * CFrame.Angles(0, rng:NextNumber(0, 3), 0),
-					C.BaldosaGastada, M.PisoGastado).Transparency = 0.35
-			end
 		end
+	end
+end
+
+--- Piso de tablones para el aula: listones largos en dos tonos de miel.
+local function plankFloor(parent: Instance, center: Vector3, width: number, length: number)
+	local plank = E.TablonAncho
+	local cols = math.max(1, math.floor(width / plank))
+	local originX = center.X - (cols * plank) / 2 + plank / 2
+
+	for i = 0, cols - 1 do
+		local board = block(parent, "Tablon", Vector3.new(plank - 0.08, 1, length),
+			CFrame.new(originX + i * plank, center.Y - 0.5, center.Z),
+			i % 2 == 0 and C.Tablon or C.TablonAlterno, M.Madera)
+		board.CastShadow = false
 	end
 end
 
@@ -3731,9 +3760,10 @@ local function dropCeiling(parent: Instance, center: Vector3, width: number, len
 				Atmosphere.troffer(parent, cf, side - 0.6, side - 1.4,
 					lights % shadowEvery == 0)
 			else
-				local stained = rng:NextNumber() < 0.09
+				-- Sin placas manchadas: la filtracion de humedad era
+				-- parte del look sucio que ya no va.
 				local plate = block(parent, "Placa", Vector3.new(side - 0.25, 0.3, side - 0.25),
-					cf, stained and C.PlacaSucia or C.Placa, M.Placa)
+					cf, C.Placa, M.Placa)
 				plate.CanCollide = false
 			end
 		end
@@ -3752,18 +3782,22 @@ end
 
 --- Friso de media pared: la franja oscura que llevan los pasillos de
 --- instituto. Es lo que mas rapido saca el look de "caja pintada".
-local function wainscot(parent: Instance, cf: CFrame, length: number, axis: string)
+--- `band` deja elegir el color: en el atrio es la banda turquesa de la
+--- referencia, en el aula es el zocalo crema bajo el verde salvia.
+local function wainscot(parent: Instance, cf: CFrame, length: number, axis: string,
+	band: Color3?, edge: Color3?)
 	local thickness = 0.22
 	local size = axis == "Z"
 		and Vector3.new(thickness, E.AlturaZocalo, length)
 		or Vector3.new(length, E.AlturaZocalo, thickness)
-	decor(parent, "Friso", size, cf * CFrame.new(0, E.AlturaZocalo / 2, 0), C.MuroBajo, M.MuroBajo)
+	decor(parent, "Friso", size, cf * CFrame.new(0, E.AlturaZocalo / 2, 0),
+		band or C.MuroBajo, M.MuroBajo)
 
 	local stripSize = axis == "Z"
 		and Vector3.new(thickness + 0.06, 0.3, length)
 		or Vector3.new(length, 0.3, thickness + 0.06)
 	decor(parent, "Franja", stripSize,
-		cf * CFrame.new(0, E.AlturaZocalo + 0.15, 0), C.MuroFranja, M.MetalLiso)
+		cf * CFrame.new(0, E.AlturaZocalo + 0.15, 0), edge or C.MuroFranja, M.MetalLiso)
 end
 
 -- ── pasillo ────────────────────────────────────────────────────────
@@ -3784,32 +3818,22 @@ local function buildLocker(parent: Instance, cf: CFrame, index: number): Model
 		C.CasilleroLuz, M.Casillero, Style.Reflectance.Casillero)
 	door.CanCollide = false
 
+	-- La rejilla de ventilacion. Era casi negra, que sobre una puerta
+	-- celeste hace un agujero; ahora es el mismo azul un tono abajo.
 	decor(model, "Rejilla", Vector3.new(E.CasilleroAncho - 1.2, 0.75, 0.07),
 		cf * CFrame.new(0, E.CasilleroAlto / 2 - 0.95, E.CasilleroFondo / 2 + 0.17),
-		Color3.fromRGB(24, 30, 38), M.Metal)
+		C.Rayon, M.Casillero)
 
 	decor(model, "Manija", Vector3.new(0.2, 0.95, 0.14),
 		cf * CFrame.new(E.CasilleroAncho / 2 - 0.5, -0.35, E.CasilleroFondo / 2 + 0.18),
 		C.Manija, M.MetalLiso).Reflectance = Style.Reflectance.Manija
 
-	-- Desgaste: rayones al azar y oxido en la base. Sin esto, veinte
-	-- casilleros identicos se leen como un patron de papel pintado.
-	for _ = 1, rng:NextInteger(0, 3) do
-		decor(model, "Rayon",
-			Vector3.new(rng:NextNumber(0.3, 1.6), rng:NextNumber(0.06, 0.16), 0.05),
-			cf * CFrame.new(
-				rng:NextNumber(-E.CasilleroAncho / 2 + 0.4, E.CasilleroAncho / 2 - 0.4),
-				rng:NextNumber(-E.CasilleroAlto / 2 + 0.6, E.CasilleroAlto / 2 - 0.6),
-				E.CasilleroFondo / 2 + 0.18)
-				* CFrame.Angles(0, 0, rng:NextNumber(-0.5, 0.5)),
-			C.Rayon, M.MetalLiso)
-	end
-	if rng:NextNumber() < 0.35 then
-		decor(model, "Oxido",
-			Vector3.new(E.CasilleroAncho - 0.5, rng:NextNumber(0.5, 1.3), 0.06),
-			cf * CFrame.new(0, -E.CasilleroAlto / 2 + 0.7, E.CasilleroFondo / 2 + 0.17),
-			C.Oxido, M.Oxido)
-	end
+	--[[
+		Aca iban de cero a tres rayones al azar por puerta y oxido en la
+		base de uno de cada tres casilleros. En la referencia los
+		casilleros estan limpios y son de un celeste parejo; lo que
+		rompe la repeticion es el numero pintado, no la mugre.
+	--]]
 
 	local number = Instance.new("SurfaceGui")
 	number.Face = Enum.NormalId.Front
@@ -3823,8 +3847,9 @@ local function buildLocker(parent: Instance, cf: CFrame, index: number): Model
 	label.BackgroundTransparency = 1
 	label.Font = Theme.FontBold
 	label.Text = string.format("%03d", index)
-	label.TextColor3 = Color3.fromRGB(206, 214, 220)
-	label.TextTransparency = 0.25
+	-- Numero oscuro: la puerta ahora es clara.
+	label.TextColor3 = Color3.fromRGB(58, 84, 132)
+	label.TextTransparency = 0.15
 	label.TextScaled = true
 	label.Parent = number
 
@@ -3897,6 +3922,56 @@ local function buildRecreation(parent: Instance, zStart: number): BasePart
 	return counter
 end
 
+--[[
+	La estatua del centro del atrio: figuras apiladas sobre un pedestal
+	redondo. Sale marcada como pintable igual que las paredes, asi que
+	la mecanica de "decorar estatuas" es el sistema de grafiti que ya
+	existe apuntado a otra superficie.
+
+	Es tambien la unica geometria no-caja del mapa: hasta ahora todo el
+	instituto eran prismas alineados a los ejes, y eso solo ya delataba
+	que estaba hecho a las apuradas.
+--]]
+local function buildStatue(parent: Instance, center: Vector3): Model
+	local model = Instance.new("Model")
+	model.Name = "Estatua"
+	model.Parent = parent
+
+	local function shaped(name: string, size: Vector3, cf: CFrame, color: Color3,
+		mesh: Enum.MeshType): BasePart
+		local part = block(model, name, size, cf, color, M.Piedra)
+		local special = Instance.new("SpecialMesh")
+		special.MeshType = mesh
+		special.Parent = part
+		return part
+	end
+
+	local radius = E.EstatuaRadio
+	shaped("Pedestal", Vector3.new(radius * 2, 1.6, radius * 2),
+		CFrame.new(center.X, 0.8, center.Z), C.Pedestal, Enum.MeshType.Cylinder)
+	shaped("Base", Vector3.new(radius * 1.5, 1, radius * 1.5),
+		CFrame.new(center.X, 1.9, center.Z), C.Estatua, Enum.MeshType.Cylinder)
+
+	-- Cuatro cuerpos apilados, cada uno mas chico y girado.
+	local height = 2.4
+	local levels = 4
+	local step = (E.EstatuaAltura - height) / levels
+	for i = 1, levels do
+		local shrink = 1 - (i - 1) * 0.17
+		local turn = i * 0.9
+		shaped("Cuerpo" .. i, Vector3.new(2.6 * shrink, step * 0.72, 1.7 * shrink),
+			CFrame.new(center.X, height + (i - 1) * step + step * 0.4, center.Z)
+				* CFrame.Angles(0, turn, 0),
+			C.Estatua, Enum.MeshType.Sphere)
+		shaped("Cabeza" .. i, Vector3.new(1.5 * shrink, 1.5 * shrink, 1.5 * shrink),
+			CFrame.new(center.X, height + (i - 1) * step + step * 0.92, center.Z)
+				* CFrame.Angles(0, turn, 0),
+			C.Estatua, Enum.MeshType.Sphere)
+	end
+
+	return model
+end
+
 local function buildHallway(root: Model): (Model, { Model }, BasePart, BasePart, { Vector3 })
 	local hall = Instance.new("Model")
 	hall.Name = "Pasillo"
@@ -3904,40 +3979,63 @@ local function buildHallway(root: Model): (Model, { Model }, BasePart, BasePart,
 
 	local halfW = E.PasilloAncho / 2
 	local halfL = E.PasilloLargo / 2
+	local top = E.AlturaPiso
 
+	--[[
+		Esto era un corredor de 16 studs con falso techo a 9.4, hecho
+		angosto a proposito. La referencia muestra un atrio ancho y de
+		techo alto, asi que se va el falso techo entero: el techo que
+		ves ahora es la losa, a 22, y las luminarias cuelgan de ahi en
+		vez de estar empotradas.
+	--]]
 	tiledFloor(hall, Vector3.new(0, 0, 0), E.PasilloAncho, E.PasilloLargo)
 	block(hall, "Losa", Vector3.new(E.PasilloAncho + 2, 1, E.PasilloLargo),
-		CFrame.new(0, E.AlturaPiso, 0), C.Losa, M.MuroAlto)
+		CFrame.new(0, top, 0), C.Losa, M.MuroAlto)
 
 	for _, side in { -1, 1 } do
-		local wall = block(hall, "Pared", Vector3.new(E.EspesorPared, E.AlturaPiso, E.PasilloLargo),
-			CFrame.new(side * halfW, E.AlturaPiso / 2, 0), C.MuroAlto, M.MuroAlto)
+		block(hall, "Pared", Vector3.new(E.EspesorPared, top, E.PasilloLargo),
+			CFrame.new(side * halfW, top / 2, 0), C.MuroAlto, M.MuroAlto)
 		wainscot(hall, CFrame.new(side * (halfW - 0.55), 0, 0), E.PasilloLargo, "Z")
-
-		-- Manchas de roce a la altura del hombro, salteadas.
-		for _ = 1, 14 do
-			decor(hall, "ManchaPared",
-				Vector3.new(0.08, rng:NextNumber(0.6, 2.2), rng:NextNumber(1, 4)),
-				CFrame.new(side * (halfW - 0.55), rng:NextNumber(4.5, 8),
-					rng:NextNumber(-halfL + 4, halfL - 4)),
-				C.MuroSucio, M.MuroAlto).Transparency = 0.45
-		end
-		wall.Reflectance = 0
 	end
 
 	for _, side in { -1, 1 } do
-		block(hall, "Fondo", Vector3.new(E.PasilloAncho + 2, E.AlturaPiso, E.EspesorPared),
-			CFrame.new(0, E.AlturaPiso / 2, side * halfL), C.MuroAlto, M.MuroAlto)
+		block(hall, "Fondo", Vector3.new(E.PasilloAncho + 2, top, E.EspesorPared),
+			CFrame.new(0, top / 2, side * halfL), C.MuroAlto, M.MuroAlto)
 		wainscot(hall, CFrame.new(0, 0, side * (halfL - 0.55)), E.PasilloAncho, "X")
-		Atmosphere.exitSign(hall, CFrame.new(0, E.AlturaFalsoTecho - 1.4, side * (halfL - 0.9)))
+		-- Iba a AlturaFalsoTecho, que ya no existe: ahora cuelga sobre
+		-- las puertas del fondo, a una altura de cartel de verdad.
+		Atmosphere.exitSign(hall, CFrame.new(0, 10.5, side * (halfL - 0.9)))
 	end
 
-	dropCeiling(hall, Vector3.new(0, 0, 0), E.PasilloAncho, E.PasilloLargo,
-		E.AlturaFalsoTecho, 3)
+	--[[
+		Claraboya: una franja de neon a lo largo del eje del atrio. Es
+		de donde viene la sensacion de dia que tiene la referencia — un
+		atrio de techo alto iluminado solo por luminarias se lee como un
+		estacionamiento.
+	--]]
+	local skylight = decor(hall, "Claraboya", Vector3.new(10, 0.4, E.PasilloLargo - 24),
+		CFrame.new(0, top - 0.7, 0), C.Tubo, M.Neon)
+	local sun = Instance.new("SurfaceLight")
+	sun.Face = Enum.NormalId.Bottom
+	sun.Angle = 150
+	sun.Range = 60
+	sun.Brightness = 2.2
+	sun.Color = C.LuzCalida
+	sun.Shadows = false
+	sun.Parent = skylight
 
-	-- Casilleros: banda central, los dos lados.
+	-- Luminarias colgadas, en dos filas a los lados de la claraboya.
+	local lightRows = math.max(1, math.floor(E.PasilloLargo / E.SeparacionLuces))
+	for row = 0, lightRows - 1 do
+		local z = -halfL + E.SeparacionLuces * (row + 0.5)
+		for _, side in { -1, 1 } do
+			Atmosphere.troffer(hall, CFrame.new(side * 13, top - 1.2, z), 4, 8, row % 3 == 0)
+		end
+	end
+
+	-- Casilleros contra las dos paredes largas.
 	local lockers: { Model } = {}
-	local bandStart = -halfL + 34
+	local bandStart = -halfL + 26
 	for side_i, side in { -1, 1 } do
 		for i = 0, E.CasillerosPorLado - 1 do
 			local z = bandStart + i * (E.CasilleroAncho + 0.12)
@@ -3949,16 +4047,19 @@ local function buildHallway(root: Model): (Model, { Model }, BasePart, BasePart,
 		end
 	end
 
+	buildStatue(hall, Vector3.new(0, 0, 0))
+
 	local shop = buildRecreation(hall, halfL - E.ZonaRecreoLargo)
 
 	local bell = decor(hall, "Campana", Vector3.new(1.6, 1.6, 0.7),
-		CFrame.new(0, E.AlturaFalsoTecho - 1.6, halfL - 3),
-		Color3.fromRGB(158, 128, 62), M.MetalLiso)
+		CFrame.new(0, 11.5, halfL - 3), C.Dorado, M.MetalLiso)
 
+	-- Los puntos de aparicion se abren con el atrio: en un espacio de 46
+	-- de ancho, tres columnas a 3.6 dejaban a todos amontonados.
 	local spawns: { Vector3 } = {}
 	for i = 0, 11 do
-		local x = ((i % 3) - 1) * 3.6
-		local z = halfL - 8 - math.floor(i / 3) * 5
+		local x = ((i % 4) - 1.5) * 7
+		local z = halfL - 10 - math.floor(i / 4) * 6
 		table.insert(spawns, Vector3.new(x, 4, z))
 	end
 
@@ -3976,14 +4077,9 @@ local function buildDesk(parent: Instance, position: Vector3, look: Vector3,
 	decor(parent, "BordePupitre", Vector3.new(4, 0.3, 0.22),
 		desk.CFrame * CFrame.new(0, -0.06, -1.05), C.Metal, M.MetalLiso)
 
-	-- Marcas de uso en la tapa: nadie estudia sin rayar el pupitre.
-	for _ = 1, rng:NextInteger(1, 3) do
-		decor(parent, "Marca",
-			Vector3.new(rng:NextNumber(0.2, 1.1), 0.03, rng:NextNumber(0.05, 0.3)),
-			desk.CFrame * CFrame.new(rng:NextNumber(-1.6, 1.6), 0.15, rng:NextNumber(-0.9, 0.9))
-				* CFrame.Angles(0, rng:NextNumber(0, 3), 0),
-			C.MaderaGastada, M.MaderaLisa)
-	end
+	-- Aca iban una a tres marcas talladas al azar en la tapa. Van fuera
+	-- por lo mismo que los rayones de los casilleros: la referencia
+	-- tiene mobiliario limpio y de color parejo.
 
 	for _, dx in { -1.6, 1.6 } do
 		for _, dz in { -0.8, 0.8 } do
@@ -4041,16 +4137,67 @@ local function buildClassroom(root: Instance, index: number): Classroom
 	local dir = Vector3.new(-side, 0, 0)
 	local look = -dir
 
-	tiledFloor(model, center, E.AulaAncho, E.AulaLargo)
+	-- Piso de tablones de madera miel, no baldosa: el aula de la
+	-- referencia tiene parquet y es lo que la separa del atrio.
+	plankFloor(model, center, E.AulaAncho, E.AulaLargo)
 	block(model, "Losa", Vector3.new(E.AulaAncho, 1, E.AulaLargo),
 		CFrame.new(cx, height, cz), C.Losa, M.MuroAlto)
 
-	block(model, "ParedFondo", Vector3.new(E.EspesorPared, height, E.AulaLargo),
-		CFrame.new(cx - dir.X * halfW, height / 2, cz), C.MuroAlto, M.MuroAlto)
-	for _, dz in { -1, 1 } do
-		block(model, "ParedLateral", Vector3.new(E.AulaAncho, height, E.EspesorPared),
-			CFrame.new(cx, height / 2, cz + dz * halfL), C.MuroAlto, M.MuroAlto)
-		wainscot(model, CFrame.new(cx, 0, cz + dz * (halfL - 0.55)), E.AulaAncho, "X")
+	--[[
+		Las dos paredes laterales. Una es maciza; la otra lleva el
+		ventanal.
+
+		Antes las ventanas eran tres paneles angostos y translucidos
+		pegados sobre una pared maciza: entraba luz pero no se veia
+		nada, y estaba escrito a proposito ("no dejan ver afuera desde
+		el pupitre"). En la referencia el aula tiene un ventanal grande
+		con vista real — cielo, agua y montanas — y esa vista es la
+		mitad de por que el aula se siente luminosa. Asi que la pared se
+		arma en cuatro pedazos alrededor de un hueco de verdad.
+	--]]
+	local sill, headHeight = 5, 11
+	local glassSpan = 20
+	local jamb = (E.AulaAncho - glassSpan) / 2
+
+	block(model, "ParedLateral", Vector3.new(E.AulaAncho, height, E.EspesorPared),
+		CFrame.new(cx, height / 2, cz + halfL), C.MuroAula, M.MuroAlto)
+	wainscot(model, CFrame.new(cx, 0, cz + halfL - 0.55), E.AulaAncho, "X",
+		C.MuroAulaBajo, C.MuroAulaBajo)
+
+	local windowZ = cz - halfL
+	block(model, "ParedLateral", Vector3.new(E.AulaAncho, sill, E.EspesorPared),
+		CFrame.new(cx, sill / 2, windowZ), C.MuroAula, M.MuroAlto)
+	block(model, "ParedLateral", Vector3.new(E.AulaAncho, height - headHeight, E.EspesorPared),
+		CFrame.new(cx, headHeight + (height - headHeight) / 2, windowZ), C.MuroAula, M.MuroAlto)
+	for _, dx in { -1, 1 } do
+		block(model, "ParedLateral",
+			Vector3.new(jamb, headHeight - sill, E.EspesorPared),
+			CFrame.new(cx + dx * (glassSpan / 2 + jamb / 2), (sill + headHeight) / 2, windowZ),
+			C.MuroAula, M.MuroAlto)
+	end
+	wainscot(model, CFrame.new(cx, 0, windowZ + 0.55), E.AulaAncho, "X",
+		C.MuroAulaBajo, C.MuroAulaBajo)
+
+	local glass = decor(model, "Ventana",
+		Vector3.new(glassSpan, headHeight - sill, 0.2),
+		CFrame.new(cx, (sill + headHeight) / 2, windowZ), C.Vidrio, M.Vidrio)
+	glass.Transparency = 0.72
+	glass.Reflectance = Style.Reflectance.Vidrio
+
+	-- Marco y dos parteluces: sin ellos el hueco se lee como un agujero
+	-- en la pared, no como una ventana.
+	for _, dx in { -1, 1 } do
+		decor(model, "MarcoVentana", Vector3.new(0.5, headHeight - sill + 0.5, 0.34),
+			CFrame.new(cx + dx * glassSpan / 2, (sill + headHeight) / 2, windowZ),
+			C.MarcoVentana, M.MetalLiso)
+	end
+	for _, dy in { sill, headHeight } do
+		decor(model, "MarcoVentana", Vector3.new(glassSpan + 0.5, 0.5, 0.34),
+			CFrame.new(cx, dy, windowZ), C.MarcoVentana, M.MetalLiso)
+	end
+	for _, dx in { -glassSpan / 6, glassSpan / 6 } do
+		decor(model, "Parteluz", Vector3.new(0.32, headHeight - sill, 0.3),
+			CFrame.new(cx + dx, (sill + headHeight) / 2, windowZ), C.MarcoVentana, M.MetalLiso)
 	end
 
 	local doorWidth, doorHeight = 6, 8.5
@@ -4077,33 +4224,75 @@ local function buildClassroom(root: Instance, index: number): Classroom
 			* CFrame.Angles(0, side < 0 and math.rad(90) or math.rad(-90), 0),
 		Enum.NormalId.Front)
 
-	-- Ventanas altas y angostas en la pared del fondo: dejan entrar
-	-- luz de tarde pero no dejan ver afuera desde el pupitre.
-	for i = -1, 1 do
-		local glass = decor(model, "Ventana", Vector3.new(0.28, 4, 6),
-			CFrame.new(cx - dir.X * (halfW - 0.2), 6.4, cz + i * 9), C.Vidrio, M.Vidrio)
-		glass.Transparency = 0.5
-		glass.Reflectance = Style.Reflectance.Vidrio
-		decor(model, "MarcoVentana", Vector3.new(0.36, 4.4, 6.5),
-			CFrame.new(cx - dir.X * (halfW - 0.22), 6.4, cz + i * 9), C.MarcoPuerta, M.MetalLiso)
-	end
+	-- La pared del pizarron, maciza: el ventanal esta enfrentado, en la
+	-- lateral, como en la referencia.
+	block(model, "ParedFondo", Vector3.new(E.EspesorPared, height, E.AulaLargo),
+		CFrame.new(cx - dir.X * halfW, height / 2, cz), C.MuroAula, M.MuroAlto)
 
 	local boardX = cx - dir.X * (halfW - 0.7)
 	local blackboard = block(model, "Pizarra", Vector3.new(0.35, 6, 20),
 		CFrame.new(boardX, 6.4, cz), C.Pizarra, M.Pizarra, Style.Reflectance.Pizarra)
-	decor(model, "MarcoPizarra", Vector3.new(0.42, 6.5, 20.6),
-		CFrame.new(boardX + dir.X * 0.08, 6.4, cz), C.MarcoPizarra, M.MetalLiso)
-	decor(model, "Bandeja", Vector3.new(0.55, 0.22, 20),
-		CFrame.new(boardX + dir.X * 0.3, 3.2, cz), C.MarcoPizarra, M.MetalLiso)
+
+	-- Marco de madera grueso, no un perfil de aluminio fino: en la
+	-- referencia el pizarron esta enmarcado en madera calida y ancha, y
+	-- eso solo ya lo saca del registro institucional.
+	for _, dz in { -1, 1 } do
+		decor(model, "MarcoPizarra", Vector3.new(0.5, 7.2, 0.6),
+			CFrame.new(boardX + dir.X * 0.1, 6.4, cz + dz * 10.3), C.MarcoPizarra, M.Madera)
+	end
+	for _, dy in { -3.3, 3.3 } do
+		decor(model, "MarcoPizarra", Vector3.new(0.5, 0.6, 21.2),
+			CFrame.new(boardX + dir.X * 0.1, 6.4 + dy, cz), C.MarcoPizarra, M.Madera)
+	end
+	decor(model, "Bandeja", Vector3.new(0.7, 0.24, 20),
+		CFrame.new(boardX + dir.X * 0.35, 2.9, cz), C.MarcoPizarra, M.Madera)
+
+	--[[
+		La pantalla de proyector, enrollada sobre el pizarron. Va marcada
+		como pintable igual que las paredes: en la referencia los alumnos
+		dibujan encima, y con eso la mecanica sale del sistema de
+		grafiti que ya existe.
+	--]]
+	decor(model, "TuboPantalla", Vector3.new(0.7, 0.7, 15),
+		CFrame.new(boardX + dir.X * 1.1, height - 1.6, cz), C.MarcoVentana, M.MetalLiso)
+	local screen = block(model, "Pantalla", Vector3.new(0.16, 7.5, 14.4),
+		CFrame.new(boardX + dir.X * 1.1, height - 5.6, cz), C.Pantalla, M.Placa)
+	screen.CanCollide = false
 
 	local podium = block(model, "Tarima", Vector3.new(8, 0.8, E.AulaLargo - 8),
 		CFrame.new(boardX + dir.X * 4.4, 0.4, cz), C.MaderaOscura, M.Madera)
 
 	local deskTeacher = block(model, "EscritorioProfesor", Vector3.new(3, 0.3, 7),
-		CFrame.new(boardX + dir.X * 6, 3.7, cz), C.MaderaOscura, M.Madera)
+		CFrame.new(boardX + dir.X * 6, 3.7, cz), C.Madera, M.Madera)
 	for _, dz in { -3, 3 } do
 		decor(model, "PataEscritorio", Vector3.new(2.6, 3.2, 0.35),
-			deskTeacher.CFrame * CFrame.new(0, -1.75, dz), C.MaderaOscura, M.MaderaLisa)
+			deskTeacher.CFrame * CFrame.new(0, -1.75, dz), C.Madera, M.MaderaLisa)
+	end
+
+	--[[
+		Los cajones del escritorio, con tirador dorado. Es una mecanica
+		confirmada del juego real: adentro esta la hoja de respuestas, y
+		abrirlos delante del profesor es la jugada mas cara del examen.
+		El `ProximityPrompt` se llama "Cajon" para que ItemService lo
+		distinga del de los casilleros.
+	--]]
+	for i = 0, 1 do
+		local drawer = block(model, "Cajon", Vector3.new(2.7, 1.15, 3),
+			deskTeacher.CFrame * CFrame.new(0, -0.85 - i * 1.3, -1.7),
+			C.MaderaGastada, M.Madera)
+		drawer.CanCollide = false
+		decor(model, "Tirador", Vector3.new(0.34, 0.26, 1.1),
+			drawer.CFrame * CFrame.new(dir.X * 1.45, 0, 0), C.Dorado, M.MetalLiso)
+
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.Name = "Cajon"
+		prompt.ActionText = "Abrir"
+		prompt.ObjectText = "Escritorio"
+		prompt.HoldDuration = 1.1
+		prompt.MaxActivationDistance = 7
+		prompt.RequiresLineOfSight = false
+		prompt.Parent = drawer
+		drawer:SetAttribute("Aula", index)
 	end
 
 	local desks: { Desk } = {}
@@ -4200,6 +4389,50 @@ local function buildDetention(root: Instance): BasePart
 	return chair
 end
 
+--[[
+	El exterior. No es decoracion gratuita: el aula tiene un ventanal de
+	verdad, y sin nada afuera se ve el vacio celeste del skybox y el
+	efecto se cae. Con un prado, una franja de agua y unas colinas
+	lejanas, la ventana pasa a tener profundidad.
+
+	Todo es `CanCollide = false` y esta lejisimos: no se puede llegar
+	caminando y no interfiere con nada del juego.
+--]]
+local function buildOutdoors(root: Instance)
+	local outside = Instance.new("Model")
+	outside.Name = "Exterior"
+	outside.Parent = root
+
+	local ground = decor(outside, "Prado", Vector3.new(2400, 2, 2400),
+		CFrame.new(0, -1, 0), Color3.fromRGB(142, 190, 118), M.MuroAlto)
+	ground.CastShadow = false
+
+	-- Franja de agua a media distancia.
+	local water = decor(outside, "Agua", Vector3.new(2400, 1, 500),
+		CFrame.new(0, -0.4, -700), Color3.fromRGB(104, 176, 214), M.MuroAlto)
+	water.CastShadow = false
+
+	-- Colinas: esferas achatadas, repartidas en un arco lejano para que
+	-- cualquier ventana del instituto de a algo.
+	local hills = Random.new(90210)
+	for i = 1, 14 do
+		local angle = (i / 14) * math.pi * 2
+		local distance = hills:NextNumber(760, 1080)
+		local scale = hills:NextNumber(120, 260)
+		local hill = decor(outside, "Colina",
+			Vector3.new(scale * 2.2, scale, scale * 2.2),
+			CFrame.new(math.cos(angle) * distance, -scale * 0.28,
+				math.sin(angle) * distance),
+			Color3.fromRGB(112, 158, 106):Lerp(Color3.fromRGB(148, 176, 196),
+				hills:NextNumber(0, 0.55)),
+			M.MuroAlto)
+		local mesh = Instance.new("SpecialMesh")
+		mesh.MeshType = Enum.MeshType.Sphere
+		mesh.Parent = hill
+		hill.CastShadow = false
+	end
+end
+
 -- ── entrada ────────────────────────────────────────────────────────
 
 function MapBuilder.build(): Map
@@ -4240,11 +4473,10 @@ function MapBuilder.build(): Map
 		baseplate:Destroy()
 	end
 
-	-- Texturas PBR propias, si el usuario cargo ids en Config.Texturas.
-	local applied = Style.applySurfaces(root, Style.SurfaceMap)
-	if applied > 0 then
-		print(string.format("[Mapa] %d piezas con textura propia.", applied))
-	end
+	-- El paisaje que se ve por el ventanal del aula.
+	safely("exterior", function()
+		buildOutdoors(root)
+	end)
 
 	local totalDesks = 0
 	for _, room in classrooms do
@@ -4400,9 +4632,22 @@ function NerdNPCs.spawn(map: any)
 	local halfW = Config.Escuela.PasilloAncho / 2
 	local halfL = Config.Escuela.PasilloLargo / 2
 
+	--[[
+		La franja donde se paran, derivada de la config en vez de las
+		constantes 46 y 86 que habia antes: esas estaban calibradas a
+		mano contra un pasillo de 190 de largo y al reproporcionar el
+		atrio dejaban a los empollones encimados o fuera del piso.
+
+		Van entre la pared del fondo y donde arranca la zona de recreo,
+		pegados a los casilleros.
+	--]]
+	local bandStart = -halfL + 24
+	local bandEnd = halfL - Config.Escuela.ZonaRecreoLargo - 8
+	local step = (bandEnd - bandStart) / math.max(1, E.Cantidad)
+
 	for i = 1, E.Cantidad do
 		local side = (i % 2 == 0) and 1 or -1
-		local z = -halfL + 46 + (i - 1) * ((Config.Escuela.PasilloLargo - 86) / E.Cantidad)
+		local z = bandStart + (i - 0.5) * step
 		local position = Vector3.new(side * (halfW - 5.5), 3, z)
 
 		local ok, err = pcall(function()

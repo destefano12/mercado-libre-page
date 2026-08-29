@@ -56,12 +56,13 @@ end
 
 local function buildSky()
 	local sky = replace("Sky", "Cielo") :: Sky
-	-- Sin textura propia queda el cielo por defecto; la Atmosphere y
-	-- las nubes lo apagan hasta que lee como dia nublado. Si subis un
-	-- skybox propio, sus seis caras van en este objeto.
+	-- Antes la Atmosphere y las nubes apagaban el cielo hasta dejarlo
+	-- encapotado. Ahora al reves: dia despejado y soleado, que es lo que
+	-- entra por el ventanal del aula. Si subis un skybox propio, sus
+	-- seis caras van en este objeto.
 	sky.CelestialBodiesShown = true
 	sky.StarCount = 0
-	sky.SunAngularSize = 9
+	sky.SunAngularSize = 16
 	sky.MoonAngularSize = 0
 end
 
@@ -89,26 +90,34 @@ local function buildClouds()
 	local clouds = Instance.new("Clouds")
 	clouds.Cover = E.Nubes.cobertura
 	clouds.Density = E.Nubes.densidad
-	clouds.Color = Color3.fromRGB(206, 208, 214)
+	clouds.Color = Color3.fromRGB(255, 255, 255)
 	clouds.Enabled = true
 	clouds.Parent = terrain
 end
 
 -- ── post-proceso ───────────────────────────────────────────────────
 
+--[[
+	El post-proceso de la version anterior estaba armado para un look
+	cinematografico: bloom fuerte, profundidad de campo marcada y rayos
+	de sol. La referencia del juego real no tiene nada de eso — es una
+	imagen limpia y plana, como un dibujo.
+
+	Asi que el bloom queda casi apagado (solo para que el ventanal
+	respire) y la profundidad de campo **se elimina del todo**: era lo
+	que mas delataba que esto no era un juego caricaturesco.
+--]]
 local function buildPost()
 	local bloom = replace("BloomEffect", "Bloom") :: BloomEffect
-	-- Umbral alto: solo los tubos fluorescentes y el neon florecen.
-	-- Con el umbral bajo se lava todo y vuelve el look de juguete.
 	bloom.Intensity = E.Bloom.intensidad
 	bloom.Size = E.Bloom.tamano
 	bloom.Threshold = E.Bloom.umbral
 
-	local dof = replace("DepthOfFieldEffect", "Profundidad") :: DepthOfFieldEffect
-	dof.FarIntensity = E.Profundidad.lejos
-	dof.FocusDistance = E.Profundidad.foco
-	dof.InFocusRadius = E.Profundidad.radio
-	dof.NearIntensity = E.Profundidad.cerca
+	-- Si quedaba una de una version anterior del lugar, se va.
+	local stale = Lighting:FindFirstChild("Profundidad")
+	if stale then
+		stale:Destroy()
+	end
 
 	local rays = replace("SunRaysEffect", "RayosSol") :: SunRaysEffect
 	rays.Intensity = E.RayosSol.intensidad
@@ -180,8 +189,10 @@ function Atmosphere.troffer(parent: Instance, cframe: CFrame, width: number,
 	light.Face = Enum.NormalId.Bottom
 	light.Angle = 110
 	light.Range = 30
-	light.Brightness = 1.35
-	light.Color = Style.Color.LuzFria
+	light.Brightness = 1.6
+	-- Luz calida, no fluorescente frio: era el tinte azulado el que
+	-- daba la sensacion de instituto publico deprimente.
+	light.Color = Style.Color.LuzCalida
 	-- Solo algunas proyectan sombra: en Future cada luz con sombra
 	-- cuesta, y con todas encendidas el colegio no corre en una
 	-- maquina modesta.
@@ -224,9 +235,15 @@ function Atmosphere.apply()
 	Lighting.EnvironmentDiffuseScale = E.DifusaEntorno
 	Lighting.EnvironmentSpecularScale = E.EspecularEntorno
 	Lighting.GlobalShadows = true
-	Lighting.Ambient = Color3.fromRGB(28, 30, 34)
-	Lighting.OutdoorAmbient = Color3.fromRGB(86, 92, 104)
-	Lighting.FogEnd = 1200
+	--[[
+		El ambiente era casi negro (28,30,34): las sombras caian a
+		oscuridad total, que es el look realista y duro. Subirlo mucho es
+		lo que aplana la imagen y la acerca al dibujo — una sombra que no
+		llega a negro se lee como un tono pintado, no como falta de luz.
+	--]]
+	Lighting.Ambient = Color3.fromRGB(126, 122, 130)
+	Lighting.OutdoorAmbient = Color3.fromRGB(168, 174, 186)
+	Lighting.FogEnd = 2400
 
 	pcall(function()
 		-- Solo existe con Future; con ShadowMap no molesta.
@@ -248,7 +265,7 @@ function Atmosphere.apply()
 				.. "desde un script y sin eso no hay sombras reales.",
 			technology, E.Tecnologia))
 	else
-		print(string.format("[Luz] %s, nubes al %d%%, look desaturado.",
+		print(string.format("[Luz] %s, nubes al %d%%, sombreado plano.",
 			technology, math.floor(E.Nubes.cobertura * 100)))
 	end
 end

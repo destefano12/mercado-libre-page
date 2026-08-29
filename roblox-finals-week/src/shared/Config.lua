@@ -15,32 +15,39 @@ local Config = {}
 -- casilleros a los dos lados y N aulas colgadas del pasillo.
 Config.Escuela = {
 	Origen = Vector3.new(0, 0, 0),
-	-- Pasillo estrecho y techo bajo: es lo que hace que el colegio se
-	-- sienta cerrado en vez de un galpon. 16 de ancho es poco menos de
-	-- tres personas de hombro a hombro.
-	PasilloLargo = 190,
-	PasilloAncho = 16,
-	AlturaPiso = 11,                -- losa
-	AlturaFalsoTecho = 9.4,         -- las placas del cielorraso
+	--[[
+		Esto era un pasillo de 16 de ancho y techo a 9.4, hecho angosto a
+		proposito para que el colegio se sintiera cerrado. La referencia
+		del juego real muestra lo contrario: un atrio ancho, de techo
+		alto y muy luminoso, con una estatua en el medio. Asi que las
+		proporciones se dan vuelta — es el cambio de mas impacto visual
+		de todo el proyecto.
+	--]]
+	PasilloLargo = 150,             -- el atrio es ancho, no largo
+	PasilloAncho = 46,
+	AlturaPiso = 22,                -- techo alto y abierto
 	EspesorPared = 1,
-	AlturaZocalo = 3.6,             -- el friso oscuro de media pared
-	CasillerosPorLado = 20,
+	AlturaZocalo = 4.2,             -- la banda turquesa de media pared
+	CasillerosPorLado = 16,
 	CasilleroAncho = 3.1,
 	CasilleroAlto = 6.4,
 	CasilleroFondo = 1.9,
 	Aulas = 2,
 	AulaAncho = 36,
 	AulaLargo = 30,
-	AulaAltura = 10,
+	AulaAltura = 13,
 	FilasDePupitres = 4,
 	PupitresPorFila = 5,
 	PupitreSeparacionX = 6.4,
 	PupitreSeparacionZ = 6.0,
 	ZonaRecreoLargo = 34,
 	SalaDeCastigo = Vector3.new(150, 0, -80),
-	BaldosaLado = 4,                -- damero del piso
-	PlacaTecho = 4,                 -- placas del falso techo (16 / 4 = 4 justas)
-	SeparacionLuces = 14,
+	BaldosaLado = 4,                -- damero del piso del atrio
+	PlacaTecho = 4,                 -- solo el cielorraso del aula
+	TablonAncho = 2,                -- tablones de madera del aula
+	SeparacionLuces = 20,
+	EstatuaAltura = 9,              -- la del centro del atrio
+	EstatuaRadio = 5.2,
 }
 
 -- ── Ciclo escolar ──────────────────────────────────────────────────
@@ -226,8 +233,10 @@ Config.Pasillo = {
 	PelotaFriccion = 0.35,
 	PelotaFuerza = 96,
 	PelotaAlturaTiro = 0.32,          -- cuanto se levanta el tiro (0-1)
-	CanastaAltura = 6.4,              -- por debajo del falso techo (9.4)
-	CanastaRadio = 2.4,               -- el pasillo mide 16 de ancho
+	-- Estaba en 6.4 solo porque el falso techo estaba a 9.4. Sin falso
+	-- techo vuelve a una altura de aro normal.
+	CanastaAltura = 10,
+	CanastaRadio = 2.4,
 	CanastaDistancia = 20,            -- del tablero a donde nace la pelota
 	PuntosPorCanasta = 3,
 	CreditosPorCanasta = 6,
@@ -314,51 +323,80 @@ Config.Goma = {
 -- La tecnologia de iluminacion NO se puede escribir desde un script:
 -- es de solo lectura en runtime. Este valor lo lee tools/build_studio.py
 -- y lo escribe en el archivo del lugar, que es donde Roblox lo acepta.
+--[[
+	Estos numeros estaban calibrados para un instituto lavado y frio:
+	saturacion negativa, tinte azul, bloom alto y profundidad de campo
+	fuerte. La referencia del juego real es lo contrario — mate, plano,
+	calido y saturado, con sombras blandas y contraste bajo. Se invierte
+	todo el bloque.
+
+	Se mantiene Future por la oclusion ambiental, pero suavizada: sin
+	SSAO las esquinas del atrio se aplanan tanto que se pierde la
+	profundidad.
+--]]
 Config.Estilo = {
 	Tecnologia = "Future",          -- "Future" | "ShadowMap"
-	Brillo = 1.55,
-	Hora = 15.2,                    -- media tarde de semana de examenes
-	Latitud = 41,
-	Exposicion = -0.12,
-	SuavidadSombras = 0.35,         -- solo Future
-	DifusaEntorno = 0.35,
-	EspecularEntorno = 0.22,
-	Nubes = { cobertura = 0.86, densidad = 0.68 },
-	Bloom = { intensidad = 0.5, tamano = 18, umbral = 1.62 },
-	Profundidad = { lejos = 0.06, foco = 18, radio = 26, cerca = 0.1 },
-	RayosSol = { intensidad = 0.03, dispersion = 0.9 },
-	-- Un ColorCorrection por clima. Saturacion negativa = el look
-	-- lavado de instituto; el tinte frio es la luz fluorescente.
+	Brillo = 2.1,
+	Hora = 13.6,                    -- mediodia largo, sol alto
+	Latitud = 18,                   -- sombras cortas: aplana la escena
+	Exposicion = 0.05,
+	SuavidadSombras = 1,            -- solo Future; al maximo = sombras blandas
+	DifusaEntorno = 0.85,           -- ambiente alto para levantar las sombras
+	EspecularEntorno = 0.05,        -- casi nada: las superficies son mates
+	Nubes = { cobertura = 0.32, densidad = 0.22 },
+	Bloom = { intensidad = 0.12, tamano = 24, umbral = 2.1 },
+	RayosSol = { intensidad = 0, dispersion = 1 },
+	--[[
+		Un ColorCorrection por clima. Ahora la saturacion es POSITIVA y
+		el tinte calido. La tension no se comunica lavando la imagen
+		sino subiendo el contraste y tirando el tinte a rosa.
+	--]]
 	Climas = {
-		pasillo = { brillo = -0.02, contraste = 0.12, saturacion = -0.26,
-			tinte = Color3.fromRGB(236, 241, 248) },
-		examen = { brillo = -0.05, contraste = 0.2, saturacion = -0.36,
-			tinte = Color3.fromRGB(230, 238, 248) },
-		tension = { brillo = -0.08, contraste = 0.28, saturacion = -0.46,
-			tinte = Color3.fromRGB(248, 234, 232) },
+		pasillo = { brillo = 0.02, contraste = 0.06, saturacion = 0.16,
+			tinte = Color3.fromRGB(255, 250, 242) },
+		examen = { brillo = 0, contraste = 0.1, saturacion = 0.12,
+			tinte = Color3.fromRGB(252, 248, 240) },
+		tension = { brillo = -0.02, contraste = 0.2, saturacion = 0.04,
+			tinte = Color3.fromRGB(255, 236, 232) },
 	},
 	Atmosfera = {
-		densidad = 0.32,
-		desplazamiento = 0.1,
-		color = Color3.fromRGB(188, 192, 198),
-		decaimiento = Color3.fromRGB(110, 118, 130),
-		brillo = 0.22,
-		neblina = 1.7,
+		densidad = 0.18,
+		desplazamiento = 0.25,
+		color = Color3.fromRGB(232, 236, 240),
+		decaimiento = Color3.fromRGB(160, 176, 196),
+		brillo = 0,
+		neblina = 0.4,
 	},
 }
 
--- ── Texturas PBR propias (opcional) ────────────────────────────────
--- SurfaceAppearance necesita imagenes SUBIDAS a Roblox: no hay forma
--- de generarlas por codigo. Subilas en Studio (Asset Manager >
--- Images), copia sus ids aca y el juego las aplica solo al arrancar.
--- Con los campos vacios se usan los materiales PBR que ya trae el
--- motor, que con Future se ven bien igual.
-Config.Texturas = {
-	Pared = { color = "", normal = "", rugosidad = "", metalidad = "" },
-	Piso = { color = "", normal = "", rugosidad = "", metalidad = "" },
-	Casillero = { color = "", normal = "", rugosidad = "", metalidad = "" },
-	Pupitre = { color = "", normal = "", rugosidad = "", metalidad = "" },
-	Techo = { color = "", normal = "", rugosidad = "", metalidad = "" },
+-- ── Personajes ─────────────────────────────────────────────────────
+--[[
+	La piel de colores no humanos es el rasgo mas reconocible del juego:
+	violeta, rosa, rojo, celeste. Cada jugador recibe una combinacion al
+	entrar y se le guarda en el perfil, asi que te reconocen entre
+	partidas.
+--]]
+Config.Personaje = {
+	Pieles = {
+		Color3.fromRGB(198, 96, 168),   -- magenta
+		Color3.fromRGB(146, 108, 210),  -- violeta
+		Color3.fromRGB(226, 104, 88),   -- rojo coral
+		Color3.fromRGB(96, 164, 214),   -- celeste
+		Color3.fromRGB(232, 148, 176),  -- rosa
+		Color3.fromRGB(120, 190, 150),  -- verde menta
+		Color3.fromRGB(238, 168, 96),   -- naranja
+		Color3.fromRGB(168, 132, 216),  -- lavanda
+	},
+	Pelos = {
+		Color3.fromRGB(72, 96, 208),    -- azul
+		Color3.fromRGB(158, 74, 190),   -- violeta
+		Color3.fromRGB(72, 178, 140),   -- verde
+		Color3.fromRGB(218, 76, 122),   -- magenta
+		Color3.fromRGB(240, 190, 72),   -- amarillo
+		Color3.fromRGB(240, 128, 88),   -- naranja
+		Color3.fromRGB(64, 188, 208),   -- turquesa
+		Color3.fromRGB(48, 48, 62),     -- casi negro
+	},
 }
 
 table.freeze(Config)

@@ -155,10 +155,16 @@ function BookService.build(map: any)
 
 	-- Repartidos a lo largo del pasillo, alternando de lado: obliga a
 	-- caminar para juntarlos.
+	-- Misma correccion que en NerdNPCs: la franja sale de la config, no
+	-- de las constantes 40 y 70 calibradas contra el pasillo viejo.
 	local spots = 6
+	local bandStart = -halfL + 18
+	local bandEnd = halfL - Config.Escuela.ZonaRecreoLargo - 6
+	local step = (bandEnd - bandStart) / spots
+
 	for i = 1, spots do
 		local side = (i % 2 == 0) and 1 or -1
-		local z = -halfL + 40 + (i - 1) * ((Config.Escuela.PasilloLargo - 70) / spots)
+		local z = bandStart + (i - 0.5) * step
 		local cf = CFrame.new(side * (halfW - 4.2), 2.3, z)
 			* CFrame.Angles(0, math.rad(20 * i), 0)
 		local ok, err = pcall(function()
