@@ -15,6 +15,7 @@ embebido (no hay que copiar y pegar nada a mano ni instalar Rojo):
     install/FinalsWeekClient.rbxmx        /
 """
 
+import re
 import sys
 from pathlib import Path
 
@@ -111,9 +112,26 @@ SPAWN = [
     '<int name="BrickColor">194</int>',
 ]
 
-# Lighting.Technology es de solo lectura desde un script, asi que la
-# sombra buena se define aca, en el archivo del lugar. 3 = ShadowMap.
-LIGHTING = ['<token name="Technology">3</token>']
+# Lighting.Technology es de solo lectura desde un script: la unica
+# forma de fijarla es escribirla en el archivo del lugar, aca. El valor
+# sale de Config.Estilo.Tecnologia para que haya una sola fuente de
+# verdad y no dos numeros que se puedan contradecir.
+TECHNOLOGY_TOKENS = {
+    "Legacy": 0, "Voxel": 1, "Compatibility": 2, "ShadowMap": 3, "Future": 5,
+}
+
+
+def lighting_technology() -> str:
+    """Lee Config.Estilo.Tecnologia y devuelve su token numerico."""
+    config = (SRC / "shared" / "Config.lua").read_text(encoding="utf-8")
+    match = re.search(r'Tecnologia\s*=\s*"(\w+)"', config)
+    name = match.group(1) if match else "ShadowMap"
+    if name not in TECHNOLOGY_TOKENS:
+        raise SystemExit(f"Config.Estilo.Tecnologia = {name!r} no es un valor valido")
+    return f'<token name="Technology">{TECHNOLOGY_TOKENS[name]}</token>'
+
+
+LIGHTING = [lighting_technology()]
 
 
 def bundle(referent: Referent, container_class: str, container_name: str,

@@ -49,6 +49,9 @@ local sittings: { [Player]: Sitting } = {}
 -- asignado: se cobran al sentarse. Sin esto, comprar una chuleta antes
 -- del examen (que es el unico momento en que se puede) no servia.
 local pendingSheets: { [Player]: number } = {}
+-- Respuestas aprendidas leyendo libros en el recreo: se revelan solas
+-- al sentarse. Estudiar tambien es una forma de ganar.
+local pendingKnowledge: { [Player]: number } = {}
 local running = false
 local currentDay = 1
 
@@ -292,6 +295,27 @@ function ExamService.begin(day: number, players: { Player })
 			exams[room.index] = QuestionBank.generate(day)
 		end
 	end
+
+	-- Lo que aprendiste leyendo aparece ya revelado en la hoja.
+	for player, sitting in sittings do
+		local learned = pendingKnowledge[player] or 0
+		if learned > 0 then
+			local questions = exams[sitting.aula] or {}
+			local pool = {}
+			for i, question in questions do
+				if question.tipo == "opcion" then
+					table.insert(pool, i)
+				end
+			end
+			for _ = 1, math.min(learned, #pool) do
+				local pick = table.remove(pool, math.random(1, #pool))
+				if pick then
+					sitting.revealed[pick] = true
+				end
+			end
+		end
+	end
+	pendingKnowledge = {}
 
 	for player, sitting in sittings do
 		refreshPaper(sitting)
@@ -563,6 +587,69 @@ function ExamService.grantSheetUses(player: Player, uses: number)
 	end
 end
 
+--- Leer un libro de texto: te deja aprendidas N respuestas del
+--- proximo examen. Se cobra al sentarse, igual que las chuletas.
+function ExamService.grantKnowledge(player: Player, answers: number)
+	pendingKnowledge[player] = (pendingKnowledge[player] or 0) + answers
+end
+
+function ExamService.knowledgeOf(player: Player): number
+	return pendingKnowledge[player] or 0
+end
+
+--- Espiar con prismaticos: mismo mecanismo que espiar al de al lado,
+--- pero contra un alumno concreto y con el alcance del aparato. Se
+--- valida igual: solo se copia lo que el otro YA escribio.
+function ExamService.peekAt(player: Player, target: Player, index: number, range: number): any
+	local sitting = sittings[player]
+	local other = sittings[target]
+	if not running or not sitting or not other then
+		return { ok = false, reason = { key = "zoom.no_target" } }
+	end
+	if sitting.aula ~= other.aula then
+		return { ok = false, reason = { key = "zoom.no_target" } }
+	end
+	local distance = (other.desk.seat.Position - sitting.desk.seat.Position).Magnitude
+	if distance > range then
+		return { ok = false, reason = { key = "zoom.no_target" } }
+	end
+
+	local now = os.clock()
+	if now - sitting.lastPeek < X.CopiarSegundos then
+		return { ok = false, reason = { key = "cheat.cooldown" } }
+	end
+	sitting.lastPeek = now
+
+	SuspicionService.infraction(player, Config.Herramientas.PrismaticosSospecha, "zoom")
+
+	local seen = other.answers[index]
+	if not seen then
+		return { ok = false, reason = { key = "cheat.peek_fail" } }
+	end
+
+	-- Con prismaticos se lee mejor que de reojo: no hay error de lectura.
+	sitting.answers[index] = seen
+	refreshPaper(sitting)
+	pushState(player)
+	return { ok = true, reason = { key = "zoom.read", args = { i = index } } }
+end
+
+--- Todos los alumnos sentados en el aula de `player`, para que los
+--- prismaticos sepan a quien pueden apuntar.
+function ExamService.classmatesOf(player: Player): { { jugador: Player, asiento: BasePart } }
+	local sitting = sittings[player]
+	local list = {}
+	if not sitting then
+		return list
+	end
+	for other, candidate in sittings do
+		if other ~= player and candidate.aula == sitting.aula then
+			table.insert(list, { jugador = other, asiento = candidate.desk.seat })
+		end
+	end
+	return list
+end
+
 --- Una nota recibida escribe la respuesta directamente en la hoja.
 function ExamService.applyNote(player: Player, index: number, option: number)
 	local sitting = sittings[player]
@@ -582,6 +669,7 @@ function ExamService.start()
 	Players.PlayerRemoving:Connect(function(player)
 		sittings[player] = nil
 		pendingSheets[player] = nil
+		pendingKnowledge[player] = nil
 	end)
 end
 

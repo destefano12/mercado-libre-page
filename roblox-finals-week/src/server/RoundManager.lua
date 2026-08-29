@@ -34,6 +34,9 @@ local PunishService = require(script.Parent:WaitForChild("PunishService"))
 local ShopService = require(script.Parent:WaitForChild("ShopService"))
 local ItemService = require(script.Parent:WaitForChild("ItemService"))
 local DataService = require(script.Parent:WaitForChild("DataService"))
+local Atmosphere = require(script.Parent:WaitForChild("Atmosphere"))
+local BookService = require(script.Parent:WaitForChild("BookService"))
+local PlaygroundService = require(script.Parent:WaitForChild("PlaygroundService"))
 
 local R = Config.Ronda
 
@@ -183,6 +186,12 @@ local function runPhase(name: string, seconds: number, onTick: (() -> ())?)
 	total = seconds
 	clock = seconds
 	ShopService.setPhase(name)
+	BookService.setPhase(name)
+	-- El clima de color cambia con la fase: el pasillo es lavado y
+	-- frio, el aula es mas contrastada y el final de examen vira.
+	pcall(function()
+		Atmosphere.setMood(name == "examen" and "examen" or "pasillo")
+	end)
 	broadcast()
 
 	local warned = false
@@ -234,6 +243,7 @@ local function phaseExam()
 	ExamService.begin(day, players)
 
 	Net.event(Net.Events.Notify):FireAllClients({ key = "notify.doors_locked" })
+	PlaygroundService.reset()
 	ExamService.seatEveryone()
 	task.wait(1.2)
 	lockDoors(true)
@@ -257,6 +267,9 @@ local function phaseExam()
 			halfWarned = true
 			TeacherAI.sayAll("teacher.time_left", { s = 30 })
 			Net.event(Net.Events.Music):FireAllClients({ clima = "tension" })
+			pcall(function()
+				Atmosphere.setMood("tension")
+			end)
 		end
 	end)
 

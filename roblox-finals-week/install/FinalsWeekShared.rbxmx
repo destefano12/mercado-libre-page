@@ -1,5 +1,5 @@
 <roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
-  <Item class="Folder" referent="RBX7">
+  <Item class="Folder" referent="RBX8">
     <Properties>
       <string name="Name">Shared</string>
     </Properties>
@@ -23,28 +23,32 @@ local Config = {}
 -- casilleros a los dos lados y N aulas colgadas del pasillo.
 Config.Escuela = {
 	Origen = Vector3.new(0, 0, 0),
+	-- Pasillo estrecho y techo bajo: es lo que hace que el colegio se
+	-- sienta cerrado en vez de un galpon. 16 de ancho es poco menos de
+	-- tres personas de hombro a hombro.
 	PasilloLargo = 190,
-	PasilloAncho = 26,
-	AlturaPiso = 15,
+	PasilloAncho = 16,
+	AlturaPiso = 11,                -- losa
+	AlturaFalsoTecho = 9.4,         -- las placas del cielorraso
 	EspesorPared = 1,
-	CasillerosPorLado = 18,
-	CasilleroAncho = 3.4,
-	CasilleroAlto = 7,
-	CasilleroFondo = 2.2,
+	AlturaZocalo = 3.6,             -- el friso oscuro de media pared
+	CasillerosPorLado = 20,
+	CasilleroAncho = 3.1,
+	CasilleroAlto = 6.4,
+	CasilleroFondo = 1.9,
 	Aulas = 2,
-	AulaAncho = 46,
-	AulaLargo = 40,
+	AulaAncho = 36,
+	AulaLargo = 30,
+	AulaAltura = 10,
 	FilasDePupitres = 4,
 	PupitresPorFila = 5,
-	PupitreSeparacionX = 7.2,
-	PupitreSeparacionZ = 7.6,
+	PupitreSeparacionX = 6.4,
+	PupitreSeparacionZ = 6.0,
 	ZonaRecreoLargo = 34,
 	SalaDeCastigo = Vector3.new(150, 0, -80),
-	ColorPiso = Color3.fromRGB(196, 192, 182),
-	ColorParedes = Color3.fromRGB(222, 219, 210),
-	ColorZocalo = Color3.fromRGB(64, 76, 92),
-	ColorCasillero = Color3.fromRGB(52, 92, 128),
-	ColorPizarra = Color3.fromRGB(34, 52, 44),
+	BaldosaLado = 4,                -- damero del piso
+	PlacaTecho = 4,                 -- placas del falso techo (16 / 4 = 4 justas)
+	SeparacionLuces = 14,
 }
 
 -- ── Ciclo escolar ──────────────────────────────────────────────────
@@ -167,6 +171,11 @@ Config.Economia = {
 		{ id = "avion", precio = 25, tipo = "objeto" },
 		{ id = "bolita", precio = 15, tipo = "objeto" },
 		{ id = "nota", precio = 10, tipo = "objeto" },
+		{ id = "walkie", precio = 110, tipo = "objeto" },
+		{ id = "prismaticos", precio = 95, tipo = "objeto" },
+		{ id = "celular", precio = 140, tipo = "objeto" },
+		{ id = "aerosol", precio = 30, tipo = "objeto" },
+		{ id = "libro", precio = 55, tipo = "objeto" },
 		{ id = "gorra", precio = 90, tipo = "estetica" },
 		{ id = "mochila", precio = 130, tipo = "estetica" },
 		{ id = "anteojos", precio = 75, tipo = "estetica" },
@@ -216,6 +225,148 @@ Config.Camara = {
 	SegundosTransicion = 0.85,
 	FovMinimo = 18,
 	FovMaximo = 74,
+}
+
+-- ── El pasillo: pelota, canasta y cosas para tirar ─────────────────
+Config.Pasillo = {
+	PelotaRadio = 1.5,
+	PelotaRebote = 0.72,
+	PelotaFriccion = 0.35,
+	PelotaFuerza = 96,
+	PelotaAlturaTiro = 0.32,          -- cuanto se levanta el tiro (0-1)
+	CanastaAltura = 6.4,              -- por debajo del falso techo (9.4)
+	CanastaRadio = 2.4,               -- el pasillo mide 16 de ancho
+	CanastaDistancia = 20,            -- del tablero a donde nace la pelota
+	PuntosPorCanasta = 3,
+	CreditosPorCanasta = 6,
+	AlcanceAgarre = 8,
+	EnfriamientoTiro = 0.4,
+}
+
+-- ── Grafiti: dibujar en las paredes ────────────────────────────────
+Config.Grafiti = {
+	Habilitado = true,
+	MaximoPorSuperficie = 450,        -- despues borra las mas viejas
+	PuntosPorSegundo = 18,            -- limite del servidor por jugador
+	Alcance = 26,
+	PixelesPorStud = 12,              -- resolucion del lienzo
+	Tamanos = { 0.4, 0.8, 1.5, 2.5 }, -- diametro de la brocha, EN STUDS
+	Paleta = {
+		Color3.fromRGB(240, 62, 62),
+		Color3.fromRGB(250, 176, 44),
+		Color3.fromRGB(246, 232, 62),
+		Color3.fromRGB(64, 204, 108),
+		Color3.fromRGB(52, 150, 244),
+		Color3.fromRGB(168, 96, 240),
+		Color3.fromRGB(248, 248, 248),
+		Color3.fromRGB(24, 24, 28),
+	},
+	SospechaPorPintar = 0.22,         -- si lo haces en el aula
+}
+
+-- ── Herramientas de comunicacion ───────────────────────────────────
+Config.Herramientas = {
+	RadioAlcance = 0,                 -- 0 = todo el mapa (es una radio)
+	RadioCaracteres = 90,
+	RadioEnfriamiento = 2.5,
+	RadioSospecha = 0.34,
+	CelularAlcance = 22,
+	CelularEnfriamiento = 6,
+	CelularSospecha = 0.46,
+	CelularRevela = 1,
+	PrismaticosFov = 16,
+	PrismaticosAlcance = 46,          -- espiar hojas lejanas
+	PrismaticosSospecha = 0.24,
+	LibroRevela = 2,
+	LibroSegundos = 3.5,
+	LibroEnfriamiento = 20,
+}
+
+-- ── Dejar KO ───────────────────────────────────────────────────────
+Config.Nocaut = {
+	Alcance = 6.5,
+	Enfriamiento = 1.1,
+	EmpujonesParaKO = 3,
+	VentanaEmpujones = 3.5,
+	PorLaEspalda = 0.55,              -- coseno: mas alto = mas de atras
+	SegundosKO = 4.5,
+	Impulso = 42,
+	SospechaEnExamen = 0.85,
+	CreditosRobados = 0,
+}
+
+-- ── Alumnos que estudiaron (NPC) ───────────────────────────────────
+Config.Empollones = {
+	Cantidad = 4,
+	Nombres = { "Nadia", "Bruno", "Iris", "Teo", "Mila", "Simon" },
+	ProbabilidadDeCeder = 0.35,
+	RespuestasQueSaben = 4,
+	RespuestasAlCaer = 3,
+	EnfriamientoPedir = 8,
+	ColorSueter = Color3.fromRGB(96, 128, 72),
+}
+
+-- ── La goma de borrar del profesor ─────────────────────────────────
+Config.Goma = {
+	Habilitada = true,
+	DistanciaMinima = 9,              -- mas cerca que esto, va y te agarra
+	DistanciaMaxima = 40,
+	Velocidad = 88,
+	Enfriamiento = 3.2,
+	Punteria = 0.86,                  -- 1 = perfecta; abajo, dispersion
+	SegundosAturdido = 1.8,
+	PenalizacionNota = 6,
+}
+
+-- ── Direccion de arte ──────────────────────────────────────────────
+-- La tecnologia de iluminacion NO se puede escribir desde un script:
+-- es de solo lectura en runtime. Este valor lo lee tools/build_studio.py
+-- y lo escribe en el archivo del lugar, que es donde Roblox lo acepta.
+Config.Estilo = {
+	Tecnologia = "Future",          -- "Future" | "ShadowMap"
+	Brillo = 1.55,
+	Hora = 15.2,                    -- media tarde de semana de examenes
+	Latitud = 41,
+	Exposicion = -0.12,
+	SuavidadSombras = 0.35,         -- solo Future
+	DifusaEntorno = 0.35,
+	EspecularEntorno = 0.22,
+	Nubes = { cobertura = 0.86, densidad = 0.68 },
+	Bloom = { intensidad = 0.5, tamano = 18, umbral = 1.62 },
+	Profundidad = { lejos = 0.06, foco = 18, radio = 26, cerca = 0.1 },
+	RayosSol = { intensidad = 0.03, dispersion = 0.9 },
+	-- Un ColorCorrection por clima. Saturacion negativa = el look
+	-- lavado de instituto; el tinte frio es la luz fluorescente.
+	Climas = {
+		pasillo = { brillo = -0.02, contraste = 0.12, saturacion = -0.26,
+			tinte = Color3.fromRGB(236, 241, 248) },
+		examen = { brillo = -0.05, contraste = 0.2, saturacion = -0.36,
+			tinte = Color3.fromRGB(230, 238, 248) },
+		tension = { brillo = -0.08, contraste = 0.28, saturacion = -0.46,
+			tinte = Color3.fromRGB(248, 234, 232) },
+	},
+	Atmosfera = {
+		densidad = 0.32,
+		desplazamiento = 0.1,
+		color = Color3.fromRGB(188, 192, 198),
+		decaimiento = Color3.fromRGB(110, 118, 130),
+		brillo = 0.22,
+		neblina = 1.7,
+	},
+}
+
+-- ── Texturas PBR propias (opcional) ────────────────────────────────
+-- SurfaceAppearance necesita imagenes SUBIDAS a Roblox: no hay forma
+-- de generarlas por codigo. Subilas en Studio (Asset Manager >
+-- Images), copia sus ids aca y el juego las aplica solo al arrancar.
+-- Con los campos vacios se usan los materiales PBR que ya trae el
+-- motor, que con Future se ven bien igual.
+Config.Texturas = {
+	Pared = { color = "", normal = "", rugosidad = "", metalidad = "" },
+	Piso = { color = "", normal = "", rugosidad = "", metalidad = "" },
+	Casillero = { color = "", normal = "", rugosidad = "", metalidad = "" },
+	Pupitre = { color = "", normal = "", rugosidad = "", metalidad = "" },
+	Techo = { color = "", normal = "", rugosidad = "", metalidad = "" },
 }
 
 table.freeze(Config)
@@ -353,6 +504,13 @@ local EVENTS: { [string]: string } = {
 	NoteReceived = "NoteReceived",   -- S->C  te llego una nota de un companero
 	Locker = "Locker",               -- C->S  abrir un casillero
 	Music = "Music",                 -- S->C  cambio de clima musical
+	Paint = "Paint",                 -- C->S  una pincelada de grafiti
+	Radio = "Radio",                 -- C<->S walkie / celular
+	Knock = "Knock",                 -- C->S  empujon / nocaut
+	Ball = "Ball",                   -- C->S  agarrar y tirar la pelota
+	Score = "Score",                 -- S->C  canasta, puntos del pasillo
+	Zoom = "Zoom",                   -- C->S  mirando con prismaticos
+	Stunned = "Stunned",             -- S->C  te dejaron KO / te pego la goma
 }
 
 local FUNCTIONS: { [string]: string } = {
@@ -479,7 +637,7 @@ local en: { [string]: string } = {
 	["hud.hint_report"] = "Report cards are out",
 	["hud.detention"] = "Detention: {s}s",
 	["hud.cone"] = "Dunce cone: {s}s",
-	["hud.keys"] = "E interact - Q peek - R whisper - F throw",
+	["hud.keys"] = "E interact - Q peek - R whisper - F throw - G shove - B shoot - Z zoom",
 	-- Examen
 	["exam.title"] = "Exam - {subject}",
 	["exam.question"] = "Question {i} of {n}",
@@ -584,6 +742,68 @@ local en: { [string]: string } = {
 	["notify.hit"] = "A paper ball hit you",
 	["notify.waiting"] = "Waiting for more students",
 	["notify.seat"] = "Your desk is row {row}, seat {seat}",
+	-- Pasillo: pelota y canasta
+	["ball.grab"] = "Grab the ball",
+	["ball.throw"] = "Click to shoot",
+	["ball.basket"] = "{name} scored! +{n}",
+	["ball.taken"] = "Somebody else has the ball",
+	["ball.score"] = "Baskets: {n}",
+	-- Grafiti
+	["paint.title"] = "Spray",
+	["paint.hint"] = "Hold click to paint - wheel changes size",
+	["paint.wall"] = "You can't paint that",
+	["paint.seen"] = "Painting in class? Really?",
+	["paint.color"] = "Colour",
+	["paint.size"] = "Size",
+	["paint.clear"] = "Erase",
+	-- Herramientas de comunicacion
+	["item.walkie"] = "Walkie-talkie",
+	["item.prismaticos"] = "Binoculars",
+	["item.celular"] = "Phone",
+	["item.libro"] = "Textbook",
+	["item.pelota"] = "Basketball",
+	["item.aerosol"] = "Spray can",
+	["item.desc_walkie"] = "Talk to every other walkie in the school",
+	["item.desc_prismaticos"] = "Zoom in and read a sheet from across the room",
+	["item.desc_celular"] = "Whispers an answer to one classmate nearby",
+	["item.desc_libro"] = "Read it at recess: you learn {n} answers",
+	["item.desc_pelota"] = "It is a basketball. There is a hoop.",
+	["item.desc_aerosol"] = "Paint on any wall in the school",
+	-- Radio y celular
+	["radio.title"] = "Walkie-talkie",
+	["radio.placeholder"] = "Question 4 is C",
+	["radio.send"] = "Transmit",
+	["radio.sent"] = "Transmitted to {n} walkies",
+	["radio.nobody"] = "Nobody else has a walkie",
+	["radio.heard"] = "[radio] {name}: {text}",
+	["radio.phone"] = "[phone] {name}: {text}",
+	["radio.need_tool"] = "You need a walkie-talkie in your hand",
+	["radio.too_long"] = "That message is too long",
+	-- Prismaticos
+	["zoom.on"] = "Binoculars: Q reads the sheet you are aiming at",
+	["zoom.no_target"] = "There is no sheet in your sights",
+	["zoom.read"] = "You read question {i} from over there",
+	-- Libros y empollones
+	["book.read"] = "Read the textbook",
+	["book.learned"] = "You learned {n} answers",
+	["book.busy"] = "You already read that one",
+	["book.only_recess"] = "There is no time to read now",
+	["nerd.ask"] = "Ask for answers",
+	["nerd.gave"] = "{name} gives you question {i}",
+	["nerd.refused"] = "{name} says no",
+	["nerd.wait"] = "{name} is not talking to you right now",
+	["nerd.dropped"] = "{name} drops a cheat sheet",
+	-- Nocaut
+	["ko.push"] = "You shoved {name}",
+	["ko.down"] = "{name} is on the floor",
+	["ko.you"] = "You got knocked down",
+	["ko.nobody"] = "Nobody within reach",
+	["ko.hint"] = "G shoves - three shoves and they go down",
+	["ko.in_class"] = "In the middle of the exam?",
+	-- La goma del profesor
+	["eraser.thrown"] = "{teacher} throws an eraser",
+	["eraser.hit"] = "The eraser got you",
+	["eraser.miss"] = "The eraser whistled past",
 	-- Boletin
 	["report.title"] = "Report card",
 	["report.day"] = "Day {n}",
@@ -675,7 +895,7 @@ local es: { [string]: string } = {
 	["hud.hint_report"] = "Salieron los boletines",
 	["hud.detention"] = "Castigo: {s}s",
 	["hud.cone"] = "Cono de la verguenza: {s}s",
-	["hud.keys"] = "E interactuar - Q espiar - R soplar - F lanzar",
+	["hud.keys"] = "E interactuar - Q espiar - R soplar - F lanzar - G empujar - B tirar - Z zoom",
 	-- Examen
 	["exam.title"] = "Examen - {subject}",
 	["exam.question"] = "Pregunta {i} de {n}",
@@ -780,6 +1000,68 @@ local es: { [string]: string } = {
 	["notify.hit"] = "Te pego una bolita de papel",
 	["notify.waiting"] = "Esperando mas alumnos",
 	["notify.seat"] = "Tu pupitre es fila {row}, asiento {seat}",
+	-- Pasillo: pelota y canasta
+	["ball.grab"] = "Agarrar la pelota",
+	["ball.throw"] = "Clic para tirar",
+	["ball.basket"] = "Canasta de {name}! +{n}",
+	["ball.taken"] = "La pelota la tiene otro",
+	["ball.score"] = "Canastas: {n}",
+	-- Grafiti
+	["paint.title"] = "Aerosol",
+	["paint.hint"] = "Manten el clic para pintar - la rueda cambia el tamano",
+	["paint.wall"] = "Eso no se puede pintar",
+	["paint.seen"] = "Pintando en el aula? En serio?",
+	["paint.color"] = "Color",
+	["paint.size"] = "Tamano",
+	["paint.clear"] = "Borrar",
+	-- Herramientas de comunicacion
+	["item.walkie"] = "Walkie-talkie",
+	["item.prismaticos"] = "Prismaticos",
+	["item.celular"] = "Celular",
+	["item.libro"] = "Libro de texto",
+	["item.pelota"] = "Pelota",
+	["item.aerosol"] = "Aerosol",
+	["item.desc_walkie"] = "Hablas con todos los walkies del colegio",
+	["item.desc_prismaticos"] = "Haces zoom y lees una hoja desde lejos",
+	["item.desc_celular"] = "Le pasa una respuesta a un companero cercano",
+	["item.desc_libro"] = "Leelo en el recreo: aprendes {n} respuestas",
+	["item.desc_pelota"] = "Es una pelota de basquet. Hay un aro.",
+	["item.desc_aerosol"] = "Pinta cualquier pared del colegio",
+	-- Radio y celular
+	["radio.title"] = "Walkie-talkie",
+	["radio.placeholder"] = "la 4 es C",
+	["radio.send"] = "Transmitir",
+	["radio.sent"] = "Transmitido a {n} walkies",
+	["radio.nobody"] = "Nadie mas tiene walkie",
+	["radio.heard"] = "[radio] {name}: {text}",
+	["radio.phone"] = "[celular] {name}: {text}",
+	["radio.need_tool"] = "Necesitas el walkie en la mano",
+	["radio.too_long"] = "Ese mensaje es muy largo",
+	-- Prismaticos
+	["zoom.on"] = "Prismaticos: Q lee la hoja que estas apuntando",
+	["zoom.no_target"] = "No hay ninguna hoja en la mira",
+	["zoom.read"] = "Leiste la pregunta {i} desde lejos",
+	-- Libros y empollones
+	["book.read"] = "Leer el libro",
+	["book.learned"] = "Aprendiste {n} respuestas",
+	["book.busy"] = "Ese ya lo leiste",
+	["book.only_recess"] = "Ahora no hay tiempo de leer",
+	["nerd.ask"] = "Pedir respuestas",
+	["nerd.gave"] = "{name} te pasa la {i}",
+	["nerd.refused"] = "{name} te dice que no",
+	["nerd.wait"] = "{name} no te habla por ahora",
+	["nerd.dropped"] = "A {name} se le cae una chuleta",
+	-- Nocaut
+	["ko.push"] = "Empujaste a {name}",
+	["ko.down"] = "{name} quedo en el piso",
+	["ko.you"] = "Te dejaron en el piso",
+	["ko.nobody"] = "No hay nadie al alcance",
+	["ko.hint"] = "G empuja - tres empujones y cae",
+	["ko.in_class"] = "En pleno examen?",
+	-- La goma del profesor
+	["eraser.thrown"] = "{teacher} te tira una goma",
+	["eraser.hit"] = "Te pego la goma",
+	["eraser.miss"] = "La goma paso silbando",
 	-- Boletin
 	["report.title"] = "Boletin",
 	["report.day"] = "Dia {n}",
@@ -871,7 +1153,7 @@ local pt: { [string]: string } = {
 	["hud.hint_report"] = "Sairam os boletins",
 	["hud.detention"] = "Castigo: {s}s",
 	["hud.cone"] = "Cone da vergonha: {s}s",
-	["hud.keys"] = "E interagir - Q espiar - R soprar - F arremessar",
+	["hud.keys"] = "E interagir - Q espiar - R soprar - F arremessar - G empurrar - B arremessar - Z zoom",
 	-- Examen
 	["exam.title"] = "Prova - {subject}",
 	["exam.question"] = "Questao {i} de {n}",
@@ -976,6 +1258,68 @@ local pt: { [string]: string } = {
 	["notify.hit"] = "Uma bolinha de papel te acertou",
 	["notify.waiting"] = "Aguardando mais alunos",
 	["notify.seat"] = "Sua carteira e fila {row}, lugar {seat}",
+	-- Pasillo: pelota y canasta
+	["ball.grab"] = "Pegar a bola",
+	["ball.throw"] = "Clique para arremessar",
+	["ball.basket"] = "Cesta de {name}! +{n}",
+	["ball.taken"] = "Outra pessoa esta com a bola",
+	["ball.score"] = "Cestas: {n}",
+	-- Grafiti
+	["paint.title"] = "Spray",
+	["paint.hint"] = "Segure o clique para pintar - a roda muda o tamanho",
+	["paint.wall"] = "Isso nao da para pintar",
+	["paint.seen"] = "Pintando na sala? Serio?",
+	["paint.color"] = "Cor",
+	["paint.size"] = "Tamanho",
+	["paint.clear"] = "Apagar",
+	-- Herramientas de comunicacion
+	["item.walkie"] = "Walkie-talkie",
+	["item.prismaticos"] = "Binoculos",
+	["item.celular"] = "Celular",
+	["item.libro"] = "Livro didatico",
+	["item.pelota"] = "Bola",
+	["item.aerosol"] = "Lata de spray",
+	["item.desc_walkie"] = "Fala com todos os walkies da escola",
+	["item.desc_prismaticos"] = "Da zoom e le uma folha de longe",
+	["item.desc_celular"] = "Passa uma resposta para um colega perto",
+	["item.desc_libro"] = "Leia no recreio: voce aprende {n} respostas",
+	["item.desc_pelota"] = "E uma bola de basquete. Tem uma cesta.",
+	["item.desc_aerosol"] = "Pinta qualquer parede da escola",
+	-- Radio y celular
+	["radio.title"] = "Walkie-talkie",
+	["radio.placeholder"] = "a 4 e C",
+	["radio.send"] = "Transmitir",
+	["radio.sent"] = "Transmitido para {n} walkies",
+	["radio.nobody"] = "Ninguem mais tem walkie",
+	["radio.heard"] = "[radio] {name}: {text}",
+	["radio.phone"] = "[celular] {name}: {text}",
+	["radio.need_tool"] = "Voce precisa do walkie na mao",
+	["radio.too_long"] = "Essa mensagem e longa demais",
+	-- Prismaticos
+	["zoom.on"] = "Binoculos: Q le a folha que voce esta mirando",
+	["zoom.no_target"] = "Nao ha folha na mira",
+	["zoom.read"] = "Voce leu a questao {i} de longe",
+	-- Libros y empollones
+	["book.read"] = "Ler o livro",
+	["book.learned"] = "Voce aprendeu {n} respostas",
+	["book.busy"] = "Esse voce ja leu",
+	["book.only_recess"] = "Agora nao da tempo de ler",
+	["nerd.ask"] = "Pedir respostas",
+	["nerd.gave"] = "{name} te passa a {i}",
+	["nerd.refused"] = "{name} diz que nao",
+	["nerd.wait"] = "{name} nao fala com voce agora",
+	["nerd.dropped"] = "{name} deixa cair uma cola",
+	-- Nocaut
+	["ko.push"] = "Voce empurrou {name}",
+	["ko.down"] = "{name} ficou no chao",
+	["ko.you"] = "Voce foi derrubado",
+	["ko.nobody"] = "Nao ha ninguem ao alcance",
+	["ko.hint"] = "G empurra - tres empurroes e cai",
+	["ko.in_class"] = "No meio da prova?",
+	-- La goma del profesor
+	["eraser.thrown"] = "{teacher} joga uma borracha",
+	["eraser.hit"] = "A borracha te acertou",
+	["eraser.miss"] = "A borracha passou assobiando",
 	-- Boletin
 	["report.title"] = "Boletim",
 	["report.day"] = "Dia {n}",
@@ -1096,6 +1440,208 @@ return Strings
     </Item>
     <Item class="ModuleScript" referent="RBX5">
       <Properties>
+        <string name="Name">Style</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Style
+	------------------------------------------------------------------
+	La direccion de arte del colegio, en un solo archivo.
+
+	El objetivo es que NO parezca Roblox: nada de plastico saturado.
+	Tres decisiones sostienen el look entero:
+
+	  1. Paleta desaturada y fria. Ningun color pasa de ~60% de
+	     saturacion. Los unicos acentos calidos son la madera de los
+	     pupitres y el oxido: todo lo demas tira a gris verdoso.
+	  2. Materiales PBR del motor, no SmoothPlastic. Concrete, Brick,
+	     CeramicTiles, WoodPlanks y Metal ya traen mapas de rugosidad y
+	     normales de verdad; con Future se ven como superficies, no
+	     como bloques pintados.
+	  3. El desgaste es geometria. Manchas, rayones y oxido son piezas
+	     finisimas encima de la superficie base — asi se ve gastado sin
+	     tener que subir una sola textura.
+
+	Si subis tus propias texturas PBR, poné los ids en Config.Texturas
+	y `Style.applySurface` las aplica encima de todo esto.
+--]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+
+local Style = {}
+
+-- ── paleta exacta ──────────────────────────────────────────────────
+-- Los RGB son literales a proposito: esta tabla ES la identidad
+-- visual del juego y tiene que poder copiarse a mano en Studio.
+Style.Color = {
+	-- muros
+	MuroAlto = Color3.fromRGB(214, 208, 191),      -- crema institucional
+	MuroBajo = Color3.fromRGB(47, 66, 58),         -- friso verde oscuro
+	MuroFranja = Color3.fromRGB(92, 112, 96),      -- linea de acento
+	MuroSucio = Color3.fromRGB(178, 172, 156),     -- manchas de roce
+
+	-- techos
+	Placa = Color3.fromRGB(226, 224, 214),         -- placa acustica
+	PlacaSucia = Color3.fromRGB(206, 200, 184),    -- filtracion
+	Rejilla = Color3.fromRGB(158, 160, 163),       -- perfil de aluminio
+	Losa = Color3.fromRGB(120, 118, 112),
+
+	-- pisos
+	Baldosa = Color3.fromRGB(150, 146, 136),
+	BaldosaAlterna = Color3.fromRGB(132, 128, 119),
+	BaldosaGastada = Color3.fromRGB(118, 114, 106),
+	Cera = Color3.fromRGB(168, 165, 155),          -- brillo del encerado
+
+	-- casilleros
+	Casillero = Color3.fromRGB(40, 74, 82),        -- verde azulado
+	CasilleroLuz = Color3.fromRGB(58, 96, 104),
+	Rayon = Color3.fromRGB(96, 116, 120),
+	Oxido = Color3.fromRGB(122, 76, 48),
+	Manija = Color3.fromRGB(186, 188, 190),
+
+	-- mobiliario
+	Madera = Color3.fromRGB(168, 130, 84),         -- roble viejo
+	MaderaGastada = Color3.fromRGB(138, 104, 66),
+	MaderaOscura = Color3.fromRGB(104, 76, 48),
+	Metal = Color3.fromRGB(74, 78, 84),
+	MetalClaro = Color3.fromRGB(122, 126, 132),
+	Asiento = Color3.fromRGB(38, 54, 72),
+
+	-- aula
+	Pizarra = Color3.fromRGB(38, 62, 52),
+	MarcoPizarra = Color3.fromRGB(176, 176, 172),
+	Tiza = Color3.fromRGB(228, 232, 226),
+	Puerta = Color3.fromRGB(116, 84, 54),
+	MarcoPuerta = Color3.fromRGB(96, 100, 106),
+	Vidrio = Color3.fromRGB(178, 196, 206),
+
+	-- luz
+	Tubo = Color3.fromRGB(246, 250, 236),
+	LuzFria = Color3.fromRGB(226, 238, 255),
+	LuzCalida = Color3.fromRGB(255, 236, 206),
+	Salida = Color3.fromRGB(226, 66, 54),          -- cartel de salida
+}
+
+-- ── materiales ─────────────────────────────────────────────────────
+-- Todos son PBR del motor: traen normal y rugosidad reales.
+Style.Material = {
+	MuroAlto = Enum.Material.Concrete,
+	MuroBajo = Enum.Material.Brick,
+	Placa = Enum.Material.Plaster,
+	Rejilla = Enum.Material.Metal,
+	Piso = Enum.Material.CeramicTiles,
+	PisoGastado = Enum.Material.Pavement,
+	Casillero = Enum.Material.Metal,
+	Oxido = Enum.Material.CorrodedMetal,
+	Madera = Enum.Material.WoodPlanks,
+	MaderaLisa = Enum.Material.Wood,
+	Metal = Enum.Material.DiamondPlate,
+	MetalLiso = Enum.Material.Metal,
+	Pizarra = Enum.Material.Slate,
+	Vidrio = Enum.Material.Glass,
+	Tela = Enum.Material.Fabric,
+	Neon = Enum.Material.Neon,
+}
+
+-- ── reflectancia ───────────────────────────────────────────────────
+-- El suelo encerado es lo unico que refleja de verdad. Un colegio con
+-- todo brillante parece un shopping.
+Style.Reflectance = {
+	Piso = 0.06,
+	Casillero = 0.04,
+	Pizarra = 0.02,
+	Vidrio = 0.25,
+	Manija = 0.18,
+}
+
+--- Aplica color + material + reflectancia de una sola vez.
+function Style.paint(part: BasePart, color: Color3, material: Enum.Material, reflectance: number?)
+	part.Color = color
+	part.Material = material
+	part.Reflectance = reflectance or 0
+end
+
+-- ── texturas propias ───────────────────────────────────────────────
+
+local function assetUrl(id: string): string
+	if id == "" then
+		return ""
+	end
+	return string.find(id, "://") and id or ("rbxassetid://" .. id)
+end
+
+--- Cuelga un SurfaceAppearance de la parte si Config.Texturas tiene
+--- ids cargados para esa familia. Sin ids, no hace nada y la parte se
+--- queda con el material PBR del motor.
+---
+--- SurfaceAppearance manda sobre Material: por eso el color base pasa
+--- a ser el del ColorMap y `part.Color` deja de verse. Es lo esperado.
+function Style.applySurface(part: BasePart, family: string): boolean
+	local textures = (Config.Texturas :: any)[family]
+	if not textures or textures.color == "" then
+		return false
+	end
+	if part:FindFirstChildOfClass("SurfaceAppearance") then
+		return true
+	end
+
+	local ok = pcall(function()
+		local surface = Instance.new("SurfaceAppearance")
+		surface.Name = "PBR"
+		surface.ColorMap = assetUrl(textures.color)
+		if textures.normal ~= "" then
+			surface.NormalMap = assetUrl(textures.normal)
+		end
+		if textures.rugosidad ~= "" then
+			surface.RoughnessMap = assetUrl(textures.rugosidad)
+		end
+		if textures.metalidad ~= "" then
+			surface.MetalnessMap = assetUrl(textures.metalidad)
+		end
+		surface.Parent = part
+	end)
+	return ok
+end
+
+--- Recorre un modelo y aplica las texturas propias por nombre de pieza.
+function Style.applySurfaces(root: Instance, mapping: { [string]: string })
+	local applied = 0
+	for _, descendant in root:GetDescendants() do
+		if descendant:IsA("BasePart") then
+			local family = mapping[descendant.Name]
+			if family and Style.applySurface(descendant, family) then
+				applied += 1
+			end
+		end
+	end
+	return applied
+end
+
+--- Que familia de textura le toca a cada pieza del mapa.
+Style.SurfaceMap = {
+	Pared = "Pared",
+	ParedLateral = "Pared",
+	ParedFondo = "Pared",
+	ParedPasillo = "Pared",
+	Fondo = "Pared",
+	Dintel = "Pared",
+	Piso = "Piso",
+	Baldosa = "Piso",
+	Cuerpo = "Casillero",
+	PuertaCasillero = "Casillero",
+	Pupitre = "Pupitre",
+	EscritorioProfesor = "Pupitre",
+	Placa = "Techo",
+}
+
+table.freeze(Style.Color)
+table.freeze(Style.Material)
+return Style
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX6">
+      <Properties>
         <string name="Name">Theme</string>
         <ProtectedString name="Source"><![CDATA[--!strict
 --[[
@@ -1174,7 +1720,7 @@ return Theme
 ]]></ProtectedString>
       </Properties>
     </Item>
-    <Item class="ModuleScript" referent="RBX6">
+    <Item class="ModuleScript" referent="RBX7">
       <Properties>
         <string name="Name">Util</string>
         <ProtectedString name="Source"><![CDATA[--!strict

@@ -37,6 +37,7 @@ local SuspicionService = require(script.Parent:WaitForChild("SuspicionService"))
 local ExamService = require(script.Parent:WaitForChild("ExamService"))
 
 local P = Config.Profesor
+local GOMA = Config.Goma
 
 local TeacherAI = {}
 
@@ -52,6 +53,7 @@ type Teacher = {
 	chasing: Player?,
 	alive: boolean,
 	nextLine: number,
+	nextEraser: number,
 	animation: RBXScriptConnection?,
 }
 
@@ -248,6 +250,132 @@ end
 
 -- ── cerebro ────────────────────────────────────────────────────────
 
+-- ── la goma de borrar ──────────────────────────────────────────────
+-- Un profesor que solo camina se esquiva caminando. La goma es lo que
+-- hace que estar lejos tampoco sea gratis.
+
+local stunHandler: ((Player, number) -> ())? = nil
+
+function TeacherAI.onStun(handler: (Player, number) -> ())
+	stunHandler = handler
+end
+
+local function eraserFolder(): Folder
+	local existing = workspace:FindFirstChild("Proyectiles")
+	if existing and existing:IsA("Folder") then
+		return existing
+	end
+	local created = Instance.new("Folder")
+	created.Name = "Proyectiles"
+	created.Parent = workspace
+	return created
+end
+
+--- Tira una goma prediciendo hacia donde va el alumno. La punteria no
+--- es perfecta a proposito: `Config.Goma.Punteria` abre un cono de
+--- dispersion, asi que correr en diagonal sirve de algo.
+local function throwEraser(teacher: Teacher, player: Player): boolean
+	if not GOMA.Habilitada then
+		return false
+	end
+	local now = os.clock()
+	if now < teacher.nextEraser then
+		return false
+	end
+
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not root or not root:IsA("BasePart") then
+		return false
+	end
+
+	local origin = teacher.root.Position + Vector3.new(0, P.AlturaOjos, 0)
+		+ teacher.root.CFrame.LookVector * 1.4
+	local distance = (root.Position - origin).Magnitude
+	if distance < GOMA.DistanciaMinima or distance > GOMA.DistanciaMaxima then
+		return false
+	end
+
+	teacher.nextEraser = now + GOMA.Enfriamiento
+
+	-- Adelanta el tiro al punto donde estara cuando llegue la goma.
+	local flight = distance / GOMA.Velocidad
+	local predicted = root.Position + root.AssemblyLinearVelocity * flight * 0.8
+	local aim = (predicted - origin).Unit
+
+	-- Dispersion: cuanto peor la punteria, mas se abre el cono.
+	local spread = (1 - math.clamp(GOMA.Punteria, 0, 1)) * 0.5
+	aim = (aim + Vector3.new(
+		rng:NextNumber(-spread, spread),
+		rng:NextNumber(-spread, spread) * 0.5,
+		rng:NextNumber(-spread, spread))).Unit
+
+	local eraser = Instance.new("Part")
+	eraser.Name = "Goma"
+	eraser.Size = Vector3.new(0.9, 0.45, 0.5)
+	eraser.Color = Color3.fromRGB(232, 108, 132)
+	eraser.Material = Enum.Material.Plastic
+	eraser.CanCollide = false
+	eraser.CFrame = CFrame.lookAt(origin, origin + aim)
+	eraser.Parent = eraserFolder()
+	eraser.AssemblyLinearVelocity = aim * GOMA.Velocidad
+	eraser.AssemblyAngularVelocity = Vector3.new(14, 6, 0)
+
+	-- Casi sin gravedad: es un tiro tenso, no un lanzamiento en arco.
+	local attachment = Instance.new("Attachment")
+	attachment.Parent = eraser
+	local lift = Instance.new("VectorForce")
+	lift.Attachment0 = attachment
+	lift.RelativeTo = Enum.ActuatorRelativeTo.World
+	lift.Force = Vector3.new(0, eraser.AssemblyMass * workspace.Gravity * 0.82, 0)
+	lift.Parent = eraser
+
+	say(teacher, "eraser.thrown", { teacher = teacher.name }, player)
+
+	local spent = false
+	eraser.Touched:Connect(function(hit)
+		if spent then
+			return
+		end
+		local model = hit:FindFirstAncestorOfClass("Model")
+		local hitPlayer = model and Players:GetPlayerFromCharacter(model) or nil
+		spent = true
+
+		if hitPlayer then
+			Net.event(Net.Events.Notify):FireClient(hitPlayer, { key = "eraser.hit" })
+			Net.event(Net.Events.Stunned):FireClient(hitPlayer, {
+				motivo = "goma",
+				segundos = GOMA.SegundosAturdido,
+			})
+			local humanoid = model and model:FindFirstChildOfClass("Humanoid")
+			if humanoid then
+				humanoid.PlatformStand = true
+				task.delay(GOMA.SegundosAturdido, function()
+					if humanoid.Parent then
+						humanoid.PlatformStand = false
+					end
+				end)
+			end
+			if stunHandler then
+				stunHandler(hitPlayer, GOMA.PenalizacionNota)
+			end
+		end
+		Util.playSound(Config.Sonidos.Impacto, eraser, 0.35, 1.2)
+		task.delay(0.4, function()
+			if eraser.Parent then
+				eraser:Destroy()
+			end
+		end)
+	end)
+
+	task.delay(6, function()
+		if eraser.Parent then
+			eraser:Destroy()
+		end
+	end)
+	return true
+end
+
 local function nearestSuspect(teacher: Teacher): (Player?, number)
 	local best: Player? = nil
 	local bestValue = Config.Sospecha.UmbralAviso
@@ -364,6 +492,12 @@ local function doChase(teacher: Teacher)
 			break
 		end
 		local distance = (root.Position - teacher.root.Position).Magnitude
+
+		-- De lejos no corre a ciegas: te tira la goma y sigue avanzando.
+		if distance > GOMA.DistanciaMinima then
+			pcall(throwEraser, teacher, player)
+		end
+
 		if distance <= 6 then
 			facePoint(teacher, root.Position)
 			local handler = punishHandler
@@ -430,6 +564,7 @@ function TeacherAI.spawn(room: any)
 		chasing = nil,
 		alive = true,
 		nextLine = 0,
+		nextEraser = 0,
 		animation = CharacterService.animate(model),
 	}
 	teachers[room.index] = teacher

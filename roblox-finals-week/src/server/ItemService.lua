@@ -368,7 +368,7 @@ function ItemService.start()
 		ItemService.setNote(player, payload)
 	end)
 
-	Net.event(Net.Events.Cheat).OnServerEvent:Connect(function(player, action, index)
+	Net.event(Net.Events.Cheat).OnServerEvent:Connect(function(player, action, index, extra)
 		local i = tonumber(index) and math.floor(tonumber(index) :: number) or 1
 		local result: any
 		if action == "peek" then
@@ -377,6 +377,18 @@ function ItemService.start()
 			result = ExamService.whisper(player, i)
 		elseif action == "sheet" then
 			result = ExamService.useSheet(player)
+		elseif action == "book" then
+			result = ItemService.onReadBook(player)
+		elseif action == "zoom" then
+			-- El cliente dice a QUIEN apunta; el servidor comprueba que
+			-- esten en la misma aula y dentro del alcance del aparato.
+			local target = ItemService.playerFromId(extra)
+			if target then
+				result = ExamService.peekAt(player, target, i,
+					Config.Herramientas.PrismaticosAlcance)
+			else
+				result = { ok = false, reason = { key = "zoom.no_target" } }
+			end
 		else
 			result = { ok = false, reason = { key = "error.generic" } }
 		end
@@ -393,6 +405,25 @@ end
 
 function ItemService.countOf(player: Player, itemId: string): number
 	return countItem(player, itemId)
+end
+
+--- Lo rellena init.server con BookService.readTool: ItemService no
+--- tiene por que saber como funcionan los libros.
+ItemService.onReadBook = function(_player: Player): any
+	return { ok = false, reason = { key = "cheat.none" } }
+end
+
+function ItemService.playerFromId(userId: any): Player?
+	local id = tonumber(userId)
+	if not id then
+		return nil
+	end
+	for _, player in Players:GetPlayers() do
+		if player.UserId == id then
+			return player
+		end
+	end
+	return nil
 end
 
 return ItemService

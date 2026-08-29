@@ -4,17 +4,19 @@
 	------------------------------------------------------------------
 	El orden importa y esta pensado:
 
-		1. Net.build()          los remotes tienen que existir antes de
-		                        que cualquier cliente los busque
-		2. ServerStorage        banco de preguntas y penalizaciones,
-		                        fuera del alcance del cliente
-		3. Templates            plantillas de herramientas en
-		                        ReplicatedStorage (el cliente las lee)
-		4. MapBuilder           el instituto entero
-		5. servicios            examenes, objetos, sospecha, castigos
-		6. TeacherAI            la vision arranca ya, los profesores
-		                        aparecen al empezar cada examen
-		7. RoundManager         el bucle escolar
+		1. Net.build()   los remotes tienen que existir antes de que
+		                 cualquier cliente los busque
+		2. ServerStorage banco de preguntas, penalizaciones y modelos
+		                 de respaldo, fuera del alcance del cliente
+		3. Templates     plantillas de herramientas en ReplicatedStorage
+		4. Atmosphere    luz, cielo y post-proceso ANTES del mapa, para
+		                 que las luminarias nazcan ya configuradas
+		5. MapBuilder    el instituto entero
+		6. pasillo       grafiti, pelota, libros y empollones
+		7. servicios     examenes, objetos, sospecha, castigos, radio
+		8. TeacherAI     la vision arranca ya; los profesores aparecen
+		                 al empezar cada examen
+		9. RoundManager  el bucle escolar
 
 	Cada paso va en su pcall con un print: si algo falla, el Output
 	dice exactamente cual y el resto del juego sigue de pie. Aprendido
@@ -22,7 +24,6 @@
 	te deja parado en el vacio sin ninguna pista.
 --]]
 
-local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -43,6 +44,13 @@ local PunishService = require(script:WaitForChild("PunishService"))
 local ShopService = require(script:WaitForChild("ShopService"))
 local RoundManager = require(script:WaitForChild("RoundManager"))
 local LobbyService = require(script:WaitForChild("LobbyService"))
+local Atmosphere = require(script:WaitForChild("Atmosphere"))
+local GraffitiService = require(script:WaitForChild("GraffitiService"))
+local PlaygroundService = require(script:WaitForChild("PlaygroundService"))
+local BookService = require(script:WaitForChild("BookService"))
+local NerdNPCs = require(script:WaitForChild("NerdNPCs"))
+local RadioService = require(script:WaitForChild("RadioService"))
+local KnockoutService = require(script:WaitForChild("KnockoutService"))
 
 local function step(label: string, fn: () -> ())
 	local ok, err = pcall(fn)
@@ -71,9 +79,45 @@ step("modelos de respaldo en ServerStorage", function()
 	CharacterService.installBackup()
 end)
 
+step("iluminacion y post-proceso", function()
+	Atmosphere.apply()
+end)
+
 local map: any = nil
 step("instituto construido", function()
 	map = MapBuilder.build()
+end)
+
+step("paredes pintables", function()
+	GraffitiService.markMap(map)
+	GraffitiService.start(function(player)
+		-- Pintar dentro del aula durante el examen es una infraccion
+		-- como cualquier otra.
+		if ExamService.isRunning() then
+			SuspicionService.infraction(player, Config.Grafiti.SospechaPorPintar, "paint")
+		end
+	end)
+end)
+
+step("pasillo: pelota, libros y empollones", function()
+	PlaygroundService.build(map)
+	PlaygroundService.start(function(player, credits)
+		DataService.addCredits(player, credits)
+	end)
+	BookService.build(map)
+	BookService.start()
+	NerdNPCs.spawn(map)
+end)
+
+step("comunicaciones", function()
+	RadioService.start()
+end)
+
+step("empujones y nocaut", function()
+	KnockoutService.start()
+	KnockoutService.onNerdDown(function(player, model)
+		NerdNPCs.dropSheet(player, model)
+	end)
 end)
 
 -- ── 5. servicios ───────────────────────────────────────────────────
@@ -90,6 +134,9 @@ end)
 
 step("objetos y casilleros", function()
 	ItemService.start()
+	ItemService.onReadBook = function(player)
+		return BookService.readTool(player)
+	end
 	if map then
 		ItemService.bindLockers(map.lockers)
 	end
@@ -107,6 +154,10 @@ step("castigos", function()
 	PunishService.setDetention(map and map.detention)
 	TeacherAI.onPunish(function(player, teacher)
 		PunishService.apply(player, teacher)
+	end)
+	-- La goma de borrar no expulsa a nadie: aturde y descuenta.
+	TeacherAI.onStun(function(player, points)
+		PunishService.addPenalty(player, points)
 	end)
 end)
 
@@ -212,29 +263,6 @@ end)
 step("ciclo escolar", function()
 	RoundManager.setMap(map)
 	RoundManager.start()
-end)
-
--- ── 11. luz ────────────────────────────────────────────────────────
--- Al final y en pcall: Lighting.Technology es de solo lectura desde un
--- script y va en el archivo del lugar, no aca.
-pcall(function()
-	Lighting.Brightness = 2
-	Lighting.ClockTime = 9.5
-	Lighting.Ambient = Color3.fromRGB(82, 84, 96)
-	Lighting.OutdoorAmbient = Color3.fromRGB(112, 118, 132)
-	Lighting.EnvironmentDiffuseScale = 0.55
-	Lighting.EnvironmentSpecularScale = 0.4
-	Lighting.GlobalShadows = true
-	Lighting.FogEnd = 900
-
-	if not Lighting:FindFirstChild("Atmosfera") then
-		local atmosphere = Instance.new("Atmosphere")
-		atmosphere.Name = "Atmosfera"
-		atmosphere.Density = 0.28
-		atmosphere.Haze = 0.9
-		atmosphere.Glare = 0.1
-		atmosphere.Parent = Lighting
-	end
 end)
 
 print("[Finals Week] Servidor listo.")

@@ -28,6 +28,7 @@ local phaseLabel: TextLabel
 local dayLabel: TextLabel
 local gradeValue: TextLabel
 local creditLabel: TextLabel
+local scoreLabel: TextLabel
 local suspicionFill: Frame
 local suspicionLabel: TextLabel
 local objective: TextLabel
@@ -207,6 +208,14 @@ function Hud.mount(parent: ScreenGui)
 		Theme.FontBlack, 26, Theme.Hud.Text)
 	creditLabel = label(left, "Creditos", "0 cr", UDim2.new(1, -20, 0, 16), UDim2.new(0, 12, 0, 54),
 		Theme.FontBold, 13, Theme.Hud.Credit)
+
+	-- Marcador de canastas del recreo. Vive debajo de la nota porque
+	-- es la otra cosa que se acumula, aunque no cuente para aprobar.
+	local court = panel(root, "Canastas", UDim2.new(0, 186, 0, 34),
+		UDim2.new(0, 12, 0, 96), Vector2.new(0, 0))
+	court.Visible = false
+	scoreLabel = label(court, "Valor", "", UDim2.new(1, -20, 1, 0), UDim2.new(0, 12, 0, 0),
+		Theme.FontBold, 13, Theme.Hud.Text)
 
 	-- Barra de sospecha, abajo al centro.
 	local bottom = panel(root, "Sospecha", UDim2.new(0, 320, 0, 52),
@@ -415,6 +424,20 @@ function Hud.teacherSay(packet: any)
 	end)
 end
 
+--- Canastas metidas en el recreo.
+function Hud.setScore(data: any)
+	if not scoreLabel then
+		return
+	end
+	local court = scoreLabel.Parent
+	if court and court:IsA("GuiObject") then
+		court.Visible = true
+	end
+	scoreLabel.Text = Strings.get("ball.score", { n = data.puntos or 0 })
+end
+
+local PUNISH_KEY = { cono = "hud.cone", expulsion = "hud.detention" }
+
 function Hud.punish(data: any)
 	if not coneOverlay then
 		return
@@ -425,8 +448,13 @@ function Hud.punish(data: any)
 		return
 	end
 
+	local key = PUNISH_KEY[data.tipo]
+	if not key then
+		-- Aturdido por la goma o por un empujon: dura poco y ya se
+		-- avisa con el aviso corto y la sacudida de camara.
+		return
+	end
 	local seconds = math.floor(data.segundos or 0)
-	local key = data.tipo == "cono" and "hud.cone" or "hud.detention"
 	coneOverlay.Visible = data.tipo == "cono"
 	punishLabel.Visible = true
 
@@ -508,7 +536,7 @@ function Hud.report(data: any)
 end
 
 --- Apaga/enciende el HUD de juego (lo usa el menu de inicio).
-local PANELES = { "Reloj", "Nota", "Sospecha", "Objetivo", "Avisos" }
+local PANELES = { "Reloj", "Nota", "Sospecha", "Objetivo", "Avisos", "Canastas" }
 
 function Hud.setVisible(visible: boolean)
 	if not root then
@@ -517,7 +545,12 @@ function Hud.setVisible(visible: boolean)
 	for _, name in PANELES do
 		local child = root:FindFirstChild(name)
 		if child and child:IsA("GuiObject") then
-			child.Visible = visible
+			-- El marcador solo reaparece si ya hubo alguna canasta.
+			if name == "Canastas" then
+				child.Visible = visible and scoreLabel ~= nil and scoreLabel.Text ~= ""
+			else
+				child.Visible = visible
+			end
 		end
 	end
 	if not visible then

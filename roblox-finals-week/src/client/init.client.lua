@@ -32,6 +32,9 @@ local LobbyUI = require(script:WaitForChild("LobbyUI"))
 local CameraDirector = require(script:WaitForChild("CameraDirector"))
 local Music = require(script:WaitForChild("Music"))
 local Poses = require(script:WaitForChild("Poses"))
+local GraffitiUI = require(script:WaitForChild("GraffitiUI"))
+local RadioUI = require(script:WaitForChild("RadioUI"))
+local ZoomUI = require(script:WaitForChild("ZoomUI"))
 
 -- ── idioma ─────────────────────────────────────────────────────────
 -- Cada jugador ve el juego en SU idioma: el servidor manda claves.
@@ -67,6 +70,9 @@ ExamUI.mount(gui)
 NoteUI.mount(gui)
 ShopUI.mount(gui)
 LobbyUI.mount(gui)
+GraffitiUI.mount(gui)
+RadioUI.mount(gui)
+ZoomUI.mount(gui)
 MainMenu.mount(gui)
 Music.start()
 
@@ -79,6 +85,8 @@ end
 NoteUI.onThrow = function()
 	Poses.throw()
 end
+-- Los prismaticos espian la pregunta que estas mirando en la hoja.
+ZoomUI.currentIndex = ExamUI.currentIndex
 
 -- Chat de proximidad: las burbujas arriba de la cabeza son lo que hace
 -- que hablar en el pasillo se sienta cara a cara. Va en pcall porque la
@@ -99,6 +107,9 @@ MainMenu.onVisible = function(open: boolean)
 	Hud.setVisible(not open)
 	ExamUI.setVisible(not open)
 	NoteUI.setVisible(not open)
+	GraffitiUI.setVisible(not open)
+	RadioUI.setVisible(not open)
+	ZoomUI.setVisible(not open)
 	if open then
 		ShopUI.close()
 		LobbyUI.close()
@@ -195,6 +206,22 @@ Net.event(Net.Events.NoteReceived).OnClientEvent:Connect(function(data)
 	NoteUI.received(data)
 end)
 
+Net.event(Net.Events.Radio).OnClientEvent:Connect(function(data)
+	RadioUI.receive(data)
+end)
+
+Net.event(Net.Events.Stunned).OnClientEvent:Connect(function(data)
+	-- Te tiraron al piso o te pego la goma: sacudida y aviso. El
+	-- control del personaje lo bloquea el servidor con PlatformStand,
+	-- aca solo se acusa el golpe.
+	CameraDirector.shake(data.motivo == "ko" and 1.6 or 0.9, 0.7)
+	Hud.punish({ tipo = "aturdido", segundos = data.segundos })
+end)
+
+Net.event(Net.Events.Score).OnClientEvent:Connect(function(data)
+	Hud.setScore(data)
+end)
+
 Net.event(Net.Events.Music).OnClientEvent:Connect(function(data)
 	if data and data.clima then
 		Music.setClimate(data.clima)
@@ -208,9 +235,24 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		return
 	end
 	if input.KeyCode == Enum.KeyCode.Q then
-		Net.event(Net.Events.Cheat):FireServer("peek", ExamUI.currentIndex())
+		-- Con los prismaticos en la mira, Q lo maneja ZoomUI.
+		if not ZoomUI.isZoomed() then
+			Net.event(Net.Events.Cheat):FireServer("peek", ExamUI.currentIndex())
+		end
 	elseif input.KeyCode == Enum.KeyCode.R then
 		Net.event(Net.Events.Cheat):FireServer("whisper", ExamUI.currentIndex())
+	elseif input.KeyCode == Enum.KeyCode.G then
+		Net.event(Net.Events.Knock):FireServer()
+		Poses.throw(0.35)
+	elseif input.KeyCode == Enum.KeyCode.B then
+		local camera = workspace.CurrentCamera
+		if camera then
+			Net.event(Net.Events.Ball):FireServer("shoot", camera.CFrame.LookVector)
+			Poses.throw(0.5)
+		end
+	elseif input.KeyCode == Enum.KeyCode.H then
+		-- Leer el libro que llevas en la mano.
+		Net.event(Net.Events.Cheat):FireServer("book", 1)
 	elseif input.KeyCode == Enum.KeyCode.T then
 		if ShopUI.isOpen() then
 			ShopUI.close()

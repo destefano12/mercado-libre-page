@@ -231,6 +231,15 @@ local function motor(parent: BasePart, child: BasePart, name: string, c0: CFrame
 	return joint
 end
 
+--- Las seis uniones de un rig R6. Los C0/C1 no son decorativos: si
+--- alguno esta mal, el Humanoid camina desarmado. Estan una sola vez
+--- para que profesor y alumnos compartan exactamente el mismo
+--- esqueleto.
+local function wireJoints(root: BasePart, torso: BasePart, head: BasePart,
+	leftArm: BasePart, rightArm: BasePart, leftLeg: BasePart, rightLeg: BasePart)
+	wireJoints(root, torso, head, leftArm, rightArm, leftLeg, rightLeg)
+end
+
 --- Cara enojada dibujada con partes: cejas caidas, ojos y boca torcida.
 local function angryFace(head: BasePart)
 	local function piece(name: string, size: Vector3, offset: CFrame, color: Color3)
@@ -359,6 +368,122 @@ function CharacterService.buildTeacher(name: string, position: Vector3): Model
 	model.PrimaryPart = root
 
 	nameTag(model, name, Color3.fromRGB(244, 206, 122))
+
+	return model
+end
+
+--- Cara neutra de alumno: ojos y una boca chiquita. Sin cejas
+--- caidas, que esas son del profesor.
+local function calmFace(head: BasePart)
+	local function piece(name: string, size: Vector3, offset: CFrame, color: Color3)
+		local part = Instance.new("Part")
+		part.Name = name
+		part.Size = size
+		part.Color = color
+		part.Material = Enum.Material.SmoothPlastic
+		part.CanCollide = false
+		part.CanQuery = false
+		part.Massless = true
+		part.CFrame = head.CFrame * offset
+		part.Parent = head.Parent
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = head
+		weld.Part1 = part
+		weld.Parent = part
+	end
+
+	for _, side in { -1, 1 } do
+		piece("Ojo", Vector3.new(0.22, 0.26, 0.1),
+			CFrame.new(side * 0.3, 0.08, -0.52), Color3.fromRGB(26, 28, 34))
+	end
+	piece("Boca", Vector3.new(0.3, 0.08, 0.1),
+		CFrame.new(0, -0.26, -0.52), Color3.fromRGB(70, 44, 44))
+end
+
+--- Un alumno NPC: el mismo esqueleto que el profesor, con uniforme y
+--- un libro bajo el brazo. Son los que estudiaron — a los que se les
+--- pide (o se les quita) la respuesta.
+function CharacterService.buildStudent(name: string, position: Vector3): Model
+	local model = Instance.new("Model")
+	model.Name = "Alumno"
+
+	local skin = Color3.fromRGB(222, 184, 150)
+	local sweater = Config.Empollones.ColorSueter
+
+	local root = limb(model, "HumanoidRootPart", Vector3.new(2, 2, 1), sweater)
+	root.Transparency = 1
+	root.CanCollide = false
+
+	local torso = limb(model, "Torso", Vector3.new(2, 2, 1), sweater)
+	local head = limb(model, "Head", Vector3.new(2, 1, 1), skin)
+	local mesh = Instance.new("SpecialMesh")
+	mesh.MeshType = Enum.MeshType.Head
+	mesh.Scale = Vector3.new(1.25, 1.25, 1.25)
+	mesh.Parent = head
+
+	local leftArm = limb(model, "Left Arm", Vector3.new(1, 2, 1), skin)
+	local rightArm = limb(model, "Right Arm", Vector3.new(1, 2, 1), skin)
+	local leftLeg = limb(model, "Left Leg", Vector3.new(1, 2, 1), Color3.fromRGB(48, 52, 66))
+	local rightLeg = limb(model, "Right Leg", Vector3.new(1, 2, 1), Color3.fromRGB(48, 52, 66))
+
+	root.CFrame = CFrame.new(position)
+	torso.CFrame = root.CFrame
+	head.CFrame = root.CFrame * CFrame.new(0, 1.5, 0)
+	leftArm.CFrame = root.CFrame * CFrame.new(-1.5, 0, 0)
+	rightArm.CFrame = root.CFrame * CFrame.new(1.5, 0, 0)
+	leftLeg.CFrame = root.CFrame * CFrame.new(-0.5, -2, 0)
+	rightLeg.CFrame = root.CFrame * CFrame.new(0.5, -2, 0)
+
+	for _, part in { torso, head, leftArm, rightArm, leftLeg, rightLeg } do
+		part.CanCollide = true
+	end
+
+	wireJoints(root, torso, head, leftArm, rightArm, leftLeg, rightLeg)
+
+	local function layer(anchor: BasePart, lname: string, size: Vector3, offset: CFrame,
+		color: Color3, material: Enum.Material)
+		local piece = Instance.new("Part")
+		piece.Name = lname
+		piece.Size = size
+		piece.Color = color
+		piece.Material = material
+		piece.CanCollide = false
+		piece.CanQuery = false
+		piece.Massless = true
+		piece.CFrame = anchor.CFrame * offset
+		piece.Parent = model
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = anchor
+		weld.Part1 = piece
+		weld.Parent = piece
+	end
+
+	layer(torso, "Camisa", Vector3.new(0.85, 1.85, 0.14), CFrame.new(0, 0, -0.5),
+		Color3.fromRGB(238, 240, 244), Enum.Material.Fabric)
+	layer(torso, "Corbata", Vector3.new(0.28, 1.2, 0.1), CFrame.new(0, 0.1, -0.6),
+		Color3.fromRGB(122, 32, 44), Enum.Material.Fabric)
+	layer(head, "Pelo", Vector3.new(2.05, 0.5, 1.08), CFrame.new(0, 0.42, 0.04),
+		Color3.fromRGB(46, 36, 30), Enum.Material.SmoothPlastic)
+	layer(head, "Anteojos", Vector3.new(1.5, 0.34, 0.08), CFrame.new(0, 0.08, -0.56),
+		Color3.fromRGB(38, 40, 48), Enum.Material.SmoothPlastic)
+	-- El libro bajo el brazo: es la razon por la que sabe las respuestas.
+	layer(leftArm, "Libro", Vector3.new(0.4, 1.3, 1), CFrame.new(-0.45, -0.2, 0),
+		Color3.fromRGB(126, 44, 52), Enum.Material.Fabric)
+
+	calmFace(head)
+
+	local humanoid = Instance.new("Humanoid")
+	humanoid.RigType = Enum.HumanoidRigType.R6
+	humanoid.WalkSpeed = 8
+	humanoid.JumpPower = 0
+	humanoid.MaxHealth = 100
+	humanoid.Health = 100
+	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	humanoid.Parent = model
+
+	model.PrimaryPart = root
+	nameTag(model, name, Color3.fromRGB(186, 224, 168))
 
 	return model
 end

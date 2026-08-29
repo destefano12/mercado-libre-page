@@ -156,6 +156,17 @@ local function detention(player: Player)
 	end)
 end
 
+--- Una penalizacion suelta, sin cono ni expulsion. La usa la goma de
+--- borrar: duele en la nota pero no te saca del examen.
+function PunishService.addPenalty(player: Player, points: number)
+	local data = record(player)
+	data.penalty += points
+	Net.event(Net.Events.Notify):FireClient(player, {
+		key = "punish.grade",
+		args = { n = points },
+	})
+end
+
 --- La sancion completa. La llama TeacherAI cuando te alcanza.
 function PunishService.apply(player: Player, teacher: any)
 	local data = record(player)

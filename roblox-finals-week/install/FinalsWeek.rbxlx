@@ -27,14 +27,14 @@
   <Item class="Lighting" referent="RBX4">
     <Properties>
       <string name="Name">Lighting</string>
-      <token name="Technology">3</token>
+      <token name="Technology">5</token>
     </Properties>
   </Item>
   <Item class="ReplicatedStorage" referent="RBX5">
     <Properties>
       <string name="Name">ReplicatedStorage</string>
     </Properties>
-    <Item class="Folder" referent="RBX12">
+    <Item class="Folder" referent="RBX13">
       <Properties>
         <string name="Name">Shared</string>
       </Properties>
@@ -58,28 +58,32 @@ local Config = {}
 -- casilleros a los dos lados y N aulas colgadas del pasillo.
 Config.Escuela = {
 	Origen = Vector3.new(0, 0, 0),
+	-- Pasillo estrecho y techo bajo: es lo que hace que el colegio se
+	-- sienta cerrado en vez de un galpon. 16 de ancho es poco menos de
+	-- tres personas de hombro a hombro.
 	PasilloLargo = 190,
-	PasilloAncho = 26,
-	AlturaPiso = 15,
+	PasilloAncho = 16,
+	AlturaPiso = 11,                -- losa
+	AlturaFalsoTecho = 9.4,         -- las placas del cielorraso
 	EspesorPared = 1,
-	CasillerosPorLado = 18,
-	CasilleroAncho = 3.4,
-	CasilleroAlto = 7,
-	CasilleroFondo = 2.2,
+	AlturaZocalo = 3.6,             -- el friso oscuro de media pared
+	CasillerosPorLado = 20,
+	CasilleroAncho = 3.1,
+	CasilleroAlto = 6.4,
+	CasilleroFondo = 1.9,
 	Aulas = 2,
-	AulaAncho = 46,
-	AulaLargo = 40,
+	AulaAncho = 36,
+	AulaLargo = 30,
+	AulaAltura = 10,
 	FilasDePupitres = 4,
 	PupitresPorFila = 5,
-	PupitreSeparacionX = 7.2,
-	PupitreSeparacionZ = 7.6,
+	PupitreSeparacionX = 6.4,
+	PupitreSeparacionZ = 6.0,
 	ZonaRecreoLargo = 34,
 	SalaDeCastigo = Vector3.new(150, 0, -80),
-	ColorPiso = Color3.fromRGB(196, 192, 182),
-	ColorParedes = Color3.fromRGB(222, 219, 210),
-	ColorZocalo = Color3.fromRGB(64, 76, 92),
-	ColorCasillero = Color3.fromRGB(52, 92, 128),
-	ColorPizarra = Color3.fromRGB(34, 52, 44),
+	BaldosaLado = 4,                -- damero del piso
+	PlacaTecho = 4,                 -- placas del falso techo (16 / 4 = 4 justas)
+	SeparacionLuces = 14,
 }
 
 -- ── Ciclo escolar ──────────────────────────────────────────────────
@@ -202,6 +206,11 @@ Config.Economia = {
 		{ id = "avion", precio = 25, tipo = "objeto" },
 		{ id = "bolita", precio = 15, tipo = "objeto" },
 		{ id = "nota", precio = 10, tipo = "objeto" },
+		{ id = "walkie", precio = 110, tipo = "objeto" },
+		{ id = "prismaticos", precio = 95, tipo = "objeto" },
+		{ id = "celular", precio = 140, tipo = "objeto" },
+		{ id = "aerosol", precio = 30, tipo = "objeto" },
+		{ id = "libro", precio = 55, tipo = "objeto" },
 		{ id = "gorra", precio = 90, tipo = "estetica" },
 		{ id = "mochila", precio = 130, tipo = "estetica" },
 		{ id = "anteojos", precio = 75, tipo = "estetica" },
@@ -251,6 +260,148 @@ Config.Camara = {
 	SegundosTransicion = 0.85,
 	FovMinimo = 18,
 	FovMaximo = 74,
+}
+
+-- ── El pasillo: pelota, canasta y cosas para tirar ─────────────────
+Config.Pasillo = {
+	PelotaRadio = 1.5,
+	PelotaRebote = 0.72,
+	PelotaFriccion = 0.35,
+	PelotaFuerza = 96,
+	PelotaAlturaTiro = 0.32,          -- cuanto se levanta el tiro (0-1)
+	CanastaAltura = 6.4,              -- por debajo del falso techo (9.4)
+	CanastaRadio = 2.4,               -- el pasillo mide 16 de ancho
+	CanastaDistancia = 20,            -- del tablero a donde nace la pelota
+	PuntosPorCanasta = 3,
+	CreditosPorCanasta = 6,
+	AlcanceAgarre = 8,
+	EnfriamientoTiro = 0.4,
+}
+
+-- ── Grafiti: dibujar en las paredes ────────────────────────────────
+Config.Grafiti = {
+	Habilitado = true,
+	MaximoPorSuperficie = 450,        -- despues borra las mas viejas
+	PuntosPorSegundo = 18,            -- limite del servidor por jugador
+	Alcance = 26,
+	PixelesPorStud = 12,              -- resolucion del lienzo
+	Tamanos = { 0.4, 0.8, 1.5, 2.5 }, -- diametro de la brocha, EN STUDS
+	Paleta = {
+		Color3.fromRGB(240, 62, 62),
+		Color3.fromRGB(250, 176, 44),
+		Color3.fromRGB(246, 232, 62),
+		Color3.fromRGB(64, 204, 108),
+		Color3.fromRGB(52, 150, 244),
+		Color3.fromRGB(168, 96, 240),
+		Color3.fromRGB(248, 248, 248),
+		Color3.fromRGB(24, 24, 28),
+	},
+	SospechaPorPintar = 0.22,         -- si lo haces en el aula
+}
+
+-- ── Herramientas de comunicacion ───────────────────────────────────
+Config.Herramientas = {
+	RadioAlcance = 0,                 -- 0 = todo el mapa (es una radio)
+	RadioCaracteres = 90,
+	RadioEnfriamiento = 2.5,
+	RadioSospecha = 0.34,
+	CelularAlcance = 22,
+	CelularEnfriamiento = 6,
+	CelularSospecha = 0.46,
+	CelularRevela = 1,
+	PrismaticosFov = 16,
+	PrismaticosAlcance = 46,          -- espiar hojas lejanas
+	PrismaticosSospecha = 0.24,
+	LibroRevela = 2,
+	LibroSegundos = 3.5,
+	LibroEnfriamiento = 20,
+}
+
+-- ── Dejar KO ───────────────────────────────────────────────────────
+Config.Nocaut = {
+	Alcance = 6.5,
+	Enfriamiento = 1.1,
+	EmpujonesParaKO = 3,
+	VentanaEmpujones = 3.5,
+	PorLaEspalda = 0.55,              -- coseno: mas alto = mas de atras
+	SegundosKO = 4.5,
+	Impulso = 42,
+	SospechaEnExamen = 0.85,
+	CreditosRobados = 0,
+}
+
+-- ── Alumnos que estudiaron (NPC) ───────────────────────────────────
+Config.Empollones = {
+	Cantidad = 4,
+	Nombres = { "Nadia", "Bruno", "Iris", "Teo", "Mila", "Simon" },
+	ProbabilidadDeCeder = 0.35,
+	RespuestasQueSaben = 4,
+	RespuestasAlCaer = 3,
+	EnfriamientoPedir = 8,
+	ColorSueter = Color3.fromRGB(96, 128, 72),
+}
+
+-- ── La goma de borrar del profesor ─────────────────────────────────
+Config.Goma = {
+	Habilitada = true,
+	DistanciaMinima = 9,              -- mas cerca que esto, va y te agarra
+	DistanciaMaxima = 40,
+	Velocidad = 88,
+	Enfriamiento = 3.2,
+	Punteria = 0.86,                  -- 1 = perfecta; abajo, dispersion
+	SegundosAturdido = 1.8,
+	PenalizacionNota = 6,
+}
+
+-- ── Direccion de arte ──────────────────────────────────────────────
+-- La tecnologia de iluminacion NO se puede escribir desde un script:
+-- es de solo lectura en runtime. Este valor lo lee tools/build_studio.py
+-- y lo escribe en el archivo del lugar, que es donde Roblox lo acepta.
+Config.Estilo = {
+	Tecnologia = "Future",          -- "Future" | "ShadowMap"
+	Brillo = 1.55,
+	Hora = 15.2,                    -- media tarde de semana de examenes
+	Latitud = 41,
+	Exposicion = -0.12,
+	SuavidadSombras = 0.35,         -- solo Future
+	DifusaEntorno = 0.35,
+	EspecularEntorno = 0.22,
+	Nubes = { cobertura = 0.86, densidad = 0.68 },
+	Bloom = { intensidad = 0.5, tamano = 18, umbral = 1.62 },
+	Profundidad = { lejos = 0.06, foco = 18, radio = 26, cerca = 0.1 },
+	RayosSol = { intensidad = 0.03, dispersion = 0.9 },
+	-- Un ColorCorrection por clima. Saturacion negativa = el look
+	-- lavado de instituto; el tinte frio es la luz fluorescente.
+	Climas = {
+		pasillo = { brillo = -0.02, contraste = 0.12, saturacion = -0.26,
+			tinte = Color3.fromRGB(236, 241, 248) },
+		examen = { brillo = -0.05, contraste = 0.2, saturacion = -0.36,
+			tinte = Color3.fromRGB(230, 238, 248) },
+		tension = { brillo = -0.08, contraste = 0.28, saturacion = -0.46,
+			tinte = Color3.fromRGB(248, 234, 232) },
+	},
+	Atmosfera = {
+		densidad = 0.32,
+		desplazamiento = 0.1,
+		color = Color3.fromRGB(188, 192, 198),
+		decaimiento = Color3.fromRGB(110, 118, 130),
+		brillo = 0.22,
+		neblina = 1.7,
+	},
+}
+
+-- ── Texturas PBR propias (opcional) ────────────────────────────────
+-- SurfaceAppearance necesita imagenes SUBIDAS a Roblox: no hay forma
+-- de generarlas por codigo. Subilas en Studio (Asset Manager >
+-- Images), copia sus ids aca y el juego las aplica solo al arrancar.
+-- Con los campos vacios se usan los materiales PBR que ya trae el
+-- motor, que con Future se ven bien igual.
+Config.Texturas = {
+	Pared = { color = "", normal = "", rugosidad = "", metalidad = "" },
+	Piso = { color = "", normal = "", rugosidad = "", metalidad = "" },
+	Casillero = { color = "", normal = "", rugosidad = "", metalidad = "" },
+	Pupitre = { color = "", normal = "", rugosidad = "", metalidad = "" },
+	Techo = { color = "", normal = "", rugosidad = "", metalidad = "" },
 }
 
 table.freeze(Config)
@@ -388,6 +539,13 @@ local EVENTS: { [string]: string } = {
 	NoteReceived = "NoteReceived",   -- S->C  te llego una nota de un companero
 	Locker = "Locker",               -- C->S  abrir un casillero
 	Music = "Music",                 -- S->C  cambio de clima musical
+	Paint = "Paint",                 -- C->S  una pincelada de grafiti
+	Radio = "Radio",                 -- C<->S walkie / celular
+	Knock = "Knock",                 -- C->S  empujon / nocaut
+	Ball = "Ball",                   -- C->S  agarrar y tirar la pelota
+	Score = "Score",                 -- S->C  canasta, puntos del pasillo
+	Zoom = "Zoom",                   -- C->S  mirando con prismaticos
+	Stunned = "Stunned",             -- S->C  te dejaron KO / te pego la goma
 }
 
 local FUNCTIONS: { [string]: string } = {
@@ -514,7 +672,7 @@ local en: { [string]: string } = {
 	["hud.hint_report"] = "Report cards are out",
 	["hud.detention"] = "Detention: {s}s",
 	["hud.cone"] = "Dunce cone: {s}s",
-	["hud.keys"] = "E interact - Q peek - R whisper - F throw",
+	["hud.keys"] = "E interact - Q peek - R whisper - F throw - G shove - B shoot - Z zoom",
 	-- Examen
 	["exam.title"] = "Exam - {subject}",
 	["exam.question"] = "Question {i} of {n}",
@@ -619,6 +777,68 @@ local en: { [string]: string } = {
 	["notify.hit"] = "A paper ball hit you",
 	["notify.waiting"] = "Waiting for more students",
 	["notify.seat"] = "Your desk is row {row}, seat {seat}",
+	-- Pasillo: pelota y canasta
+	["ball.grab"] = "Grab the ball",
+	["ball.throw"] = "Click to shoot",
+	["ball.basket"] = "{name} scored! +{n}",
+	["ball.taken"] = "Somebody else has the ball",
+	["ball.score"] = "Baskets: {n}",
+	-- Grafiti
+	["paint.title"] = "Spray",
+	["paint.hint"] = "Hold click to paint - wheel changes size",
+	["paint.wall"] = "You can't paint that",
+	["paint.seen"] = "Painting in class? Really?",
+	["paint.color"] = "Colour",
+	["paint.size"] = "Size",
+	["paint.clear"] = "Erase",
+	-- Herramientas de comunicacion
+	["item.walkie"] = "Walkie-talkie",
+	["item.prismaticos"] = "Binoculars",
+	["item.celular"] = "Phone",
+	["item.libro"] = "Textbook",
+	["item.pelota"] = "Basketball",
+	["item.aerosol"] = "Spray can",
+	["item.desc_walkie"] = "Talk to every other walkie in the school",
+	["item.desc_prismaticos"] = "Zoom in and read a sheet from across the room",
+	["item.desc_celular"] = "Whispers an answer to one classmate nearby",
+	["item.desc_libro"] = "Read it at recess: you learn {n} answers",
+	["item.desc_pelota"] = "It is a basketball. There is a hoop.",
+	["item.desc_aerosol"] = "Paint on any wall in the school",
+	-- Radio y celular
+	["radio.title"] = "Walkie-talkie",
+	["radio.placeholder"] = "Question 4 is C",
+	["radio.send"] = "Transmit",
+	["radio.sent"] = "Transmitted to {n} walkies",
+	["radio.nobody"] = "Nobody else has a walkie",
+	["radio.heard"] = "[radio] {name}: {text}",
+	["radio.phone"] = "[phone] {name}: {text}",
+	["radio.need_tool"] = "You need a walkie-talkie in your hand",
+	["radio.too_long"] = "That message is too long",
+	-- Prismaticos
+	["zoom.on"] = "Binoculars: Q reads the sheet you are aiming at",
+	["zoom.no_target"] = "There is no sheet in your sights",
+	["zoom.read"] = "You read question {i} from over there",
+	-- Libros y empollones
+	["book.read"] = "Read the textbook",
+	["book.learned"] = "You learned {n} answers",
+	["book.busy"] = "You already read that one",
+	["book.only_recess"] = "There is no time to read now",
+	["nerd.ask"] = "Ask for answers",
+	["nerd.gave"] = "{name} gives you question {i}",
+	["nerd.refused"] = "{name} says no",
+	["nerd.wait"] = "{name} is not talking to you right now",
+	["nerd.dropped"] = "{name} drops a cheat sheet",
+	-- Nocaut
+	["ko.push"] = "You shoved {name}",
+	["ko.down"] = "{name} is on the floor",
+	["ko.you"] = "You got knocked down",
+	["ko.nobody"] = "Nobody within reach",
+	["ko.hint"] = "G shoves - three shoves and they go down",
+	["ko.in_class"] = "In the middle of the exam?",
+	-- La goma del profesor
+	["eraser.thrown"] = "{teacher} throws an eraser",
+	["eraser.hit"] = "The eraser got you",
+	["eraser.miss"] = "The eraser whistled past",
 	-- Boletin
 	["report.title"] = "Report card",
 	["report.day"] = "Day {n}",
@@ -710,7 +930,7 @@ local es: { [string]: string } = {
 	["hud.hint_report"] = "Salieron los boletines",
 	["hud.detention"] = "Castigo: {s}s",
 	["hud.cone"] = "Cono de la verguenza: {s}s",
-	["hud.keys"] = "E interactuar - Q espiar - R soplar - F lanzar",
+	["hud.keys"] = "E interactuar - Q espiar - R soplar - F lanzar - G empujar - B tirar - Z zoom",
 	-- Examen
 	["exam.title"] = "Examen - {subject}",
 	["exam.question"] = "Pregunta {i} de {n}",
@@ -815,6 +1035,68 @@ local es: { [string]: string } = {
 	["notify.hit"] = "Te pego una bolita de papel",
 	["notify.waiting"] = "Esperando mas alumnos",
 	["notify.seat"] = "Tu pupitre es fila {row}, asiento {seat}",
+	-- Pasillo: pelota y canasta
+	["ball.grab"] = "Agarrar la pelota",
+	["ball.throw"] = "Clic para tirar",
+	["ball.basket"] = "Canasta de {name}! +{n}",
+	["ball.taken"] = "La pelota la tiene otro",
+	["ball.score"] = "Canastas: {n}",
+	-- Grafiti
+	["paint.title"] = "Aerosol",
+	["paint.hint"] = "Manten el clic para pintar - la rueda cambia el tamano",
+	["paint.wall"] = "Eso no se puede pintar",
+	["paint.seen"] = "Pintando en el aula? En serio?",
+	["paint.color"] = "Color",
+	["paint.size"] = "Tamano",
+	["paint.clear"] = "Borrar",
+	-- Herramientas de comunicacion
+	["item.walkie"] = "Walkie-talkie",
+	["item.prismaticos"] = "Prismaticos",
+	["item.celular"] = "Celular",
+	["item.libro"] = "Libro de texto",
+	["item.pelota"] = "Pelota",
+	["item.aerosol"] = "Aerosol",
+	["item.desc_walkie"] = "Hablas con todos los walkies del colegio",
+	["item.desc_prismaticos"] = "Haces zoom y lees una hoja desde lejos",
+	["item.desc_celular"] = "Le pasa una respuesta a un companero cercano",
+	["item.desc_libro"] = "Leelo en el recreo: aprendes {n} respuestas",
+	["item.desc_pelota"] = "Es una pelota de basquet. Hay un aro.",
+	["item.desc_aerosol"] = "Pinta cualquier pared del colegio",
+	-- Radio y celular
+	["radio.title"] = "Walkie-talkie",
+	["radio.placeholder"] = "la 4 es C",
+	["radio.send"] = "Transmitir",
+	["radio.sent"] = "Transmitido a {n} walkies",
+	["radio.nobody"] = "Nadie mas tiene walkie",
+	["radio.heard"] = "[radio] {name}: {text}",
+	["radio.phone"] = "[celular] {name}: {text}",
+	["radio.need_tool"] = "Necesitas el walkie en la mano",
+	["radio.too_long"] = "Ese mensaje es muy largo",
+	-- Prismaticos
+	["zoom.on"] = "Prismaticos: Q lee la hoja que estas apuntando",
+	["zoom.no_target"] = "No hay ninguna hoja en la mira",
+	["zoom.read"] = "Leiste la pregunta {i} desde lejos",
+	-- Libros y empollones
+	["book.read"] = "Leer el libro",
+	["book.learned"] = "Aprendiste {n} respuestas",
+	["book.busy"] = "Ese ya lo leiste",
+	["book.only_recess"] = "Ahora no hay tiempo de leer",
+	["nerd.ask"] = "Pedir respuestas",
+	["nerd.gave"] = "{name} te pasa la {i}",
+	["nerd.refused"] = "{name} te dice que no",
+	["nerd.wait"] = "{name} no te habla por ahora",
+	["nerd.dropped"] = "A {name} se le cae una chuleta",
+	-- Nocaut
+	["ko.push"] = "Empujaste a {name}",
+	["ko.down"] = "{name} quedo en el piso",
+	["ko.you"] = "Te dejaron en el piso",
+	["ko.nobody"] = "No hay nadie al alcance",
+	["ko.hint"] = "G empuja - tres empujones y cae",
+	["ko.in_class"] = "En pleno examen?",
+	-- La goma del profesor
+	["eraser.thrown"] = "{teacher} te tira una goma",
+	["eraser.hit"] = "Te pego la goma",
+	["eraser.miss"] = "La goma paso silbando",
 	-- Boletin
 	["report.title"] = "Boletin",
 	["report.day"] = "Dia {n}",
@@ -906,7 +1188,7 @@ local pt: { [string]: string } = {
 	["hud.hint_report"] = "Sairam os boletins",
 	["hud.detention"] = "Castigo: {s}s",
 	["hud.cone"] = "Cone da vergonha: {s}s",
-	["hud.keys"] = "E interagir - Q espiar - R soprar - F arremessar",
+	["hud.keys"] = "E interagir - Q espiar - R soprar - F arremessar - G empurrar - B arremessar - Z zoom",
 	-- Examen
 	["exam.title"] = "Prova - {subject}",
 	["exam.question"] = "Questao {i} de {n}",
@@ -1011,6 +1293,68 @@ local pt: { [string]: string } = {
 	["notify.hit"] = "Uma bolinha de papel te acertou",
 	["notify.waiting"] = "Aguardando mais alunos",
 	["notify.seat"] = "Sua carteira e fila {row}, lugar {seat}",
+	-- Pasillo: pelota y canasta
+	["ball.grab"] = "Pegar a bola",
+	["ball.throw"] = "Clique para arremessar",
+	["ball.basket"] = "Cesta de {name}! +{n}",
+	["ball.taken"] = "Outra pessoa esta com a bola",
+	["ball.score"] = "Cestas: {n}",
+	-- Grafiti
+	["paint.title"] = "Spray",
+	["paint.hint"] = "Segure o clique para pintar - a roda muda o tamanho",
+	["paint.wall"] = "Isso nao da para pintar",
+	["paint.seen"] = "Pintando na sala? Serio?",
+	["paint.color"] = "Cor",
+	["paint.size"] = "Tamanho",
+	["paint.clear"] = "Apagar",
+	-- Herramientas de comunicacion
+	["item.walkie"] = "Walkie-talkie",
+	["item.prismaticos"] = "Binoculos",
+	["item.celular"] = "Celular",
+	["item.libro"] = "Livro didatico",
+	["item.pelota"] = "Bola",
+	["item.aerosol"] = "Lata de spray",
+	["item.desc_walkie"] = "Fala com todos os walkies da escola",
+	["item.desc_prismaticos"] = "Da zoom e le uma folha de longe",
+	["item.desc_celular"] = "Passa uma resposta para um colega perto",
+	["item.desc_libro"] = "Leia no recreio: voce aprende {n} respostas",
+	["item.desc_pelota"] = "E uma bola de basquete. Tem uma cesta.",
+	["item.desc_aerosol"] = "Pinta qualquer parede da escola",
+	-- Radio y celular
+	["radio.title"] = "Walkie-talkie",
+	["radio.placeholder"] = "a 4 e C",
+	["radio.send"] = "Transmitir",
+	["radio.sent"] = "Transmitido para {n} walkies",
+	["radio.nobody"] = "Ninguem mais tem walkie",
+	["radio.heard"] = "[radio] {name}: {text}",
+	["radio.phone"] = "[celular] {name}: {text}",
+	["radio.need_tool"] = "Voce precisa do walkie na mao",
+	["radio.too_long"] = "Essa mensagem e longa demais",
+	-- Prismaticos
+	["zoom.on"] = "Binoculos: Q le a folha que voce esta mirando",
+	["zoom.no_target"] = "Nao ha folha na mira",
+	["zoom.read"] = "Voce leu a questao {i} de longe",
+	-- Libros y empollones
+	["book.read"] = "Ler o livro",
+	["book.learned"] = "Voce aprendeu {n} respostas",
+	["book.busy"] = "Esse voce ja leu",
+	["book.only_recess"] = "Agora nao da tempo de ler",
+	["nerd.ask"] = "Pedir respostas",
+	["nerd.gave"] = "{name} te passa a {i}",
+	["nerd.refused"] = "{name} diz que nao",
+	["nerd.wait"] = "{name} nao fala com voce agora",
+	["nerd.dropped"] = "{name} deixa cair uma cola",
+	-- Nocaut
+	["ko.push"] = "Voce empurrou {name}",
+	["ko.down"] = "{name} ficou no chao",
+	["ko.you"] = "Voce foi derrubado",
+	["ko.nobody"] = "Nao ha ninguem ao alcance",
+	["ko.hint"] = "G empurra - tres empurroes e cai",
+	["ko.in_class"] = "No meio da prova?",
+	-- La goma del profesor
+	["eraser.thrown"] = "{teacher} joga uma borracha",
+	["eraser.hit"] = "A borracha te acertou",
+	["eraser.miss"] = "A borracha passou assobiando",
 	-- Boletin
 	["report.title"] = "Boletim",
 	["report.day"] = "Dia {n}",
@@ -1131,6 +1475,208 @@ return Strings
       </Item>
       <Item class="ModuleScript" referent="RBX10">
         <Properties>
+          <string name="Name">Style</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Style
+	------------------------------------------------------------------
+	La direccion de arte del colegio, en un solo archivo.
+
+	El objetivo es que NO parezca Roblox: nada de plastico saturado.
+	Tres decisiones sostienen el look entero:
+
+	  1. Paleta desaturada y fria. Ningun color pasa de ~60% de
+	     saturacion. Los unicos acentos calidos son la madera de los
+	     pupitres y el oxido: todo lo demas tira a gris verdoso.
+	  2. Materiales PBR del motor, no SmoothPlastic. Concrete, Brick,
+	     CeramicTiles, WoodPlanks y Metal ya traen mapas de rugosidad y
+	     normales de verdad; con Future se ven como superficies, no
+	     como bloques pintados.
+	  3. El desgaste es geometria. Manchas, rayones y oxido son piezas
+	     finisimas encima de la superficie base — asi se ve gastado sin
+	     tener que subir una sola textura.
+
+	Si subis tus propias texturas PBR, poné los ids en Config.Texturas
+	y `Style.applySurface` las aplica encima de todo esto.
+--]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+
+local Style = {}
+
+-- ── paleta exacta ──────────────────────────────────────────────────
+-- Los RGB son literales a proposito: esta tabla ES la identidad
+-- visual del juego y tiene que poder copiarse a mano en Studio.
+Style.Color = {
+	-- muros
+	MuroAlto = Color3.fromRGB(214, 208, 191),      -- crema institucional
+	MuroBajo = Color3.fromRGB(47, 66, 58),         -- friso verde oscuro
+	MuroFranja = Color3.fromRGB(92, 112, 96),      -- linea de acento
+	MuroSucio = Color3.fromRGB(178, 172, 156),     -- manchas de roce
+
+	-- techos
+	Placa = Color3.fromRGB(226, 224, 214),         -- placa acustica
+	PlacaSucia = Color3.fromRGB(206, 200, 184),    -- filtracion
+	Rejilla = Color3.fromRGB(158, 160, 163),       -- perfil de aluminio
+	Losa = Color3.fromRGB(120, 118, 112),
+
+	-- pisos
+	Baldosa = Color3.fromRGB(150, 146, 136),
+	BaldosaAlterna = Color3.fromRGB(132, 128, 119),
+	BaldosaGastada = Color3.fromRGB(118, 114, 106),
+	Cera = Color3.fromRGB(168, 165, 155),          -- brillo del encerado
+
+	-- casilleros
+	Casillero = Color3.fromRGB(40, 74, 82),        -- verde azulado
+	CasilleroLuz = Color3.fromRGB(58, 96, 104),
+	Rayon = Color3.fromRGB(96, 116, 120),
+	Oxido = Color3.fromRGB(122, 76, 48),
+	Manija = Color3.fromRGB(186, 188, 190),
+
+	-- mobiliario
+	Madera = Color3.fromRGB(168, 130, 84),         -- roble viejo
+	MaderaGastada = Color3.fromRGB(138, 104, 66),
+	MaderaOscura = Color3.fromRGB(104, 76, 48),
+	Metal = Color3.fromRGB(74, 78, 84),
+	MetalClaro = Color3.fromRGB(122, 126, 132),
+	Asiento = Color3.fromRGB(38, 54, 72),
+
+	-- aula
+	Pizarra = Color3.fromRGB(38, 62, 52),
+	MarcoPizarra = Color3.fromRGB(176, 176, 172),
+	Tiza = Color3.fromRGB(228, 232, 226),
+	Puerta = Color3.fromRGB(116, 84, 54),
+	MarcoPuerta = Color3.fromRGB(96, 100, 106),
+	Vidrio = Color3.fromRGB(178, 196, 206),
+
+	-- luz
+	Tubo = Color3.fromRGB(246, 250, 236),
+	LuzFria = Color3.fromRGB(226, 238, 255),
+	LuzCalida = Color3.fromRGB(255, 236, 206),
+	Salida = Color3.fromRGB(226, 66, 54),          -- cartel de salida
+}
+
+-- ── materiales ─────────────────────────────────────────────────────
+-- Todos son PBR del motor: traen normal y rugosidad reales.
+Style.Material = {
+	MuroAlto = Enum.Material.Concrete,
+	MuroBajo = Enum.Material.Brick,
+	Placa = Enum.Material.Plaster,
+	Rejilla = Enum.Material.Metal,
+	Piso = Enum.Material.CeramicTiles,
+	PisoGastado = Enum.Material.Pavement,
+	Casillero = Enum.Material.Metal,
+	Oxido = Enum.Material.CorrodedMetal,
+	Madera = Enum.Material.WoodPlanks,
+	MaderaLisa = Enum.Material.Wood,
+	Metal = Enum.Material.DiamondPlate,
+	MetalLiso = Enum.Material.Metal,
+	Pizarra = Enum.Material.Slate,
+	Vidrio = Enum.Material.Glass,
+	Tela = Enum.Material.Fabric,
+	Neon = Enum.Material.Neon,
+}
+
+-- ── reflectancia ───────────────────────────────────────────────────
+-- El suelo encerado es lo unico que refleja de verdad. Un colegio con
+-- todo brillante parece un shopping.
+Style.Reflectance = {
+	Piso = 0.06,
+	Casillero = 0.04,
+	Pizarra = 0.02,
+	Vidrio = 0.25,
+	Manija = 0.18,
+}
+
+--- Aplica color + material + reflectancia de una sola vez.
+function Style.paint(part: BasePart, color: Color3, material: Enum.Material, reflectance: number?)
+	part.Color = color
+	part.Material = material
+	part.Reflectance = reflectance or 0
+end
+
+-- ── texturas propias ───────────────────────────────────────────────
+
+local function assetUrl(id: string): string
+	if id == "" then
+		return ""
+	end
+	return string.find(id, "://") and id or ("rbxassetid://" .. id)
+end
+
+--- Cuelga un SurfaceAppearance de la parte si Config.Texturas tiene
+--- ids cargados para esa familia. Sin ids, no hace nada y la parte se
+--- queda con el material PBR del motor.
+---
+--- SurfaceAppearance manda sobre Material: por eso el color base pasa
+--- a ser el del ColorMap y `part.Color` deja de verse. Es lo esperado.
+function Style.applySurface(part: BasePart, family: string): boolean
+	local textures = (Config.Texturas :: any)[family]
+	if not textures or textures.color == "" then
+		return false
+	end
+	if part:FindFirstChildOfClass("SurfaceAppearance") then
+		return true
+	end
+
+	local ok = pcall(function()
+		local surface = Instance.new("SurfaceAppearance")
+		surface.Name = "PBR"
+		surface.ColorMap = assetUrl(textures.color)
+		if textures.normal ~= "" then
+			surface.NormalMap = assetUrl(textures.normal)
+		end
+		if textures.rugosidad ~= "" then
+			surface.RoughnessMap = assetUrl(textures.rugosidad)
+		end
+		if textures.metalidad ~= "" then
+			surface.MetalnessMap = assetUrl(textures.metalidad)
+		end
+		surface.Parent = part
+	end)
+	return ok
+end
+
+--- Recorre un modelo y aplica las texturas propias por nombre de pieza.
+function Style.applySurfaces(root: Instance, mapping: { [string]: string })
+	local applied = 0
+	for _, descendant in root:GetDescendants() do
+		if descendant:IsA("BasePart") then
+			local family = mapping[descendant.Name]
+			if family and Style.applySurface(descendant, family) then
+				applied += 1
+			end
+		end
+	end
+	return applied
+end
+
+--- Que familia de textura le toca a cada pieza del mapa.
+Style.SurfaceMap = {
+	Pared = "Pared",
+	ParedLateral = "Pared",
+	ParedFondo = "Pared",
+	ParedPasillo = "Pared",
+	Fondo = "Pared",
+	Dintel = "Pared",
+	Piso = "Piso",
+	Baldosa = "Piso",
+	Cuerpo = "Casillero",
+	PuertaCasillero = "Casillero",
+	Pupitre = "Pupitre",
+	EscritorioProfesor = "Pupitre",
+	Placa = "Techo",
+}
+
+table.freeze(Style.Color)
+table.freeze(Style.Material)
+return Style
+]]></ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX11">
+        <Properties>
           <string name="Name">Theme</string>
           <ProtectedString name="Source"><![CDATA[--!strict
 --[[
@@ -1209,7 +1755,7 @@ return Theme
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX11">
+      <Item class="ModuleScript" referent="RBX12">
         <Properties>
           <string name="Name">Util</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -1357,11 +1903,11 @@ return Util
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="RBX13">
+  <Item class="ServerScriptService" referent="RBX14">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Script" referent="RBX27">
+    <Item class="Script" referent="RBX36">
       <Properties>
         <string name="Name">Server</string>
         <ProtectedString name="Source"><![CDATA[--!strict
@@ -1370,17 +1916,19 @@ return Util
 	------------------------------------------------------------------
 	El orden importa y esta pensado:
 
-		1. Net.build()          los remotes tienen que existir antes de
-		                        que cualquier cliente los busque
-		2. ServerStorage        banco de preguntas y penalizaciones,
-		                        fuera del alcance del cliente
-		3. Templates            plantillas de herramientas en
-		                        ReplicatedStorage (el cliente las lee)
-		4. MapBuilder           el instituto entero
-		5. servicios            examenes, objetos, sospecha, castigos
-		6. TeacherAI            la vision arranca ya, los profesores
-		                        aparecen al empezar cada examen
-		7. RoundManager         el bucle escolar
+		1. Net.build()   los remotes tienen que existir antes de que
+		                 cualquier cliente los busque
+		2. ServerStorage banco de preguntas, penalizaciones y modelos
+		                 de respaldo, fuera del alcance del cliente
+		3. Templates     plantillas de herramientas en ReplicatedStorage
+		4. Atmosphere    luz, cielo y post-proceso ANTES del mapa, para
+		                 que las luminarias nazcan ya configuradas
+		5. MapBuilder    el instituto entero
+		6. pasillo       grafiti, pelota, libros y empollones
+		7. servicios     examenes, objetos, sospecha, castigos, radio
+		8. TeacherAI     la vision arranca ya; los profesores aparecen
+		                 al empezar cada examen
+		9. RoundManager  el bucle escolar
 
 	Cada paso va en su pcall con un print: si algo falla, el Output
 	dice exactamente cual y el resto del juego sigue de pie. Aprendido
@@ -1388,7 +1936,6 @@ return Util
 	te deja parado en el vacio sin ninguna pista.
 --]]
 
-local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -1409,6 +1956,13 @@ local PunishService = require(script:WaitForChild("PunishService"))
 local ShopService = require(script:WaitForChild("ShopService"))
 local RoundManager = require(script:WaitForChild("RoundManager"))
 local LobbyService = require(script:WaitForChild("LobbyService"))
+local Atmosphere = require(script:WaitForChild("Atmosphere"))
+local GraffitiService = require(script:WaitForChild("GraffitiService"))
+local PlaygroundService = require(script:WaitForChild("PlaygroundService"))
+local BookService = require(script:WaitForChild("BookService"))
+local NerdNPCs = require(script:WaitForChild("NerdNPCs"))
+local RadioService = require(script:WaitForChild("RadioService"))
+local KnockoutService = require(script:WaitForChild("KnockoutService"))
 
 local function step(label: string, fn: () -> ())
 	local ok, err = pcall(fn)
@@ -1437,9 +1991,45 @@ step("modelos de respaldo en ServerStorage", function()
 	CharacterService.installBackup()
 end)
 
+step("iluminacion y post-proceso", function()
+	Atmosphere.apply()
+end)
+
 local map: any = nil
 step("instituto construido", function()
 	map = MapBuilder.build()
+end)
+
+step("paredes pintables", function()
+	GraffitiService.markMap(map)
+	GraffitiService.start(function(player)
+		-- Pintar dentro del aula durante el examen es una infraccion
+		-- como cualquier otra.
+		if ExamService.isRunning() then
+			SuspicionService.infraction(player, Config.Grafiti.SospechaPorPintar, "paint")
+		end
+	end)
+end)
+
+step("pasillo: pelota, libros y empollones", function()
+	PlaygroundService.build(map)
+	PlaygroundService.start(function(player, credits)
+		DataService.addCredits(player, credits)
+	end)
+	BookService.build(map)
+	BookService.start()
+	NerdNPCs.spawn(map)
+end)
+
+step("comunicaciones", function()
+	RadioService.start()
+end)
+
+step("empujones y nocaut", function()
+	KnockoutService.start()
+	KnockoutService.onNerdDown(function(player, model)
+		NerdNPCs.dropSheet(player, model)
+	end)
 end)
 
 -- ── 5. servicios ───────────────────────────────────────────────────
@@ -1456,6 +2046,9 @@ end)
 
 step("objetos y casilleros", function()
 	ItemService.start()
+	ItemService.onReadBook = function(player)
+		return BookService.readTool(player)
+	end
 	if map then
 		ItemService.bindLockers(map.lockers)
 	end
@@ -1473,6 +2066,10 @@ step("castigos", function()
 	PunishService.setDetention(map and map.detention)
 	TeacherAI.onPunish(function(player, teacher)
 		PunishService.apply(player, teacher)
+	end)
+	-- La goma de borrar no expulsa a nadie: aturde y descuenta.
+	TeacherAI.onStun(function(player, points)
+		PunishService.addPenalty(player, points)
 	end)
 end)
 
@@ -1580,33 +2177,459 @@ step("ciclo escolar", function()
 	RoundManager.start()
 end)
 
--- ── 11. luz ────────────────────────────────────────────────────────
--- Al final y en pcall: Lighting.Technology es de solo lectura desde un
--- script y va en el archivo del lugar, no aca.
-pcall(function()
-	Lighting.Brightness = 2
-	Lighting.ClockTime = 9.5
-	Lighting.Ambient = Color3.fromRGB(82, 84, 96)
-	Lighting.OutdoorAmbient = Color3.fromRGB(112, 118, 132)
-	Lighting.EnvironmentDiffuseScale = 0.55
-	Lighting.EnvironmentSpecularScale = 0.4
-	Lighting.GlobalShadows = true
-	Lighting.FogEnd = 900
-
-	if not Lighting:FindFirstChild("Atmosfera") then
-		local atmosphere = Instance.new("Atmosphere")
-		atmosphere.Name = "Atmosfera"
-		atmosphere.Density = 0.28
-		atmosphere.Haze = 0.9
-		atmosphere.Glare = 0.1
-		atmosphere.Parent = Lighting
-	end
-end)
-
 print("[Finals Week] Servidor listo.")
 ]]></ProtectedString>
       </Properties>
-      <Item class="ModuleScript" referent="RBX14">
+      <Item class="ModuleScript" referent="RBX15">
+        <Properties>
+          <string name="Name">Atmosphere</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Atmosphere
+	------------------------------------------------------------------
+	Iluminacion, cielo y post-proceso. Todo lo que hace que el colegio
+	no se vea como un juego plano de Roblox.
+
+	Una aclaracion importante antes que nada, porque se malinterpreta
+	seguido: la tecnologia de iluminacion NO esta en Workspace y NO se
+	puede escribir desde un script — `Lighting.Technology` es de solo
+	lectura en runtime. Se define en el archivo del lugar, y aca eso lo
+	hace tools/build_studio.py leyendo Config.Estilo.Tecnologia. Este
+	modulo lo verifica al arrancar y avisa si quedo en Voxel.
+
+	Otra: no existe un objeto `AmbientOcclusion` en Roblox. La oclusion
+	ambiental viene incluida en Future — es una de las razones para
+	usarlo. Con ShadowMap no hay SSAO y el colegio se ve mas chato.
+
+	Lo que si se crea aca:
+	  Sky              cielo con el sol suavizado y sin estrellas
+	  Atmosphere       la neblina gris que apaga los colores a lo lejos
+	  Clouds           nubes volumetricas (van en Terrain, sin assets)
+	  BloomEffect      solo los tubos fluorescentes florecen
+	  ColorCorrection  el look lavado y frio, por clima
+	  DepthOfField     desenfoque suave, para que no parezca maqueta
+	  SunRaysEffect    un toque, casi imperceptible
+--]]
+
+local Lighting = game:GetService("Lighting")
+local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Style = require(Shared:WaitForChild("Style"))
+
+local E = Config.Estilo
+
+local Atmosphere = {}
+
+local correction: ColorCorrectionEffect? = nil
+local mood = "pasillo"
+
+local function replace(className: string, name: string): Instance
+	local existing = Lighting:FindFirstChild(name)
+	if existing then
+		existing:Destroy()
+	end
+	local instance = Instance.new(className)
+	instance.Name = name
+	instance.Parent = Lighting
+	return instance
+end
+
+-- ── cielo y niebla ─────────────────────────────────────────────────
+
+local function buildSky()
+	local sky = replace("Sky", "Cielo") :: Sky
+	-- Sin textura propia queda el cielo por defecto; la Atmosphere y
+	-- las nubes lo apagan hasta que lee como dia nublado. Si subis un
+	-- skybox propio, sus seis caras van en este objeto.
+	sky.CelestialBodiesShown = true
+	sky.StarCount = 0
+	sky.SunAngularSize = 9
+	sky.MoonAngularSize = 0
+end
+
+local function buildAtmosphere()
+	local A = E.Atmosfera
+	local atmosphere = replace("Atmosphere", "Atmosfera") :: Atmosphere
+	atmosphere.Density = A.densidad
+	atmosphere.Offset = A.desplazamiento
+	atmosphere.Color = A.color
+	atmosphere.Decay = A.decaimiento
+	atmosphere.Glare = A.brillo
+	atmosphere.Haze = A.neblina
+end
+
+--- Nubes volumetricas de verdad, sin subir nada: viven en Terrain.
+local function buildClouds()
+	local terrain = workspace:FindFirstChildOfClass("Terrain")
+	if not terrain then
+		return
+	end
+	local existing = terrain:FindFirstChildOfClass("Clouds")
+	if existing then
+		existing:Destroy()
+	end
+	local clouds = Instance.new("Clouds")
+	clouds.Cover = E.Nubes.cobertura
+	clouds.Density = E.Nubes.densidad
+	clouds.Color = Color3.fromRGB(206, 208, 214)
+	clouds.Enabled = true
+	clouds.Parent = terrain
+end
+
+-- ── post-proceso ───────────────────────────────────────────────────
+
+local function buildPost()
+	local bloom = replace("BloomEffect", "Bloom") :: BloomEffect
+	-- Umbral alto: solo los tubos fluorescentes y el neon florecen.
+	-- Con el umbral bajo se lava todo y vuelve el look de juguete.
+	bloom.Intensity = E.Bloom.intensidad
+	bloom.Size = E.Bloom.tamano
+	bloom.Threshold = E.Bloom.umbral
+
+	local dof = replace("DepthOfFieldEffect", "Profundidad") :: DepthOfFieldEffect
+	dof.FarIntensity = E.Profundidad.lejos
+	dof.FocusDistance = E.Profundidad.foco
+	dof.InFocusRadius = E.Profundidad.radio
+	dof.NearIntensity = E.Profundidad.cerca
+
+	local rays = replace("SunRaysEffect", "RayosSol") :: SunRaysEffect
+	rays.Intensity = E.RayosSol.intensidad
+	rays.Spread = E.RayosSol.dispersion
+
+	correction = replace("ColorCorrectionEffect", "Correccion") :: ColorCorrectionEffect
+	Atmosphere.setMood("pasillo", true)
+end
+
+--- Cambia el clima de color. Es lo que hace que el aula "se sienta"
+--- distinta del pasillo sin tocar una sola luz.
+function Atmosphere.setMood(name: string, instant: boolean?)
+	local preset = (E.Climas :: any)[name]
+	if not preset or not correction then
+		return
+	end
+	mood = name
+
+	local goal = {
+		Brightness = preset.brillo,
+		Contrast = preset.contraste,
+		Saturation = preset.saturacion,
+		TintColor = preset.tinte,
+	}
+
+	if instant then
+		for key, value in goal do
+			(correction :: any)[key] = value
+		end
+		return
+	end
+	TweenService:Create(correction, TweenInfo.new(1.4, Enum.EasingStyle.Sine), goal):Play()
+end
+
+function Atmosphere.mood(): string
+	return mood
+end
+
+-- ── luminarias ─────────────────────────────────────────────────────
+
+--- Una luminaria empotrada en el falso techo: marco de aluminio,
+--- difusor neon y una SurfaceLight que baña hacia abajo.
+---
+--- SurfaceLight y no PointLight a proposito: una luz puntual dentro de
+--- un panel largo hace un charco redondo en el piso; la de superficie
+--- reparte parejo, que es como se ve un fluorescente de verdad.
+function Atmosphere.troffer(parent: Instance, cframe: CFrame, width: number,
+	length: number, shadows: boolean): BasePart
+	local frame = Instance.new("Part")
+	frame.Name = "Luminaria"
+	frame.Anchored = true
+	frame.CanCollide = false
+	frame.Size = Vector3.new(width, 0.4, length)
+	frame.CFrame = cframe
+	Style.paint(frame, Style.Color.Rejilla, Style.Material.MetalLiso, 0.1)
+	frame.Parent = parent
+
+	local diffuser = Instance.new("Part")
+	diffuser.Name = "Difusor"
+	diffuser.Anchored = true
+	diffuser.CanCollide = false
+	diffuser.CastShadow = false
+	diffuser.Size = Vector3.new(width - 0.5, 0.16, length - 0.5)
+	diffuser.CFrame = cframe * CFrame.new(0, -0.24, 0)
+	Style.paint(diffuser, Style.Color.Tubo, Style.Material.Neon)
+	diffuser.Parent = parent
+
+	local light = Instance.new("SurfaceLight")
+	light.Face = Enum.NormalId.Bottom
+	light.Angle = 110
+	light.Range = 30
+	light.Brightness = 1.35
+	light.Color = Style.Color.LuzFria
+	-- Solo algunas proyectan sombra: en Future cada luz con sombra
+	-- cuesta, y con todas encendidas el colegio no corre en una
+	-- maquina modesta.
+	light.Shadows = shadows
+	light.Parent = diffuser
+
+	return frame
+end
+
+--- Cartel de SALIDA: el unico rojo del pasillo. Ancla la vista y da
+--- escala en un corredor largo y monotono.
+function Atmosphere.exitSign(parent: Instance, cframe: CFrame): BasePart
+	local box = Instance.new("Part")
+	box.Name = "Salida"
+	box.Anchored = true
+	box.CanCollide = false
+	box.Size = Vector3.new(3.2, 1.1, 0.35)
+	box.CFrame = cframe
+	Style.paint(box, Style.Color.Salida, Style.Material.Neon)
+	box.Parent = parent
+
+	local glow = Instance.new("PointLight")
+	glow.Brightness = 0.5
+	glow.Range = 9
+	glow.Color = Style.Color.Salida
+	glow.Shadows = false
+	glow.Parent = box
+
+	return box
+end
+
+-- ── entrada ────────────────────────────────────────────────────────
+
+function Atmosphere.apply()
+	-- Lo que si se puede escribir en runtime.
+	Lighting.Brightness = E.Brillo
+	Lighting.ClockTime = E.Hora
+	Lighting.GeographicLatitude = E.Latitud
+	Lighting.ExposureCompensation = E.Exposicion
+	Lighting.EnvironmentDiffuseScale = E.DifusaEntorno
+	Lighting.EnvironmentSpecularScale = E.EspecularEntorno
+	Lighting.GlobalShadows = true
+	Lighting.Ambient = Color3.fromRGB(28, 30, 34)
+	Lighting.OutdoorAmbient = Color3.fromRGB(86, 92, 104)
+	Lighting.FogEnd = 1200
+
+	pcall(function()
+		-- Solo existe con Future; con ShadowMap no molesta.
+		Lighting.ShadowSoftness = E.SuavidadSombras
+	end)
+
+	buildSky()
+	buildAtmosphere()
+	buildClouds()
+	buildPost()
+
+	-- Verificacion honesta: si el lugar quedo en Voxel, no hay sombras
+	-- proyectadas y todo el trabajo de arriba se ve la mitad de bien.
+	local technology = Lighting.Technology.Name
+	if technology ~= "Future" and technology ~= "ShadowMap" then
+		warn(string.format(
+			"[Luz] Lighting.Technology esta en %s. Ponelo en %s "
+				.. "(Lighting > Technology en Studio): es de solo lectura "
+				.. "desde un script y sin eso no hay sombras reales.",
+			technology, E.Tecnologia))
+	else
+		print(string.format("[Luz] %s, nubes al %d%%, look desaturado.",
+			technology, math.floor(E.Nubes.cobertura * 100)))
+	end
+end
+
+return Atmosphere
+]]></ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX16">
+        <Properties>
+          <string name="Name">BookService</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	BookService
+	------------------------------------------------------------------
+	Los libros de texto del pasillo.
+
+	Son la ruta honesta: leer uno en el recreo te deja aprendidas de
+	verdad unas cuantas respuestas del examen que viene, y aparecen ya
+	marcadas en tu hoja cuando te sentas. No es trampa — es la
+	alternativa a la trampa, y por eso existe: sin ella copiar no seria
+	una eleccion, seria la unica opcion.
+
+	Cada libro tiene su propio enfriamiento, asi que no se puede
+	exprimir el mismo tomo cuatro veces seguidas: hay que recorrer el
+	pasillo, y recorrer el pasillo es tiempo que no pasas preparando
+	otra cosa.
+--]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local ExamService = require(script.Parent:WaitForChild("ExamService"))
+
+local H = Config.Herramientas
+
+local BookService = {}
+
+local COLORES = {
+	Color3.fromRGB(126, 44, 52),
+	Color3.fromRGB(42, 74, 118),
+	Color3.fromRGB(58, 96, 62),
+	Color3.fromRGB(120, 92, 44),
+	Color3.fromRGB(78, 54, 104),
+}
+
+local cooldown: { [Instance]: number } = {}
+local playerCooldown: { [Player]: number } = {}
+local phase = "espera"
+
+function BookService.setPhase(name: string)
+	phase = name
+end
+
+local function canRead(player: Player): (boolean, any)
+	if phase ~= "recreo" and phase ~= "espera" then
+		return false, { key = "book.only_recess" }
+	end
+	local now = os.clock()
+	if now - (playerCooldown[player] or -math.huge) < H.LibroEnfriamiento then
+		return false, { key = "book.busy" }
+	end
+	return true, nil
+end
+
+local function grant(player: Player)
+	playerCooldown[player] = os.clock()
+	ExamService.grantKnowledge(player, H.LibroRevela)
+	Net.event(Net.Events.Notify):FireClient(player, {
+		key = "book.learned",
+		args = { n = H.LibroRevela },
+	})
+end
+
+--- Leer el libro que llevas en la mano (la herramienta comprada).
+function BookService.readTool(player: Player): any
+	local character = player.Character
+	local tool = character and character:FindFirstChildOfClass("Tool")
+	if not tool or tool:GetAttribute("Libro") ~= true then
+		return { ok = false, reason = { key = "cheat.none" } }
+	end
+	local ok, reason = canRead(player)
+	if not ok then
+		return { ok = false, reason = reason }
+	end
+	grant(player)
+	return { ok = true }
+end
+
+-- ── libros del mapa ────────────────────────────────────────────────
+
+local function buildBook(parent: Instance, cf: CFrame, index: number): Model
+	local model = Instance.new("Model")
+	model.Name = "Libro" .. index
+	model.Parent = parent
+
+	local color = COLORES[((index - 1) % #COLORES) + 1]
+	local cover = Util.part({
+		Name = "Tapa",
+		Size = Vector3.new(1.6, 0.4, 2.1),
+		CFrame = cf,
+		Color = color,
+		Material = Enum.Material.Fabric,
+		Parent = model,
+	})
+	Util.part({
+		Name = "Hojas",
+		Size = Vector3.new(1.5, 0.32, 2),
+		CFrame = cf * CFrame.new(0.06, 0.02, 0),
+		Color = Color3.fromRGB(246, 244, 234),
+		Material = Enum.Material.SmoothPlastic,
+		Parent = model,
+	}).CanCollide = false
+
+	model.PrimaryPart = cover
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "Leer"
+	prompt.ActionText = "Leer"
+	prompt.ObjectText = "Libro de texto"
+	prompt.HoldDuration = H.LibroSegundos
+	prompt.MaxActivationDistance = 8
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = cover
+
+	prompt.Triggered:Connect(function(player)
+		local now = os.clock()
+		if now - (cooldown[model] or -math.huge) < H.LibroEnfriamiento then
+			Net.event(Net.Events.Notify):FireClient(player, { key = "book.busy" })
+			return
+		end
+		local ok, reason = canRead(player)
+		if not ok then
+			Net.event(Net.Events.Notify):FireClient(player, reason)
+			return
+		end
+		cooldown[model] = now
+		grant(player)
+		Util.playSound(Config.Sonidos.Papel, cover, 0.3, 0.9)
+	end)
+
+	return model
+end
+
+--- Reparte los libros por los bancos y el suelo del pasillo.
+function BookService.build(map: any)
+	if not map then
+		return
+	end
+	local parent = workspace:FindFirstChild("Objetos") or workspace
+	local previous = parent:FindFirstChild("Libros")
+	if previous then
+		previous:Destroy()
+	end
+
+	local holder = Instance.new("Model")
+	holder.Name = "Libros"
+	holder.Parent = parent
+
+	local halfW = Config.Escuela.PasilloAncho / 2
+	local halfL = Config.Escuela.PasilloLargo / 2
+
+	-- Repartidos a lo largo del pasillo, alternando de lado: obliga a
+	-- caminar para juntarlos.
+	local spots = 6
+	for i = 1, spots do
+		local side = (i % 2 == 0) and 1 or -1
+		local z = -halfL + 40 + (i - 1) * ((Config.Escuela.PasilloLargo - 70) / spots)
+		local cf = CFrame.new(side * (halfW - 4.2), 2.3, z)
+			* CFrame.Angles(0, math.rad(20 * i), 0)
+		local ok, err = pcall(function()
+			buildBook(holder, cf, i)
+		end)
+		if not ok then
+			warn("[Libros] " .. tostring(err))
+		end
+	end
+
+	print(string.format("[Libros] %d libros de texto en el pasillo.", spots))
+end
+
+function BookService.start()
+	game:GetService("Players").PlayerRemoving:Connect(function(player)
+		playerCooldown[player] = nil
+	end)
+end
+
+return BookService
+]]></ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX17">
         <Properties>
           <string name="Name">CharacterService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -1842,6 +2865,15 @@ local function motor(parent: BasePart, child: BasePart, name: string, c0: CFrame
 	return joint
 end
 
+--- Las seis uniones de un rig R6. Los C0/C1 no son decorativos: si
+--- alguno esta mal, el Humanoid camina desarmado. Estan una sola vez
+--- para que profesor y alumnos compartan exactamente el mismo
+--- esqueleto.
+local function wireJoints(root: BasePart, torso: BasePart, head: BasePart,
+	leftArm: BasePart, rightArm: BasePart, leftLeg: BasePart, rightLeg: BasePart)
+	wireJoints(root, torso, head, leftArm, rightArm, leftLeg, rightLeg)
+end
+
 --- Cara enojada dibujada con partes: cejas caidas, ojos y boca torcida.
 local function angryFace(head: BasePart)
 	local function piece(name: string, size: Vector3, offset: CFrame, color: Color3)
@@ -1974,6 +3006,122 @@ function CharacterService.buildTeacher(name: string, position: Vector3): Model
 	return model
 end
 
+--- Cara neutra de alumno: ojos y una boca chiquita. Sin cejas
+--- caidas, que esas son del profesor.
+local function calmFace(head: BasePart)
+	local function piece(name: string, size: Vector3, offset: CFrame, color: Color3)
+		local part = Instance.new("Part")
+		part.Name = name
+		part.Size = size
+		part.Color = color
+		part.Material = Enum.Material.SmoothPlastic
+		part.CanCollide = false
+		part.CanQuery = false
+		part.Massless = true
+		part.CFrame = head.CFrame * offset
+		part.Parent = head.Parent
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = head
+		weld.Part1 = part
+		weld.Parent = part
+	end
+
+	for _, side in { -1, 1 } do
+		piece("Ojo", Vector3.new(0.22, 0.26, 0.1),
+			CFrame.new(side * 0.3, 0.08, -0.52), Color3.fromRGB(26, 28, 34))
+	end
+	piece("Boca", Vector3.new(0.3, 0.08, 0.1),
+		CFrame.new(0, -0.26, -0.52), Color3.fromRGB(70, 44, 44))
+end
+
+--- Un alumno NPC: el mismo esqueleto que el profesor, con uniforme y
+--- un libro bajo el brazo. Son los que estudiaron — a los que se les
+--- pide (o se les quita) la respuesta.
+function CharacterService.buildStudent(name: string, position: Vector3): Model
+	local model = Instance.new("Model")
+	model.Name = "Alumno"
+
+	local skin = Color3.fromRGB(222, 184, 150)
+	local sweater = Config.Empollones.ColorSueter
+
+	local root = limb(model, "HumanoidRootPart", Vector3.new(2, 2, 1), sweater)
+	root.Transparency = 1
+	root.CanCollide = false
+
+	local torso = limb(model, "Torso", Vector3.new(2, 2, 1), sweater)
+	local head = limb(model, "Head", Vector3.new(2, 1, 1), skin)
+	local mesh = Instance.new("SpecialMesh")
+	mesh.MeshType = Enum.MeshType.Head
+	mesh.Scale = Vector3.new(1.25, 1.25, 1.25)
+	mesh.Parent = head
+
+	local leftArm = limb(model, "Left Arm", Vector3.new(1, 2, 1), skin)
+	local rightArm = limb(model, "Right Arm", Vector3.new(1, 2, 1), skin)
+	local leftLeg = limb(model, "Left Leg", Vector3.new(1, 2, 1), Color3.fromRGB(48, 52, 66))
+	local rightLeg = limb(model, "Right Leg", Vector3.new(1, 2, 1), Color3.fromRGB(48, 52, 66))
+
+	root.CFrame = CFrame.new(position)
+	torso.CFrame = root.CFrame
+	head.CFrame = root.CFrame * CFrame.new(0, 1.5, 0)
+	leftArm.CFrame = root.CFrame * CFrame.new(-1.5, 0, 0)
+	rightArm.CFrame = root.CFrame * CFrame.new(1.5, 0, 0)
+	leftLeg.CFrame = root.CFrame * CFrame.new(-0.5, -2, 0)
+	rightLeg.CFrame = root.CFrame * CFrame.new(0.5, -2, 0)
+
+	for _, part in { torso, head, leftArm, rightArm, leftLeg, rightLeg } do
+		part.CanCollide = true
+	end
+
+	wireJoints(root, torso, head, leftArm, rightArm, leftLeg, rightLeg)
+
+	local function layer(anchor: BasePart, lname: string, size: Vector3, offset: CFrame,
+		color: Color3, material: Enum.Material)
+		local piece = Instance.new("Part")
+		piece.Name = lname
+		piece.Size = size
+		piece.Color = color
+		piece.Material = material
+		piece.CanCollide = false
+		piece.CanQuery = false
+		piece.Massless = true
+		piece.CFrame = anchor.CFrame * offset
+		piece.Parent = model
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = anchor
+		weld.Part1 = piece
+		weld.Parent = piece
+	end
+
+	layer(torso, "Camisa", Vector3.new(0.85, 1.85, 0.14), CFrame.new(0, 0, -0.5),
+		Color3.fromRGB(238, 240, 244), Enum.Material.Fabric)
+	layer(torso, "Corbata", Vector3.new(0.28, 1.2, 0.1), CFrame.new(0, 0.1, -0.6),
+		Color3.fromRGB(122, 32, 44), Enum.Material.Fabric)
+	layer(head, "Pelo", Vector3.new(2.05, 0.5, 1.08), CFrame.new(0, 0.42, 0.04),
+		Color3.fromRGB(46, 36, 30), Enum.Material.SmoothPlastic)
+	layer(head, "Anteojos", Vector3.new(1.5, 0.34, 0.08), CFrame.new(0, 0.08, -0.56),
+		Color3.fromRGB(38, 40, 48), Enum.Material.SmoothPlastic)
+	-- El libro bajo el brazo: es la razon por la que sabe las respuestas.
+	layer(leftArm, "Libro", Vector3.new(0.4, 1.3, 1), CFrame.new(-0.45, -0.2, 0),
+		Color3.fromRGB(126, 44, 52), Enum.Material.Fabric)
+
+	calmFace(head)
+
+	local humanoid = Instance.new("Humanoid")
+	humanoid.RigType = Enum.HumanoidRigType.R6
+	humanoid.WalkSpeed = 8
+	humanoid.JumpPower = 0
+	humanoid.MaxHealth = 100
+	humanoid.Health = 100
+	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	humanoid.Parent = model
+
+	model.PrimaryPart = root
+	nameTag(model, name, Color3.fromRGB(186, 224, 168))
+
+	return model
+end
+
 --- Animacion procedural: sin esto el NPC se desliza rigido, porque el
 --- script Animate solo viene en los avatares de jugador.
 function CharacterService.animate(model: Model): RBXScriptConnection?
@@ -2085,7 +3233,7 @@ return CharacterService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX15">
+      <Item class="ModuleScript" referent="RBX18">
         <Properties>
           <string name="Name">DataService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -2326,7 +3474,7 @@ return DataService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX16">
+      <Item class="ModuleScript" referent="RBX19">
         <Properties>
           <string name="Name">ExamService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -2380,6 +3528,9 @@ local sittings: { [Player]: Sitting } = {}
 -- asignado: se cobran al sentarse. Sin esto, comprar una chuleta antes
 -- del examen (que es el unico momento en que se puede) no servia.
 local pendingSheets: { [Player]: number } = {}
+-- Respuestas aprendidas leyendo libros en el recreo: se revelan solas
+-- al sentarse. Estudiar tambien es una forma de ganar.
+local pendingKnowledge: { [Player]: number } = {}
 local running = false
 local currentDay = 1
 
@@ -2623,6 +3774,27 @@ function ExamService.begin(day: number, players: { Player })
 			exams[room.index] = QuestionBank.generate(day)
 		end
 	end
+
+	-- Lo que aprendiste leyendo aparece ya revelado en la hoja.
+	for player, sitting in sittings do
+		local learned = pendingKnowledge[player] or 0
+		if learned > 0 then
+			local questions = exams[sitting.aula] or {}
+			local pool = {}
+			for i, question in questions do
+				if question.tipo == "opcion" then
+					table.insert(pool, i)
+				end
+			end
+			for _ = 1, math.min(learned, #pool) do
+				local pick = table.remove(pool, math.random(1, #pool))
+				if pick then
+					sitting.revealed[pick] = true
+				end
+			end
+		end
+	end
+	pendingKnowledge = {}
 
 	for player, sitting in sittings do
 		refreshPaper(sitting)
@@ -2894,6 +4066,69 @@ function ExamService.grantSheetUses(player: Player, uses: number)
 	end
 end
 
+--- Leer un libro de texto: te deja aprendidas N respuestas del
+--- proximo examen. Se cobra al sentarse, igual que las chuletas.
+function ExamService.grantKnowledge(player: Player, answers: number)
+	pendingKnowledge[player] = (pendingKnowledge[player] or 0) + answers
+end
+
+function ExamService.knowledgeOf(player: Player): number
+	return pendingKnowledge[player] or 0
+end
+
+--- Espiar con prismaticos: mismo mecanismo que espiar al de al lado,
+--- pero contra un alumno concreto y con el alcance del aparato. Se
+--- valida igual: solo se copia lo que el otro YA escribio.
+function ExamService.peekAt(player: Player, target: Player, index: number, range: number): any
+	local sitting = sittings[player]
+	local other = sittings[target]
+	if not running or not sitting or not other then
+		return { ok = false, reason = { key = "zoom.no_target" } }
+	end
+	if sitting.aula ~= other.aula then
+		return { ok = false, reason = { key = "zoom.no_target" } }
+	end
+	local distance = (other.desk.seat.Position - sitting.desk.seat.Position).Magnitude
+	if distance > range then
+		return { ok = false, reason = { key = "zoom.no_target" } }
+	end
+
+	local now = os.clock()
+	if now - sitting.lastPeek < X.CopiarSegundos then
+		return { ok = false, reason = { key = "cheat.cooldown" } }
+	end
+	sitting.lastPeek = now
+
+	SuspicionService.infraction(player, Config.Herramientas.PrismaticosSospecha, "zoom")
+
+	local seen = other.answers[index]
+	if not seen then
+		return { ok = false, reason = { key = "cheat.peek_fail" } }
+	end
+
+	-- Con prismaticos se lee mejor que de reojo: no hay error de lectura.
+	sitting.answers[index] = seen
+	refreshPaper(sitting)
+	pushState(player)
+	return { ok = true, reason = { key = "zoom.read", args = { i = index } } }
+end
+
+--- Todos los alumnos sentados en el aula de `player`, para que los
+--- prismaticos sepan a quien pueden apuntar.
+function ExamService.classmatesOf(player: Player): { { jugador: Player, asiento: BasePart } }
+	local sitting = sittings[player]
+	local list = {}
+	if not sitting then
+		return list
+	end
+	for other, candidate in sittings do
+		if other ~= player and candidate.aula == sitting.aula then
+			table.insert(list, { jugador = other, asiento = candidate.desk.seat })
+		end
+	end
+	return list
+end
+
 --- Una nota recibida escribe la respuesta directamente en la hoja.
 function ExamService.applyNote(player: Player, index: number, option: number)
 	local sitting = sittings[player]
@@ -2913,6 +4148,7 @@ function ExamService.start()
 	Players.PlayerRemoving:Connect(function(player)
 		sittings[player] = nil
 		pendingSheets[player] = nil
+		pendingKnowledge[player] = nil
 	end)
 end
 
@@ -2920,7 +4156,322 @@ return ExamService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX17">
+      <Item class="ModuleScript" referent="RBX20">
+        <Properties>
+          <string name="Name">GraffitiService</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	GraffitiService
+	------------------------------------------------------------------
+	Pintar en las paredes del colegio.
+
+	El truco: cada superficie pintable lleva un SurfaceGui con un Frame
+	vacio adentro, y cada pincelada es un circulito (Frame + UICorner)
+	posicionado en coordenadas de escala. Eso quiere decir que el
+	dibujo se replica solo, se ve igual para todos y no necesita
+	EditableImage ni ningun asset subido.
+
+	Lo unico que manda el cliente es una DIRECCION y que color/tamano
+	eligio. El servidor tira el rayo, decide contra que pego, calcula
+	las coordenadas UV de esa cara y estampa. Asi nadie puede pintar
+	del otro lado del mapa ni sobre una superficie que no toca.
+
+	Convencion de caras: mirando una cara desde afuera, la "derecha"
+	del SurfaceGui no siempre es +X. Esta tabla es la parte que hay que
+	acertar si o si; esta derivada, no adivinada:
+
+		Front  (-Z)   derecha = -X    alto = Y
+		Back   (+Z)   derecha = +X    alto = Y
+		Right  (+X)   derecha = -Z    alto = Y
+		Left   (-X)   derecha = +Z    alto = Y
+		Top    (+Y)   derecha = +X    alto = Z (hacia +Z)
+		Bottom (-Y)   derecha = +X    alto = Z (hacia -Z)
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+
+local G = Config.Grafiti
+
+local GraffitiService = {}
+
+local ATRIBUTO = "Pintable"
+local CANVAS = "Grafiti"
+
+local budget: { [Player]: number } = {}
+local lastTick: { [Player]: number } = {}
+
+-- ── caras ──────────────────────────────────────────────────────────
+
+type Face = {
+	id: Enum.NormalId,
+	-- (u, v) a partir de la posicion local; ancho y alto en studs
+	uv: (Vector3, Vector3) -> (number, number),
+	extent: (Vector3) -> (number, number),
+}
+
+local FACES: { Face } = {
+	{
+		id = Enum.NormalId.Front,
+		uv = function(p, s) return (s.X / 2 - p.X) / s.X, (s.Y / 2 - p.Y) / s.Y end,
+		extent = function(s) return s.X, s.Y end,
+	},
+	{
+		id = Enum.NormalId.Back,
+		uv = function(p, s) return (p.X + s.X / 2) / s.X, (s.Y / 2 - p.Y) / s.Y end,
+		extent = function(s) return s.X, s.Y end,
+	},
+	{
+		id = Enum.NormalId.Right,
+		uv = function(p, s) return (s.Z / 2 - p.Z) / s.Z, (s.Y / 2 - p.Y) / s.Y end,
+		extent = function(s) return s.Z, s.Y end,
+	},
+	{
+		id = Enum.NormalId.Left,
+		uv = function(p, s) return (p.Z + s.Z / 2) / s.Z, (s.Y / 2 - p.Y) / s.Y end,
+		extent = function(s) return s.Z, s.Y end,
+	},
+	{
+		id = Enum.NormalId.Top,
+		uv = function(p, s) return (p.X + s.X / 2) / s.X, (p.Z + s.Z / 2) / s.Z end,
+		extent = function(s) return s.X, s.Z end,
+	},
+	{
+		id = Enum.NormalId.Bottom,
+		uv = function(p, s) return (p.X + s.X / 2) / s.X, (s.Z / 2 - p.Z) / s.Z end,
+		extent = function(s) return s.X, s.Z end,
+	},
+}
+
+-- Normales locales de cada cara, en el mismo orden que FACES.
+local NORMALS = {
+	Vector3.new(0, 0, -1),
+	Vector3.new(0, 0, 1),
+	Vector3.new(1, 0, 0),
+	Vector3.new(-1, 0, 0),
+	Vector3.new(0, 1, 0),
+	Vector3.new(0, -1, 0),
+}
+
+--- Que cara es la que mira hacia `worldNormal`.
+local function faceFromNormal(part: BasePart, worldNormal: Vector3): Face?
+	local local_ = part.CFrame:VectorToObjectSpace(worldNormal)
+	local best, bestDot = nil, 0.5
+	for index, normal in NORMALS do
+		local dot = normal:Dot(local_)
+		if dot > bestDot then
+			bestDot = dot
+			best = FACES[index]
+		end
+	end
+	return best
+end
+
+-- ── lienzo ─────────────────────────────────────────────────────────
+
+function GraffitiService.markPaintable(part: BasePart)
+	part:SetAttribute(ATRIBUTO, true)
+end
+
+local function canvasName(face: Face): string
+	return CANVAS .. face.id.Name
+end
+
+local function ensureCanvas(part: BasePart, face: Face): Frame
+	local existing = part:FindFirstChild(canvasName(face))
+	if existing and existing:IsA("SurfaceGui") then
+		return existing:FindFirstChild("Lienzo") :: Frame
+	end
+
+	local width, height = face.extent(part.Size)
+
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = canvasName(face)
+	gui.Face = face.id
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	-- Pocos pixeles por stud: las paredes son enormes y no hace falta
+	-- resolucion, hace falta que no se coma la memoria del cliente.
+	gui.PixelsPerStud = G.PixelesPorStud
+	gui.LightInfluence = 0.6
+	gui.AlwaysOnTop = false
+	gui.MaxDistance = 140
+	gui.ZOffset = 0.02
+	gui.Parent = part
+
+	local canvas = Instance.new("Frame")
+	canvas.Name = "Lienzo"
+	canvas.Size = UDim2.fromScale(1, 1)
+	canvas.BackgroundTransparency = 1
+	canvas.BorderSizePixel = 0
+	canvas.ClipsDescendants = true
+	canvas:SetAttribute("Siguiente", 0)
+	canvas:SetAttribute("Ancho", width)
+	canvas:SetAttribute("Alto", height)
+	canvas.Parent = gui
+
+	return canvas
+end
+
+--- Estampa un punto. Cuando se pasa del maximo, borra el mas viejo:
+--- una pared se puede repintar para siempre sin que el cliente muera.
+local function stamp(canvas: Frame, u: number, v: number, color: Color3, pixels: number)
+	local index = (canvas:GetAttribute("Siguiente") :: number) + 1
+	canvas:SetAttribute("Siguiente", index)
+
+	local old = canvas:FindFirstChild("D" .. (index - G.MaximoPorSuperficie))
+	if old then
+		old:Destroy()
+	end
+
+	local dot = Instance.new("Frame")
+	dot.Name = "D" .. index
+	dot.AnchorPoint = Vector2.new(0.5, 0.5)
+	dot.Position = UDim2.fromScale(u, v)
+	dot.Size = UDim2.fromOffset(pixels, pixels)
+	dot.BackgroundColor3 = color
+	dot.BorderSizePixel = 0
+	dot.ZIndex = 1 + (index % 3)
+	dot.Parent = canvas
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(1, 0)
+	corner.Parent = dot
+end
+
+-- ── presupuesto por jugador ────────────────────────────────────────
+
+--- Cubeta simple: se rellena con el tiempo y cada pincelada gasta uno.
+--- Sin esto, un cliente modificado pinta mil puntos por segundo.
+local function spend(player: Player): boolean
+	local now = os.clock()
+	local last = lastTick[player] or now
+	lastTick[player] = now
+
+	local available = math.min(G.PuntosPorSegundo,
+		(budget[player] or G.PuntosPorSegundo) + (now - last) * G.PuntosPorSegundo)
+	if available < 1 then
+		budget[player] = available
+		return false
+	end
+	budget[player] = available - 1
+	return true
+end
+
+-- ── entrada ────────────────────────────────────────────────────────
+
+local paintParams = RaycastParams.new()
+paintParams.FilterType = Enum.RaycastFilterType.Exclude
+
+--- Se llama con cada pincelada. Devuelve por que no se pudo, si fallo.
+function GraffitiService.paint(player: Player, direction: any, colorIndex: any, sizeIndex: any): any
+	if not G.Habilitado then
+		return { ok = false }
+	end
+	if typeof(direction) ~= "Vector3" or direction.Magnitude < 0.05 then
+		return { ok = false }
+	end
+
+	local character = player.Character
+	local head = character and character:FindFirstChild("Head")
+	if not head or not head:IsA("BasePart") then
+		return { ok = false }
+	end
+	if not spend(player) then
+		return { ok = false }
+	end
+
+	local color = G.Paleta[math.clamp(tonumber(colorIndex) or 1, 1, #G.Paleta)]
+	-- El grosor viene en studs y se convierte a pixeles del lienzo:
+	-- asi una brocha mide lo mismo en una pared de 190 studs que en la
+	-- puerta de un casillero de 3.
+	local studs = G.Tamanos[math.clamp(tonumber(sizeIndex) or 2, 1, #G.Tamanos)]
+	local pixels = math.max(2, math.round(studs * G.PixelesPorStud))
+
+	paintParams.FilterDescendantsInstances = {
+		character,
+		workspace:FindFirstChild("Proyectiles") :: any,
+		workspace:FindFirstChild("Personajes") :: any,
+	}
+	local hit = workspace:Raycast(head.Position, direction.Unit * G.Alcance, paintParams)
+	if not hit or not hit.Instance:IsA("BasePart") then
+		return { ok = false, reason = { key = "paint.wall" } }
+	end
+
+	local part = hit.Instance
+	if part:GetAttribute(ATRIBUTO) ~= true then
+		return { ok = false, reason = { key = "paint.wall" } }
+	end
+
+	local face = faceFromNormal(part, hit.Normal)
+	if not face then
+		return { ok = false, reason = { key = "paint.wall" } }
+	end
+
+	local localPoint = part.CFrame:PointToObjectSpace(hit.Position)
+	local u, v = face.uv(localPoint, part.Size)
+	if u < 0 or u > 1 or v < 0 or v > 1 then
+		return { ok = false }
+	end
+
+	local canvas = ensureCanvas(part, face)
+	stamp(canvas, u, v, color, pixels)
+	return { ok = true, pintado = true }
+end
+
+--- Borra todo lo pintado (se llama al empezar una semana nueva).
+function GraffitiService.clearAll()
+	for _, descendant in workspace:GetDescendants() do
+		if descendant:IsA("SurfaceGui") and string.sub(descendant.Name, 1, #CANVAS) == CANVAS then
+			descendant:Destroy()
+		end
+	end
+end
+
+--- Deja pintable todo lo que el mapa marco como pared o casillero.
+function GraffitiService.markMap(map: any)
+	if not map then
+		return
+	end
+	local marked = 0
+	for _, descendant in map.root:GetDescendants() do
+		if descendant:IsA("BasePart") then
+			local name = descendant.Name
+			if name == "Pared" or name == "ParedLateral" or name == "ParedFondo"
+				or name == "ParedPasillo" or name == "Puerta" or name == "Cuerpo"
+				or name == "PuertaCasillero" or name == "Fondo" or name == "Dintel"
+				or name == "Baldosa" or name == "Friso" or name == "Tienda"
+				or name == "Pizarra" then
+				GraffitiService.markPaintable(descendant)
+				marked += 1
+			end
+		end
+	end
+	print(string.format("[Grafiti] %d superficies pintables.", marked))
+end
+
+function GraffitiService.start(onPaintedInClass: ((Player) -> ())?)
+	Net.event(Net.Events.Paint).OnServerEvent:Connect(function(player, direction, colorIndex, sizeIndex)
+		local result = GraffitiService.paint(player, direction, colorIndex, sizeIndex)
+		if result.pintado and onPaintedInClass then
+			onPaintedInClass(player)
+		end
+	end)
+
+	Players.PlayerRemoving:Connect(function(player)
+		budget[player] = nil
+		lastTick[player] = nil
+	end)
+end
+
+return GraffitiService
+]]></ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX21">
         <Properties>
           <string name="Name">ItemService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -3293,7 +4844,7 @@ function ItemService.start()
 		ItemService.setNote(player, payload)
 	end)
 
-	Net.event(Net.Events.Cheat).OnServerEvent:Connect(function(player, action, index)
+	Net.event(Net.Events.Cheat).OnServerEvent:Connect(function(player, action, index, extra)
 		local i = tonumber(index) and math.floor(tonumber(index) :: number) or 1
 		local result: any
 		if action == "peek" then
@@ -3302,6 +4853,18 @@ function ItemService.start()
 			result = ExamService.whisper(player, i)
 		elseif action == "sheet" then
 			result = ExamService.useSheet(player)
+		elseif action == "book" then
+			result = ItemService.onReadBook(player)
+		elseif action == "zoom" then
+			-- El cliente dice a QUIEN apunta; el servidor comprueba que
+			-- esten en la misma aula y dentro del alcance del aparato.
+			local target = ItemService.playerFromId(extra)
+			if target then
+				result = ExamService.peekAt(player, target, i,
+					Config.Herramientas.PrismaticosAlcance)
+			else
+				result = { ok = false, reason = { key = "zoom.no_target" } }
+			end
 		else
 			result = { ok = false, reason = { key = "error.generic" } }
 		end
@@ -3320,11 +4883,276 @@ function ItemService.countOf(player: Player, itemId: string): number
 	return countItem(player, itemId)
 end
 
+--- Lo rellena init.server con BookService.readTool: ItemService no
+--- tiene por que saber como funcionan los libros.
+ItemService.onReadBook = function(_player: Player): any
+	return { ok = false, reason = { key = "cheat.none" } }
+end
+
+function ItemService.playerFromId(userId: any): Player?
+	local id = tonumber(userId)
+	if not id then
+		return nil
+	end
+	for _, player in Players:GetPlayers() do
+		if player.UserId == id then
+			return player
+		end
+	end
+	return nil
+end
+
 return ItemService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX18">
+      <Item class="ModuleScript" referent="RBX22">
+        <Properties>
+          <string name="Name">KnockoutService</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	KnockoutService
+	------------------------------------------------------------------
+	Dejar KO al que no suelta las respuestas.
+
+	No es un golpe instantaneo: son empujones. Tres seguidos dentro de
+	la ventana y el otro se va al piso; uno solo por la espalda cuenta
+	casi por dos. Eso lo convierte en algo que se ve venir y de lo que
+	te podes escapar, en vez de un boton de "ganar".
+
+	Al caer, el que empujo se lleva UNA herramienta de la victima. Si
+	la victima es un empollon (NPC), se le cae la chuleta: ahi esta el
+	premio de verdad.
+
+	En el pasillo es gratis y es la parte tonta del juego. En pleno
+	examen es la infraccion mas cara que existe.
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local ExamService = require(script.Parent:WaitForChild("ExamService"))
+local SuspicionService = require(script.Parent:WaitForChild("SuspicionService"))
+
+local K = Config.Nocaut
+
+local KnockoutService = {}
+
+type Tally = { count: number, expires: number }
+
+local tally: { [Player]: { [Instance]: Tally } } = {}
+local lastShove: { [Player]: number } = {}
+local downUntil: { [Model]: number } = {}
+local nerdHandler: ((Player, Model) -> ())? = nil
+
+function KnockoutService.onNerdDown(handler: (Player, Model) -> ())
+	nerdHandler = handler
+end
+
+--- Todos los personajes con Humanoid que hay cerca: jugadores y NPC.
+local function candidates(): { Model }
+	local list: { Model } = {}
+	for _, player in Players:GetPlayers() do
+		if player.Character then
+			table.insert(list, player.Character)
+		end
+	end
+	local folder = workspace:FindFirstChild("Personajes")
+	if folder then
+		for _, child in folder:GetChildren() do
+			if child:IsA("Model") and child:GetAttribute("Empollon") == true then
+				table.insert(list, child)
+			end
+		end
+	end
+	return list
+end
+
+--- El mas cercano que este DELANTE del que empuja.
+local function targetOf(player: Player): (Model?, number)
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not root or not root:IsA("BasePart") then
+		return nil, 0
+	end
+
+	local origin = root.Position
+	local forward = root.CFrame.LookVector
+	local best: Model? = nil
+	local bestDistance = K.Alcance
+	local bestBack = 0
+
+	for _, model in candidates() do
+		if model ~= character then
+			local otherRoot = model:FindFirstChild("HumanoidRootPart")
+			if otherRoot and otherRoot:IsA("BasePart") then
+				local offset = otherRoot.Position - origin
+				local distance = offset.Magnitude
+				if distance <= bestDistance and forward:Dot(offset.Unit) > 0.35 then
+					bestDistance = distance
+					best = model
+					-- Cuanto coincide su espalda con mi direccion: 1 es
+					-- justo por detras.
+					bestBack = otherRoot.CFrame.LookVector:Dot(forward)
+				end
+			end
+		end
+	end
+	return best, bestBack
+end
+
+local function playerOf(model: Model): Player?
+	return Players:GetPlayerFromCharacter(model)
+end
+
+--- Le quita una herramienta al caido y se la da al que lo tiro.
+local function steal(from: Model, to: Player)
+	local tool = from:FindFirstChildOfClass("Tool")
+	if not tool then
+		local victim = playerOf(from)
+		local backpack = victim and victim:FindFirstChildOfClass("Backpack")
+		if backpack then
+			tool = backpack:FindFirstChildOfClass("Tool")
+		end
+	end
+	if not tool then
+		return
+	end
+	local backpack = to:FindFirstChildOfClass("Backpack")
+	if backpack then
+		tool.Parent = backpack
+	end
+end
+
+local function knockDown(model: Model, by: Player)
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	local root = model:FindFirstChild("HumanoidRootPart")
+	if not humanoid or not root or not root:IsA("BasePart") then
+		return
+	end
+	if downUntil[model] and os.clock() < downUntil[model] then
+		return
+	end
+	downUntil[model] = os.clock() + K.SegundosKO
+
+	local attackerRoot = by.Character and by.Character:FindFirstChild("HumanoidRootPart")
+	local push = attackerRoot and attackerRoot:IsA("BasePart")
+		and attackerRoot.CFrame.LookVector or Vector3.new(0, 0, -1)
+
+	humanoid.Sit = false
+	humanoid.PlatformStand = true
+	root.AssemblyLinearVelocity = (push + Vector3.new(0, 0.55, 0)).Unit * K.Impulso
+
+	Util.playSound(Config.Sonidos.Impacto, root, 0.5, 0.75)
+
+	local victim = playerOf(model)
+	if victim then
+		steal(model, by)
+		Net.event(Net.Events.Stunned):FireClient(victim, {
+			motivo = "ko",
+			segundos = K.SegundosKO,
+		})
+		Net.event(Net.Events.Notify):FireClient(victim, { key = "ko.you" })
+		Net.event(Net.Events.Notify):FireAllClients({
+			key = "ko.down",
+			args = { name = victim.DisplayName },
+		})
+	elseif model:GetAttribute("Empollon") == true then
+		if nerdHandler then
+			nerdHandler(by, model)
+		end
+	end
+
+	task.delay(K.SegundosKO, function()
+		if humanoid.Parent then
+			humanoid.PlatformStand = false
+		end
+		downUntil[model] = nil
+	end)
+end
+
+--- Un empujon. Devuelve el motivo si no se pudo.
+function KnockoutService.shove(player: Player): any
+	local now = os.clock()
+	if now - (lastShove[player] or -math.huge) < K.Enfriamiento then
+		return { ok = false }
+	end
+
+	local target, back = targetOf(player)
+	if not target then
+		return { ok = false, reason = { key = "ko.nobody" } }
+	end
+	lastShove[player] = now
+
+	-- Empujar en pleno examen es lo mas caro del juego.
+	if ExamService.isRunning() then
+		SuspicionService.infraction(player, K.SospechaEnExamen, "ko")
+		Net.event(Net.Events.Notify):FireClient(player, { key = "ko.in_class" })
+	end
+
+	local mine = tally[player]
+	if not mine then
+		mine = {}
+		tally[player] = mine
+	end
+	local entry = mine[target]
+	if not entry or now > entry.expires then
+		entry = { count = 0, expires = now + K.VentanaEmpujones }
+		mine[target] = entry
+	end
+
+	-- Por la espalda cuenta casi doble: pillarlo desprevenido es medio
+	-- KO de entrada.
+	entry.count += (back >= K.PorLaEspalda) and 2 or 1
+	entry.expires = now + K.VentanaEmpujones
+
+	local humanoid = target:FindFirstChildOfClass("Humanoid")
+	local root = target:FindFirstChild("HumanoidRootPart")
+	if root and root:IsA("BasePart") and humanoid then
+		local attackerRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+		local push = attackerRoot and attackerRoot:IsA("BasePart")
+			and attackerRoot.CFrame.LookVector or Vector3.new(0, 0, -1)
+		root.AssemblyLinearVelocity += push * 16 + Vector3.new(0, 6, 0)
+	end
+
+	if entry.count >= K.EmpujonesParaKO then
+		mine[target] = nil
+		knockDown(target, player)
+		return { ok = true, ko = true }
+	end
+
+	local name = playerOf(target)
+	Net.event(Net.Events.Notify):FireClient(player, {
+		key = "ko.push",
+		args = { name = name and name.DisplayName or target.Name },
+	})
+	return { ok = true, ko = false }
+end
+
+function KnockoutService.start()
+	Net.event(Net.Events.Knock).OnServerEvent:Connect(function(player)
+		local result = KnockoutService.shove(player)
+		if result.reason then
+			Net.event(Net.Events.Notify):FireClient(player, result.reason)
+		end
+	end)
+
+	Players.PlayerRemoving:Connect(function(player)
+		tally[player] = nil
+		lastShove[player] = nil
+	end)
+end
+
+return KnockoutService
+]]></ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX23">
         <Properties>
           <string name="Name">LobbyService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -3612,41 +5440,56 @@ return LobbyService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX19">
+      <Item class="ModuleScript" referent="RBX24">
         <Properties>
           <string name="Name">MapBuilder</string>
           <ProtectedString name="Source"><![CDATA[--!strict
 --[[
 	MapBuilder
 	------------------------------------------------------------------
-	Arma el instituto entero por codigo, modular y en piezas nombradas
-	para que el resto del juego no tenga que adivinar donde esta nada:
+	Arma el instituto entero por codigo, con la direccion de arte de
+	Style.lua y las proporciones de Config.Escuela.
 
 		Workspace/Instituto/Pasillo      casilleros + zona de recreo
 		Workspace/Instituto/Aulas/Aula1  filas fijas de pupitres,
 		                                 tarima, pizarra y puerta
 		Workspace/Instituto/Castigo      la sala de castigo
-		Workspace/Personajes             alumnos y el NPC del profesor
-		Workspace/Objetos                cosas interactivas del mapa
-		Workspace/Proyectiles            lo que vuela por el aire
 
-	Todo se construye con la geometria de Config.Escuela: cambiando
-	esos numeros cambia el colegio, no hay medidas escritas a mano.
+	Tres decisiones de arquitectura visual sostienen el look:
 
-	Cada pieza va dentro de su propio pcall: si una silla explota, el
-	resto del colegio se construye igual y el Output dice cual fallo.
+	  * El pasillo mide 16 studs de ancho y 11 de alto, con el falso
+	    techo a 9.4. Es estrecho a proposito: dos personas cruzandose
+	    ya se rozan, y correr por el se siente arriesgado.
+	  * Nada de losas planas gigantes. El piso es un damero de baldosas
+	    de 4 studs (una de cada doce, gastada) y el techo es una grilla
+	    de placas acusticas de 6 con perfiles de aluminio entre medio.
+	    Esa repeticion es lo que le da escala al pasillo y lo que hace
+	    que se lea como un colegio y no como una caja.
+	  * El desgaste es geometria: rayones en los casilleros, oxido en
+	    las bases, manchas en las paredes, placas de techo manchadas.
+	    Nada de eso necesita una textura subida.
+
+	Cada pieza va en su propio pcall: si una silla explota, el resto
+	del colegio se construye igual y el Output dice cual fallo.
 --]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
+local Style = require(Shared:WaitForChild("Style"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local Util = require(Shared:WaitForChild("Util"))
 
+local Atmosphere = require(script.Parent:WaitForChild("Atmosphere"))
+
 local E = Config.Escuela
+local C = Style.Color
+local M = Style.Material
 
 local MapBuilder = {}
+
+local rng = Random.new(20240607)
 
 export type Desk = {
 	seat: Seat,
@@ -3661,13 +5504,13 @@ export type Classroom = {
 	index: number,
 	model: Model,
 	center: Vector3,
-	dir: Vector3,          -- de la pizarra hacia el fondo del aula
+	dir: Vector3,
 	desks: { Desk },
 	door: BasePart,
 	blackboard: BasePart,
 	podium: BasePart,
-	patrol: { Vector3 },   -- puntos de patrullaje del profesor
-	spawn: Vector3,        -- donde aparece el profesor
+	patrol: { Vector3 },
+	spawn: Vector3,
 }
 
 export type Map = {
@@ -3684,15 +5527,23 @@ export type Map = {
 -- ── helpers ────────────────────────────────────────────────────────
 
 local function block(parent: Instance, name: string, size: Vector3, cf: CFrame,
-	color: Color3, material: Enum.Material): BasePart
+	color: Color3, material: Enum.Material, reflectance: number?): BasePart
 	local part = Util.part({
 		Name = name,
 		Size = size,
 		CFrame = cf,
-		Color = color,
-		Material = material,
 		Parent = parent,
 	})
+	Style.paint(part, color, material, reflectance)
+	return part
+end
+
+local function decor(parent: Instance, name: string, size: Vector3, cf: CFrame,
+	color: Color3, material: Enum.Material): BasePart
+	local part = block(parent, name, size, cf, color, material)
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CastShadow = false
 	return part
 end
 
@@ -3703,15 +5554,15 @@ local function safely(label: string, fn: () -> ())
 	end
 end
 
---- Un cartel de texto pegado a una pared (para nombres de aula, etc).
-local function sign(parent: Instance, text: string, size: Vector2, cf: CFrame, face: Enum.NormalId)
-	local plate = block(parent, "Cartel", Vector3.new(size.X, size.Y, 0.2), cf,
-		Color3.fromRGB(28, 32, 40), Enum.Material.SmoothPlastic)
+local function sign(parent: Instance, text: string, size: Vector2, cf: CFrame,
+	face: Enum.NormalId, color: Color3?)
+	local plate = decor(parent, "Cartel", Vector3.new(size.X, size.Y, 0.2), cf,
+		color or Color3.fromRGB(28, 32, 40), M.MetalLiso)
 	local gui = Instance.new("SurfaceGui")
 	gui.Face = face
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	gui.PixelsPerStud = 48
-	gui.LightInfluence = 0.2
+	gui.LightInfluence = 0.4
 	gui.Parent = plate
 
 	local label = Instance.new("TextLabel")
@@ -3719,9 +5570,108 @@ local function sign(parent: Instance, text: string, size: Vector2, cf: CFrame, f
 	label.BackgroundTransparency = 1
 	label.Font = Theme.FontBold
 	label.Text = text
-	label.TextColor3 = Color3.fromRGB(238, 240, 246)
+	label.TextColor3 = Color3.fromRGB(232, 234, 238)
 	label.TextScaled = true
 	label.Parent = gui
+end
+
+-- ── piso y techo ───────────────────────────────────────────────────
+
+--- Damero de baldosas. Una de cada doce sale gastada y una de cada
+--- treinta lleva una mancha: alcanza para que el suelo no se lea
+--- como una superficie plana infinita.
+local function tiledFloor(parent: Instance, center: Vector3, width: number, length: number)
+	local side = E.BaldosaLado
+	local cols = math.max(1, math.floor(width / side))
+	local rows = math.max(1, math.floor(length / side))
+	local originX = center.X - (cols * side) / 2 + side / 2
+	local originZ = center.Z - (rows * side) / 2 + side / 2
+
+	for i = 0, cols - 1 do
+		for j = 0, rows - 1 do
+			local checker = (i + j) % 2 == 0
+			local color = checker and C.Baldosa or C.BaldosaAlterna
+			local material = M.Piso
+			local roll = rng:NextNumber()
+			if roll < 0.085 then
+				color = C.BaldosaGastada
+				material = M.PisoGastado
+			end
+			local tile = block(parent, "Baldosa", Vector3.new(side, 1, side),
+				CFrame.new(originX + i * side, center.Y - 0.5, originZ + j * side),
+				color, material, Style.Reflectance.Piso)
+			tile.CastShadow = false
+
+			if roll > 0.972 then
+				-- Mancha de roce: una lamina finita, apenas mas oscura.
+				decor(parent, "Mancha", Vector3.new(side * 0.7, 0.06, side * 0.55),
+					tile.CFrame * CFrame.new(0, 0.53, 0) * CFrame.Angles(0, rng:NextNumber(0, 3), 0),
+					C.BaldosaGastada, M.PisoGastado).Transparency = 0.35
+			end
+		end
+	end
+end
+
+--- Falso techo: placas acusticas con perfiles de aluminio entre
+--- medio, y luminarias empotradas cada SeparacionLuces.
+--- `shadowEvery` dice cada cuantas luminarias una proyecta sombra.
+local function dropCeiling(parent: Instance, center: Vector3, width: number, length: number,
+	height: number, shadowEvery: number)
+	local side = E.PlacaTecho
+	local cols = math.max(1, math.floor(width / side))
+	local rows = math.max(1, math.floor(length / side))
+	local originX = center.X - (cols * side) / 2 + side / 2
+	local originZ = center.Z - (rows * side) / 2 + side / 2
+
+	local lightRow = math.max(1, math.floor(E.SeparacionLuces / side))
+	local lights = 0
+
+	for i = 0, cols - 1 do
+		for j = 0, rows - 1 do
+			local x = originX + i * side
+			local z = originZ + j * side
+			local cf = CFrame.new(x, height, z)
+
+			-- Cada `lightRow` placas, en la columna del medio, va una
+			-- luminaria en lugar de una placa.
+			if j % lightRow == 0 and i == math.floor(cols / 2) then
+				lights += 1
+				Atmosphere.troffer(parent, cf, side - 0.6, side - 1.4,
+					lights % shadowEvery == 0)
+			else
+				local stained = rng:NextNumber() < 0.09
+				local plate = block(parent, "Placa", Vector3.new(side - 0.25, 0.3, side - 0.25),
+					cf, stained and C.PlacaSucia or C.Placa, M.Placa)
+				plate.CanCollide = false
+			end
+		end
+	end
+
+	-- Perfiles de aluminio: la grilla que sostiene las placas.
+	for i = 0, cols do
+		decor(parent, "Perfil", Vector3.new(0.2, 0.34, length),
+			CFrame.new(originX - side / 2 + i * side, height, center.Z), C.Rejilla, M.Rejilla)
+	end
+	for j = 0, rows do
+		decor(parent, "Perfil", Vector3.new(width, 0.34, 0.2),
+			CFrame.new(center.X, height, originZ - side / 2 + j * side), C.Rejilla, M.Rejilla)
+	end
+end
+
+--- Friso de media pared: la franja oscura que llevan los pasillos de
+--- instituto. Es lo que mas rapido saca el look de "caja pintada".
+local function wainscot(parent: Instance, cf: CFrame, length: number, axis: string)
+	local thickness = 0.22
+	local size = axis == "Z"
+		and Vector3.new(thickness, E.AlturaZocalo, length)
+		or Vector3.new(length, E.AlturaZocalo, thickness)
+	decor(parent, "Friso", size, cf * CFrame.new(0, E.AlturaZocalo / 2, 0), C.MuroBajo, M.MuroBajo)
+
+	local stripSize = axis == "Z"
+		and Vector3.new(thickness + 0.06, 0.3, length)
+		or Vector3.new(length, 0.3, thickness + 0.06)
+	decor(parent, "Franja", stripSize,
+		cf * CFrame.new(0, E.AlturaZocalo + 0.15, 0), C.MuroFranja, M.MetalLiso)
 end
 
 -- ── pasillo ────────────────────────────────────────────────────────
@@ -3733,36 +5683,56 @@ local function buildLocker(parent: Instance, cf: CFrame, index: number): Model
 
 	local body = block(model, "Cuerpo",
 		Vector3.new(E.CasilleroAncho, E.CasilleroAlto, E.CasilleroFondo), cf,
-		E.ColorCasillero, Enum.Material.Metal)
+		C.Casillero, M.Casillero, Style.Reflectance.Casillero)
 	model.PrimaryPart = body
 
-	-- Puerta un poco mas clara, con rejilla y manija.
-	local door = block(model, "Puerta",
-		Vector3.new(E.CasilleroAncho - 0.25, E.CasilleroAlto - 0.3, 0.18),
-		cf * CFrame.new(0, 0, E.CasilleroFondo / 2 + 0.09),
-		E.ColorCasillero:Lerp(Color3.new(1, 1, 1), 0.16), Enum.Material.Metal)
+	local door = block(model, "PuertaCasillero",
+		Vector3.new(E.CasilleroAncho - 0.2, E.CasilleroAlto - 0.28, 0.16),
+		cf * CFrame.new(0, 0, E.CasilleroFondo / 2 + 0.08),
+		C.CasilleroLuz, M.Casillero, Style.Reflectance.Casillero)
 	door.CanCollide = false
 
-	block(model, "Rejilla", Vector3.new(E.CasilleroAncho - 1.4, 0.9, 0.08),
-		cf * CFrame.new(0, E.CasilleroAlto / 2 - 1.1, E.CasilleroFondo / 2 + 0.19),
-		Color3.fromRGB(24, 30, 38), Enum.Material.DiamondPlate).CanCollide = false
+	decor(model, "Rejilla", Vector3.new(E.CasilleroAncho - 1.2, 0.75, 0.07),
+		cf * CFrame.new(0, E.CasilleroAlto / 2 - 0.95, E.CasilleroFondo / 2 + 0.17),
+		Color3.fromRGB(24, 30, 38), M.Metal)
 
-	block(model, "Manija", Vector3.new(0.22, 1.1, 0.16),
-		cf * CFrame.new(E.CasilleroAncho / 2 - 0.55, -0.4, E.CasilleroFondo / 2 + 0.2),
-		Color3.fromRGB(206, 210, 216), Enum.Material.Metal).CanCollide = false
+	decor(model, "Manija", Vector3.new(0.2, 0.95, 0.14),
+		cf * CFrame.new(E.CasilleroAncho / 2 - 0.5, -0.35, E.CasilleroFondo / 2 + 0.18),
+		C.Manija, M.MetalLiso).Reflectance = Style.Reflectance.Manija
+
+	-- Desgaste: rayones al azar y oxido en la base. Sin esto, veinte
+	-- casilleros identicos se leen como un patron de papel pintado.
+	for _ = 1, rng:NextInteger(0, 3) do
+		decor(model, "Rayon",
+			Vector3.new(rng:NextNumber(0.3, 1.6), rng:NextNumber(0.06, 0.16), 0.05),
+			cf * CFrame.new(
+				rng:NextNumber(-E.CasilleroAncho / 2 + 0.4, E.CasilleroAncho / 2 - 0.4),
+				rng:NextNumber(-E.CasilleroAlto / 2 + 0.6, E.CasilleroAlto / 2 - 0.6),
+				E.CasilleroFondo / 2 + 0.18)
+				* CFrame.Angles(0, 0, rng:NextNumber(-0.5, 0.5)),
+			C.Rayon, M.MetalLiso)
+	end
+	if rng:NextNumber() < 0.35 then
+		decor(model, "Oxido",
+			Vector3.new(E.CasilleroAncho - 0.5, rng:NextNumber(0.5, 1.3), 0.06),
+			cf * CFrame.new(0, -E.CasilleroAlto / 2 + 0.7, E.CasilleroFondo / 2 + 0.17),
+			C.Oxido, M.Oxido)
+	end
 
 	local number = Instance.new("SurfaceGui")
 	number.Face = Enum.NormalId.Front
 	number.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	number.PixelsPerStud = 40
+	number.LightInfluence = 0.8
 	number.Parent = door
 	local label = Instance.new("TextLabel")
-	label.Size = UDim2.new(1, 0, 0, 42)
-	label.Position = UDim2.new(0, 0, 0, 8)
+	label.Size = UDim2.new(1, 0, 0, 36)
+	label.Position = UDim2.new(0, 0, 0, 6)
 	label.BackgroundTransparency = 1
 	label.Font = Theme.FontBold
 	label.Text = string.format("%03d", index)
-	label.TextColor3 = Color3.fromRGB(224, 230, 240)
+	label.TextColor3 = Color3.fromRGB(206, 214, 220)
+	label.TextTransparency = 0.25
 	label.TextScaled = true
 	label.Parent = number
 
@@ -3771,7 +5741,7 @@ local function buildLocker(parent: Instance, cf: CFrame, index: number): Model
 	prompt.ActionText = "Abrir"
 	prompt.ObjectText = "Casillero " .. index
 	prompt.HoldDuration = 0.35
-	prompt.MaxActivationDistance = 9
+	prompt.MaxActivationDistance = 8
 	prompt.RequiresLineOfSight = false
 	prompt.Parent = door
 
@@ -3782,66 +5752,53 @@ end
 local function buildRecreation(parent: Instance, zStart: number): BasePart
 	local half = E.PasilloAncho / 2
 
-	-- Bancos largos contra las paredes.
+	-- Bancos corridos contra el friso.
 	for i = 0, 2 do
 		local z = zStart + 6 + i * 10
 		for _, side in { -1, 1 } do
-			local x = side * (half - 3)
-			block(parent, "Banco", Vector3.new(2.4, 0.4, 7),
-				CFrame.new(x, 1.8, z), Color3.fromRGB(148, 108, 62), Enum.Material.WoodPlanks)
-			block(parent, "PataBanco", Vector3.new(2, 1.6, 0.5),
-				CFrame.new(x, 0.9, z - 2.6), Color3.fromRGB(74, 78, 88), Enum.Material.Metal)
-			block(parent, "PataBanco", Vector3.new(2, 1.6, 0.5),
-				CFrame.new(x, 0.9, z + 2.6), Color3.fromRGB(74, 78, 88), Enum.Material.Metal)
+			local x = side * (half - 2.4)
+			block(parent, "Banco", Vector3.new(1.9, 0.35, 6.5),
+				CFrame.new(x, 1.7, z), C.MaderaGastada, M.Madera)
+			for _, dz in { -2.4, 2.4 } do
+				decor(parent, "PataBanco", Vector3.new(1.6, 1.5, 0.4),
+					CFrame.new(x, 0.85, z + dz), C.Metal, M.MetalLiso)
+			end
 		end
 	end
 
-	-- Maquinas expendedoras.
+	-- Maquinas expendedoras: el unico mueble alto del recreo.
 	for i, side in { -1, 1 } do
-		local x = side * (half - 1.6)
-		local body = block(parent, "Expendedora", Vector3.new(2.6, 8, 4.4),
-			CFrame.new(x, 4, zStart + 2 + i * 4), Color3.fromRGB(180, 46, 52), Enum.Material.Metal)
-		block(parent, "Vidrio", Vector3.new(0.2, 5.6, 3.4),
-			body.CFrame * CFrame.new(-side * 1.35, 0.6, 0),
-			Color3.fromRGB(160, 200, 220), Enum.Material.Glass).Transparency = 0.55
+		local x = side * (half - 1.3)
+		local body = block(parent, "Expendedora", Vector3.new(2.2, 7, 3.8),
+			CFrame.new(x, 3.5, zStart + 2 + i * 4), Color3.fromRGB(122, 44, 46), M.MetalLiso)
+		local glass = decor(parent, "Vidrio", Vector3.new(0.18, 4.8, 3),
+			body.CFrame * CFrame.new(-side * 1.15, 0.5, 0), C.Vidrio, M.Vidrio)
+		glass.Transparency = 0.55
+		glass.Reflectance = Style.Reflectance.Vidrio
 	end
 
-	-- Mesa de ping pong en el centro del recreo.
-	local table_ = block(parent, "MesaPingPong", Vector3.new(9, 0.4, 5),
-		CFrame.new(0, 3, zStart + 18), Color3.fromRGB(24, 92, 62), Enum.Material.SmoothPlastic)
-	block(parent, "Red", Vector3.new(0.2, 1.1, 5),
-		table_.CFrame * CFrame.new(0, 0.75, 0), Color3.fromRGB(235, 238, 244), Enum.Material.Fabric).CanCollide = false
-	for _, dx in { -3.8, 3.8 } do
-		for _, dz in { -2, 2 } do
-			block(parent, "PataMesa", Vector3.new(0.4, 3, 0.4),
-				CFrame.new(dx, 1.5, zStart + 18 + dz), Color3.fromRGB(64, 68, 78), Enum.Material.Metal)
-		end
-	end
-
-	-- Plantas y tachos, para que el pasillo no sea un tubo vacio.
+	-- Tachos y una fuente: cosas a la altura de la vista.
 	for i = 0, 3 do
-		local z = zStart + 4 + i * 8
+		local z = zStart + 5 + i * 8
 		local side = (i % 2 == 0) and -1 or 1
-		local pot = block(parent, "Maceta", Vector3.new(2, 2, 2),
-			CFrame.new(side * (half - 2.4), 1, z), Color3.fromRGB(126, 92, 68), Enum.Material.Slate)
-		local leaves = block(parent, "Planta", Vector3.new(3.4, 4, 3.4),
-			pot.CFrame * CFrame.new(0, 2.8, 0), Color3.fromRGB(56, 118, 62), Enum.Material.Grass)
-		leaves.Shape = Enum.PartType.Ball
-		leaves.CanCollide = false
+		block(parent, "Tacho", Vector3.new(1.8, 2.6, 1.8),
+			CFrame.new(side * (half - 1.9), 1.3, z), C.Metal, M.MetalLiso)
 	end
 
-	-- Kiosco de la tienda: el mostrador con el prompt.
-	local counter = block(parent, "Tienda", Vector3.new(10, 4, 3),
-		CFrame.new(0, 2, zStart + 30), Color3.fromRGB(206, 168, 92), Enum.Material.WoodPlanks)
-	sign(parent, "TIENDA", Vector2.new(9, 2),
-		CFrame.new(0, 6.4, zStart + 30), Enum.NormalId.Front)
+	-- Kiosco: mostrador bajo con la persiana arriba.
+	local counter = block(parent, "Tienda", Vector3.new(8, 3.4, 2.4),
+		CFrame.new(0, 1.7, zStart + 28), C.MaderaOscura, M.Madera)
+	decor(parent, "Persiana", Vector3.new(8.4, 3, 0.3),
+		CFrame.new(0, 5.6, zStart + 28), C.Rejilla, M.Metal)
+	sign(parent, "TIENDA", Vector2.new(6, 1.4),
+		CFrame.new(0, 7.4, zStart + 28), Enum.NormalId.Front)
 
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "Tienda"
 	prompt.ActionText = "Tienda"
 	prompt.ObjectText = "Kiosco"
 	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = 12
+	prompt.MaxActivationDistance = 11
 	prompt.RequiresLineOfSight = false
 	prompt.Parent = counter
 
@@ -3856,45 +5813,43 @@ local function buildHallway(root: Model): (Model, { Model }, BasePart, BasePart,
 	local halfW = E.PasilloAncho / 2
 	local halfL = E.PasilloLargo / 2
 
-	block(hall, "Piso", Vector3.new(E.PasilloAncho, 1, E.PasilloLargo),
-		CFrame.new(0, -0.5, 0), E.ColorPiso, Enum.Material.CeramicTiles)
-	block(hall, "Techo", Vector3.new(E.PasilloAncho, 1, E.PasilloLargo),
-		CFrame.new(0, E.AlturaPiso, 0), Color3.fromRGB(238, 238, 236), Enum.Material.Plaster)
+	tiledFloor(hall, Vector3.new(0, 0, 0), E.PasilloAncho, E.PasilloLargo)
+	block(hall, "Losa", Vector3.new(E.PasilloAncho + 2, 1, E.PasilloLargo),
+		CFrame.new(0, E.AlturaPiso, 0), C.Losa, M.MuroAlto)
 
-	-- Paredes largas. Las aulas les abren huecos despues.
 	for _, side in { -1, 1 } do
-		block(hall, "Pared", Vector3.new(E.EspesorPared, E.AlturaPiso, E.PasilloLargo),
-			CFrame.new(side * halfW, E.AlturaPiso / 2, 0), E.ColorParedes, Enum.Material.Concrete)
-		block(hall, "Zocalo", Vector3.new(0.35, 1.2, E.PasilloLargo),
-			CFrame.new(side * (halfW - 0.6), 0.6, 0), E.ColorZocalo, Enum.Material.SmoothPlastic).CanCollide = false
+		local wall = block(hall, "Pared", Vector3.new(E.EspesorPared, E.AlturaPiso, E.PasilloLargo),
+			CFrame.new(side * halfW, E.AlturaPiso / 2, 0), C.MuroAlto, M.MuroAlto)
+		wainscot(hall, CFrame.new(side * (halfW - 0.55), 0, 0), E.PasilloLargo, "Z")
+
+		-- Manchas de roce a la altura del hombro, salteadas.
+		for _ = 1, 14 do
+			decor(hall, "ManchaPared",
+				Vector3.new(0.08, rng:NextNumber(0.6, 2.2), rng:NextNumber(1, 4)),
+				CFrame.new(side * (halfW - 0.55), rng:NextNumber(4.5, 8),
+					rng:NextNumber(-halfL + 4, halfL - 4)),
+				C.MuroSucio, M.MuroAlto).Transparency = 0.45
+		end
+		wall.Reflectance = 0
 	end
-	-- Tapas de los dos extremos.
+
 	for _, side in { -1, 1 } do
 		block(hall, "Fondo", Vector3.new(E.PasilloAncho + 2, E.AlturaPiso, E.EspesorPared),
-			CFrame.new(0, E.AlturaPiso / 2, side * halfL), E.ColorParedes, Enum.Material.Concrete)
+			CFrame.new(0, E.AlturaPiso / 2, side * halfL), C.MuroAlto, M.MuroAlto)
+		wainscot(hall, CFrame.new(0, 0, side * (halfL - 0.55)), E.PasilloAncho, "X")
+		Atmosphere.exitSign(hall, CFrame.new(0, E.AlturaFalsoTecho - 1.4, side * (halfL - 0.9)))
 	end
 
-	-- Luces de tubo cada 12 studs.
-	local lights = math.floor(E.PasilloLargo / 12)
-	for i = 0, lights do
-		local z = -halfL + 6 + i * 12
-		local tube = block(hall, "Tubo", Vector3.new(2, 0.3, 6),
-			CFrame.new(0, E.AlturaPiso - 0.7, z), Color3.fromRGB(255, 252, 238), Enum.Material.Neon)
-		tube.CanCollide = false
-		local light = Instance.new("PointLight")
-		light.Brightness = 1.1
-		light.Range = 26
-		light.Color = Color3.fromRGB(255, 250, 236)
-		light.Parent = tube
-	end
+	dropCeiling(hall, Vector3.new(0, 0, 0), E.PasilloAncho, E.PasilloLargo,
+		E.AlturaFalsoTecho, 3)
 
-	-- Casilleros: banda central del pasillo, los dos lados.
+	-- Casilleros: banda central, los dos lados.
 	local lockers: { Model } = {}
-	local bandStart = -halfL + 30
+	local bandStart = -halfL + 34
 	for side_i, side in { -1, 1 } do
 		for i = 0, E.CasillerosPorLado - 1 do
-			local z = bandStart + i * (E.CasilleroAncho + 0.15)
-			local cf = CFrame.new(side * (halfW - E.CasilleroFondo / 2 - 0.6),
+			local z = bandStart + i * (E.CasilleroAncho + 0.12)
+			local cf = CFrame.new(side * (halfW - E.CasilleroFondo / 2 - 0.75),
 				E.CasilleroAlto / 2, z)
 				* CFrame.Angles(0, side < 0 and math.rad(90) or math.rad(-90), 0)
 			local index = (side_i - 1) * E.CasillerosPorLado + i + 1
@@ -3904,18 +5859,14 @@ local function buildHallway(root: Model): (Model, { Model }, BasePart, BasePart,
 
 	local shop = buildRecreation(hall, halfL - E.ZonaRecreoLargo)
 
-	-- La campana, arriba del todo, al lado de la tienda.
-	local bell = block(hall, "Campana", Vector3.new(2.2, 2.2, 2.2),
-		CFrame.new(0, E.AlturaPiso - 2.6, halfL - 4),
-		Color3.fromRGB(196, 156, 62), Enum.Material.Metal)
-	bell.Shape = Enum.PartType.Ball
-	bell.CanCollide = false
+	local bell = decor(hall, "Campana", Vector3.new(1.6, 1.6, 0.7),
+		CFrame.new(0, E.AlturaFalsoTecho - 1.6, halfL - 3),
+		Color3.fromRGB(158, 128, 62), M.MetalLiso)
 
-	-- Puntos de aparicion, repartidos en la zona de recreo.
 	local spawns: { Vector3 } = {}
 	for i = 0, 11 do
-		local x = ((i % 4) - 1.5) * 5
-		local z = halfL - 8 - math.floor(i / 4) * 6
+		local x = ((i % 3) - 1) * 3.6
+		local z = halfL - 8 - math.floor(i / 3) * 5
 		table.insert(spawns, Vector3.new(x, 4, z))
 	end
 
@@ -3928,47 +5879,51 @@ local function buildDesk(parent: Instance, position: Vector3, look: Vector3,
 	aula: number, fila: number, asiento: number): Desk
 	local face = CFrame.lookAt(position, position + look)
 
-	local desk = block(parent, "Pupitre", Vector3.new(4.4, 0.28, 2.6),
-		face * CFrame.new(0, 3, -1.4), Color3.fromRGB(214, 190, 148), Enum.Material.WoodPlanks)
-	block(parent, "BordePupitre", Vector3.new(4.5, 0.35, 0.25),
-		desk.CFrame * CFrame.new(0, -0.08, -1.2), Color3.fromRGB(70, 74, 84), Enum.Material.Metal).CanCollide = false
-	for _, dx in { -1.8, 1.8 } do
-		block(parent, "PataPupitre", Vector3.new(0.22, 3, 0.22),
-			desk.CFrame * CFrame.new(dx, -1.5, -0.9), Color3.fromRGB(74, 78, 88), Enum.Material.Metal)
-		block(parent, "PataPupitre", Vector3.new(0.22, 3, 0.22),
-			desk.CFrame * CFrame.new(dx, -1.5, 0.9), Color3.fromRGB(74, 78, 88), Enum.Material.Metal)
-	end
-	-- Bandeja de abajo, donde se esconden las chuletas.
-	block(parent, "Bandeja", Vector3.new(3.8, 0.15, 2),
-		desk.CFrame * CFrame.new(0, -1.1, 0), Color3.fromRGB(160, 138, 104), Enum.Material.Wood).CanCollide = false
+	local desk = block(parent, "Pupitre", Vector3.new(3.9, 0.26, 2.3),
+		face * CFrame.new(0, 2.7, -1.25), C.Madera, M.Madera)
+	decor(parent, "BordePupitre", Vector3.new(4, 0.3, 0.22),
+		desk.CFrame * CFrame.new(0, -0.06, -1.05), C.Metal, M.MetalLiso)
 
-	-- La silla: un Seat de verdad, asi Occupant nos dice quien esta sentado.
+	-- Marcas de uso en la tapa: nadie estudia sin rayar el pupitre.
+	for _ = 1, rng:NextInteger(1, 3) do
+		decor(parent, "Marca",
+			Vector3.new(rng:NextNumber(0.2, 1.1), 0.03, rng:NextNumber(0.05, 0.3)),
+			desk.CFrame * CFrame.new(rng:NextNumber(-1.6, 1.6), 0.15, rng:NextNumber(-0.9, 0.9))
+				* CFrame.Angles(0, rng:NextNumber(0, 3), 0),
+			C.MaderaGastada, M.MaderaLisa)
+	end
+
+	for _, dx in { -1.6, 1.6 } do
+		for _, dz in { -0.8, 0.8 } do
+			decor(parent, "PataPupitre", Vector3.new(0.2, 2.7, 0.2),
+				desk.CFrame * CFrame.new(dx, -1.35, dz), C.Metal, M.MetalLiso)
+		end
+	end
+	decor(parent, "Bandeja", Vector3.new(3.3, 0.14, 1.7),
+		desk.CFrame * CFrame.new(0, -1, 0), C.MaderaGastada, M.MaderaLisa)
+
 	local seat = Instance.new("Seat")
 	seat.Name = "Asiento"
-	seat.Size = Vector3.new(2.6, 0.4, 2.6)
-	seat.CFrame = face * CFrame.new(0, 2.2, 1.1)
+	seat.Size = Vector3.new(2.3, 0.35, 2.3)
+	seat.CFrame = face * CFrame.new(0, 2, 1)
 	seat.Anchored = true
 	seat.CanCollide = true
-	seat.Color = Color3.fromRGB(46, 60, 84)
-	seat.Material = Enum.Material.SmoothPlastic
 	seat.TopSurface = Enum.SurfaceType.Smooth
+	Style.paint(seat, C.Asiento, M.MaderaLisa)
 	seat.Parent = parent
 
-	block(parent, "Respaldo", Vector3.new(2.6, 2.6, 0.3),
-		seat.CFrame * CFrame.new(0, 1.4, 1.15), Color3.fromRGB(46, 60, 84), Enum.Material.SmoothPlastic).CanCollide = false
-	for _, dx in { -1, 1 } do
-		block(parent, "PataSilla", Vector3.new(0.2, 2.2, 0.2),
-			seat.CFrame * CFrame.new(dx, -1.1, -0.9), Color3.fromRGB(74, 78, 88), Enum.Material.Metal)
-		block(parent, "PataSilla", Vector3.new(0.2, 2.2, 0.2),
-			seat.CFrame * CFrame.new(dx, -1.1, 0.9), Color3.fromRGB(74, 78, 88), Enum.Material.Metal)
+	decor(parent, "Respaldo", Vector3.new(2.3, 2.3, 0.26),
+		seat.CFrame * CFrame.new(0, 1.25, 1), C.Asiento, M.MaderaLisa)
+	for _, dx in { -0.9, 0.9 } do
+		for _, dz in { -0.8, 0.8 } do
+			decor(parent, "PataSilla", Vector3.new(0.18, 2, 0.18),
+				seat.CFrame * CFrame.new(dx, -1, dz), C.Metal, M.MetalLiso)
+		end
 	end
 
-	-- La hoja del examen apoyada en el pupitre. La UI la dibuja el
-	-- servidor via SurfaceGui: se ve desde afuera (por eso se puede espiar).
-	local paper = block(parent, "Hoja", Vector3.new(2.4, 0.05, 1.7),
-		desk.CFrame * CFrame.new(0, 0.17, -0.1), Color3.fromRGB(250, 248, 242), Enum.Material.SmoothPlastic)
-	paper.CanCollide = false
-	paper.CastShadow = false
+	local paper = decor(parent, "Hoja", Vector3.new(2.2, 0.04, 1.55),
+		desk.CFrame * CFrame.new(0, 0.16, -0.05), Color3.fromRGB(248, 246, 238),
+		Enum.Material.SmoothPlastic)
 
 	seat:SetAttribute("Aula", aula)
 	seat:SetAttribute("Fila", fila)
@@ -3982,91 +5937,87 @@ local function buildClassroom(root: Instance, index: number): Classroom
 	model.Name = "Aula" .. index
 	model.Parent = root
 
-	-- Impares a la izquierda del pasillo, pares a la derecha; cada par
-	-- de aulas baja un tramo en Z.
 	local side = (index % 2 == 1) and -1 or 1
 	local row = math.floor((index - 1) / 2)
 	local halfW = E.AulaAncho / 2
 	local halfL = E.AulaLargo / 2
+	local height = E.AulaAltura
 	local cx = side * (E.PasilloAncho / 2 + halfW)
-	local cz = -25 - row * (E.AulaLargo + 10)
+	local cz = -22 - row * (E.AulaLargo + 10)
 	local center = Vector3.new(cx, 0, cz)
 
-	-- dir: de la pizarra hacia el fondo. La puerta da al pasillo.
 	local dir = Vector3.new(-side, 0, 0)
-	local look = -dir  -- los alumnos miran a la pizarra
+	local look = -dir
 
-	block(model, "Piso", Vector3.new(E.AulaAncho, 1, E.AulaLargo),
-		CFrame.new(cx, -0.5, cz), Color3.fromRGB(178, 172, 160), Enum.Material.CeramicTiles)
-	block(model, "Techo", Vector3.new(E.AulaAncho, 1, E.AulaLargo),
-		CFrame.new(cx, E.AlturaPiso, cz), Color3.fromRGB(240, 240, 238), Enum.Material.Plaster)
+	tiledFloor(model, center, E.AulaAncho, E.AulaLargo)
+	block(model, "Losa", Vector3.new(E.AulaAncho, 1, E.AulaLargo),
+		CFrame.new(cx, height, cz), C.Losa, M.MuroAlto)
 
-	-- Paredes: la del pasillo lleva el hueco de la puerta.
-	block(model, "ParedFondo", Vector3.new(E.EspesorPared, E.AlturaPiso, E.AulaLargo),
-		CFrame.new(cx - dir.X * halfW, E.AlturaPiso / 2, cz), E.ColorParedes, Enum.Material.Concrete)
+	block(model, "ParedFondo", Vector3.new(E.EspesorPared, height, E.AulaLargo),
+		CFrame.new(cx - dir.X * halfW, height / 2, cz), C.MuroAlto, M.MuroAlto)
 	for _, dz in { -1, 1 } do
-		block(model, "ParedLateral", Vector3.new(E.AulaAncho, E.AlturaPiso, E.EspesorPared),
-			CFrame.new(cx, E.AlturaPiso / 2, cz + dz * halfL), E.ColorParedes, Enum.Material.Concrete)
+		block(model, "ParedLateral", Vector3.new(E.AulaAncho, height, E.EspesorPared),
+			CFrame.new(cx, height / 2, cz + dz * halfL), C.MuroAlto, M.MuroAlto)
+		wainscot(model, CFrame.new(cx, 0, cz + dz * (halfL - 0.55)), E.AulaAncho, "X")
 	end
-	-- Pared del pasillo partida en dos, dejando el vano de la puerta.
-	local doorWidth, doorHeight = 8, 10
+
+	local doorWidth, doorHeight = 6, 8.5
 	local wallX = cx + dir.X * halfW
 	local sidePiece = (E.AulaLargo - doorWidth) / 2
 	for _, dz in { -1, 1 } do
-		block(model, "ParedPasillo", Vector3.new(E.EspesorPared, E.AlturaPiso, sidePiece),
-			CFrame.new(wallX, E.AlturaPiso / 2, cz + dz * (doorWidth / 2 + sidePiece / 2)),
-			E.ColorParedes, Enum.Material.Concrete)
+		block(model, "ParedPasillo", Vector3.new(E.EspesorPared, height, sidePiece),
+			CFrame.new(wallX, height / 2, cz + dz * (doorWidth / 2 + sidePiece / 2)),
+			C.MuroAlto, M.MuroAlto)
 	end
-	block(model, "Dintel", Vector3.new(E.EspesorPared, E.AlturaPiso - doorHeight, doorWidth),
-		CFrame.new(wallX, doorHeight + (E.AlturaPiso - doorHeight) / 2, cz),
-		E.ColorParedes, Enum.Material.Concrete)
+	block(model, "Dintel", Vector3.new(E.EspesorPared, height - doorHeight, doorWidth),
+		CFrame.new(wallX, doorHeight + (height - doorHeight) / 2, cz), C.MuroAlto, M.MuroAlto)
 
-	-- La puerta: durante el examen se traba (CanCollide + opaca).
-	local door = block(model, "Puerta", Vector3.new(0.4, doorHeight, doorWidth),
-		CFrame.new(wallX, doorHeight / 2, cz), Color3.fromRGB(126, 92, 58), Enum.Material.WoodPlanks)
+	local door = block(model, "Puerta", Vector3.new(0.35, doorHeight, doorWidth),
+		CFrame.new(wallX, doorHeight / 2, cz), C.Puerta, M.Madera)
 	door.CanCollide = false
 	door.Transparency = 1
 	door:SetAttribute("Trabada", false)
+	decor(model, "MarcoPuerta", Vector3.new(0.5, doorHeight + 0.4, doorWidth + 0.7),
+		CFrame.new(wallX, doorHeight / 2, cz), C.MarcoPuerta, M.MetalLiso)
 
-	sign(model, "AULA " .. index, Vector2.new(6, 1.8),
-		CFrame.new(wallX + dir.X * 0.8, doorHeight + 1.6, cz)
+	sign(model, "AULA " .. index, Vector2.new(4.4, 1.3),
+		CFrame.new(wallX + dir.X * 0.7, doorHeight + 0.9, cz)
 			* CFrame.Angles(0, side < 0 and math.rad(90) or math.rad(-90), 0),
 		Enum.NormalId.Front)
 
-	-- Ventanas en la pared del fondo, para que entre luz.
+	-- Ventanas altas y angostas en la pared del fondo: dejan entrar
+	-- luz de tarde pero no dejan ver afuera desde el pupitre.
 	for i = -1, 1 do
-		local glass = block(model, "Ventana", Vector3.new(0.3, 5, 8),
-			CFrame.new(cx - dir.X * (halfW - 0.2), 8, cz + i * 12),
-			Color3.fromRGB(190, 214, 232), Enum.Material.Glass)
-		glass.Transparency = 0.55
-		glass.CanCollide = false
+		local glass = decor(model, "Ventana", Vector3.new(0.28, 4, 6),
+			CFrame.new(cx - dir.X * (halfW - 0.2), 6.4, cz + i * 9), C.Vidrio, M.Vidrio)
+		glass.Transparency = 0.5
+		glass.Reflectance = Style.Reflectance.Vidrio
+		decor(model, "MarcoVentana", Vector3.new(0.36, 4.4, 6.5),
+			CFrame.new(cx - dir.X * (halfW - 0.22), 6.4, cz + i * 9), C.MarcoPuerta, M.MetalLiso)
 	end
 
-	-- Pizarra + tarima del profesor.
 	local boardX = cx - dir.X * (halfW - 0.7)
-	local blackboard = block(model, "Pizarra", Vector3.new(0.4, 7, 26),
-		CFrame.new(boardX, 7.5, cz), E.ColorPizarra, Enum.Material.Slate)
-	block(model, "MarcoPizarra", Vector3.new(0.5, 7.6, 26.6),
-		CFrame.new(boardX + dir.X * 0.1, 7.5, cz),
-		Color3.fromRGB(150, 116, 72), Enum.Material.Wood).CanCollide = false
-	blackboard.CFrame = CFrame.new(boardX, 7.5, cz)
+	local blackboard = block(model, "Pizarra", Vector3.new(0.35, 6, 20),
+		CFrame.new(boardX, 6.4, cz), C.Pizarra, M.Pizarra, Style.Reflectance.Pizarra)
+	decor(model, "MarcoPizarra", Vector3.new(0.42, 6.5, 20.6),
+		CFrame.new(boardX + dir.X * 0.08, 6.4, cz), C.MarcoPizarra, M.MetalLiso)
+	decor(model, "Bandeja", Vector3.new(0.55, 0.22, 20),
+		CFrame.new(boardX + dir.X * 0.3, 3.2, cz), C.MarcoPizarra, M.MetalLiso)
 
-	local podium = block(model, "Tarima", Vector3.new(10, 1, E.AulaLargo - 8),
-		CFrame.new(boardX + dir.X * 5.5, 0.5, cz),
-		Color3.fromRGB(132, 96, 62), Enum.Material.WoodPlanks)
+	local podium = block(model, "Tarima", Vector3.new(8, 0.8, E.AulaLargo - 8),
+		CFrame.new(boardX + dir.X * 4.4, 0.4, cz), C.MaderaOscura, M.Madera)
 
-	local deskTeacher = block(model, "EscritorioProfesor", Vector3.new(3.4, 0.35, 8),
-		CFrame.new(boardX + dir.X * 7, 4, cz), Color3.fromRGB(112, 82, 54), Enum.Material.Wood)
-	for _, dz in { -3.4, 3.4 } do
-		block(model, "PataEscritorio", Vector3.new(3, 3.4, 0.4),
-			deskTeacher.CFrame * CFrame.new(0, -1.9, dz), Color3.fromRGB(96, 70, 46), Enum.Material.Wood)
+	local deskTeacher = block(model, "EscritorioProfesor", Vector3.new(3, 0.3, 7),
+		CFrame.new(boardX + dir.X * 6, 3.7, cz), C.MaderaOscura, M.Madera)
+	for _, dz in { -3, 3 } do
+		decor(model, "PataEscritorio", Vector3.new(2.6, 3.2, 0.35),
+			deskTeacher.CFrame * CFrame.new(0, -1.75, dz), C.MaderaOscura, M.MaderaLisa)
 	end
 
-	-- Filas fijas de pupitres.
 	local desks: { Desk } = {}
 	for fila = 1, E.FilasDePupitres do
 		for asiento = 1, E.PupitresPorFila do
-			local offsetX = 13 + (fila - 1) * E.PupitreSeparacionX
+			local offsetX = 11 + (fila - 1) * E.PupitreSeparacionX
 			local offsetZ = (asiento - (E.PupitresPorFila + 1) / 2) * E.PupitreSeparacionZ
 			local position = Vector3.new(boardX + dir.X * offsetX, 0, cz + offsetZ)
 			safely(string.format("pupitre A%d F%d P%d", index, fila, asiento), function()
@@ -4075,13 +6026,11 @@ local function buildClassroom(root: Instance, index: number): Classroom
 		end
 	end
 
-	-- Ruta de patrullaje: sube y baja por los pasillos entre filas,
-	-- mas una parada en la pizarra.
 	local patrol: { Vector3 } = {}
-	local lanes = E.FilasDePupitres
-	for fila = 1, lanes do
-		local x = boardX + dir.X * (13 + (fila - 1) * E.PupitreSeparacionX + E.PupitreSeparacionX / 2)
-		local edge = (E.PupitresPorFila / 2) * E.PupitreSeparacionZ + 1
+	for fila = 1, E.FilasDePupitres do
+		local x = boardX + dir.X * (11 + (fila - 1) * E.PupitreSeparacionX
+			+ E.PupitreSeparacionX / 2)
+		local edge = (E.PupitresPorFila / 2) * E.PupitreSeparacionZ + 0.5
 		local a = Vector3.new(x, 3, cz - edge)
 		local b = Vector3.new(x, 3, cz + edge)
 		if fila % 2 == 0 then
@@ -4091,19 +6040,10 @@ local function buildClassroom(root: Instance, index: number): Classroom
 		table.insert(patrol, b)
 	end
 
-	local spawn = Vector3.new(boardX + dir.X * 5, 4, cz)
-
-	-- Luces del aula.
-	for i = -1, 1 do
-		local tube = block(model, "Tubo", Vector3.new(8, 0.3, 2),
-			CFrame.new(cx, E.AlturaPiso - 0.7, cz + i * 12),
-			Color3.fromRGB(255, 252, 240), Enum.Material.Neon)
-		tube.CanCollide = false
-		local light = Instance.new("PointLight")
-		light.Brightness = 1.3
-		light.Range = 34
-		light.Parent = tube
-	end
+	-- Techo del aula: mismo sistema que el pasillo, con TODAS las
+	-- luminarias proyectando sombra. Es la unica sala donde importa
+	-- que las sombras de los pupitres se vean nitidas.
+	dropCeiling(model, center, E.AulaAncho, E.AulaLargo, height - 1.2, 1)
 
 	model.PrimaryPart = blackboard
 
@@ -4117,7 +6057,7 @@ local function buildClassroom(root: Instance, index: number): Classroom
 		blackboard = blackboard,
 		podium = podium,
 		patrol = patrol,
-		spawn = spawn,
+		spawn = Vector3.new(boardX + dir.X * 4.5, 4, cz),
 	}
 end
 
@@ -4129,34 +6069,41 @@ local function buildDetention(root: Instance): BasePart
 	model.Parent = root
 
 	local c = E.SalaDeCastigo
-	local size = 24
-	block(model, "Piso", Vector3.new(size, 1, size),
-		CFrame.new(c.X, -0.5, c.Z), Color3.fromRGB(120, 118, 112), Enum.Material.Concrete)
-	block(model, "Techo", Vector3.new(size, 1, size),
-		CFrame.new(c.X, 12, c.Z), Color3.fromRGB(150, 148, 142), Enum.Material.Concrete)
-	for _, offset in { Vector3.new(size / 2, 0, 0), Vector3.new(-size / 2, 0, 0) } do
-		block(model, "Pared", Vector3.new(1, 12, size),
-			CFrame.new(c.X + offset.X, 6, c.Z), Color3.fromRGB(138, 136, 130), Enum.Material.Concrete)
-	end
+	local size = 18
+	tiledFloor(model, Vector3.new(c.X, 0, c.Z), size, size)
+	block(model, "Losa", Vector3.new(size, 1, size),
+		CFrame.new(c.X, 10, c.Z), C.Losa, M.MuroAlto)
 	for _, offset in { size / 2, -size / 2 } do
-		block(model, "Pared", Vector3.new(size, 12, 1),
-			CFrame.new(c.X, 6, c.Z + offset), Color3.fromRGB(138, 136, 130), Enum.Material.Concrete)
+		block(model, "Pared", Vector3.new(1, 10, size),
+			CFrame.new(c.X + offset, 5, c.Z), C.MuroAlto, M.MuroAlto)
+		block(model, "Pared", Vector3.new(size, 10, 1),
+			CFrame.new(c.X, 5, c.Z + offset), C.MuroAlto, M.MuroAlto)
 	end
 
-	local chair = block(model, "Banquito", Vector3.new(3, 0.4, 3),
-		CFrame.new(c.X, 3, c.Z), Color3.fromRGB(96, 70, 46), Enum.Material.Wood)
-	sign(model, "SALA DE CASTIGO", Vector2.new(12, 2.4),
-		CFrame.new(c.X, 8, c.Z - size / 2 + 0.8), Enum.NormalId.Front)
+	local chair = block(model, "Banquito", Vector3.new(2.4, 0.35, 2.4),
+		CFrame.new(c.X, 2.6, c.Z), C.MaderaOscura, M.MaderaLisa)
+	sign(model, "SALA DE CASTIGO", Vector2.new(9, 1.8),
+		CFrame.new(c.X, 7, c.Z - size / 2 + 0.7), Enum.NormalId.Front)
 
-	local bulb = block(model, "Foco", Vector3.new(1, 1, 1),
-		CFrame.new(c.X, 10.6, c.Z), Color3.fromRGB(255, 240, 200), Enum.Material.Neon)
-	bulb.Shape = Enum.PartType.Ball
-	bulb.CanCollide = false
-	local light = Instance.new("PointLight")
-	light.Brightness = 1
-	light.Range = 20
-	light.Color = Color3.fromRGB(255, 226, 180)
-	light.Parent = bulb
+	-- Un solo tubo, parpadeando: es la sala donde te dejan pensar.
+	local troffer = Atmosphere.troffer(model, CFrame.new(c.X, 8.6, c.Z), 4, 6, true)
+	local diffuser = model:FindFirstChild("Difusor")
+	if diffuser and diffuser:IsA("BasePart") then
+		local light = diffuser:FindFirstChildOfClass("SurfaceLight")
+		task.spawn(function()
+			while diffuser.Parent do
+				task.wait(rng:NextNumber(2, 7))
+				if light then
+					light.Brightness = 0.2
+					diffuser.Material = Enum.Material.SmoothPlastic
+					task.wait(0.09)
+					light.Brightness = 1.35
+					diffuser.Material = Enum.Material.Neon
+				end
+			end
+		end)
+	end
+	troffer.Name = "Luminaria"
 
 	return chair
 end
@@ -4173,7 +6120,6 @@ function MapBuilder.build(): Map
 	root.Name = "Instituto"
 	root.Parent = workspace
 
-	-- Carpetas que el resto del juego da por hechas.
 	for _, name in { "Personajes", "Objetos", "Proyectiles" } do
 		if not workspace:FindFirstChild(name) then
 			local folder = Instance.new("Folder")
@@ -4197,10 +6143,15 @@ function MapBuilder.build(): Map
 
 	local detention = buildDetention(root)
 
-	-- El baseplate de emergencia del archivo del lugar ya no hace falta.
 	local baseplate = workspace:FindFirstChild("Baseplate")
 	if baseplate then
 		baseplate:Destroy()
+	end
+
+	-- Texturas PBR propias, si el usuario cargo ids en Config.Texturas.
+	local applied = Style.applySurfaces(root, Style.SurfaceMap)
+	if applied > 0 then
+		print(string.format("[Mapa] %d piezas con textura propia.", applied))
 	end
 
 	local totalDesks = 0
@@ -4226,7 +6177,564 @@ return MapBuilder
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX20">
+      <Item class="ModuleScript" referent="RBX25">
+        <Properties>
+          <string name="Name">NerdNPCs</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	NerdNPCs
+	------------------------------------------------------------------
+	Los alumnos que si estudiaron.
+
+	Estan en el pasillo, con el libro bajo el brazo, y saben respuestas
+	del examen que viene. Hay dos formas de sacarselas:
+
+	  pedirselas   gratis, rapido, y a veces te dicen que no
+	  tirarlos     siempre funciona, se les cae la chuleta, y en pleno
+	               examen te cuesta carisimo
+
+	Esa es toda la mecanica: la via amable es incierta y la via bruta
+	es segura pero cara. Si pedir siempre funcionara, nadie empujaria a
+	nadie; si nunca funcionara, no habria decision.
+--]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local CharacterService = require(script.Parent:WaitForChild("CharacterService"))
+local ExamService = require(script.Parent:WaitForChild("ExamService"))
+
+local E = Config.Empollones
+
+local NerdNPCs = {}
+
+local nerds: { Model } = {}
+local askCooldown: { [Model]: { [Player]: number } } = {}
+local animations: { RBXScriptConnection } = {}
+local rng = Random.new()
+
+local function nameFor(index: number): string
+	return E.Nombres[((index - 1) % #E.Nombres) + 1]
+end
+
+local function bindPrompt(model: Model, index: number)
+	local root = model:FindFirstChild("HumanoidRootPart")
+	if not root or not root:IsA("BasePart") then
+		return
+	end
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "Pedir"
+	prompt.ActionText = "Pedir respuestas"
+	prompt.ObjectText = nameFor(index)
+	prompt.HoldDuration = 0.4
+	prompt.MaxActivationDistance = 9
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = root
+
+	prompt.Triggered:Connect(function(player)
+		local perModel = askCooldown[model]
+		if not perModel then
+			perModel = {}
+			askCooldown[model] = perModel
+		end
+		local now = os.clock()
+		if now - (perModel[player] or -math.huge) < E.EnfriamientoPedir then
+			Net.event(Net.Events.Notify):FireClient(player, {
+				key = "nerd.wait",
+				args = { name = nameFor(index) },
+			})
+			return
+		end
+		perModel[player] = now
+
+		if rng:NextNumber() > E.ProbabilidadDeCeder then
+			Net.event(Net.Events.Notify):FireClient(player, {
+				key = "nerd.refused",
+				args = { name = nameFor(index) },
+			})
+			Util.playSound(Config.Sonidos.Error, root, 0.3, 0.9)
+			return
+		end
+
+		ExamService.grantKnowledge(player, 1)
+		Net.event(Net.Events.Notify):FireClient(player, {
+			key = "book.learned",
+			args = { n = 1 },
+		})
+		Util.playSound(Config.Sonidos.Acierto, root, 0.3, 1.2)
+	end)
+end
+
+--- Se le cayo la chuleta: el que lo tiro se lleva varias respuestas.
+function NerdNPCs.dropSheet(player: Player, model: Model)
+	ExamService.grantKnowledge(player, E.RespuestasAlCaer)
+	Net.event(Net.Events.Notify):FireAllClients({
+		key = "nerd.dropped",
+		args = { name = model:GetAttribute("Alumno") or model.Name },
+	})
+	Net.event(Net.Events.Notify):FireClient(player, {
+		key = "book.learned",
+		args = { n = E.RespuestasAlCaer },
+	})
+end
+
+function NerdNPCs.despawn()
+	for _, connection in animations do
+		connection:Disconnect()
+	end
+	animations = {}
+	for _, model in nerds do
+		if model.Parent then
+			model:Destroy()
+		end
+	end
+	nerds = {}
+	askCooldown = {}
+end
+
+--- Los reparte por el pasillo, mirando hacia el centro.
+function NerdNPCs.spawn(map: any)
+	NerdNPCs.despawn()
+	if not map then
+		return
+	end
+
+	local parent = CharacterService.folder()
+	local halfW = Config.Escuela.PasilloAncho / 2
+	local halfL = Config.Escuela.PasilloLargo / 2
+
+	for i = 1, E.Cantidad do
+		local side = (i % 2 == 0) and 1 or -1
+		local z = -halfL + 46 + (i - 1) * ((Config.Escuela.PasilloLargo - 86) / E.Cantidad)
+		local position = Vector3.new(side * (halfW - 5.5), 3, z)
+
+		local ok, err = pcall(function()
+			local model = CharacterService.buildStudent(nameFor(i), position)
+			model.Name = "Empollon" .. i
+			model:SetAttribute("Empollon", true)
+			model:SetAttribute("Alumno", nameFor(i))
+			model.Parent = parent
+
+			-- Mirando hacia el centro del pasillo, como quien espera.
+			local root = model.PrimaryPart
+			if root then
+				root.CFrame = CFrame.lookAt(position, Vector3.new(0, 3, z))
+			end
+
+			bindPrompt(model, i)
+			local connection = CharacterService.animate(model)
+			if connection then
+				table.insert(animations, connection)
+			end
+			table.insert(nerds, model)
+		end)
+		if not ok then
+			warn("[Empollones] " .. tostring(err))
+		end
+	end
+
+	print(string.format("[Empollones] %d alumnos estudiosos en el pasillo.", #nerds))
+end
+
+function NerdNPCs.list(): { Model }
+	return nerds
+end
+
+return NerdNPCs
+]]></ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX26">
+        <Properties>
+          <string name="Name">PlaygroundService</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	PlaygroundService
+	------------------------------------------------------------------
+	El pasillo antes del examen: la pelota de basquet, el aro y el
+	marcador. Es la valvula de escape del juego — los tres minutos de
+	recreo son para hacer el tonto, y sin algo con lo que jugar el
+	pasillo es solo una sala de espera.
+
+	La pelota es una parte fisica de verdad (densidad, friccion y
+	rebote reales), no un efecto. Se agarra con E, se suelta con clic:
+	al agarrarla se suelda a la mano y deja de colisionar; al tirarla
+	se despega y se le da velocidad con un poco de elevacion, que es lo
+	que hace que un tiro se sienta un tiro y no un disparo.
+
+	La canasta se detecta por direccion, no por contacto: el sensor
+	debajo del aro solo cuenta si la pelota lo cruza BAJANDO. Si no,
+	pegarle al aro desde abajo valdria tres puntos.
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+local Util = require(Shared:WaitForChild("Util"))
+
+local P = Config.Pasillo
+
+local PlaygroundService = {}
+
+local ball: BasePart? = nil
+local home = Vector3.new(0, 6, 0)
+local holder: Player? = nil
+local lastThrower: Player? = nil
+local lastThrow: { [Player]: number } = {}
+local scores: { [Player]: number } = {}
+local onScore: ((Player, number) -> ())? = nil
+
+local function folder(): Folder
+	local existing = workspace:FindFirstChild("Objetos")
+	if existing and existing:IsA("Folder") then
+		return existing
+	end
+	local created = Instance.new("Folder")
+	created.Name = "Objetos"
+	created.Parent = workspace
+	return created
+end
+
+-- ── construccion ───────────────────────────────────────────────────
+
+local function buildHoop(parent: Instance, position: Vector3, facing: Vector3): BasePart
+	local look = CFrame.lookAt(position, position + facing)
+
+	-- Poste y tablero.
+	local pole = Instance.new("Part")
+	pole.Name = "Poste"
+	pole.Anchored = true
+	pole.Size = Vector3.new(0.9, P.CanastaAltura + 2, 0.9)
+	pole.CFrame = look * CFrame.new(0, (P.CanastaAltura + 2) / 2 - 1, 1.6)
+	pole.Color = Color3.fromRGB(64, 68, 78)
+	pole.Material = Enum.Material.Metal
+	pole.Parent = parent
+
+	local board = Instance.new("Part")
+	board.Name = "Tablero"
+	board.Anchored = true
+	board.Size = Vector3.new(11, 6.5, 0.4)
+	board.CFrame = look * CFrame.new(0, P.CanastaAltura + 2, 1.2)
+	board.Color = Color3.fromRGB(236, 236, 230)
+	board.Material = Enum.Material.SmoothPlastic
+	board.Parent = parent
+
+	local square = Instance.new("Part")
+	square.Name = "Recuadro"
+	square.Anchored = true
+	square.Size = Vector3.new(4.2, 3.2, 0.1)
+	square.CFrame = board.CFrame * CFrame.new(0, -0.8, -0.26)
+	square.Color = Color3.fromRGB(200, 62, 52)
+	square.Material = Enum.Material.SmoothPlastic
+	square.CanCollide = false
+	square.Parent = parent
+
+	-- El aro: catorce cilindros en circulo. Un Torus no existe en
+	-- Roblox sin mesh, y esto rebota igual de bien.
+	local center = look * CFrame.new(0, P.CanastaAltura, -P.CanastaRadio + 0.6)
+	local segments = 14
+	for i = 0, segments - 1 do
+		local angle = (i / segments) * math.pi * 2
+		local offset = Vector3.new(math.cos(angle), 0, math.sin(angle)) * P.CanastaRadio
+		local segment = Instance.new("Part")
+		segment.Name = "Aro"
+		segment.Anchored = true
+		segment.Shape = Enum.PartType.Cylinder
+		segment.Size = Vector3.new(P.CanastaRadio * 0.5, 0.32, 0.32)
+		segment.CFrame = CFrame.new(center.Position + offset)
+			* CFrame.Angles(0, -angle, 0)
+		segment.Color = Color3.fromRGB(226, 108, 44)
+		segment.Material = Enum.Material.Metal
+		segment.Parent = parent
+	end
+
+	-- La red: cortinas finas colgando, sin colision.
+	for i = 0, 9 do
+		local angle = (i / 10) * math.pi * 2
+		local offset = Vector3.new(math.cos(angle), 0, math.sin(angle)) * (P.CanastaRadio - 0.2)
+		local strand = Instance.new("Part")
+		strand.Name = "Red"
+		strand.Anchored = true
+		strand.CanCollide = false
+		strand.Size = Vector3.new(0.12, 2.4, 0.12)
+		strand.CFrame = CFrame.new(center.Position + offset - Vector3.new(0, 1.2, 0))
+		strand.Color = Color3.fromRGB(238, 238, 234)
+		strand.Material = Enum.Material.Fabric
+		strand.Transparency = 0.15
+		strand.Parent = parent
+	end
+
+	-- El sensor de canasta, justo debajo del aro.
+	local sensor = Instance.new("Part")
+	sensor.Name = "Canasta"
+	sensor.Anchored = true
+	sensor.CanCollide = false
+	sensor.CanTouch = true
+	sensor.Transparency = 1
+	sensor.Size = Vector3.new(P.CanastaRadio * 1.6, 0.4, P.CanastaRadio * 1.6)
+	sensor.CFrame = CFrame.new(center.Position - Vector3.new(0, 1.1, 0))
+	sensor.Parent = parent
+
+	return sensor
+end
+
+local function buildBall(parent: Instance, position: Vector3): BasePart
+	local part = Instance.new("Part")
+	part.Name = "Pelota"
+	part.Shape = Enum.PartType.Ball
+	part.Size = Vector3.new(P.PelotaRadio * 2, P.PelotaRadio * 2, P.PelotaRadio * 2)
+	part.Position = position
+	part.Color = Color3.fromRGB(206, 104, 42)
+	part.Material = Enum.Material.Pebble
+	part.Anchored = false
+	part.CanCollide = true
+	-- densidad, friccion, rebote, y cuanto pesan esos dos ultimos
+	-- frente al material del suelo.
+	part.CustomPhysicalProperties = PhysicalProperties.new(
+		0.6, P.PelotaFriccion, P.PelotaRebote, 1, 1)
+	part.Parent = parent
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "Agarrar"
+	prompt.ActionText = "Agarrar"
+	prompt.ObjectText = "Pelota"
+	prompt.HoldDuration = 0
+	prompt.MaxActivationDistance = P.AlcanceAgarre
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = part
+
+	return part
+end
+
+-- ── llevarla y tirarla ─────────────────────────────────────────────
+
+local function handOf(player: Player): BasePart?
+	local character = player.Character
+	if not character then
+		return nil
+	end
+	for _, name in { "RightHand", "Right Arm" } do
+		local part = character:FindFirstChild(name)
+		if part and part:IsA("BasePart") then
+			return part
+		end
+	end
+	return nil
+end
+
+local function release()
+	local part = ball
+	if not part then
+		return
+	end
+	local weld = part:FindFirstChild("Agarre")
+	if weld then
+		weld:Destroy()
+	end
+	part.CanCollide = true
+	part.Massless = false
+	holder = nil
+end
+
+function PlaygroundService.grab(player: Player): any
+	local part = ball
+	if not part then
+		return { ok = false }
+	end
+	if holder and holder ~= player and holder.Parent then
+		return { ok = false, reason = { key = "ball.taken" } }
+	end
+	local hand = handOf(player)
+	if not hand then
+		return { ok = false }
+	end
+	if (part.Position - hand.Position).Magnitude > P.AlcanceAgarre then
+		return { ok = false }
+	end
+
+	release()
+	holder = player
+	part.CanCollide = false
+	part.Massless = true
+	part.CFrame = hand.CFrame * CFrame.new(0, -1.6, -0.6)
+
+	local weld = Instance.new("Weld")
+	weld.Name = "Agarre"
+	weld.Part0 = hand
+	weld.Part1 = part
+	weld.C0 = CFrame.new(0, -1.6, -0.6)
+	weld.Parent = part
+
+	Net.event(Net.Events.Notify):FireClient(player, { key = "ball.throw" })
+	return { ok = true }
+end
+
+function PlaygroundService.shoot(player: Player, direction: any): any
+	local part = ball
+	if not part or holder ~= player then
+		return { ok = false }
+	end
+	if typeof(direction) ~= "Vector3" or direction.Magnitude < 0.05 then
+		return { ok = false }
+	end
+	local now = os.clock()
+	if now - (lastThrow[player] or -math.huge) < P.EnfriamientoTiro then
+		return { ok = false }
+	end
+	lastThrow[player] = now
+
+	release()
+	lastThrower = player
+
+	-- Un poco hacia arriba: sin elevacion, un tiro de basquet es un
+	-- pase raso y nunca entra.
+	local aim = (direction.Unit + Vector3.new(0, P.PelotaAlturaTiro, 0)).Unit
+	part.AssemblyLinearVelocity = aim * P.PelotaFuerza
+	part.AssemblyAngularVelocity = Vector3.new(0, 0, -12)
+
+	Util.playSound(Config.Sonidos.Impacto, part, 0.3, 1.5)
+	return { ok = true }
+end
+
+-- ── canasta ────────────────────────────────────────────────────────
+
+local function bindBasket(sensor: BasePart)
+	local cooling = false
+	sensor.Touched:Connect(function(hit)
+		if cooling or hit ~= ball then
+			return
+		end
+		-- Solo cuenta si viene BAJANDO: pegarle al aro desde abajo no
+		-- es una canasta.
+		if hit.AssemblyLinearVelocity.Y > -4 then
+			return
+		end
+		local scorer = lastThrower
+		if not scorer or not scorer.Parent then
+			return
+		end
+		cooling = true
+		task.delay(1.5, function()
+			cooling = false
+		end)
+
+		scores[scorer] = (scores[scorer] or 0) + P.PuntosPorCanasta
+		Util.playSound(Config.Sonidos.Silbato, sensor, 0.5, 1.3)
+
+		Net.event(Net.Events.Notify):FireAllClients({
+			key = "ball.basket",
+			args = { name = scorer.DisplayName, n = P.PuntosPorCanasta },
+		})
+		Net.event(Net.Events.Score):FireAllClients({
+			jugador = scorer.DisplayName,
+			puntos = scores[scorer],
+		})
+		if onScore then
+			onScore(scorer, P.CreditosPorCanasta)
+		end
+	end)
+end
+
+-- ── entrada ────────────────────────────────────────────────────────
+
+function PlaygroundService.build(map: any)
+	if not map then
+		return
+	end
+	local parent = folder()
+	for _, child in parent:GetChildren() do
+		if child.Name == "Pelota" or child.Name == "Cancha" then
+			child:Destroy()
+		end
+	end
+
+	local court = Instance.new("Model")
+	court.Name = "Cancha"
+	court.Parent = parent
+
+	-- La cancha vive en el extremo del pasillo contrario al de la
+	-- tienda: asi el recreo tiene dos polos y la gente se reparte.
+	local half = Config.Escuela.PasilloLargo / 2
+	local z = -half + 14
+	local hoopPosition = Vector3.new(0, 0, z)
+	local sensor = buildHoop(court, hoopPosition, Vector3.new(0, 0, 1))
+	bindBasket(sensor)
+
+	home = Vector3.new(0, P.PelotaRadio + 3, z + P.CanastaDistancia)
+	ball = buildBall(parent, home)
+
+	local prompt = (ball :: BasePart):FindFirstChild("Agarrar")
+	if prompt and prompt:IsA("ProximityPrompt") then
+		prompt.Triggered:Connect(function(player)
+			PlaygroundService.grab(player)
+		end)
+	end
+end
+
+--- Si la pelota se pierde (se cae del mapa o queda trabada), vuelve.
+function PlaygroundService.watch()
+	task.spawn(function()
+		while true do
+			task.wait(4)
+			local part = ball
+			if part and not holder and part.Position.Y < -30 then
+				part.AssemblyLinearVelocity = Vector3.zero
+				part.CFrame = CFrame.new(home)
+			end
+		end
+	end)
+end
+
+--- Al empezar el examen la pelota vuelve a su sitio y nadie la lleva.
+function PlaygroundService.reset()
+	release()
+	lastThrower = nil
+	local part = ball
+	if part then
+		part.AssemblyLinearVelocity = Vector3.zero
+		part.AssemblyAngularVelocity = Vector3.zero
+		part.CFrame = CFrame.new(home)
+	end
+end
+
+function PlaygroundService.start(reward: ((Player, number) -> ())?)
+	onScore = reward
+
+	Net.event(Net.Events.Ball).OnServerEvent:Connect(function(player, action, direction)
+		if action == "grab" then
+			local result = PlaygroundService.grab(player)
+			if result.reason then
+				Net.event(Net.Events.Notify):FireClient(player, result.reason)
+			end
+		elseif action == "shoot" then
+			PlaygroundService.shoot(player, direction)
+		end
+	end)
+
+	Players.PlayerRemoving:Connect(function(player)
+		if holder == player then
+			release()
+		end
+		scores[player] = nil
+		lastThrow[player] = nil
+	end)
+
+	PlaygroundService.watch()
+end
+
+return PlaygroundService
+]]></ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX27">
         <Properties>
           <string name="Name">PunishService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -4387,6 +6895,17 @@ local function detention(player: Player)
 	end)
 end
 
+--- Una penalizacion suelta, sin cono ni expulsion. La usa la goma de
+--- borrar: duele en la nota pero no te saca del examen.
+function PunishService.addPenalty(player: Player, points: number)
+	local data = record(player)
+	data.penalty += points
+	Net.event(Net.Events.Notify):FireClient(player, {
+		key = "punish.grade",
+		args = { n = points },
+	})
+end
+
 --- La sancion completa. La llama TeacherAI cuando te alcanza.
 function PunishService.apply(player: Player, teacher: any)
 	local data = record(player)
@@ -4450,7 +6969,7 @@ return PunishService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX21">
+      <Item class="ModuleScript" referent="RBX28">
         <Properties>
           <string name="Name">QuestionBank</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -4736,7 +7255,175 @@ return QuestionBank
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX22">
+      <Item class="ModuleScript" referent="RBX29">
+        <Properties>
+          <string name="Name">RadioService</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	RadioService
+	------------------------------------------------------------------
+	Las dos herramientas de comunicacion a distancia:
+
+	  walkie   transmite a TODOS los que tengan un walkie en la mano,
+	           en cualquier punto del colegio. Es la herramienta de
+	           equipo: el que ya termino le dicta al resto.
+	  celular  le manda el mensaje a UN companero cercano. Menos
+	           alcance, pero mucho mas discreto... salvo que el
+	           profesor te vea con el telefono en la mano.
+
+	Las dos suben la sospecha al usarlas dentro del examen, y el
+	celular mucho mas que el walkie: sacar el telefono en un examen es
+	lo mas descarado que podes hacer.
+
+	Todo el texto pasa por TextFilter antes de salir. Si el filtro
+	falla, el mensaje no se manda.
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+
+local TextFilter = require(script.Parent:WaitForChild("TextFilter"))
+local ExamService = require(script.Parent:WaitForChild("ExamService"))
+local SuspicionService = require(script.Parent:WaitForChild("SuspicionService"))
+
+local H = Config.Herramientas
+
+local RadioService = {}
+
+local lastUse: { [Player]: number } = {}
+
+--- La herramienta que tiene en la mano, si es una radio de las nuestras.
+local function radioInHand(player: Player, kind: string): Tool?
+	local character = player.Character
+	if not character then
+		return nil
+	end
+	local tool = character:FindFirstChildOfClass("Tool")
+	if tool and tool:GetAttribute("Radio") == kind then
+		return tool
+	end
+	return nil
+end
+
+local function holdersOf(kind: string): { Player }
+	local list = {}
+	for _, player in Players:GetPlayers() do
+		if radioInHand(player, kind) then
+			table.insert(list, player)
+		end
+	end
+	return list
+end
+
+local function nearestListener(player: Player, range: number): Player?
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not root or not root:IsA("BasePart") then
+		return nil
+	end
+	local best: Player? = nil
+	local bestDistance = range
+	for _, other in Players:GetPlayers() do
+		if other ~= player then
+			local otherCharacter = other.Character
+			local otherRoot = otherCharacter and otherCharacter:FindFirstChild("HumanoidRootPart")
+			if otherRoot and otherRoot:IsA("BasePart") then
+				local distance = (otherRoot.Position - root.Position).Magnitude
+				if distance < bestDistance then
+					bestDistance = distance
+					best = other
+				end
+			end
+		end
+	end
+	return best
+end
+
+--- Manda un mensaje. `kind` es "walkie" o "celular".
+function RadioService.send(player: Player, kind: any, text: any): any
+	if kind ~= "walkie" and kind ~= "celular" then
+		return { ok = false, reason = { key = "error.generic" } }
+	end
+	if not radioInHand(player, kind) then
+		return { ok = false, reason = { key = "radio.need_tool" } }
+	end
+
+	local cooldown = kind == "walkie" and H.RadioEnfriamiento or H.CelularEnfriamiento
+	local now = os.clock()
+	if now - (lastUse[player] or -math.huge) < cooldown then
+		return { ok = false, reason = { key = "cheat.cooldown" } }
+	end
+
+	local raw = TextFilter.trim(text, H.RadioCaracteres)
+	if raw == "" then
+		return { ok = false, reason = { key = "note.empty" } }
+	end
+	local safe = TextFilter.forBroadcast(raw, player.UserId)
+	if not safe then
+		return { ok = false, reason = { key = "error.generic" } }
+	end
+
+	lastUse[player] = now
+
+	-- Usar la radio en pleno examen se paga, y el celular mucho mas.
+	if ExamService.isRunning() then
+		SuspicionService.infraction(player,
+			kind == "walkie" and H.RadioSospecha or H.CelularSospecha, kind)
+	end
+
+	if kind == "walkie" then
+		local listeners = holdersOf("walkie")
+		local reached = 0
+		for _, other in listeners do
+			if other ~= player then
+				reached += 1
+				Net.event(Net.Events.Radio):FireClient(other, {
+					tipo = "walkie",
+					de = player.DisplayName,
+					texto = safe,
+				})
+			end
+		end
+		if reached == 0 then
+			return { ok = true, reason = { key = "radio.nobody" } }
+		end
+		return { ok = true, reason = { key = "radio.sent", args = { n = reached } } }
+	end
+
+	local target = nearestListener(player, H.CelularAlcance)
+	if not target then
+		return { ok = false, reason = { key = "radio.nobody" } }
+	end
+	Net.event(Net.Events.Radio):FireClient(target, {
+		tipo = "celular",
+		de = player.DisplayName,
+		texto = safe,
+	})
+	return { ok = true, reason = { key = "radio.sent", args = { n = 1 } } }
+end
+
+function RadioService.start()
+	Net.event(Net.Events.Radio).OnServerEvent:Connect(function(player, kind, text)
+		local result = RadioService.send(player, kind, text)
+		if result.reason then
+			Net.event(Net.Events.Notify):FireClient(player, result.reason)
+		end
+	end)
+
+	Players.PlayerRemoving:Connect(function(player)
+		lastUse[player] = nil
+	end)
+end
+
+return RadioService
+]]></ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX30">
         <Properties>
           <string name="Name">RoundManager</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -4775,6 +7462,9 @@ local PunishService = require(script.Parent:WaitForChild("PunishService"))
 local ShopService = require(script.Parent:WaitForChild("ShopService"))
 local ItemService = require(script.Parent:WaitForChild("ItemService"))
 local DataService = require(script.Parent:WaitForChild("DataService"))
+local Atmosphere = require(script.Parent:WaitForChild("Atmosphere"))
+local BookService = require(script.Parent:WaitForChild("BookService"))
+local PlaygroundService = require(script.Parent:WaitForChild("PlaygroundService"))
 
 local R = Config.Ronda
 
@@ -4924,6 +7614,12 @@ local function runPhase(name: string, seconds: number, onTick: (() -> ())?)
 	total = seconds
 	clock = seconds
 	ShopService.setPhase(name)
+	BookService.setPhase(name)
+	-- El clima de color cambia con la fase: el pasillo es lavado y
+	-- frio, el aula es mas contrastada y el final de examen vira.
+	pcall(function()
+		Atmosphere.setMood(name == "examen" and "examen" or "pasillo")
+	end)
 	broadcast()
 
 	local warned = false
@@ -4975,6 +7671,7 @@ local function phaseExam()
 	ExamService.begin(day, players)
 
 	Net.event(Net.Events.Notify):FireAllClients({ key = "notify.doors_locked" })
+	PlaygroundService.reset()
 	ExamService.seatEveryone()
 	task.wait(1.2)
 	lockDoors(true)
@@ -4998,6 +7695,9 @@ local function phaseExam()
 			halfWarned = true
 			TeacherAI.sayAll("teacher.time_left", { s = 30 })
 			Net.event(Net.Events.Music):FireAllClients({ clima = "tension" })
+			pcall(function()
+				Atmosphere.setMood("tension")
+			end)
 		end
 	end)
 
@@ -5174,7 +7874,7 @@ return RoundManager
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX23">
+      <Item class="ModuleScript" referent="RBX31">
         <Properties>
           <string name="Name">ShopService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -5373,7 +8073,7 @@ return ShopService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX24">
+      <Item class="ModuleScript" referent="RBX32">
         <Properties>
           <string name="Name">SuspicionService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -5574,7 +8274,7 @@ return SuspicionService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX25">
+      <Item class="ModuleScript" referent="RBX33">
         <Properties>
           <string name="Name">TeacherAI</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -5616,6 +8316,7 @@ local SuspicionService = require(script.Parent:WaitForChild("SuspicionService"))
 local ExamService = require(script.Parent:WaitForChild("ExamService"))
 
 local P = Config.Profesor
+local GOMA = Config.Goma
 
 local TeacherAI = {}
 
@@ -5631,6 +8332,7 @@ type Teacher = {
 	chasing: Player?,
 	alive: boolean,
 	nextLine: number,
+	nextEraser: number,
 	animation: RBXScriptConnection?,
 }
 
@@ -5827,6 +8529,132 @@ end
 
 -- ── cerebro ────────────────────────────────────────────────────────
 
+-- ── la goma de borrar ──────────────────────────────────────────────
+-- Un profesor que solo camina se esquiva caminando. La goma es lo que
+-- hace que estar lejos tampoco sea gratis.
+
+local stunHandler: ((Player, number) -> ())? = nil
+
+function TeacherAI.onStun(handler: (Player, number) -> ())
+	stunHandler = handler
+end
+
+local function eraserFolder(): Folder
+	local existing = workspace:FindFirstChild("Proyectiles")
+	if existing and existing:IsA("Folder") then
+		return existing
+	end
+	local created = Instance.new("Folder")
+	created.Name = "Proyectiles"
+	created.Parent = workspace
+	return created
+end
+
+--- Tira una goma prediciendo hacia donde va el alumno. La punteria no
+--- es perfecta a proposito: `Config.Goma.Punteria` abre un cono de
+--- dispersion, asi que correr en diagonal sirve de algo.
+local function throwEraser(teacher: Teacher, player: Player): boolean
+	if not GOMA.Habilitada then
+		return false
+	end
+	local now = os.clock()
+	if now < teacher.nextEraser then
+		return false
+	end
+
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not root or not root:IsA("BasePart") then
+		return false
+	end
+
+	local origin = teacher.root.Position + Vector3.new(0, P.AlturaOjos, 0)
+		+ teacher.root.CFrame.LookVector * 1.4
+	local distance = (root.Position - origin).Magnitude
+	if distance < GOMA.DistanciaMinima or distance > GOMA.DistanciaMaxima then
+		return false
+	end
+
+	teacher.nextEraser = now + GOMA.Enfriamiento
+
+	-- Adelanta el tiro al punto donde estara cuando llegue la goma.
+	local flight = distance / GOMA.Velocidad
+	local predicted = root.Position + root.AssemblyLinearVelocity * flight * 0.8
+	local aim = (predicted - origin).Unit
+
+	-- Dispersion: cuanto peor la punteria, mas se abre el cono.
+	local spread = (1 - math.clamp(GOMA.Punteria, 0, 1)) * 0.5
+	aim = (aim + Vector3.new(
+		rng:NextNumber(-spread, spread),
+		rng:NextNumber(-spread, spread) * 0.5,
+		rng:NextNumber(-spread, spread))).Unit
+
+	local eraser = Instance.new("Part")
+	eraser.Name = "Goma"
+	eraser.Size = Vector3.new(0.9, 0.45, 0.5)
+	eraser.Color = Color3.fromRGB(232, 108, 132)
+	eraser.Material = Enum.Material.Plastic
+	eraser.CanCollide = false
+	eraser.CFrame = CFrame.lookAt(origin, origin + aim)
+	eraser.Parent = eraserFolder()
+	eraser.AssemblyLinearVelocity = aim * GOMA.Velocidad
+	eraser.AssemblyAngularVelocity = Vector3.new(14, 6, 0)
+
+	-- Casi sin gravedad: es un tiro tenso, no un lanzamiento en arco.
+	local attachment = Instance.new("Attachment")
+	attachment.Parent = eraser
+	local lift = Instance.new("VectorForce")
+	lift.Attachment0 = attachment
+	lift.RelativeTo = Enum.ActuatorRelativeTo.World
+	lift.Force = Vector3.new(0, eraser.AssemblyMass * workspace.Gravity * 0.82, 0)
+	lift.Parent = eraser
+
+	say(teacher, "eraser.thrown", { teacher = teacher.name }, player)
+
+	local spent = false
+	eraser.Touched:Connect(function(hit)
+		if spent then
+			return
+		end
+		local model = hit:FindFirstAncestorOfClass("Model")
+		local hitPlayer = model and Players:GetPlayerFromCharacter(model) or nil
+		spent = true
+
+		if hitPlayer then
+			Net.event(Net.Events.Notify):FireClient(hitPlayer, { key = "eraser.hit" })
+			Net.event(Net.Events.Stunned):FireClient(hitPlayer, {
+				motivo = "goma",
+				segundos = GOMA.SegundosAturdido,
+			})
+			local humanoid = model and model:FindFirstChildOfClass("Humanoid")
+			if humanoid then
+				humanoid.PlatformStand = true
+				task.delay(GOMA.SegundosAturdido, function()
+					if humanoid.Parent then
+						humanoid.PlatformStand = false
+					end
+				end)
+			end
+			if stunHandler then
+				stunHandler(hitPlayer, GOMA.PenalizacionNota)
+			end
+		end
+		Util.playSound(Config.Sonidos.Impacto, eraser, 0.35, 1.2)
+		task.delay(0.4, function()
+			if eraser.Parent then
+				eraser:Destroy()
+			end
+		end)
+	end)
+
+	task.delay(6, function()
+		if eraser.Parent then
+			eraser:Destroy()
+		end
+	end)
+	return true
+end
+
 local function nearestSuspect(teacher: Teacher): (Player?, number)
 	local best: Player? = nil
 	local bestValue = Config.Sospecha.UmbralAviso
@@ -5943,6 +8771,12 @@ local function doChase(teacher: Teacher)
 			break
 		end
 		local distance = (root.Position - teacher.root.Position).Magnitude
+
+		-- De lejos no corre a ciegas: te tira la goma y sigue avanzando.
+		if distance > GOMA.DistanciaMinima then
+			pcall(throwEraser, teacher, player)
+		end
+
 		if distance <= 6 then
 			facePoint(teacher, root.Position)
 			local handler = punishHandler
@@ -6009,6 +8843,7 @@ function TeacherAI.spawn(room: any)
 		chasing = nil,
 		alive = true,
 		nextLine = 0,
+		nextEraser = 0,
 		animation = CharacterService.animate(model),
 	}
 	teachers[room.index] = teacher
@@ -6119,7 +8954,7 @@ return TeacherAI
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX26">
+      <Item class="ModuleScript" referent="RBX34">
         <Properties>
           <string name="Name">Templates</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -6160,7 +8995,7 @@ local function handle(tool: Tool, size: Vector3, color: Color3, material: Enum.M
 	return part
 end
 
-local function tool(name: string, itemId: string): Tool
+local function makeTool(name: string, itemId: string): Tool
 	local instance = Instance.new("Tool")
 	instance.Name = name
 	instance.RequiresHandle = true
@@ -6172,7 +9007,7 @@ end
 
 --- Papel doblado: se escribe y se lanza.
 local function buildNota(): Tool
-	local item = tool("Nota", "nota")
+	local item = makeTool("Nota", "nota")
 	local body = handle(item, Vector3.new(0.9, 0.12, 0.7), Color3.fromRGB(250, 248, 240),
 		Enum.Material.SmoothPlastic)
 	body.Name = "Handle"
@@ -6203,7 +9038,7 @@ end
 
 --- Avioncito: vuela mas lejos y mas derecho.
 local function buildAvion(): Tool
-	local item = tool("Avion", "avion")
+	local item = makeTool("Avion", "avion")
 	local wedge = Instance.new("WedgePart")
 	wedge.Name = "Handle"
 	wedge.Size = Vector3.new(0.25, 0.4, 1.6)
@@ -6241,7 +9076,7 @@ end
 
 --- Bolita de papel: hace ruido donde cae y el profe va a mirar.
 local function buildBolita(): Tool
-	local item = tool("Bolita", "bolita")
+	local item = makeTool("Bolita", "bolita")
 	local ball = handle(item, Vector3.new(0.6, 0.6, 0.6), Color3.fromRGB(244, 242, 234),
 		Enum.Material.Plastic, Enum.PartType.Ball)
 	ball.Reflectance = 0.02
@@ -6253,7 +9088,7 @@ end
 
 --- Chuleta: no se lanza, se usa y revela respuestas.
 local function buildChuleta(): Tool
-	local item = tool("Chuleta", "chuleta")
+	local item = makeTool("Chuleta", "chuleta")
 	local strip = handle(item, Vector3.new(1.3, 0.06, 0.4), Color3.fromRGB(252, 250, 236),
 		Enum.Material.SmoothPlastic)
 
@@ -6277,11 +9112,179 @@ local function buildChuleta(): Tool
 	return item
 end
 
+--- Walkie-talkie: habla con todos los walkies del colegio.
+local function buildWalkie(): Tool
+	local item = makeTool("Walkie", "walkie")
+	local body = handle(item, Vector3.new(0.55, 1.5, 0.38), Color3.fromRGB(32, 34, 40),
+		Enum.Material.SmoothPlastic)
+
+	local function piece(name: string, size: Vector3, offset: CFrame, color: Color3,
+		material: Enum.Material)
+		local part = Instance.new("Part")
+		part.Name = name
+		part.Size = size
+		part.Color = color
+		part.Material = material
+		part.CanCollide = false
+		part.Massless = true
+		part.CFrame = body.CFrame * offset
+		part.Parent = item
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = body
+		weld.Part1 = part
+		weld.Parent = body
+	end
+
+	piece("Antena", Vector3.new(0.1, 0.9, 0.1), CFrame.new(0.18, 1.1, 0),
+		Color3.fromRGB(18, 18, 22), Enum.Material.SmoothPlastic)
+	piece("Rejilla", Vector3.new(0.4, 0.4, 0.06), CFrame.new(0, 0.42, -0.22),
+		Color3.fromRGB(58, 62, 70), Enum.Material.DiamondPlate)
+	piece("Luz", Vector3.new(0.12, 0.12, 0.06), CFrame.new(-0.16, 0.66, -0.22),
+		Color3.fromRGB(94, 232, 122), Enum.Material.Neon)
+
+	item:SetAttribute("Lanzable", false)
+	item:SetAttribute("Radio", "walkie")
+	item.Grip = CFrame.new(0, -0.2, 0)
+	return item
+end
+
+--- Prismaticos: acercan la imagen y dejan leer una hoja de lejos.
+local function buildPrismaticos(): Tool
+	local item = makeTool("Prismaticos", "prismaticos")
+	local body = handle(item, Vector3.new(1.05, 0.55, 0.7), Color3.fromRGB(28, 30, 36),
+		Enum.Material.SmoothPlastic)
+
+	for _, side in { -1, 1 } do
+		local barrel = Instance.new("Part")
+		barrel.Name = "Tubo"
+		barrel.Shape = Enum.PartType.Cylinder
+		barrel.Size = Vector3.new(0.8, 0.48, 0.48)
+		barrel.Color = Color3.fromRGB(22, 24, 30)
+		barrel.Material = Enum.Material.Metal
+		barrel.CanCollide = false
+		barrel.Massless = true
+		barrel.CFrame = body.CFrame * CFrame.new(side * 0.27, 0, -0.1)
+			* CFrame.Angles(0, math.rad(90), 0)
+		barrel.Parent = item
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = body
+		weld.Part1 = barrel
+		weld.Parent = body
+
+		local lens = Instance.new("Part")
+		lens.Name = "Lente"
+		lens.Shape = Enum.PartType.Cylinder
+		lens.Size = Vector3.new(0.06, 0.4, 0.4)
+		lens.Color = Color3.fromRGB(150, 200, 232)
+		lens.Material = Enum.Material.Glass
+		lens.CanCollide = false
+		lens.Massless = true
+		lens.CFrame = body.CFrame * CFrame.new(side * 0.27, 0, -0.5)
+			* CFrame.Angles(0, math.rad(90), 0)
+		lens.Parent = item
+		local lensWeld = Instance.new("WeldConstraint")
+		lensWeld.Part0 = body
+		lensWeld.Part1 = lens
+		lensWeld.Parent = body
+	end
+
+	item:SetAttribute("Lanzable", false)
+	item:SetAttribute("Zoom", true)
+	item.Grip = CFrame.new(0, -0.15, 0.2)
+	return item
+end
+
+--- Celular: le sopla una respuesta a UN companero cercano.
+local function buildCelular(): Tool
+	local item = makeTool("Celular", "celular")
+	local body = handle(item, Vector3.new(0.62, 1.24, 0.09), Color3.fromRGB(22, 24, 30),
+		Enum.Material.SmoothPlastic)
+
+	local screen = Instance.new("Part")
+	screen.Name = "Pantalla"
+	screen.Size = Vector3.new(0.54, 1.08, 0.03)
+	screen.Color = Color3.fromRGB(96, 168, 240)
+	screen.Material = Enum.Material.Neon
+	screen.CanCollide = false
+	screen.Massless = true
+	screen.CFrame = body.CFrame * CFrame.new(0, 0.04, -0.06)
+	screen.Parent = item
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = body
+	weld.Part1 = screen
+	weld.Parent = body
+
+	item:SetAttribute("Lanzable", false)
+	item:SetAttribute("Radio", "celular")
+	item.Grip = CFrame.new(0, -0.1, 0)
+	return item
+end
+
+--- Libro de texto: leerlo en el recreo te ensena respuestas de verdad.
+local function buildLibro(): Tool
+	local item = makeTool("Libro", "libro")
+	local cover = handle(item, Vector3.new(1.5, 2, 0.34), Color3.fromRGB(126, 44, 52),
+		Enum.Material.Fabric)
+
+	local pages = Instance.new("Part")
+	pages.Name = "Hojas"
+	pages.Size = Vector3.new(1.42, 1.9, 0.3)
+	pages.Color = Color3.fromRGB(246, 244, 234)
+	pages.Material = Enum.Material.SmoothPlastic
+	pages.CanCollide = false
+	pages.Massless = true
+	pages.CFrame = cover.CFrame * CFrame.new(0.06, 0, 0)
+	pages.Parent = item
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = cover
+	weld.Part1 = pages
+	weld.Parent = cover
+
+	item:SetAttribute("Lanzable", false)
+	item:SetAttribute("Libro", true)
+	item.Grip = CFrame.new(0, -0.3, 0)
+	return item
+end
+
+--- Aerosol: pinta cualquier pared marcada como pintable.
+local function buildAerosol(): Tool
+	local item = makeTool("Aerosol", "aerosol")
+	local can = handle(item, Vector3.new(0.55, 1.4, 0.55), Color3.fromRGB(210, 66, 66),
+		Enum.Material.Metal, Enum.PartType.Cylinder)
+	-- Un cilindro nace acostado sobre X: se lo pone de pie.
+	can.Size = Vector3.new(1.4, 0.55, 0.55)
+	can.CFrame = can.CFrame * CFrame.Angles(0, 0, math.rad(90))
+
+	local cap = Instance.new("Part")
+	cap.Name = "Boquilla"
+	cap.Size = Vector3.new(0.22, 0.24, 0.22)
+	cap.Color = Color3.fromRGB(238, 238, 232)
+	cap.Material = Enum.Material.SmoothPlastic
+	cap.CanCollide = false
+	cap.Massless = true
+	cap.CFrame = can.CFrame * CFrame.new(0.82, 0, 0)
+	cap.Parent = item
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = can
+	weld.Part1 = cap
+	weld.Parent = can
+
+	item:SetAttribute("Lanzable", false)
+	item:SetAttribute("Pintar", true)
+	item.Grip = CFrame.new(0, -0.2, 0)
+	return item
+end
+
 local BUILDERS: { [string]: () -> Tool } = {
 	nota = buildNota,
 	avion = buildAvion,
 	bolita = buildBolita,
 	chuleta = buildChuleta,
+	walkie = buildWalkie,
+	prismaticos = buildPrismaticos,
+	celular = buildCelular,
+	libro = buildLibro,
+	aerosol = buildAerosol,
 }
 
 function Templates.folder(): Folder
@@ -6335,17 +9338,71 @@ return Templates
 ]]></ProtectedString>
         </Properties>
       </Item>
+      <Item class="ModuleScript" referent="RBX35">
+        <Properties>
+          <string name="Name">TextFilter</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	TextFilter
+	------------------------------------------------------------------
+	Cualquier texto que escribe un jugador y lee OTRO jugador tiene que
+	pasar por el filtro de Roblox. Es una obligacion de la plataforma,
+	no una opcion, y aplica a los tres sitios donde este juego deja
+	escribir: las notas de papel, el walkie y el celular.
+
+	Regla de este modulo: si el filtro no responde, NO se manda nada.
+	Es preferible perder un mensaje que publicar texto sin filtrar.
+--]]
+
+local TextService = game:GetService("TextService")
+
+local TextFilter = {}
+
+--- Devuelve el texto filtrado listo para mostrarselo a cualquiera, o
+--- nil si el filtro fallo (en cuyo caso no hay que mandar nada).
+function TextFilter.forBroadcast(text: string, fromUserId: number): string?
+	if text == "" then
+		return ""
+	end
+
+	local ok, result = pcall(function()
+		local filtered = TextService:FilterStringAsync(
+			text, fromUserId, Enum.TextFilterContext.PublicChat)
+		return filtered:GetNonChatStringForBroadcastAsync()
+	end)
+
+	if ok and type(result) == "string" then
+		return result
+	end
+	warn("[Filtro] no se pudo filtrar un mensaje: no se envia.")
+	return nil
+end
+
+--- Recorta a `limit` caracteres y saca los espacios de los bordes.
+function TextFilter.trim(text: any, limit: number): string
+	if typeof(text) ~= "string" then
+		return ""
+	end
+	local clean = string.gsub(text, "^%s+", "")
+	clean = string.gsub(clean, "%s+$", "")
+	return string.sub(clean, 1, limit)
+end
+
+return TextFilter
+]]></ProtectedString>
+        </Properties>
+      </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="RBX28">
+  <Item class="StarterPlayer" referent="RBX37">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="RBX29">
+    <Item class="StarterPlayerScripts" referent="RBX38">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="RBX39">
+      <Item class="LocalScript" referent="RBX51">
         <Properties>
           <string name="Name">Client</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -6382,6 +9439,9 @@ local LobbyUI = require(script:WaitForChild("LobbyUI"))
 local CameraDirector = require(script:WaitForChild("CameraDirector"))
 local Music = require(script:WaitForChild("Music"))
 local Poses = require(script:WaitForChild("Poses"))
+local GraffitiUI = require(script:WaitForChild("GraffitiUI"))
+local RadioUI = require(script:WaitForChild("RadioUI"))
+local ZoomUI = require(script:WaitForChild("ZoomUI"))
 
 -- ── idioma ─────────────────────────────────────────────────────────
 -- Cada jugador ve el juego en SU idioma: el servidor manda claves.
@@ -6417,6 +9477,9 @@ ExamUI.mount(gui)
 NoteUI.mount(gui)
 ShopUI.mount(gui)
 LobbyUI.mount(gui)
+GraffitiUI.mount(gui)
+RadioUI.mount(gui)
+ZoomUI.mount(gui)
 MainMenu.mount(gui)
 Music.start()
 
@@ -6429,6 +9492,8 @@ end
 NoteUI.onThrow = function()
 	Poses.throw()
 end
+-- Los prismaticos espian la pregunta que estas mirando en la hoja.
+ZoomUI.currentIndex = ExamUI.currentIndex
 
 -- Chat de proximidad: las burbujas arriba de la cabeza son lo que hace
 -- que hablar en el pasillo se sienta cara a cara. Va en pcall porque la
@@ -6449,6 +9514,9 @@ MainMenu.onVisible = function(open: boolean)
 	Hud.setVisible(not open)
 	ExamUI.setVisible(not open)
 	NoteUI.setVisible(not open)
+	GraffitiUI.setVisible(not open)
+	RadioUI.setVisible(not open)
+	ZoomUI.setVisible(not open)
 	if open then
 		ShopUI.close()
 		LobbyUI.close()
@@ -6545,6 +9613,22 @@ Net.event(Net.Events.NoteReceived).OnClientEvent:Connect(function(data)
 	NoteUI.received(data)
 end)
 
+Net.event(Net.Events.Radio).OnClientEvent:Connect(function(data)
+	RadioUI.receive(data)
+end)
+
+Net.event(Net.Events.Stunned).OnClientEvent:Connect(function(data)
+	-- Te tiraron al piso o te pego la goma: sacudida y aviso. El
+	-- control del personaje lo bloquea el servidor con PlatformStand,
+	-- aca solo se acusa el golpe.
+	CameraDirector.shake(data.motivo == "ko" and 1.6 or 0.9, 0.7)
+	Hud.punish({ tipo = "aturdido", segundos = data.segundos })
+end)
+
+Net.event(Net.Events.Score).OnClientEvent:Connect(function(data)
+	Hud.setScore(data)
+end)
+
 Net.event(Net.Events.Music).OnClientEvent:Connect(function(data)
 	if data and data.clima then
 		Music.setClimate(data.clima)
@@ -6558,9 +9642,24 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		return
 	end
 	if input.KeyCode == Enum.KeyCode.Q then
-		Net.event(Net.Events.Cheat):FireServer("peek", ExamUI.currentIndex())
+		-- Con los prismaticos en la mira, Q lo maneja ZoomUI.
+		if not ZoomUI.isZoomed() then
+			Net.event(Net.Events.Cheat):FireServer("peek", ExamUI.currentIndex())
+		end
 	elseif input.KeyCode == Enum.KeyCode.R then
 		Net.event(Net.Events.Cheat):FireServer("whisper", ExamUI.currentIndex())
+	elseif input.KeyCode == Enum.KeyCode.G then
+		Net.event(Net.Events.Knock):FireServer()
+		Poses.throw(0.35)
+	elseif input.KeyCode == Enum.KeyCode.B then
+		local camera = workspace.CurrentCamera
+		if camera then
+			Net.event(Net.Events.Ball):FireServer("shoot", camera.CFrame.LookVector)
+			Poses.throw(0.5)
+		end
+	elseif input.KeyCode == Enum.KeyCode.H then
+		-- Leer el libro que llevas en la mano.
+		Net.event(Net.Events.Cheat):FireServer("book", 1)
 	elseif input.KeyCode == Enum.KeyCode.T then
 		if ShopUI.isOpen() then
 			ShopUI.close()
@@ -6615,7 +9714,7 @@ end)
 print(string.format("[Finals Week] Cliente listo (%s).", Strings.locale()))
 ]]></ProtectedString>
         </Properties>
-        <Item class="ModuleScript" referent="RBX30">
+        <Item class="ModuleScript" referent="RBX39">
           <Properties>
             <string name="Name">CameraDirector</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -6730,7 +9829,7 @@ return CameraDirector
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX31">
+        <Item class="ModuleScript" referent="RBX40">
           <Properties>
             <string name="Name">ExamUI</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -7288,7 +10387,253 @@ return ExamUI
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX32">
+        <Item class="ModuleScript" referent="RBX41">
+          <Properties>
+            <string name="Name">GraffitiUI</string>
+            <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	GraffitiUI
+	------------------------------------------------------------------
+	El aerosol: paleta de ocho colores, cuatro grosores, y pintar
+	manteniendo el clic.
+
+	El cliente no dibuja nada por su cuenta. Manda la direccion en la
+	que apunta la camara y el servidor decide contra que pared pego y
+	estampa el punto — que despues se replica a todos. Por eso lo que
+	pintas lo ven los demas, y por eso no se puede pintar a traves de
+	una pared por mucho que se toque el cliente.
+
+	El ritmo de envio esta limitado aca ademas de en el servidor: sin
+	eso, a 240 fps mandarias 240 puntos por segundo y el servidor
+	tiraria 222 a la basura.
+--]]
+
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Theme = require(Shared:WaitForChild("Theme"))
+local Strings = require(Shared:WaitForChild("Strings"))
+local Net = require(Shared:WaitForChild("Net"))
+
+local player = Players.LocalPlayer
+
+local GraffitiUI = {}
+
+local G = Config.Grafiti
+
+local root: Frame
+local swatches: { TextButton } = {}
+local sizeLabel: TextLabel
+local preview: Frame
+
+local colorIndex = 1
+local sizeIndex = 2
+local painting = false
+local lastSend = 0
+local equipped = false
+
+local function new(class: string, props: { [string]: any }, parent: Instance?): any
+	local instance = Instance.new(class)
+	for key, value in props do
+		(instance :: any)[key] = value
+	end
+	if parent then
+		instance.Parent = parent
+	end
+	return instance
+end
+
+local function refresh()
+	for i, button in swatches do
+		local on = i == colorIndex
+		button.Size = on and UDim2.fromOffset(30, 30) or UDim2.fromOffset(24, 24)
+		local stroke = button:FindFirstChildOfClass("UIStroke")
+		if stroke then
+			stroke.Transparency = on and 0 or 0.75
+		end
+	end
+	local studs = G.Tamanos[sizeIndex]
+	sizeLabel.Text = string.format("%s  %.1f", Strings.get("paint.size"), studs)
+	preview.BackgroundColor3 = G.Paleta[colorIndex]
+	-- La muestra se dibuja a la misma escala que el lienzo del mundo.
+	local pixels = math.max(4, math.round(studs * G.PixelesPorStud))
+	preview.Size = UDim2.fromOffset(pixels, pixels)
+end
+
+function GraffitiUI.mount(parent: ScreenGui)
+	root = new("Frame", {
+		Name = "Aerosol",
+		Size = UDim2.new(0, 300, 0, 96),
+		Position = UDim2.new(0.5, 0, 1, -150),
+		AnchorPoint = Vector2.new(0.5, 1),
+		BackgroundColor3 = Theme.Hud.Panel,
+		BackgroundTransparency = 0.15,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 5,
+	}, parent)
+	new("UICorner", { CornerRadius = UDim.new(0, 10) }, root)
+	new("UIStroke", { Color = Theme.Hud.Line, Thickness = 1, Transparency = 0.4 }, root)
+
+	new("TextLabel", {
+		Text = Strings.get("paint.hint"),
+		Size = UDim2.new(1, -20, 0, 16),
+		Position = UDim2.new(0, 10, 0, 6),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		TextSize = 11,
+		TextColor3 = Theme.Hud.Muted,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 6,
+	}, root)
+
+	local strip = new("Frame", {
+		Name = "Paleta",
+		Size = UDim2.new(1, -20, 0, 32),
+		Position = UDim2.new(0, 10, 0, 26),
+		BackgroundTransparency = 1,
+		ZIndex = 6,
+	}, root)
+	new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 6),
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, strip)
+
+	for i, color in G.Paleta do
+		local button = new("TextButton", {
+			Name = "C" .. i,
+			LayoutOrder = i,
+			Text = "",
+			Size = UDim2.fromOffset(24, 24),
+			BackgroundColor3 = color,
+			AutoButtonColor = false,
+			BorderSizePixel = 0,
+			ZIndex = 7,
+		}, strip)
+		new("UICorner", { CornerRadius = UDim.new(1, 0) }, button)
+		new("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 2, Transparency = 0.75 }, button)
+		button.MouseButton1Click:Connect(function()
+			colorIndex = i
+			refresh()
+		end)
+		swatches[i] = button
+	end
+
+	sizeLabel = new("TextLabel", {
+		Text = "",
+		Size = UDim2.new(1, -70, 0, 18),
+		Position = UDim2.new(0, 10, 0, 66),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		TextSize = 12,
+		TextColor3 = Theme.Hud.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 6,
+	}, root)
+
+	preview = new("Frame", {
+		Name = "Muestra",
+		Size = UDim2.fromOffset(12, 12),
+		Position = UDim2.new(1, -34, 0, 75),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = G.Paleta[1],
+		BorderSizePixel = 0,
+		ZIndex = 7,
+	}, root)
+	new("UICorner", { CornerRadius = UDim.new(1, 0) }, preview)
+
+	refresh()
+	GraffitiUI.bind()
+end
+
+-- ── herramienta equipada ───────────────────────────────────────────
+
+local function watch(character: Model)
+	local function check()
+		local tool = character:FindFirstChildOfClass("Tool")
+		equipped = tool ~= nil and tool:GetAttribute("Pintar") == true
+		root.Visible = equipped
+		if not equipped then
+			painting = false
+		end
+	end
+	character.ChildAdded:Connect(check)
+	character.ChildRemoved:Connect(check)
+	check()
+end
+
+function GraffitiUI.bind()
+	if player.Character then
+		watch(player.Character)
+	end
+	player.CharacterAdded:Connect(watch)
+
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if processed or not equipped then
+			return
+		end
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			painting = true
+		elseif input.KeyCode == Enum.KeyCode.C then
+			colorIndex = (colorIndex % #G.Paleta) + 1
+			refresh()
+		end
+	end)
+
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			painting = false
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input, processed)
+		if processed or not equipped then
+			return
+		end
+		if input.UserInputType == Enum.UserInputType.MouseWheel then
+			local step = input.Position.Z > 0 and 1 or -1
+			sizeIndex = math.clamp(sizeIndex + step, 1, #G.Tamanos)
+			refresh()
+		end
+	end)
+
+	RunService.RenderStepped:Connect(function()
+		if not painting or not equipped then
+			return
+		end
+		local now = os.clock()
+		if now - lastSend < 1 / G.PuntosPorSegundo then
+			return
+		end
+		lastSend = now
+
+		local camera = workspace.CurrentCamera
+		if camera then
+			Net.event(Net.Events.Paint):FireServer(camera.CFrame.LookVector, colorIndex, sizeIndex)
+		end
+	end)
+end
+
+function GraffitiUI.setVisible(visible: boolean)
+	if root then
+		root.Visible = visible and equipped
+	end
+	if not visible then
+		painting = false
+	end
+end
+
+return GraffitiUI
+]]></ProtectedString>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="RBX42">
           <Properties>
             <string name="Name">Hud</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -7321,6 +10666,7 @@ local phaseLabel: TextLabel
 local dayLabel: TextLabel
 local gradeValue: TextLabel
 local creditLabel: TextLabel
+local scoreLabel: TextLabel
 local suspicionFill: Frame
 local suspicionLabel: TextLabel
 local objective: TextLabel
@@ -7500,6 +10846,14 @@ function Hud.mount(parent: ScreenGui)
 		Theme.FontBlack, 26, Theme.Hud.Text)
 	creditLabel = label(left, "Creditos", "0 cr", UDim2.new(1, -20, 0, 16), UDim2.new(0, 12, 0, 54),
 		Theme.FontBold, 13, Theme.Hud.Credit)
+
+	-- Marcador de canastas del recreo. Vive debajo de la nota porque
+	-- es la otra cosa que se acumula, aunque no cuente para aprobar.
+	local court = panel(root, "Canastas", UDim2.new(0, 186, 0, 34),
+		UDim2.new(0, 12, 0, 96), Vector2.new(0, 0))
+	court.Visible = false
+	scoreLabel = label(court, "Valor", "", UDim2.new(1, -20, 1, 0), UDim2.new(0, 12, 0, 0),
+		Theme.FontBold, 13, Theme.Hud.Text)
 
 	-- Barra de sospecha, abajo al centro.
 	local bottom = panel(root, "Sospecha", UDim2.new(0, 320, 0, 52),
@@ -7708,6 +11062,20 @@ function Hud.teacherSay(packet: any)
 	end)
 end
 
+--- Canastas metidas en el recreo.
+function Hud.setScore(data: any)
+	if not scoreLabel then
+		return
+	end
+	local court = scoreLabel.Parent
+	if court and court:IsA("GuiObject") then
+		court.Visible = true
+	end
+	scoreLabel.Text = Strings.get("ball.score", { n = data.puntos or 0 })
+end
+
+local PUNISH_KEY = { cono = "hud.cone", expulsion = "hud.detention" }
+
 function Hud.punish(data: any)
 	if not coneOverlay then
 		return
@@ -7718,8 +11086,13 @@ function Hud.punish(data: any)
 		return
 	end
 
+	local key = PUNISH_KEY[data.tipo]
+	if not key then
+		-- Aturdido por la goma o por un empujon: dura poco y ya se
+		-- avisa con el aviso corto y la sacudida de camara.
+		return
+	end
 	local seconds = math.floor(data.segundos or 0)
-	local key = data.tipo == "cono" and "hud.cone" or "hud.detention"
 	coneOverlay.Visible = data.tipo == "cono"
 	punishLabel.Visible = true
 
@@ -7801,7 +11174,7 @@ function Hud.report(data: any)
 end
 
 --- Apaga/enciende el HUD de juego (lo usa el menu de inicio).
-local PANELES = { "Reloj", "Nota", "Sospecha", "Objetivo", "Avisos" }
+local PANELES = { "Reloj", "Nota", "Sospecha", "Objetivo", "Avisos", "Canastas" }
 
 function Hud.setVisible(visible: boolean)
 	if not root then
@@ -7810,7 +11183,12 @@ function Hud.setVisible(visible: boolean)
 	for _, name in PANELES do
 		local child = root:FindFirstChild(name)
 		if child and child:IsA("GuiObject") then
-			child.Visible = visible
+			-- El marcador solo reaparece si ya hubo alguna canasta.
+			if name == "Canastas" then
+				child.Visible = visible and scoreLabel ~= nil and scoreLabel.Text ~= ""
+			else
+				child.Visible = visible
+			end
 		end
 	end
 	if not visible then
@@ -7827,7 +11205,7 @@ return Hud
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX33">
+        <Item class="ModuleScript" referent="RBX43">
           <Properties>
             <string name="Name">LobbyUI</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -8230,7 +11608,7 @@ return LobbyUI
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX34">
+        <Item class="ModuleScript" referent="RBX44">
           <Properties>
             <string name="Name">MainMenu</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -8634,7 +12012,7 @@ return MainMenu
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX35">
+        <Item class="ModuleScript" referent="RBX45">
           <Properties>
             <string name="Name">Music</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -8866,7 +12244,7 @@ return Music
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX36">
+        <Item class="ModuleScript" referent="RBX46">
           <Properties>
             <string name="Name">NoteUI</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -9210,7 +12588,7 @@ return NoteUI
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX37">
+        <Item class="ModuleScript" referent="RBX47">
           <Properties>
             <string name="Name">Poses</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -9312,7 +12690,232 @@ return Poses
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX38">
+        <Item class="ModuleScript" referent="RBX48">
+          <Properties>
+            <string name="Name">RadioUI</string>
+            <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	RadioUI
+	------------------------------------------------------------------
+	El walkie y el celular. Misma pantalla, dos alcances distintos:
+	el walkie llega a todo el colegio, el celular solo al de al lado.
+
+	El panel aparece solo cuando tenes el aparato en la mano — es
+	deliberado: si el walkie estuviera siempre abierto no habria nada
+	que arriesgar al sacarlo en pleno examen, que es justo donde el
+	profesor te lo puede ver.
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Theme = require(Shared:WaitForChild("Theme"))
+local Strings = require(Shared:WaitForChild("Strings"))
+local Net = require(Shared:WaitForChild("Net"))
+
+local player = Players.LocalPlayer
+
+local RadioUI = {}
+
+local root: Frame
+local title: TextLabel
+local log: ScrollingFrame
+local box: TextBox
+local kind: string? = nil
+local entries = 0
+
+local function new(class: string, props: { [string]: any }, parent: Instance?): any
+	local instance = Instance.new(class)
+	for key, value in props do
+		(instance :: any)[key] = value
+	end
+	if parent then
+		instance.Parent = parent
+	end
+	return instance
+end
+
+function RadioUI.mount(parent: ScreenGui)
+	root = new("Frame", {
+		Name = "Radio",
+		Size = UDim2.new(0, 290, 0, 210),
+		Position = UDim2.new(1, -16, 1, -170),
+		AnchorPoint = Vector2.new(1, 1),
+		BackgroundColor3 = Theme.Hud.Panel,
+		BackgroundTransparency = 0.12,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 5,
+	}, parent)
+	new("UICorner", { CornerRadius = UDim.new(0, 10) }, root)
+	new("UIStroke", { Color = Theme.Hud.Line, Thickness = 1, Transparency = 0.4 }, root)
+
+	title = new("TextLabel", {
+		Text = Strings.get("radio.title"),
+		Size = UDim2.new(1, -20, 0, 20),
+		Position = UDim2.new(0, 10, 0, 8),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		TextSize = 14,
+		TextColor3 = Theme.Hud.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 6,
+	}, root)
+
+	log = new("ScrollingFrame", {
+		Name = "Registro",
+		Size = UDim2.new(1, -20, 1, -80),
+		Position = UDim2.new(0, 10, 0, 32),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 3,
+		ScrollBarImageColor3 = Theme.Hud.Line,
+		CanvasSize = UDim2.new(),
+		ZIndex = 6,
+	}, root)
+	new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }, log)
+
+	box = new("TextBox", {
+		Name = "Mensaje",
+		Text = "",
+		PlaceholderText = Strings.get("radio.placeholder"),
+		Size = UDim2.new(1, -84, 0, 30),
+		Position = UDim2.new(0, 10, 1, -40),
+		BackgroundColor3 = Theme.Hud.PanelSoft,
+		Font = Theme.Font,
+		TextSize = 13,
+		TextColor3 = Theme.Hud.Text,
+		PlaceholderColor3 = Theme.Hud.Muted,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ClearTextOnFocus = false,
+		BorderSizePixel = 0,
+		ZIndex = 6,
+	}, root)
+	new("UICorner", { CornerRadius = UDim.new(0, 8) }, box)
+	new("UIPadding", { PaddingLeft = UDim.new(0, 8) }, box)
+
+	local send = new("TextButton", {
+		Name = "Transmitir",
+		Text = Strings.get("radio.send"),
+		Size = UDim2.new(0, 64, 0, 30),
+		Position = UDim2.new(1, -74, 1, -40),
+		BackgroundColor3 = Theme.Hud.Safe,
+		BackgroundTransparency = 0.84,
+		AutoButtonColor = false,
+		Font = Theme.FontBold,
+		TextSize = 12,
+		TextColor3 = Theme.Hud.Safe,
+		BorderSizePixel = 0,
+		ZIndex = 6,
+	}, root)
+	new("UICorner", { CornerRadius = UDim.new(0, 8) }, send)
+	new("UIStroke", { Color = Theme.Hud.Safe, Thickness = 1, Transparency = 0.5 }, send)
+
+	send.MouseButton1Click:Connect(function()
+		RadioUI.send()
+	end)
+	box.FocusLost:Connect(function(enterPressed)
+		if enterPressed then
+			RadioUI.send()
+		end
+	end)
+
+	box:GetPropertyChangedSignal("Text"):Connect(function()
+		local limit = Config.Herramientas.RadioCaracteres
+		if #box.Text > limit then
+			box.Text = string.sub(box.Text, 1, limit)
+		end
+	end)
+
+	RadioUI.watch()
+end
+
+function RadioUI.send()
+	if not kind then
+		return
+	end
+	local text = box.Text
+	if text == "" then
+		return
+	end
+	box.Text = ""
+	Net.event(Net.Events.Radio):FireServer(kind, text)
+end
+
+--- Una linea en el registro. Se guardan las ultimas veinte.
+function RadioUI.receive(data: any)
+	if not log or not data then
+		return
+	end
+	entries += 1
+	local key = data.tipo == "celular" and "radio.phone" or "radio.heard"
+
+	local line = new("TextLabel", {
+		Name = "L" .. entries,
+		LayoutOrder = entries,
+		Text = Strings.get(key, { name = data.de or "?", text = data.texto or "" }),
+		Size = UDim2.new(1, -6, 0, 30),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		TextSize = 12,
+		TextColor3 = data.tipo == "celular" and Theme.Hud.Credit or Theme.Hud.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextWrapped = true,
+		ZIndex = 7,
+	}, log)
+
+	local children = log:GetChildren()
+	if #children > 22 then
+		for _, child in children do
+			if child:IsA("TextLabel") and child.LayoutOrder <= entries - 20 then
+				child:Destroy()
+			end
+		end
+	end
+
+	log.CanvasSize = UDim2.new(0, 0, 0, entries * 34)
+	log.CanvasPosition = Vector2.new(0, math.max(0, entries * 34 - log.AbsoluteSize.Y))
+	line.Parent = log
+end
+
+-- ── herramienta equipada ───────────────────────────────────────────
+
+local function watchCharacter(character: Model)
+	local function check()
+		local tool = character:FindFirstChildOfClass("Tool")
+		local radio = tool and tool:GetAttribute("Radio")
+		kind = typeof(radio) == "string" and radio or nil
+		root.Visible = kind ~= nil
+		if kind then
+			title.Text = Strings.get(kind == "celular" and "item.celular" or "radio.title")
+		end
+	end
+	character.ChildAdded:Connect(check)
+	character.ChildRemoved:Connect(check)
+	check()
+end
+
+function RadioUI.watch()
+	if player.Character then
+		watchCharacter(player.Character)
+	end
+	player.CharacterAdded:Connect(watchCharacter)
+end
+
+function RadioUI.setVisible(visible: boolean)
+	if root then
+		root.Visible = visible and kind ~= nil
+	end
+end
+
+return RadioUI
+]]></ProtectedString>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="RBX49">
           <Properties>
             <string name="Name">ShopUI</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -9606,6 +13209,255 @@ function ShopUI.isOpen(): boolean
 end
 
 return ShopUI
+]]></ProtectedString>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="RBX50">
+          <Properties>
+            <string name="Name">ZoomUI</string>
+            <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	ZoomUI
+	------------------------------------------------------------------
+	Los prismaticos.
+
+	Manteniendo Z se cierra el campo de vision de la camara y aparece
+	la mascara de dos circulos. Mientras estas asi, apuntar a un
+	companero y pulsar Q lee SU hoja desde donde estes: es espiar, pero
+	a cuarenta studs.
+
+	El cliente decide a quien apuntas (tiene la camara), el servidor
+	comprueba que ese alguien exista, este en tu misma aula y dentro
+	del alcance del aparato. Si el cliente miente, el servidor dice que
+	no hay nadie en la mira.
+
+	Detalle importante: el FOV se guarda y se restaura. Una camara que
+	se queda con FOV 16 porque alguien solto la tecla en el frame
+	equivocado deja el juego injugable.
+--]]
+
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Theme = require(Shared:WaitForChild("Theme"))
+local Strings = require(Shared:WaitForChild("Strings"))
+local Net = require(Shared:WaitForChild("Net"))
+
+local player = Players.LocalPlayer
+
+local ZoomUI = {}
+
+local H = Config.Herramientas
+
+local mask: Frame
+local hint: TextLabel
+local equipped = false
+local zoomed = false
+local restoreFov = 70
+
+--- Lo rellena el init del cliente: la pregunta que mira el alumno.
+ZoomUI.currentIndex = function(): number
+	return 1
+end
+
+local function new(class: string, props: { [string]: any }, parent: Instance?): any
+	local instance = Instance.new(class)
+	for key, value in props do
+		(instance :: any)[key] = value
+	end
+	if parent then
+		instance.Parent = parent
+	end
+	return instance
+end
+
+function ZoomUI.mount(parent: ScreenGui)
+	mask = new("Frame", {
+		Name = "Prismaticos",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Visible = false,
+		ZIndex = 14,
+	}, parent)
+
+	-- Cuatro bandas negras dejan al descubierto una franja central, y
+	-- dos circulos oscuros terminan de dar la forma del binocular.
+	for _, edge in {
+		{ UDim2.new(1, 0, 0.16, 0), UDim2.fromScale(0, 0), Vector2.new(0, 0) },
+		{ UDim2.new(1, 0, 0.16, 0), UDim2.fromScale(0, 1), Vector2.new(0, 1) },
+		{ UDim2.new(0.2, 0, 1, 0), UDim2.fromScale(0, 0), Vector2.new(0, 0) },
+		{ UDim2.new(0.2, 0, 1, 0), UDim2.fromScale(1, 0), Vector2.new(1, 0) },
+	} do
+		new("Frame", {
+			Size = edge[1],
+			Position = edge[2],
+			AnchorPoint = edge[3],
+			BackgroundColor3 = Color3.new(0, 0, 0),
+			BorderSizePixel = 0,
+			ZIndex = 14,
+		}, mask)
+	end
+
+	for _, side in { -1, 1 } do
+		local ring = new("Frame", {
+			Name = "Circulo",
+			Size = UDim2.fromScale(0.34, 0.62),
+			Position = UDim2.fromScale(0.5 + side * 0.16, 0.5),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			ZIndex = 15,
+		}, mask)
+		new("UICorner", { CornerRadius = UDim.new(1, 0) }, ring)
+		new("UIStroke", { Color = Color3.new(0, 0, 0), Thickness = 90, Transparency = 0.05 }, ring)
+	end
+
+	-- Retícula.
+	new("Frame", {
+		Size = UDim2.fromOffset(1, 26),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = Color3.fromRGB(210, 230, 210),
+		BackgroundTransparency = 0.4,
+		BorderSizePixel = 0,
+		ZIndex = 16,
+	}, mask)
+	new("Frame", {
+		Size = UDim2.fromOffset(26, 1),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = Color3.fromRGB(210, 230, 210),
+		BackgroundTransparency = 0.4,
+		BorderSizePixel = 0,
+		ZIndex = 16,
+	}, mask)
+
+	hint = new("TextLabel", {
+		Text = Strings.get("zoom.on"),
+		Size = UDim2.new(1, 0, 0, 20),
+		Position = UDim2.fromScale(0, 0.82),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		TextSize = 13,
+		TextColor3 = Theme.Hud.Text,
+		ZIndex = 16,
+	}, mask)
+
+	ZoomUI.bind()
+end
+
+-- ── zoom ───────────────────────────────────────────────────────────
+
+local function setZoom(on: boolean)
+	local camera = workspace.CurrentCamera
+	if not camera or zoomed == on then
+		return
+	end
+	zoomed = on
+	mask.Visible = on
+
+	if on then
+		restoreFov = camera.FieldOfView
+		TweenService:Create(camera, TweenInfo.new(0.22), {
+			FieldOfView = H.PrismaticosFov,
+		}):Play()
+	else
+		TweenService:Create(camera, TweenInfo.new(0.22), {
+			FieldOfView = restoreFov,
+		}):Play()
+	end
+end
+
+--- A quien estas apuntando: se tira un rayo desde la camara y se mira
+--- si lo que corta pertenece al personaje de otro jugador.
+local function aimedPlayer(): Player?
+	local camera = workspace.CurrentCamera
+	if not camera then
+		return nil
+	end
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { player.Character :: any }
+
+	local hit = workspace:Raycast(camera.CFrame.Position,
+		camera.CFrame.LookVector * (H.PrismaticosAlcance + 10), params)
+	if not hit then
+		return nil
+	end
+	local model = hit.Instance:FindFirstAncestorOfClass("Model")
+	return model and Players:GetPlayerFromCharacter(model) or nil
+end
+
+function ZoomUI.read()
+	if not zoomed then
+		return
+	end
+	local target = aimedPlayer()
+	if not target then
+		hint.Text = Strings.get("zoom.no_target")
+		task.delay(2, function()
+			if hint then
+				hint.Text = Strings.get("zoom.on")
+			end
+		end)
+		return
+	end
+	Net.event(Net.Events.Cheat):FireServer("zoom", ZoomUI.currentIndex(), target.UserId)
+end
+
+-- ── herramienta equipada ───────────────────────────────────────────
+
+local function watchCharacter(character: Model)
+	local function check()
+		local tool = character:FindFirstChildOfClass("Tool")
+		equipped = tool ~= nil and tool:GetAttribute("Zoom") == true
+		if not equipped then
+			setZoom(false)
+		end
+	end
+	character.ChildAdded:Connect(check)
+	character.ChildRemoved:Connect(check)
+	check()
+end
+
+function ZoomUI.bind()
+	if player.Character then
+		watchCharacter(player.Character)
+	end
+	player.CharacterAdded:Connect(watchCharacter)
+
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if processed then
+			return
+		end
+		if input.KeyCode == Enum.KeyCode.Z and equipped then
+			setZoom(true)
+		elseif input.KeyCode == Enum.KeyCode.Q and zoomed then
+			ZoomUI.read()
+		end
+	end)
+
+	UserInputService.InputEnded:Connect(function(input)
+		if input.KeyCode == Enum.KeyCode.Z then
+			setZoom(false)
+		end
+	end)
+end
+
+function ZoomUI.isZoomed(): boolean
+	return zoomed
+end
+
+function ZoomUI.setVisible(visible: boolean)
+	if not visible then
+		setZoom(false)
+	end
+end
+
+return ZoomUI
 ]]></ProtectedString>
           </Properties>
         </Item>

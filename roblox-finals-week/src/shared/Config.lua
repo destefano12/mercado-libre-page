@@ -15,28 +15,32 @@ local Config = {}
 -- casilleros a los dos lados y N aulas colgadas del pasillo.
 Config.Escuela = {
 	Origen = Vector3.new(0, 0, 0),
+	-- Pasillo estrecho y techo bajo: es lo que hace que el colegio se
+	-- sienta cerrado en vez de un galpon. 16 de ancho es poco menos de
+	-- tres personas de hombro a hombro.
 	PasilloLargo = 190,
-	PasilloAncho = 26,
-	AlturaPiso = 15,
+	PasilloAncho = 16,
+	AlturaPiso = 11,                -- losa
+	AlturaFalsoTecho = 9.4,         -- las placas del cielorraso
 	EspesorPared = 1,
-	CasillerosPorLado = 18,
-	CasilleroAncho = 3.4,
-	CasilleroAlto = 7,
-	CasilleroFondo = 2.2,
+	AlturaZocalo = 3.6,             -- el friso oscuro de media pared
+	CasillerosPorLado = 20,
+	CasilleroAncho = 3.1,
+	CasilleroAlto = 6.4,
+	CasilleroFondo = 1.9,
 	Aulas = 2,
-	AulaAncho = 46,
-	AulaLargo = 40,
+	AulaAncho = 36,
+	AulaLargo = 30,
+	AulaAltura = 10,
 	FilasDePupitres = 4,
 	PupitresPorFila = 5,
-	PupitreSeparacionX = 7.2,
-	PupitreSeparacionZ = 7.6,
+	PupitreSeparacionX = 6.4,
+	PupitreSeparacionZ = 6.0,
 	ZonaRecreoLargo = 34,
 	SalaDeCastigo = Vector3.new(150, 0, -80),
-	ColorPiso = Color3.fromRGB(196, 192, 182),
-	ColorParedes = Color3.fromRGB(222, 219, 210),
-	ColorZocalo = Color3.fromRGB(64, 76, 92),
-	ColorCasillero = Color3.fromRGB(52, 92, 128),
-	ColorPizarra = Color3.fromRGB(34, 52, 44),
+	BaldosaLado = 4,                -- damero del piso
+	PlacaTecho = 4,                 -- placas del falso techo (16 / 4 = 4 justas)
+	SeparacionLuces = 14,
 }
 
 -- ── Ciclo escolar ──────────────────────────────────────────────────
@@ -159,6 +163,11 @@ Config.Economia = {
 		{ id = "avion", precio = 25, tipo = "objeto" },
 		{ id = "bolita", precio = 15, tipo = "objeto" },
 		{ id = "nota", precio = 10, tipo = "objeto" },
+		{ id = "walkie", precio = 110, tipo = "objeto" },
+		{ id = "prismaticos", precio = 95, tipo = "objeto" },
+		{ id = "celular", precio = 140, tipo = "objeto" },
+		{ id = "aerosol", precio = 30, tipo = "objeto" },
+		{ id = "libro", precio = 55, tipo = "objeto" },
 		{ id = "gorra", precio = 90, tipo = "estetica" },
 		{ id = "mochila", precio = 130, tipo = "estetica" },
 		{ id = "anteojos", precio = 75, tipo = "estetica" },
@@ -208,6 +217,148 @@ Config.Camara = {
 	SegundosTransicion = 0.85,
 	FovMinimo = 18,
 	FovMaximo = 74,
+}
+
+-- ── El pasillo: pelota, canasta y cosas para tirar ─────────────────
+Config.Pasillo = {
+	PelotaRadio = 1.5,
+	PelotaRebote = 0.72,
+	PelotaFriccion = 0.35,
+	PelotaFuerza = 96,
+	PelotaAlturaTiro = 0.32,          -- cuanto se levanta el tiro (0-1)
+	CanastaAltura = 6.4,              -- por debajo del falso techo (9.4)
+	CanastaRadio = 2.4,               -- el pasillo mide 16 de ancho
+	CanastaDistancia = 20,            -- del tablero a donde nace la pelota
+	PuntosPorCanasta = 3,
+	CreditosPorCanasta = 6,
+	AlcanceAgarre = 8,
+	EnfriamientoTiro = 0.4,
+}
+
+-- ── Grafiti: dibujar en las paredes ────────────────────────────────
+Config.Grafiti = {
+	Habilitado = true,
+	MaximoPorSuperficie = 450,        -- despues borra las mas viejas
+	PuntosPorSegundo = 18,            -- limite del servidor por jugador
+	Alcance = 26,
+	PixelesPorStud = 12,              -- resolucion del lienzo
+	Tamanos = { 0.4, 0.8, 1.5, 2.5 }, -- diametro de la brocha, EN STUDS
+	Paleta = {
+		Color3.fromRGB(240, 62, 62),
+		Color3.fromRGB(250, 176, 44),
+		Color3.fromRGB(246, 232, 62),
+		Color3.fromRGB(64, 204, 108),
+		Color3.fromRGB(52, 150, 244),
+		Color3.fromRGB(168, 96, 240),
+		Color3.fromRGB(248, 248, 248),
+		Color3.fromRGB(24, 24, 28),
+	},
+	SospechaPorPintar = 0.22,         -- si lo haces en el aula
+}
+
+-- ── Herramientas de comunicacion ───────────────────────────────────
+Config.Herramientas = {
+	RadioAlcance = 0,                 -- 0 = todo el mapa (es una radio)
+	RadioCaracteres = 90,
+	RadioEnfriamiento = 2.5,
+	RadioSospecha = 0.34,
+	CelularAlcance = 22,
+	CelularEnfriamiento = 6,
+	CelularSospecha = 0.46,
+	CelularRevela = 1,
+	PrismaticosFov = 16,
+	PrismaticosAlcance = 46,          -- espiar hojas lejanas
+	PrismaticosSospecha = 0.24,
+	LibroRevela = 2,
+	LibroSegundos = 3.5,
+	LibroEnfriamiento = 20,
+}
+
+-- ── Dejar KO ───────────────────────────────────────────────────────
+Config.Nocaut = {
+	Alcance = 6.5,
+	Enfriamiento = 1.1,
+	EmpujonesParaKO = 3,
+	VentanaEmpujones = 3.5,
+	PorLaEspalda = 0.55,              -- coseno: mas alto = mas de atras
+	SegundosKO = 4.5,
+	Impulso = 42,
+	SospechaEnExamen = 0.85,
+	CreditosRobados = 0,
+}
+
+-- ── Alumnos que estudiaron (NPC) ───────────────────────────────────
+Config.Empollones = {
+	Cantidad = 4,
+	Nombres = { "Nadia", "Bruno", "Iris", "Teo", "Mila", "Simon" },
+	ProbabilidadDeCeder = 0.35,
+	RespuestasQueSaben = 4,
+	RespuestasAlCaer = 3,
+	EnfriamientoPedir = 8,
+	ColorSueter = Color3.fromRGB(96, 128, 72),
+}
+
+-- ── La goma de borrar del profesor ─────────────────────────────────
+Config.Goma = {
+	Habilitada = true,
+	DistanciaMinima = 9,              -- mas cerca que esto, va y te agarra
+	DistanciaMaxima = 40,
+	Velocidad = 88,
+	Enfriamiento = 3.2,
+	Punteria = 0.86,                  -- 1 = perfecta; abajo, dispersion
+	SegundosAturdido = 1.8,
+	PenalizacionNota = 6,
+}
+
+-- ── Direccion de arte ──────────────────────────────────────────────
+-- La tecnologia de iluminacion NO se puede escribir desde un script:
+-- es de solo lectura en runtime. Este valor lo lee tools/build_studio.py
+-- y lo escribe en el archivo del lugar, que es donde Roblox lo acepta.
+Config.Estilo = {
+	Tecnologia = "Future",          -- "Future" | "ShadowMap"
+	Brillo = 1.55,
+	Hora = 15.2,                    -- media tarde de semana de examenes
+	Latitud = 41,
+	Exposicion = -0.12,
+	SuavidadSombras = 0.35,         -- solo Future
+	DifusaEntorno = 0.35,
+	EspecularEntorno = 0.22,
+	Nubes = { cobertura = 0.86, densidad = 0.68 },
+	Bloom = { intensidad = 0.5, tamano = 18, umbral = 1.62 },
+	Profundidad = { lejos = 0.06, foco = 18, radio = 26, cerca = 0.1 },
+	RayosSol = { intensidad = 0.03, dispersion = 0.9 },
+	-- Un ColorCorrection por clima. Saturacion negativa = el look
+	-- lavado de instituto; el tinte frio es la luz fluorescente.
+	Climas = {
+		pasillo = { brillo = -0.02, contraste = 0.12, saturacion = -0.26,
+			tinte = Color3.fromRGB(236, 241, 248) },
+		examen = { brillo = -0.05, contraste = 0.2, saturacion = -0.36,
+			tinte = Color3.fromRGB(230, 238, 248) },
+		tension = { brillo = -0.08, contraste = 0.28, saturacion = -0.46,
+			tinte = Color3.fromRGB(248, 234, 232) },
+	},
+	Atmosfera = {
+		densidad = 0.32,
+		desplazamiento = 0.1,
+		color = Color3.fromRGB(188, 192, 198),
+		decaimiento = Color3.fromRGB(110, 118, 130),
+		brillo = 0.22,
+		neblina = 1.7,
+	},
+}
+
+-- ── Texturas PBR propias (opcional) ────────────────────────────────
+-- SurfaceAppearance necesita imagenes SUBIDAS a Roblox: no hay forma
+-- de generarlas por codigo. Subilas en Studio (Asset Manager >
+-- Images), copia sus ids aca y el juego las aplica solo al arrancar.
+-- Con los campos vacios se usan los materiales PBR que ya trae el
+-- motor, que con Future se ven bien igual.
+Config.Texturas = {
+	Pared = { color = "", normal = "", rugosidad = "", metalidad = "" },
+	Piso = { color = "", normal = "", rugosidad = "", metalidad = "" },
+	Casillero = { color = "", normal = "", rugosidad = "", metalidad = "" },
+	Pupitre = { color = "", normal = "", rugosidad = "", metalidad = "" },
+	Techo = { color = "", normal = "", rugosidad = "", metalidad = "" },
 }
 
 table.freeze(Config)

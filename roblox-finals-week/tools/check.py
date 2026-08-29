@@ -227,11 +227,76 @@ def check_syntax() -> list[str]:
     return problems
 
 
+
+def strip_noise(source: str) -> list[str]:
+    """El fuente sin comentarios ni cadenas, conservando los renglones.
+
+    Hace falta para buscar usos de verdad: una palabra dentro de un
+    comentario de cabecera o dentro de un texto traducido no es un uso.
+    Se reemplaza por espacios en vez de borrarse para que los numeros
+    de linea sigan siendo los del archivo original.
+    """
+    out = []
+    for line in source.splitlines():
+        out.append(list(line))
+
+    text = source
+    spans = []
+    for match in re.finditer(r"--\[\[.*?\]\]", text, re.S):      # comentario de bloque
+        spans.append(match.span())
+    for match in re.finditer(r"--(?!\[\[).*", text):              # comentario de linea
+        spans.append(match.span())
+    for match in re.finditer(r'"(?:[^"\\\n]|\\.)*"', text):        # cadena
+        spans.append(match.span())
+
+    blanked = list(text)
+    for start, end in spans:
+        for index in range(start, end):
+            if blanked[index] != "\n":
+                blanked[index] = " "
+    return "".join(blanked).splitlines()
+
+
+def check_use_before_declaration() -> list[str]:
+    """Locales usadas antes de declararlas.
+
+    Luau compila esto sin decir nada: dentro de la funcion de arriba,
+    el nombre resuelve a una GLOBAL que vale nil, y la llamada falla
+    en silencio en runtime. Nos comio una mecanica entera (el profesor
+    nunca tiraba la goma) sin un solo error en el Output.
+    """
+    problems = []
+    declaration = re.compile(r"^local (?:function )?(\w+)")
+
+    for path in lua_files():
+        lines = strip_noise(path.read_text(encoding="utf-8"))
+        declared: dict[str, int] = {}
+        for number, line in enumerate(lines):
+            match = declaration.match(line)
+            if match and match.group(1) not in declared:
+                declared[match.group(1)] = number
+
+        for name, at in declared.items():
+            # Ni un campo de tipo (`opciones: {string}`) ni un
+            # parametro (`tool: Tool`) ni un acceso (`x.tool`) cuentan
+            # como uso de la local.
+            usage = re.compile(rf"(?<![.:\w]){re.escape(name)}\b(?!\s*:)")
+            for number in range(at):
+                if usage.search(lines[number]):
+                    problems.append(
+                        f"{path.relative_to(ROOT)}:{number + 1}: usa {name!r}, "
+                        f"que recien se declara en la linea {at + 1}")
+                    break
+
+    return sorted(set(problems))
+
+
 def main() -> int:
     checks = [
         ("sintaxis (luau-compile)", check_syntax),
         ("referencias a Config", check_config),
         ("valores de Enum", check_enums),
+        ("uso antes de declarar", check_use_before_declaration),
         ("propiedades de solo lectura", check_read_only),
         ("claves de idioma", check_strings),
     ]

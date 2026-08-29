@@ -1,5 +1,5 @@
 <roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
-  <Item class="LocalScript" referent="RBX10">
+  <Item class="LocalScript" referent="RBX13">
     <Properties>
       <string name="Name">Client</string>
       <ProtectedString name="Source"><![CDATA[--!strict
@@ -36,6 +36,9 @@ local LobbyUI = require(script:WaitForChild("LobbyUI"))
 local CameraDirector = require(script:WaitForChild("CameraDirector"))
 local Music = require(script:WaitForChild("Music"))
 local Poses = require(script:WaitForChild("Poses"))
+local GraffitiUI = require(script:WaitForChild("GraffitiUI"))
+local RadioUI = require(script:WaitForChild("RadioUI"))
+local ZoomUI = require(script:WaitForChild("ZoomUI"))
 
 -- ── idioma ─────────────────────────────────────────────────────────
 -- Cada jugador ve el juego en SU idioma: el servidor manda claves.
@@ -71,6 +74,9 @@ ExamUI.mount(gui)
 NoteUI.mount(gui)
 ShopUI.mount(gui)
 LobbyUI.mount(gui)
+GraffitiUI.mount(gui)
+RadioUI.mount(gui)
+ZoomUI.mount(gui)
 MainMenu.mount(gui)
 Music.start()
 
@@ -83,6 +89,8 @@ end
 NoteUI.onThrow = function()
 	Poses.throw()
 end
+-- Los prismaticos espian la pregunta que estas mirando en la hoja.
+ZoomUI.currentIndex = ExamUI.currentIndex
 
 -- Chat de proximidad: las burbujas arriba de la cabeza son lo que hace
 -- que hablar en el pasillo se sienta cara a cara. Va en pcall porque la
@@ -103,6 +111,9 @@ MainMenu.onVisible = function(open: boolean)
 	Hud.setVisible(not open)
 	ExamUI.setVisible(not open)
 	NoteUI.setVisible(not open)
+	GraffitiUI.setVisible(not open)
+	RadioUI.setVisible(not open)
+	ZoomUI.setVisible(not open)
 	if open then
 		ShopUI.close()
 		LobbyUI.close()
@@ -199,6 +210,22 @@ Net.event(Net.Events.NoteReceived).OnClientEvent:Connect(function(data)
 	NoteUI.received(data)
 end)
 
+Net.event(Net.Events.Radio).OnClientEvent:Connect(function(data)
+	RadioUI.receive(data)
+end)
+
+Net.event(Net.Events.Stunned).OnClientEvent:Connect(function(data)
+	-- Te tiraron al piso o te pego la goma: sacudida y aviso. El
+	-- control del personaje lo bloquea el servidor con PlatformStand,
+	-- aca solo se acusa el golpe.
+	CameraDirector.shake(data.motivo == "ko" and 1.6 or 0.9, 0.7)
+	Hud.punish({ tipo = "aturdido", segundos = data.segundos })
+end)
+
+Net.event(Net.Events.Score).OnClientEvent:Connect(function(data)
+	Hud.setScore(data)
+end)
+
 Net.event(Net.Events.Music).OnClientEvent:Connect(function(data)
 	if data and data.clima then
 		Music.setClimate(data.clima)
@@ -212,9 +239,24 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		return
 	end
 	if input.KeyCode == Enum.KeyCode.Q then
-		Net.event(Net.Events.Cheat):FireServer("peek", ExamUI.currentIndex())
+		-- Con los prismaticos en la mira, Q lo maneja ZoomUI.
+		if not ZoomUI.isZoomed() then
+			Net.event(Net.Events.Cheat):FireServer("peek", ExamUI.currentIndex())
+		end
 	elseif input.KeyCode == Enum.KeyCode.R then
 		Net.event(Net.Events.Cheat):FireServer("whisper", ExamUI.currentIndex())
+	elseif input.KeyCode == Enum.KeyCode.G then
+		Net.event(Net.Events.Knock):FireServer()
+		Poses.throw(0.35)
+	elseif input.KeyCode == Enum.KeyCode.B then
+		local camera = workspace.CurrentCamera
+		if camera then
+			Net.event(Net.Events.Ball):FireServer("shoot", camera.CFrame.LookVector)
+			Poses.throw(0.5)
+		end
+	elseif input.KeyCode == Enum.KeyCode.H then
+		-- Leer el libro que llevas en la mano.
+		Net.event(Net.Events.Cheat):FireServer("book", 1)
 	elseif input.KeyCode == Enum.KeyCode.T then
 		if ShopUI.isOpen() then
 			ShopUI.close()
@@ -944,6 +986,252 @@ return ExamUI
     </Item>
     <Item class="ModuleScript" referent="RBX3">
       <Properties>
+        <string name="Name">GraffitiUI</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	GraffitiUI
+	------------------------------------------------------------------
+	El aerosol: paleta de ocho colores, cuatro grosores, y pintar
+	manteniendo el clic.
+
+	El cliente no dibuja nada por su cuenta. Manda la direccion en la
+	que apunta la camara y el servidor decide contra que pared pego y
+	estampa el punto — que despues se replica a todos. Por eso lo que
+	pintas lo ven los demas, y por eso no se puede pintar a traves de
+	una pared por mucho que se toque el cliente.
+
+	El ritmo de envio esta limitado aca ademas de en el servidor: sin
+	eso, a 240 fps mandarias 240 puntos por segundo y el servidor
+	tiraria 222 a la basura.
+--]]
+
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Theme = require(Shared:WaitForChild("Theme"))
+local Strings = require(Shared:WaitForChild("Strings"))
+local Net = require(Shared:WaitForChild("Net"))
+
+local player = Players.LocalPlayer
+
+local GraffitiUI = {}
+
+local G = Config.Grafiti
+
+local root: Frame
+local swatches: { TextButton } = {}
+local sizeLabel: TextLabel
+local preview: Frame
+
+local colorIndex = 1
+local sizeIndex = 2
+local painting = false
+local lastSend = 0
+local equipped = false
+
+local function new(class: string, props: { [string]: any }, parent: Instance?): any
+	local instance = Instance.new(class)
+	for key, value in props do
+		(instance :: any)[key] = value
+	end
+	if parent then
+		instance.Parent = parent
+	end
+	return instance
+end
+
+local function refresh()
+	for i, button in swatches do
+		local on = i == colorIndex
+		button.Size = on and UDim2.fromOffset(30, 30) or UDim2.fromOffset(24, 24)
+		local stroke = button:FindFirstChildOfClass("UIStroke")
+		if stroke then
+			stroke.Transparency = on and 0 or 0.75
+		end
+	end
+	local studs = G.Tamanos[sizeIndex]
+	sizeLabel.Text = string.format("%s  %.1f", Strings.get("paint.size"), studs)
+	preview.BackgroundColor3 = G.Paleta[colorIndex]
+	-- La muestra se dibuja a la misma escala que el lienzo del mundo.
+	local pixels = math.max(4, math.round(studs * G.PixelesPorStud))
+	preview.Size = UDim2.fromOffset(pixels, pixels)
+end
+
+function GraffitiUI.mount(parent: ScreenGui)
+	root = new("Frame", {
+		Name = "Aerosol",
+		Size = UDim2.new(0, 300, 0, 96),
+		Position = UDim2.new(0.5, 0, 1, -150),
+		AnchorPoint = Vector2.new(0.5, 1),
+		BackgroundColor3 = Theme.Hud.Panel,
+		BackgroundTransparency = 0.15,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 5,
+	}, parent)
+	new("UICorner", { CornerRadius = UDim.new(0, 10) }, root)
+	new("UIStroke", { Color = Theme.Hud.Line, Thickness = 1, Transparency = 0.4 }, root)
+
+	new("TextLabel", {
+		Text = Strings.get("paint.hint"),
+		Size = UDim2.new(1, -20, 0, 16),
+		Position = UDim2.new(0, 10, 0, 6),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		TextSize = 11,
+		TextColor3 = Theme.Hud.Muted,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 6,
+	}, root)
+
+	local strip = new("Frame", {
+		Name = "Paleta",
+		Size = UDim2.new(1, -20, 0, 32),
+		Position = UDim2.new(0, 10, 0, 26),
+		BackgroundTransparency = 1,
+		ZIndex = 6,
+	}, root)
+	new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 6),
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, strip)
+
+	for i, color in G.Paleta do
+		local button = new("TextButton", {
+			Name = "C" .. i,
+			LayoutOrder = i,
+			Text = "",
+			Size = UDim2.fromOffset(24, 24),
+			BackgroundColor3 = color,
+			AutoButtonColor = false,
+			BorderSizePixel = 0,
+			ZIndex = 7,
+		}, strip)
+		new("UICorner", { CornerRadius = UDim.new(1, 0) }, button)
+		new("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 2, Transparency = 0.75 }, button)
+		button.MouseButton1Click:Connect(function()
+			colorIndex = i
+			refresh()
+		end)
+		swatches[i] = button
+	end
+
+	sizeLabel = new("TextLabel", {
+		Text = "",
+		Size = UDim2.new(1, -70, 0, 18),
+		Position = UDim2.new(0, 10, 0, 66),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		TextSize = 12,
+		TextColor3 = Theme.Hud.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 6,
+	}, root)
+
+	preview = new("Frame", {
+		Name = "Muestra",
+		Size = UDim2.fromOffset(12, 12),
+		Position = UDim2.new(1, -34, 0, 75),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = G.Paleta[1],
+		BorderSizePixel = 0,
+		ZIndex = 7,
+	}, root)
+	new("UICorner", { CornerRadius = UDim.new(1, 0) }, preview)
+
+	refresh()
+	GraffitiUI.bind()
+end
+
+-- ── herramienta equipada ───────────────────────────────────────────
+
+local function watch(character: Model)
+	local function check()
+		local tool = character:FindFirstChildOfClass("Tool")
+		equipped = tool ~= nil and tool:GetAttribute("Pintar") == true
+		root.Visible = equipped
+		if not equipped then
+			painting = false
+		end
+	end
+	character.ChildAdded:Connect(check)
+	character.ChildRemoved:Connect(check)
+	check()
+end
+
+function GraffitiUI.bind()
+	if player.Character then
+		watch(player.Character)
+	end
+	player.CharacterAdded:Connect(watch)
+
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if processed or not equipped then
+			return
+		end
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			painting = true
+		elseif input.KeyCode == Enum.KeyCode.C then
+			colorIndex = (colorIndex % #G.Paleta) + 1
+			refresh()
+		end
+	end)
+
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			painting = false
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input, processed)
+		if processed or not equipped then
+			return
+		end
+		if input.UserInputType == Enum.UserInputType.MouseWheel then
+			local step = input.Position.Z > 0 and 1 or -1
+			sizeIndex = math.clamp(sizeIndex + step, 1, #G.Tamanos)
+			refresh()
+		end
+	end)
+
+	RunService.RenderStepped:Connect(function()
+		if not painting or not equipped then
+			return
+		end
+		local now = os.clock()
+		if now - lastSend < 1 / G.PuntosPorSegundo then
+			return
+		end
+		lastSend = now
+
+		local camera = workspace.CurrentCamera
+		if camera then
+			Net.event(Net.Events.Paint):FireServer(camera.CFrame.LookVector, colorIndex, sizeIndex)
+		end
+	end)
+end
+
+function GraffitiUI.setVisible(visible: boolean)
+	if root then
+		root.Visible = visible and equipped
+	end
+	if not visible then
+		painting = false
+	end
+end
+
+return GraffitiUI
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX4">
+      <Properties>
         <string name="Name">Hud</string>
         <ProtectedString name="Source"><![CDATA[--!strict
 --[[
@@ -975,6 +1263,7 @@ local phaseLabel: TextLabel
 local dayLabel: TextLabel
 local gradeValue: TextLabel
 local creditLabel: TextLabel
+local scoreLabel: TextLabel
 local suspicionFill: Frame
 local suspicionLabel: TextLabel
 local objective: TextLabel
@@ -1154,6 +1443,14 @@ function Hud.mount(parent: ScreenGui)
 		Theme.FontBlack, 26, Theme.Hud.Text)
 	creditLabel = label(left, "Creditos", "0 cr", UDim2.new(1, -20, 0, 16), UDim2.new(0, 12, 0, 54),
 		Theme.FontBold, 13, Theme.Hud.Credit)
+
+	-- Marcador de canastas del recreo. Vive debajo de la nota porque
+	-- es la otra cosa que se acumula, aunque no cuente para aprobar.
+	local court = panel(root, "Canastas", UDim2.new(0, 186, 0, 34),
+		UDim2.new(0, 12, 0, 96), Vector2.new(0, 0))
+	court.Visible = false
+	scoreLabel = label(court, "Valor", "", UDim2.new(1, -20, 1, 0), UDim2.new(0, 12, 0, 0),
+		Theme.FontBold, 13, Theme.Hud.Text)
 
 	-- Barra de sospecha, abajo al centro.
 	local bottom = panel(root, "Sospecha", UDim2.new(0, 320, 0, 52),
@@ -1362,6 +1659,20 @@ function Hud.teacherSay(packet: any)
 	end)
 end
 
+--- Canastas metidas en el recreo.
+function Hud.setScore(data: any)
+	if not scoreLabel then
+		return
+	end
+	local court = scoreLabel.Parent
+	if court and court:IsA("GuiObject") then
+		court.Visible = true
+	end
+	scoreLabel.Text = Strings.get("ball.score", { n = data.puntos or 0 })
+end
+
+local PUNISH_KEY = { cono = "hud.cone", expulsion = "hud.detention" }
+
 function Hud.punish(data: any)
 	if not coneOverlay then
 		return
@@ -1372,8 +1683,13 @@ function Hud.punish(data: any)
 		return
 	end
 
+	local key = PUNISH_KEY[data.tipo]
+	if not key then
+		-- Aturdido por la goma o por un empujon: dura poco y ya se
+		-- avisa con el aviso corto y la sacudida de camara.
+		return
+	end
 	local seconds = math.floor(data.segundos or 0)
-	local key = data.tipo == "cono" and "hud.cone" or "hud.detention"
 	coneOverlay.Visible = data.tipo == "cono"
 	punishLabel.Visible = true
 
@@ -1455,7 +1771,7 @@ function Hud.report(data: any)
 end
 
 --- Apaga/enciende el HUD de juego (lo usa el menu de inicio).
-local PANELES = { "Reloj", "Nota", "Sospecha", "Objetivo", "Avisos" }
+local PANELES = { "Reloj", "Nota", "Sospecha", "Objetivo", "Avisos", "Canastas" }
 
 function Hud.setVisible(visible: boolean)
 	if not root then
@@ -1464,7 +1780,12 @@ function Hud.setVisible(visible: boolean)
 	for _, name in PANELES do
 		local child = root:FindFirstChild(name)
 		if child and child:IsA("GuiObject") then
-			child.Visible = visible
+			-- El marcador solo reaparece si ya hubo alguna canasta.
+			if name == "Canastas" then
+				child.Visible = visible and scoreLabel ~= nil and scoreLabel.Text ~= ""
+			else
+				child.Visible = visible
+			end
 		end
 	end
 	if not visible then
@@ -1481,7 +1802,7 @@ return Hud
 ]]></ProtectedString>
       </Properties>
     </Item>
-    <Item class="ModuleScript" referent="RBX4">
+    <Item class="ModuleScript" referent="RBX5">
       <Properties>
         <string name="Name">LobbyUI</string>
         <ProtectedString name="Source"><![CDATA[--!strict
@@ -1884,7 +2205,7 @@ return LobbyUI
 ]]></ProtectedString>
       </Properties>
     </Item>
-    <Item class="ModuleScript" referent="RBX5">
+    <Item class="ModuleScript" referent="RBX6">
       <Properties>
         <string name="Name">MainMenu</string>
         <ProtectedString name="Source"><![CDATA[--!strict
@@ -2288,7 +2609,7 @@ return MainMenu
 ]]></ProtectedString>
       </Properties>
     </Item>
-    <Item class="ModuleScript" referent="RBX6">
+    <Item class="ModuleScript" referent="RBX7">
       <Properties>
         <string name="Name">Music</string>
         <ProtectedString name="Source"><![CDATA[--!strict
@@ -2520,7 +2841,7 @@ return Music
 ]]></ProtectedString>
       </Properties>
     </Item>
-    <Item class="ModuleScript" referent="RBX7">
+    <Item class="ModuleScript" referent="RBX8">
       <Properties>
         <string name="Name">NoteUI</string>
         <ProtectedString name="Source"><![CDATA[--!strict
@@ -2864,7 +3185,7 @@ return NoteUI
 ]]></ProtectedString>
       </Properties>
     </Item>
-    <Item class="ModuleScript" referent="RBX8">
+    <Item class="ModuleScript" referent="RBX9">
       <Properties>
         <string name="Name">Poses</string>
         <ProtectedString name="Source"><![CDATA[--!strict
@@ -2966,7 +3287,232 @@ return Poses
 ]]></ProtectedString>
       </Properties>
     </Item>
-    <Item class="ModuleScript" referent="RBX9">
+    <Item class="ModuleScript" referent="RBX10">
+      <Properties>
+        <string name="Name">RadioUI</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	RadioUI
+	------------------------------------------------------------------
+	El walkie y el celular. Misma pantalla, dos alcances distintos:
+	el walkie llega a todo el colegio, el celular solo al de al lado.
+
+	El panel aparece solo cuando tenes el aparato en la mano — es
+	deliberado: si el walkie estuviera siempre abierto no habria nada
+	que arriesgar al sacarlo en pleno examen, que es justo donde el
+	profesor te lo puede ver.
+--]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Theme = require(Shared:WaitForChild("Theme"))
+local Strings = require(Shared:WaitForChild("Strings"))
+local Net = require(Shared:WaitForChild("Net"))
+
+local player = Players.LocalPlayer
+
+local RadioUI = {}
+
+local root: Frame
+local title: TextLabel
+local log: ScrollingFrame
+local box: TextBox
+local kind: string? = nil
+local entries = 0
+
+local function new(class: string, props: { [string]: any }, parent: Instance?): any
+	local instance = Instance.new(class)
+	for key, value in props do
+		(instance :: any)[key] = value
+	end
+	if parent then
+		instance.Parent = parent
+	end
+	return instance
+end
+
+function RadioUI.mount(parent: ScreenGui)
+	root = new("Frame", {
+		Name = "Radio",
+		Size = UDim2.new(0, 290, 0, 210),
+		Position = UDim2.new(1, -16, 1, -170),
+		AnchorPoint = Vector2.new(1, 1),
+		BackgroundColor3 = Theme.Hud.Panel,
+		BackgroundTransparency = 0.12,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 5,
+	}, parent)
+	new("UICorner", { CornerRadius = UDim.new(0, 10) }, root)
+	new("UIStroke", { Color = Theme.Hud.Line, Thickness = 1, Transparency = 0.4 }, root)
+
+	title = new("TextLabel", {
+		Text = Strings.get("radio.title"),
+		Size = UDim2.new(1, -20, 0, 20),
+		Position = UDim2.new(0, 10, 0, 8),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		TextSize = 14,
+		TextColor3 = Theme.Hud.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 6,
+	}, root)
+
+	log = new("ScrollingFrame", {
+		Name = "Registro",
+		Size = UDim2.new(1, -20, 1, -80),
+		Position = UDim2.new(0, 10, 0, 32),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 3,
+		ScrollBarImageColor3 = Theme.Hud.Line,
+		CanvasSize = UDim2.new(),
+		ZIndex = 6,
+	}, root)
+	new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }, log)
+
+	box = new("TextBox", {
+		Name = "Mensaje",
+		Text = "",
+		PlaceholderText = Strings.get("radio.placeholder"),
+		Size = UDim2.new(1, -84, 0, 30),
+		Position = UDim2.new(0, 10, 1, -40),
+		BackgroundColor3 = Theme.Hud.PanelSoft,
+		Font = Theme.Font,
+		TextSize = 13,
+		TextColor3 = Theme.Hud.Text,
+		PlaceholderColor3 = Theme.Hud.Muted,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ClearTextOnFocus = false,
+		BorderSizePixel = 0,
+		ZIndex = 6,
+	}, root)
+	new("UICorner", { CornerRadius = UDim.new(0, 8) }, box)
+	new("UIPadding", { PaddingLeft = UDim.new(0, 8) }, box)
+
+	local send = new("TextButton", {
+		Name = "Transmitir",
+		Text = Strings.get("radio.send"),
+		Size = UDim2.new(0, 64, 0, 30),
+		Position = UDim2.new(1, -74, 1, -40),
+		BackgroundColor3 = Theme.Hud.Safe,
+		BackgroundTransparency = 0.84,
+		AutoButtonColor = false,
+		Font = Theme.FontBold,
+		TextSize = 12,
+		TextColor3 = Theme.Hud.Safe,
+		BorderSizePixel = 0,
+		ZIndex = 6,
+	}, root)
+	new("UICorner", { CornerRadius = UDim.new(0, 8) }, send)
+	new("UIStroke", { Color = Theme.Hud.Safe, Thickness = 1, Transparency = 0.5 }, send)
+
+	send.MouseButton1Click:Connect(function()
+		RadioUI.send()
+	end)
+	box.FocusLost:Connect(function(enterPressed)
+		if enterPressed then
+			RadioUI.send()
+		end
+	end)
+
+	box:GetPropertyChangedSignal("Text"):Connect(function()
+		local limit = Config.Herramientas.RadioCaracteres
+		if #box.Text > limit then
+			box.Text = string.sub(box.Text, 1, limit)
+		end
+	end)
+
+	RadioUI.watch()
+end
+
+function RadioUI.send()
+	if not kind then
+		return
+	end
+	local text = box.Text
+	if text == "" then
+		return
+	end
+	box.Text = ""
+	Net.event(Net.Events.Radio):FireServer(kind, text)
+end
+
+--- Una linea en el registro. Se guardan las ultimas veinte.
+function RadioUI.receive(data: any)
+	if not log or not data then
+		return
+	end
+	entries += 1
+	local key = data.tipo == "celular" and "radio.phone" or "radio.heard"
+
+	local line = new("TextLabel", {
+		Name = "L" .. entries,
+		LayoutOrder = entries,
+		Text = Strings.get(key, { name = data.de or "?", text = data.texto or "" }),
+		Size = UDim2.new(1, -6, 0, 30),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		TextSize = 12,
+		TextColor3 = data.tipo == "celular" and Theme.Hud.Credit or Theme.Hud.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextWrapped = true,
+		ZIndex = 7,
+	}, log)
+
+	local children = log:GetChildren()
+	if #children > 22 then
+		for _, child in children do
+			if child:IsA("TextLabel") and child.LayoutOrder <= entries - 20 then
+				child:Destroy()
+			end
+		end
+	end
+
+	log.CanvasSize = UDim2.new(0, 0, 0, entries * 34)
+	log.CanvasPosition = Vector2.new(0, math.max(0, entries * 34 - log.AbsoluteSize.Y))
+	line.Parent = log
+end
+
+-- ── herramienta equipada ───────────────────────────────────────────
+
+local function watchCharacter(character: Model)
+	local function check()
+		local tool = character:FindFirstChildOfClass("Tool")
+		local radio = tool and tool:GetAttribute("Radio")
+		kind = typeof(radio) == "string" and radio or nil
+		root.Visible = kind ~= nil
+		if kind then
+			title.Text = Strings.get(kind == "celular" and "item.celular" or "radio.title")
+		end
+	end
+	character.ChildAdded:Connect(check)
+	character.ChildRemoved:Connect(check)
+	check()
+end
+
+function RadioUI.watch()
+	if player.Character then
+		watchCharacter(player.Character)
+	end
+	player.CharacterAdded:Connect(watchCharacter)
+end
+
+function RadioUI.setVisible(visible: boolean)
+	if root then
+		root.Visible = visible and kind ~= nil
+	end
+end
+
+return RadioUI
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX11">
       <Properties>
         <string name="Name">ShopUI</string>
         <ProtectedString name="Source"><![CDATA[--!strict
@@ -3260,6 +3806,255 @@ function ShopUI.isOpen(): boolean
 end
 
 return ShopUI
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX12">
+      <Properties>
+        <string name="Name">ZoomUI</string>
+        <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	ZoomUI
+	------------------------------------------------------------------
+	Los prismaticos.
+
+	Manteniendo Z se cierra el campo de vision de la camara y aparece
+	la mascara de dos circulos. Mientras estas asi, apuntar a un
+	companero y pulsar Q lee SU hoja desde donde estes: es espiar, pero
+	a cuarenta studs.
+
+	El cliente decide a quien apuntas (tiene la camara), el servidor
+	comprueba que ese alguien exista, este en tu misma aula y dentro
+	del alcance del aparato. Si el cliente miente, el servidor dice que
+	no hay nadie en la mira.
+
+	Detalle importante: el FOV se guarda y se restaura. Una camara que
+	se queda con FOV 16 porque alguien solto la tecla en el frame
+	equivocado deja el juego injugable.
+--]]
+
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Theme = require(Shared:WaitForChild("Theme"))
+local Strings = require(Shared:WaitForChild("Strings"))
+local Net = require(Shared:WaitForChild("Net"))
+
+local player = Players.LocalPlayer
+
+local ZoomUI = {}
+
+local H = Config.Herramientas
+
+local mask: Frame
+local hint: TextLabel
+local equipped = false
+local zoomed = false
+local restoreFov = 70
+
+--- Lo rellena el init del cliente: la pregunta que mira el alumno.
+ZoomUI.currentIndex = function(): number
+	return 1
+end
+
+local function new(class: string, props: { [string]: any }, parent: Instance?): any
+	local instance = Instance.new(class)
+	for key, value in props do
+		(instance :: any)[key] = value
+	end
+	if parent then
+		instance.Parent = parent
+	end
+	return instance
+end
+
+function ZoomUI.mount(parent: ScreenGui)
+	mask = new("Frame", {
+		Name = "Prismaticos",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Visible = false,
+		ZIndex = 14,
+	}, parent)
+
+	-- Cuatro bandas negras dejan al descubierto una franja central, y
+	-- dos circulos oscuros terminan de dar la forma del binocular.
+	for _, edge in {
+		{ UDim2.new(1, 0, 0.16, 0), UDim2.fromScale(0, 0), Vector2.new(0, 0) },
+		{ UDim2.new(1, 0, 0.16, 0), UDim2.fromScale(0, 1), Vector2.new(0, 1) },
+		{ UDim2.new(0.2, 0, 1, 0), UDim2.fromScale(0, 0), Vector2.new(0, 0) },
+		{ UDim2.new(0.2, 0, 1, 0), UDim2.fromScale(1, 0), Vector2.new(1, 0) },
+	} do
+		new("Frame", {
+			Size = edge[1],
+			Position = edge[2],
+			AnchorPoint = edge[3],
+			BackgroundColor3 = Color3.new(0, 0, 0),
+			BorderSizePixel = 0,
+			ZIndex = 14,
+		}, mask)
+	end
+
+	for _, side in { -1, 1 } do
+		local ring = new("Frame", {
+			Name = "Circulo",
+			Size = UDim2.fromScale(0.34, 0.62),
+			Position = UDim2.fromScale(0.5 + side * 0.16, 0.5),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			ZIndex = 15,
+		}, mask)
+		new("UICorner", { CornerRadius = UDim.new(1, 0) }, ring)
+		new("UIStroke", { Color = Color3.new(0, 0, 0), Thickness = 90, Transparency = 0.05 }, ring)
+	end
+
+	-- Retícula.
+	new("Frame", {
+		Size = UDim2.fromOffset(1, 26),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = Color3.fromRGB(210, 230, 210),
+		BackgroundTransparency = 0.4,
+		BorderSizePixel = 0,
+		ZIndex = 16,
+	}, mask)
+	new("Frame", {
+		Size = UDim2.fromOffset(26, 1),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = Color3.fromRGB(210, 230, 210),
+		BackgroundTransparency = 0.4,
+		BorderSizePixel = 0,
+		ZIndex = 16,
+	}, mask)
+
+	hint = new("TextLabel", {
+		Text = Strings.get("zoom.on"),
+		Size = UDim2.new(1, 0, 0, 20),
+		Position = UDim2.fromScale(0, 0.82),
+		BackgroundTransparency = 1,
+		Font = Theme.FontBold,
+		TextSize = 13,
+		TextColor3 = Theme.Hud.Text,
+		ZIndex = 16,
+	}, mask)
+
+	ZoomUI.bind()
+end
+
+-- ── zoom ───────────────────────────────────────────────────────────
+
+local function setZoom(on: boolean)
+	local camera = workspace.CurrentCamera
+	if not camera or zoomed == on then
+		return
+	end
+	zoomed = on
+	mask.Visible = on
+
+	if on then
+		restoreFov = camera.FieldOfView
+		TweenService:Create(camera, TweenInfo.new(0.22), {
+			FieldOfView = H.PrismaticosFov,
+		}):Play()
+	else
+		TweenService:Create(camera, TweenInfo.new(0.22), {
+			FieldOfView = restoreFov,
+		}):Play()
+	end
+end
+
+--- A quien estas apuntando: se tira un rayo desde la camara y se mira
+--- si lo que corta pertenece al personaje de otro jugador.
+local function aimedPlayer(): Player?
+	local camera = workspace.CurrentCamera
+	if not camera then
+		return nil
+	end
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { player.Character :: any }
+
+	local hit = workspace:Raycast(camera.CFrame.Position,
+		camera.CFrame.LookVector * (H.PrismaticosAlcance + 10), params)
+	if not hit then
+		return nil
+	end
+	local model = hit.Instance:FindFirstAncestorOfClass("Model")
+	return model and Players:GetPlayerFromCharacter(model) or nil
+end
+
+function ZoomUI.read()
+	if not zoomed then
+		return
+	end
+	local target = aimedPlayer()
+	if not target then
+		hint.Text = Strings.get("zoom.no_target")
+		task.delay(2, function()
+			if hint then
+				hint.Text = Strings.get("zoom.on")
+			end
+		end)
+		return
+	end
+	Net.event(Net.Events.Cheat):FireServer("zoom", ZoomUI.currentIndex(), target.UserId)
+end
+
+-- ── herramienta equipada ───────────────────────────────────────────
+
+local function watchCharacter(character: Model)
+	local function check()
+		local tool = character:FindFirstChildOfClass("Tool")
+		equipped = tool ~= nil and tool:GetAttribute("Zoom") == true
+		if not equipped then
+			setZoom(false)
+		end
+	end
+	character.ChildAdded:Connect(check)
+	character.ChildRemoved:Connect(check)
+	check()
+end
+
+function ZoomUI.bind()
+	if player.Character then
+		watchCharacter(player.Character)
+	end
+	player.CharacterAdded:Connect(watchCharacter)
+
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if processed then
+			return
+		end
+		if input.KeyCode == Enum.KeyCode.Z and equipped then
+			setZoom(true)
+		elseif input.KeyCode == Enum.KeyCode.Q and zoomed then
+			ZoomUI.read()
+		end
+	end)
+
+	UserInputService.InputEnded:Connect(function(input)
+		if input.KeyCode == Enum.KeyCode.Z then
+			setZoom(false)
+		end
+	end)
+end
+
+function ZoomUI.isZoomed(): boolean
+	return zoomed
+end
+
+function ZoomUI.setVisible(visible: boolean)
+	if not visible then
+		setZoom(false)
+	end
+end
+
+return ZoomUI
 ]]></ProtectedString>
       </Properties>
     </Item>

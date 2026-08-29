@@ -28,6 +28,13 @@ local EVENTS: { [string]: string } = {
 	NoteReceived = "NoteReceived",   -- S->C  te llego una nota de un companero
 	Locker = "Locker",               -- C->S  abrir un casillero
 	Music = "Music",                 -- S->C  cambio de clima musical
+	Paint = "Paint",                 -- C->S  una pincelada de grafiti
+	Radio = "Radio",                 -- C<->S walkie / celular
+	Knock = "Knock",                 -- C->S  empujon / nocaut
+	Ball = "Ball",                   -- C->S  agarrar y tirar la pelota
+	Score = "Score",                 -- S->C  canasta, puntos del pasillo
+	Zoom = "Zoom",                   -- C->S  mirando con prismaticos
+	Stunned = "Stunned",             -- S->C  te dejaron KO / te pego la goma
 }
 
 local FUNCTIONS: { [string]: string } = {
