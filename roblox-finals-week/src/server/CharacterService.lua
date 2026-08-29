@@ -21,6 +21,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local Util = require(Shared:WaitForChild("Util"))
+local Rig = require(Shared:WaitForChild("Rig"))
 
 local P = Config.Profesor
 
@@ -31,11 +32,33 @@ local rng = Random.new()
 -- ── uniforme del alumno ────────────────────────────────────────────
 
 local UNIFORME = {
-	Camisa = Color3.fromRGB(236, 238, 244),
-	Sueter = Color3.fromRGB(52, 72, 116),
-	Pantalon = Color3.fromRGB(44, 48, 60),
-	Zapato = Color3.fromRGB(28, 30, 36),
+	Camisa = Color3.fromRGB(246, 242, 228),
+	Pantalon = Color3.fromRGB(92, 116, 186),
+	Zapato = Color3.fromRGB(58, 58, 74),
+	Corbata = Color3.fromRGB(228, 140, 96),
 }
+
+--[[
+	La piel y el pelo salen del UserId, no de un valor guardado.
+
+	Podria persistirse en DataService, pero derivarlo del id es mejor en
+	todo sentido: es estable entre partidas sin ocupar almacenamiento,
+	funciona en Studio sin acceso a la API de DataStore, y dos jugadores
+	distintos casi nunca coinciden. El `% #tabla` con dos primos
+	distintos evita que piel y pelo queden correlacionados.
+--]]
+function CharacterService.skinFor(userId: number): Rig.Skin
+	local pieles = Config.Personaje.Pieles
+	local pelos = Config.Personaje.Pelos
+	local id = math.abs(userId)
+	return {
+		piel = pieles[(id * 7) % #pieles + 1],
+		pelo = pelos[(id * 13) % #pelos + 1],
+		camisa = UNIFORME.Camisa,
+		pantalon = UNIFORME.Pantalon,
+		zapato = UNIFORME.Zapato,
+	}
+end
 
 local TORSOS = { "Torso", "UpperTorso", "LowerTorso" }
 local BRAZOS = { "Left Arm", "Right Arm", "LeftUpperArm", "RightUpperArm",
@@ -73,6 +96,9 @@ local function attach(character: Model, anchorName: string, name: string,
 	part.TopSurface = Enum.SurfaceType.Smooth
 	part.BottomSurface = Enum.SurfaceType.Smooth
 	part.CFrame = anchor.CFrame * offset
+	-- La marca que permite que `dressStudent` sea idempotente: sin ella
+	-- cada compra en la tienda apilaba otra corbata.
+	part:SetAttribute("Accesorio", true)
 	part.Parent = character
 
 	local weld = Instance.new("WeldConstraint")
@@ -82,29 +108,48 @@ local function attach(character: Model, anchorName: string, name: string,
 	return part
 end
 
+--[[
+	Las cosmeticas de la tienda. Todos estos offsets estaban calibrados
+	contra una cabeza de 2x1x1 y un torso de 2x2x1 — el R6 estandar. Con
+	el cuerpo caricaturesco la cabeza es mucho mas grande, asi que ahora
+	se derivan de `Rig.Alumno` y siguen cualquier cambio de proporciones.
+--]]
+local A = Rig.Alumno
+
 local ESTETICAS: { [string]: (Model) -> () } = {
 	gorra = function(character)
-		attach(character, "Head", "Gorra", Vector3.new(2.1, 0.55, 2.1),
-			CFrame.new(0, 0.75, 0), Color3.fromRGB(168, 42, 52), Enum.Material.Fabric)
-		attach(character, "Head", "Visera", Vector3.new(2.1, 0.16, 1.1),
-			CFrame.new(0, 0.5, -1.05), Color3.fromRGB(140, 34, 44), Enum.Material.Fabric)
+		attach(character, "Head", "Gorra",
+			Vector3.new(A.cabeza.X * 1.06, A.cabeza.Y * 0.34, A.cabeza.Z * 1.06),
+			CFrame.new(0, A.cabeza.Y * 0.5, 0),
+			Color3.fromRGB(226, 84, 72), Enum.Material.SmoothPlastic)
+		attach(character, "Head", "Visera",
+			Vector3.new(A.cabeza.X * 1.06, 0.16, A.cabeza.Z * 0.7),
+			CFrame.new(0, A.cabeza.Y * 0.34, -A.cabeza.Z * 0.72),
+			Color3.fromRGB(198, 66, 58), Enum.Material.SmoothPlastic)
 	end,
 	anteojos = function(character)
-		attach(character, "Head", "Anteojos", Vector3.new(1.9, 0.42, 0.14),
-			CFrame.new(0, 0.06, -0.62), Color3.fromRGB(30, 32, 38), Enum.Material.SmoothPlastic)
+		attach(character, "Head", "Anteojos",
+			Vector3.new(A.cabeza.X * 0.86, A.cabeza.Y * 0.22, 0.14),
+			CFrame.new(0, A.cabeza.Y * 0.05, -A.cabeza.Z * 0.55),
+			Color3.fromRGB(52, 50, 66), Enum.Material.SmoothPlastic)
 	end,
 	mochila = function(character)
 		local anchor = character:FindFirstChild("UpperTorso") and "UpperTorso" or "Torso"
-		attach(character, anchor, "Mochila", Vector3.new(1.7, 1.9, 0.85),
-			CFrame.new(0, 0.1, 0.78), Color3.fromRGB(52, 92, 128), Enum.Material.Fabric)
-		attach(character, anchor, "Correa", Vector3.new(0.3, 1.7, 0.2),
-			CFrame.new(-0.55, 0.1, 0.42), Color3.fromRGB(38, 66, 94), Enum.Material.Fabric)
-		attach(character, anchor, "Correa", Vector3.new(0.3, 1.7, 0.2),
-			CFrame.new(0.55, 0.1, 0.42), Color3.fromRGB(38, 66, 94), Enum.Material.Fabric)
+		attach(character, anchor, "Mochila",
+			Vector3.new(A.torso.X * 0.8, A.torso.Y * 1, A.torso.Z * 0.8),
+			CFrame.new(0, 0.1, A.torso.Z * 0.78),
+			Color3.fromRGB(96, 176, 128), Enum.Material.SmoothPlastic)
+		for _, side in { -1, 1 } do
+			attach(character, anchor, "Correa",
+				Vector3.new(0.26, A.torso.Y * 0.9, 0.18),
+				CFrame.new(side * A.torso.X * 0.28, 0.1, A.torso.Z * 0.42),
+				Color3.fromRGB(72, 148, 104), Enum.Material.SmoothPlastic)
+		end
 	end,
 	campera = function(character)
-		paint(character, TORSOS, Color3.fromRGB(96, 32, 42))
-		paint(character, BRAZOS, Color3.fromRGB(96, 32, 42))
+		paint(character, TORSOS, Color3.fromRGB(214, 92, 76))
+		-- Solo el torso: los brazos son piel de color y taparlos borra
+		-- lo mas identificable del personaje.
 	end,
 }
 
@@ -135,18 +180,49 @@ local function nameTag(character: Model, text: string, color: Color3)
 	label.Parent = billboard
 end
 
---- Viste al alumno con el uniforme y le pone lo que tenga equipado.
+--[[
+	Viste al alumno y le pone lo que tenga equipado.
+
+	Antes esto no era idempotente: `ShopService` la vuelve a llamar cada
+	vez que comprás una cosmética, y `attach` no deduplicaba, así que se
+	apilaban corbatas y gorras una encima de otra hasta que el personaje
+	quedaba con seis. Ahora todo lo que cuelga sale marcado y se limpia
+	al principio.
+--]]
+local function stripAccessories(character: Model)
+	for _, child in character:GetChildren() do
+		if child:IsA("BasePart") and child:GetAttribute("Accesorio") then
+			child:Destroy()
+		end
+	end
+end
+
 function CharacterService.dressStudent(player: Player, character: Model, estetica: { [string]: boolean }?)
 	local ok, err = pcall(function()
-		paint(character, TORSOS, UNIFORME.Sueter)
-		paint(character, BRAZOS, UNIFORME.Camisa)
-		paint(character, PIERNAS, UNIFORME.Pantalon)
-		paint(character, PIES, UNIFORME.Zapato)
+		stripAccessories(character)
 
-		-- Corbata del colegio.
+		-- La piel de color es lo mas identificable del juego, y sale del
+		-- UserId: el mismo jugador se ve igual en todas las partidas.
+		local skin = CharacterService.skinFor(player.UserId)
+		paint(character, TORSOS, skin.camisa)
+		paint(character, BRAZOS, skin.piel)
+		paint(character, PIERNAS, skin.pantalon)
+		paint(character, PIES, skin.zapato)
+
+		local head = character:FindFirstChild("Head")
+		if head and head:IsA("BasePart") then
+			head.Color = skin.piel
+			for _, child in character:GetChildren() do
+				if child:IsA("BasePart")
+					and (child.Name == "Pelo" or child.Name == "Flequillo") then
+					child.Color = skin.pelo
+				end
+			end
+		end
+
 		local torso = character:FindFirstChild("UpperTorso") and "UpperTorso" or "Torso"
-		attach(character, torso, "Corbata", Vector3.new(0.34, 1.1, 0.14),
-			CFrame.new(0, 0.25, -0.55), Color3.fromRGB(122, 32, 44), Enum.Material.Fabric)
+		attach(character, torso, "Corbata", Vector3.new(0.34, 1, 0.14),
+			CFrame.new(0, 0.2, -0.55), UNIFORME.Corbata, Enum.Material.SmoothPlastic)
 
 		for id, on in (estetica or {}) do
 			if on and ESTETICAS[id] then
@@ -159,6 +235,48 @@ function CharacterService.dressStudent(player: Player, character: Model, estetic
 	if not ok then
 		warn("[Personajes] uniforme fallo: " .. tostring(err))
 	end
+end
+
+--[[
+	Fuerza el cuerpo caricaturesco para todos los jugadores.
+
+	Un modelo llamado `StarterCharacter` colgado de `StarterPlayer`
+	reemplaza el avatar de Roblox de cada jugador por este rig. Es el
+	unico metodo que sirve por las dos vias de instalacion: el tipo de
+	avatar del lugar es una opcion de Game Settings que un script no
+	puede tocar, asi que por el `.rbxmx` todo-en-uno no habria forma de
+	imponerlo. Un modelo, en cambio, se crea en runtime.
+
+	El color se lo pone `dressStudent` por jugador; de aca sale solo la
+	forma.
+--]]
+function CharacterService.installStarterCharacter()
+	local StarterPlayer = game:GetService("StarterPlayer")
+	local previous = StarterPlayer:FindFirstChild("StarterCharacter")
+	if previous then
+		previous:Destroy()
+	end
+
+	local model = Rig.build("StarterCharacter", Rig.Alumno, {
+		piel = Config.Personaje.Pieles[1],
+		pelo = Config.Personaje.Pelos[1],
+		camisa = UNIFORME.Camisa,
+		pantalon = UNIFORME.Pantalon,
+		zapato = UNIFORME.Zapato,
+	})
+
+	local head = model:FindFirstChild("Head")
+	if head and head:IsA("BasePart") then
+		Rig.face(head, Rig.Alumno, false)
+	end
+
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	end
+
+	model.Parent = StarterPlayer
+	print("[Personajes] cuerpo caricaturesco instalado (StarterCharacter).")
 end
 
 -- ── cono de la verguenza ───────────────────────────────────────────
@@ -176,19 +294,25 @@ function CharacterService.attachCone(character: Model)
 	cone.Name = "ConoDeLaVerguenza"
 	cone.Parent = character
 
+	-- El ancho y la altura salen de la cabeza: con el cuerpo
+	-- caricaturesco un cono de 2.2 studs quedaba de sombrerito.
+	local widest = Rig.Alumno.cabeza.X * 1.7
 	local layers = 6
+	local step = Rig.Alumno.cabeza.Y * 0.3
 	for i = 0, layers - 1 do
 		local alpha = i / layers
 		local disc = Instance.new("Part")
 		disc.Name = "Anillo" .. i
 		disc.Shape = Enum.PartType.Cylinder
-		disc.Size = Vector3.new(0.42, 2.2 * (1 - alpha) + 0.25, 2.2 * (1 - alpha) + 0.25)
+		disc.Size = Vector3.new(0.42, widest * (1 - alpha) + 0.3, widest * (1 - alpha) + 0.3)
 		disc.Color = i % 2 == 0 and Color3.fromRGB(228, 74, 62) or Color3.fromRGB(246, 246, 240)
 		disc.Material = Enum.Material.SmoothPlastic
 		disc.CanCollide = false
 		disc.CanQuery = false
 		disc.Massless = true
-		disc.CFrame = head.CFrame * CFrame.new(0, 0.75 + i * 0.4, 0) * CFrame.Angles(0, 0, math.rad(90))
+		disc.CFrame = head.CFrame
+			* CFrame.new(0, Rig.Alumno.cabeza.Y * 0.45 + i * step, 0)
+			* CFrame.Angles(0, 0, math.rad(90))
 		disc.Parent = cone
 
 		local weld = Instance.new("WeldConstraint")
@@ -207,280 +331,112 @@ end
 
 -- ── el profesor ────────────────────────────────────────────────────
 
-local function limb(model: Model, name: string, size: Vector3, color: Color3): BasePart
-	local part = Instance.new("Part")
-	part.Name = name
-	part.Size = size
-	part.Color = color
-	part.Material = Enum.Material.SmoothPlastic
-	part.TopSurface = Enum.SurfaceType.Smooth
-	part.BottomSurface = Enum.SurfaceType.Smooth
-	part.CanCollide = false
-	part.Parent = model
-	return part
-end
+--[[
+	Aca vivian `limb`, `motor`, `wireJoints` y `angryFace`, mas una copia
+	entera del esqueleto R6 dentro de `buildTeacher` y otra dentro de
+	`buildStudent`. Todo eso se mudo a `shared/Rig.lua`.
 
-local function motor(parent: BasePart, child: BasePart, name: string, c0: CFrame, c1: CFrame): Motor6D
-	local joint = Instance.new("Motor6D")
-	joint.Name = name
-	joint.Part0 = parent
-	joint.Part1 = child
-	joint.C0 = c0
-	joint.C1 = c1
-	joint.Parent = parent
-	return joint
-end
+	El motivo no es solo el orden: `wireJoints` se llamaba a si misma y
+	desbordaba la pila, era la unica llamada de `buildStudent`, y por eso
+	**ningun NPC empollon llegaba a existir**. Con un solo constructor
+	compartido ese error deja de ser posible.
+--]]
 
---- Las seis uniones de un rig R6. Los C0/C1 no son decorativos: si
---- alguno esta mal, el Humanoid camina desarmado. Estan una sola vez
---- para que profesor y alumnos compartan exactamente el mismo
---- esqueleto.
-local function wireJoints(root: BasePart, torso: BasePart, head: BasePart,
-	leftArm: BasePart, rightArm: BasePart, leftLeg: BasePart, rightLeg: BasePart)
-	wireJoints(root, torso, head, leftArm, rightArm, leftLeg, rightLeg)
-end
-
---- Cara enojada dibujada con partes: cejas caidas, ojos y boca torcida.
-local function angryFace(head: BasePart)
-	local function piece(name: string, size: Vector3, offset: CFrame, color: Color3)
-		local part = Instance.new("Part")
-		part.Name = name
-		part.Size = size
-		part.Color = color
-		part.Material = Enum.Material.SmoothPlastic
-		part.CanCollide = false
-		part.CanQuery = false
-		part.Massless = true
-		part.CFrame = head.CFrame * offset
-		part.Parent = head.Parent
-		local weld = Instance.new("WeldConstraint")
-		weld.Part0 = head
-		weld.Part1 = part
-		weld.Parent = part
-	end
-
-	for _, side in { -1, 1 } do
-		piece("Ojo", Vector3.new(0.24, 0.24, 0.1),
-			CFrame.new(side * 0.32, 0.06, -0.52), Color3.fromRGB(22, 24, 30))
-		piece("Ceja", Vector3.new(0.5, 0.11, 0.1),
-			CFrame.new(side * 0.34, 0.3, -0.52) * CFrame.Angles(0, 0, math.rad(side * 18)),
-			Color3.fromRGB(38, 32, 28))
-	end
-	piece("Boca", Vector3.new(0.62, 0.09, 0.1),
-		CFrame.new(0, -0.3, -0.52), Color3.fromRGB(60, 34, 34))
-	piece("Anteojos", Vector3.new(1.05, 0.3, 0.08),
-		CFrame.new(0, 0.06, -0.56), Color3.fromRGB(30, 32, 38))
-end
-
---- Arma el rig R6 completo del profesor, listo para Humanoid:MoveTo.
+--- Arma el rig del profesor, listo para Humanoid:MoveTo.
 function CharacterService.buildTeacher(name: string, position: Vector3): Model
-	local model = Instance.new("Model")
-	model.Name = "Profesor"
+	local prop = Rig.Profesor
+	local model = Rig.build("Profesor", prop, {
+		piel = P.ColorPiel,
+		pelo = Color3.fromRGB(88, 62, 74),
+		camisa = P.ColorTraje,
+		pantalon = Color3.fromRGB(58, 62, 88),
+		zapato = Color3.fromRGB(46, 44, 56),
+	})
+	model:PivotTo(CFrame.new(position))
 
-	local root = limb(model, "HumanoidRootPart", Vector3.new(2, 2, 1), P.ColorTraje)
-	root.Transparency = 1
-	root.CanCollide = false
+	local torso = model:FindFirstChild("Torso") :: BasePart
+	local head = model:FindFirstChild("Head") :: BasePart
 
-	local torso = limb(model, "Torso", Vector3.new(2, 2, 1), P.ColorTraje)
-	torso.CanCollide = true
-
-	local head = limb(model, "Head", Vector3.new(2, 1, 1), P.ColorPiel)
-	local mesh = Instance.new("SpecialMesh")
-	mesh.MeshType = Enum.MeshType.Head
-	mesh.Scale = Vector3.new(1.25, 1.25, 1.25)
-	mesh.Parent = head
-
-	local leftArm = limb(model, "Left Arm", Vector3.new(1, 2, 1), P.ColorTraje)
-	local rightArm = limb(model, "Right Arm", Vector3.new(1, 2, 1), P.ColorTraje)
-	local leftLeg = limb(model, "Left Leg", Vector3.new(1, 2, 1), Color3.fromRGB(30, 33, 42))
-	local rightLeg = limb(model, "Right Leg", Vector3.new(1, 2, 1), Color3.fromRGB(30, 33, 42))
-
-	-- Como cualquier R6: todo colisiona menos la raiz. Con las piernas
-	-- atravesables el Humanoid se hunde en el piso al primer paso.
-	for _, part in { torso, head, leftArm, rightArm, leftLeg, rightLeg } do
-		part.CanCollide = true
+	-- Camisa, corbata y solapas: capas finas encima del torso.
+	Rig.attach(torso, "Camisa", Vector3.new(prop.torso.X * 0.46, prop.torso.Y * 0.9, 0.14),
+		CFrame.new(0, 0, -prop.torso.Z / 2), P.ColorCamisa)
+	Rig.attach(torso, "Corbata", Vector3.new(0.3, prop.torso.Y * 0.66, 0.1),
+		CFrame.new(0, 0.1, -prop.torso.Z / 2 - 0.06), P.ColorCorbata)
+	for _, side in { -1, 1 } do
+		Rig.attach(torso, "Solapa", Vector3.new(0.42, prop.torso.Y * 0.52, 0.1),
+			CFrame.new(side * 0.45, 0.4, -prop.torso.Z / 2 - 0.02)
+				* CFrame.Angles(0, 0, math.rad(-side * 12)), P.ColorTraje)
 	end
+	Rig.attach(head, "Anteojos",
+		Vector3.new(prop.cabeza.X * 0.62, prop.cabeza.Y * 0.18, 0.08),
+		CFrame.new(0, prop.cabeza.Y * 0.06, -prop.cabeza.Z * 0.54),
+		Color3.fromRGB(46, 44, 58))
 
-	root.CFrame = CFrame.new(position)
-	torso.CFrame = root.CFrame
-	head.CFrame = root.CFrame * CFrame.new(0, 1.5, 0)
-	leftArm.CFrame = root.CFrame * CFrame.new(-1.5, 0, 0)
-	rightArm.CFrame = root.CFrame * CFrame.new(1.5, 0, 0)
-	leftLeg.CFrame = root.CFrame * CFrame.new(-0.5, -2, 0)
-	rightLeg.CFrame = root.CFrame * CFrame.new(0.5, -2, 0)
+	Rig.face(head, prop, true)
 
-	local flip = CFrame.Angles(-math.pi / 2, 0, math.pi)
-	motor(root, torso, "RootJoint", flip, flip)
-	motor(torso, head, "Neck", CFrame.new(0, 1, 0) * flip, CFrame.new(0, -0.5, 0) * flip)
-	motor(torso, rightArm, "Right Shoulder",
-		CFrame.new(1, 0.5, 0) * CFrame.Angles(0, math.pi / 2, 0),
-		CFrame.new(-0.5, 0.5, 0) * CFrame.Angles(0, math.pi / 2, 0))
-	motor(torso, leftArm, "Left Shoulder",
-		CFrame.new(-1, 0.5, 0) * CFrame.Angles(0, -math.pi / 2, 0),
-		CFrame.new(0.5, 0.5, 0) * CFrame.Angles(0, -math.pi / 2, 0))
-	motor(torso, rightLeg, "Right Hip",
-		CFrame.new(1, -1, 0) * CFrame.Angles(0, math.pi / 2, 0),
-		CFrame.new(0.5, 1, 0) * CFrame.Angles(0, math.pi / 2, 0))
-	motor(torso, leftLeg, "Left Hip",
-		CFrame.new(-1, -1, 0) * CFrame.Angles(0, -math.pi / 2, 0),
-		CFrame.new(-0.5, 1, 0) * CFrame.Angles(0, -math.pi / 2, 0))
-
-	-- Camisa, corbata y saco: capas finas encima del torso.
-	local function layer(part: BasePart, lname: string, size: Vector3, offset: CFrame, color: Color3)
-		local piece = Instance.new("Part")
-		piece.Name = lname
-		piece.Size = size
-		piece.Color = color
-		piece.Material = Enum.Material.Fabric
-		piece.CanCollide = false
-		piece.CanQuery = false
-		piece.Massless = true
-		piece.CFrame = part.CFrame * offset
-		piece.Parent = model
-		local weld = Instance.new("WeldConstraint")
-		weld.Part0 = part
-		weld.Part1 = piece
-		weld.Parent = piece
-	end
-
-	layer(torso, "Camisa", Vector3.new(0.9, 1.9, 0.14), CFrame.new(0, 0, -0.5), P.ColorCamisa)
-	layer(torso, "Corbata", Vector3.new(0.3, 1.4, 0.1), CFrame.new(0, 0.1, -0.6), P.ColorCorbata)
-	layer(torso, "Solapa", Vector3.new(0.42, 1.1, 0.1),
-		CFrame.new(-0.45, 0.4, -0.56) * CFrame.Angles(0, 0, math.rad(12)), P.ColorTraje)
-	layer(torso, "Solapa", Vector3.new(0.42, 1.1, 0.1),
-		CFrame.new(0.45, 0.4, -0.56) * CFrame.Angles(0, 0, math.rad(-12)), P.ColorTraje)
-	layer(head, "Pelo", Vector3.new(2.05, 0.42, 1.05), CFrame.new(0, 0.45, 0.02),
-		Color3.fromRGB(58, 48, 42))
-
-	angryFace(head)
-
-	local humanoid = Instance.new("Humanoid")
-	humanoid.RigType = Enum.HumanoidRigType.R6
+	local humanoid = model:FindFirstChildOfClass("Humanoid") :: Humanoid
 	humanoid.WalkSpeed = P.VelocidadPatrulla
 	humanoid.JumpPower = 0
 	humanoid.AutoRotate = true
 	humanoid.MaxHealth = 1000
 	humanoid.Health = 1000
-	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
 	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
-	humanoid.Parent = model
-
-	model.PrimaryPart = root
 
 	nameTag(model, name, Color3.fromRGB(244, 206, 122))
 
 	return model
 end
 
---- Cara neutra de alumno: ojos y una boca chiquita. Sin cejas
---- caidas, que esas son del profesor.
-local function calmFace(head: BasePart)
-	local function piece(name: string, size: Vector3, offset: CFrame, color: Color3)
-		local part = Instance.new("Part")
-		part.Name = name
-		part.Size = size
-		part.Color = color
-		part.Material = Enum.Material.SmoothPlastic
-		part.CanCollide = false
-		part.CanQuery = false
-		part.Massless = true
-		part.CFrame = head.CFrame * offset
-		part.Parent = head.Parent
-		local weld = Instance.new("WeldConstraint")
-		weld.Part0 = head
-		weld.Part1 = part
-		weld.Parent = part
-	end
+--[[
+	Un alumno NPC: el mismo esqueleto que el profesor, con uniforme y un
+	libro bajo el brazo. Son los que estudiaron — a los que se les pide
+	(o se les quita) la respuesta.
 
-	for _, side in { -1, 1 } do
-		piece("Ojo", Vector3.new(0.22, 0.26, 0.1),
-			CFrame.new(side * 0.3, 0.08, -0.52), Color3.fromRGB(26, 28, 34))
-	end
-	piece("Boca", Vector3.new(0.3, 0.08, 0.1),
-		CFrame.new(0, -0.26, -0.52), Color3.fromRGB(70, 44, 44))
-end
+	Esta es la funcion que no llegaba a terminar: su unica llamada al
+	viejo `wireJoints` desbordaba la pila y el `pcall` de NerdNPCs se
+	comia el error, asi que el pasillo quedaba sin un solo empollon.
 
---- Un alumno NPC: el mismo esqueleto que el profesor, con uniforme y
---- un libro bajo el brazo. Son los que estudiaron — a los que se les
---- pide (o se les quita) la respuesta.
+	Cada uno sale con una combinacion distinta de piel y pelo — el
+	indice del nombre alcanza como semilla y ademas los hace
+	distinguibles entre si de un vistazo.
+--]]
 function CharacterService.buildStudent(name: string, position: Vector3): Model
-	local model = Instance.new("Model")
-	model.Name = "Alumno"
+	local prop = Rig.Alumno
+	local pieles = Config.Personaje.Pieles
+	local pelos = Config.Personaje.Pelos
+	local seed = #name + string.byte(name, 1)
 
-	local skin = Color3.fromRGB(222, 184, 150)
-	local sweater = Config.Empollones.ColorSueter
+	local model = Rig.build("Alumno", prop, {
+		piel = pieles[seed % #pieles + 1],
+		pelo = pelos[(seed * 5) % #pelos + 1],
+		camisa = UNIFORME.Camisa,
+		pantalon = Config.Empollones.ColorSueter,
+		zapato = UNIFORME.Zapato,
+	})
+	model:PivotTo(CFrame.new(position))
 
-	local root = limb(model, "HumanoidRootPart", Vector3.new(2, 2, 1), sweater)
-	root.Transparency = 1
-	root.CanCollide = false
+	local torso = model:FindFirstChild("Torso") :: BasePart
+	local head = model:FindFirstChild("Head") :: BasePart
+	local leftArm = model:FindFirstChild("Left Arm") :: BasePart
 
-	local torso = limb(model, "Torso", Vector3.new(2, 2, 1), sweater)
-	local head = limb(model, "Head", Vector3.new(2, 1, 1), skin)
-	local mesh = Instance.new("SpecialMesh")
-	mesh.MeshType = Enum.MeshType.Head
-	mesh.Scale = Vector3.new(1.25, 1.25, 1.25)
-	mesh.Parent = head
-
-	local leftArm = limb(model, "Left Arm", Vector3.new(1, 2, 1), skin)
-	local rightArm = limb(model, "Right Arm", Vector3.new(1, 2, 1), skin)
-	local leftLeg = limb(model, "Left Leg", Vector3.new(1, 2, 1), Color3.fromRGB(48, 52, 66))
-	local rightLeg = limb(model, "Right Leg", Vector3.new(1, 2, 1), Color3.fromRGB(48, 52, 66))
-
-	root.CFrame = CFrame.new(position)
-	torso.CFrame = root.CFrame
-	head.CFrame = root.CFrame * CFrame.new(0, 1.5, 0)
-	leftArm.CFrame = root.CFrame * CFrame.new(-1.5, 0, 0)
-	rightArm.CFrame = root.CFrame * CFrame.new(1.5, 0, 0)
-	leftLeg.CFrame = root.CFrame * CFrame.new(-0.5, -2, 0)
-	rightLeg.CFrame = root.CFrame * CFrame.new(0.5, -2, 0)
-
-	for _, part in { torso, head, leftArm, rightArm, leftLeg, rightLeg } do
-		part.CanCollide = true
-	end
-
-	wireJoints(root, torso, head, leftArm, rightArm, leftLeg, rightLeg)
-
-	local function layer(anchor: BasePart, lname: string, size: Vector3, offset: CFrame,
-		color: Color3, material: Enum.Material)
-		local piece = Instance.new("Part")
-		piece.Name = lname
-		piece.Size = size
-		piece.Color = color
-		piece.Material = material
-		piece.CanCollide = false
-		piece.CanQuery = false
-		piece.Massless = true
-		piece.CFrame = anchor.CFrame * offset
-		piece.Parent = model
-		local weld = Instance.new("WeldConstraint")
-		weld.Part0 = anchor
-		weld.Part1 = piece
-		weld.Parent = piece
-	end
-
-	layer(torso, "Camisa", Vector3.new(0.85, 1.85, 0.14), CFrame.new(0, 0, -0.5),
-		Color3.fromRGB(238, 240, 244), Enum.Material.Fabric)
-	layer(torso, "Corbata", Vector3.new(0.28, 1.2, 0.1), CFrame.new(0, 0.1, -0.6),
-		Color3.fromRGB(122, 32, 44), Enum.Material.Fabric)
-	layer(head, "Pelo", Vector3.new(2.05, 0.5, 1.08), CFrame.new(0, 0.42, 0.04),
-		Color3.fromRGB(46, 36, 30), Enum.Material.SmoothPlastic)
-	layer(head, "Anteojos", Vector3.new(1.5, 0.34, 0.08), CFrame.new(0, 0.08, -0.56),
-		Color3.fromRGB(38, 40, 48), Enum.Material.SmoothPlastic)
+	Rig.attach(torso, "Corbata", Vector3.new(0.28, prop.torso.Y * 0.62, 0.1),
+		CFrame.new(0, 0.1, -prop.torso.Z / 2 - 0.06), UNIFORME.Corbata)
+	Rig.attach(head, "Anteojos",
+		Vector3.new(prop.cabeza.X * 0.66, prop.cabeza.Y * 0.16, 0.08),
+		CFrame.new(0, prop.cabeza.Y * 0.06, -prop.cabeza.Z * 0.54),
+		Color3.fromRGB(52, 50, 66))
 	-- El libro bajo el brazo: es la razon por la que sabe las respuestas.
-	layer(leftArm, "Libro", Vector3.new(0.4, 1.3, 1), CFrame.new(-0.45, -0.2, 0),
-		Color3.fromRGB(126, 44, 52), Enum.Material.Fabric)
+	Rig.attach(leftArm, "Libro", Vector3.new(0.4, 1.1, 0.9),
+		CFrame.new(-0.4, -0.2, 0), Color3.fromRGB(126, 44, 52))
 
-	calmFace(head)
+	Rig.face(head, prop, false)
 
-	local humanoid = Instance.new("Humanoid")
-	humanoid.RigType = Enum.HumanoidRigType.R6
+	local humanoid = model:FindFirstChildOfClass("Humanoid") :: Humanoid
 	humanoid.WalkSpeed = 8
 	humanoid.JumpPower = 0
 	humanoid.MaxHealth = 100
 	humanoid.Health = 100
-	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
 	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
-	humanoid.Parent = model
 
 	model.PrimaryPart = root
 	nameTag(model, name, Color3.fromRGB(186, 224, 168))

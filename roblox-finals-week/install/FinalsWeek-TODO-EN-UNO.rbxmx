@@ -1,5 +1,5 @@
 <roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
-  <Item class="Model" referent="RBX47">
+  <Item class="Model" referent="RBX49">
     <Properties>
       <string name="Name">FinalsWeek</string>
     </Properties>
@@ -73,7 +73,7 @@ end)
 ]]></ProtectedString>
       </Properties>
     </Item>
-    <Item class="Folder" referent="RBX11">
+    <Item class="Folder" referent="RBX12">
       <Properties>
         <string name="Name">Shared</string>
       </Properties>
@@ -910,6 +910,296 @@ return Previews
         </Properties>
       </Item>
       <Item class="ModuleScript" referent="RBX6">
+        <Properties>
+          <string name="Name">Rig</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Rig
+	------------------------------------------------------------------
+	El cuerpo, en un solo lugar: proporciones, esqueleto y cara.
+
+	Dos razones para que exista este archivo.
+
+	La primera es de forma. Los personajes eran R6 estandar — un
+	monigote de Roblox con la cabeza a escala 1.25. En la referencia del
+	juego real los alumnos son caricaturas: cabeza enorme (cerca de un
+	tercio de la altura), cuerpo chico, miembros cortos y gruesos, y la
+	piel de colores que no existen en una persona — violeta, rosa, rojo,
+	celeste. Eso ultimo es lo mas reconocible de todo el juego.
+
+	La segunda es un bug. `CharacterService.wireJoints` se llamaba a si
+	misma:
+
+	    local function wireJoints(root, torso, head, ...)
+	        wireJoints(root, torso, head, ...)   -- <-- desbordaba la pila
+	    end
+
+	Era la unica llamada de `buildStudent`, asi que **todos los NPC
+	empollones reventaban al nacer**. `NerdNPCs.spawn` lo envolvia en
+	`pcall` y solo hacia `warn`, de modo que el pasillo quedaba con cero
+	empollones y en el Output no habia mas que una linea suelta. El
+	compilador no lo ve porque una `local function` recursiva es Luau
+	perfectamente valido.
+
+	Al mover el esqueleto aca, el bug no se "arregla": deja de poder
+	existir, porque hay un solo sitio donde se arman las uniones y lo
+	usan el jugador, el profesor y los NPC.
+
+	Sobre los offsets: los C0/C1 de un R6 no son magia, salen de las
+	medidas de las piezas. Antes estaban escritos como numeros sueltos
+	(1, 0.5, -1...) calibrados contra un torso de 2x2x1; aca se derivan
+	de la tabla de proporciones, asi que cambiar el cuerpo no descoloca
+	los brazos.
+--]]
+
+local Rig = {}
+
+export type Proportions = {
+	cabeza: Vector3,
+	escalaCabeza: number,
+	torso: Vector3,
+	brazo: Vector3,
+	pierna: Vector3,
+}
+
+--[[
+	Alumno: cabezon. Con la cabeza a 1.7 de alto sobre un total de ~4.8
+	studs, la cabeza es un tercio del personaje — que es la proporcion
+	que se ve en la referencia.
+--]]
+Rig.Alumno = {
+	cabeza = Vector3.new(2, 1.7, 1.6),
+	escalaCabeza = 1.55,
+	torso = Vector3.new(1.9, 1.7, 1),
+	brazo = Vector3.new(0.8, 1.6, 0.8),
+	pierna = Vector3.new(0.85, 1.5, 0.85),
+} :: Proportions
+
+--- El profesor es mas alto y menos cabezon: se lee como adulto sin
+--- salirse del estilo.
+Rig.Profesor = {
+	cabeza = Vector3.new(1.9, 1.5, 1.5),
+	escalaCabeza = 1.4,
+	torso = Vector3.new(2, 2.1, 1.05),
+	brazo = Vector3.new(0.85, 2, 0.85),
+	pierna = Vector3.new(0.9, 2, 0.9),
+} :: Proportions
+
+-- ── piezas ─────────────────────────────────────────────────────────
+
+local function limb(model: Model, name: string, size: Vector3, color: Color3): BasePart
+	local part = Instance.new("Part")
+	part.Name = name
+	part.Size = size
+	part.Color = color
+	part.Material = Enum.Material.SmoothPlastic
+	part.TopSurface = Enum.SurfaceType.Smooth
+	part.BottomSurface = Enum.SurfaceType.Smooth
+	part.CanCollide = false
+	part.Parent = model
+	return part
+end
+
+local function motor(parent: BasePart, child: BasePart, name: string,
+	c0: CFrame, c1: CFrame): Motor6D
+	local joint = Instance.new("Motor6D")
+	joint.Name = name
+	joint.Part0 = parent
+	joint.Part1 = child
+	joint.C0 = c0
+	joint.C1 = c1
+	joint.Parent = parent
+	return joint
+end
+
+--- Pega una pieza decorativa a otra con WeldConstraint.
+function Rig.attach(anchor: BasePart, name: string, size: Vector3, offset: CFrame,
+	color: Color3, material: Enum.Material?): BasePart
+	local part = Instance.new("Part")
+	part.Name = name
+	part.Size = size
+	part.Color = color
+	part.Material = material or Enum.Material.SmoothPlastic
+	part.CanCollide = false
+	part.CanQuery = false
+	part.Massless = true
+	part.CFrame = anchor.CFrame * offset
+	part.Parent = anchor.Parent
+
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = anchor
+	weld.Part1 = part
+	weld.Parent = part
+	return part
+end
+
+-- ── esqueleto ──────────────────────────────────────────────────────
+
+--[[
+	Las seis uniones de un R6, derivadas de las medidas. Esta es la
+	funcion que antes se llamaba a si misma.
+--]]
+local function wireJoints(prop: Proportions, root: BasePart, torso: BasePart,
+	head: BasePart, leftArm: BasePart, rightArm: BasePart,
+	leftLeg: BasePart, rightLeg: BasePart)
+	local flip = CFrame.Angles(-math.pi / 2, 0, math.pi)
+	local halfTorsoX = prop.torso.X / 2
+	local halfTorsoY = prop.torso.Y / 2
+
+	motor(root, torso, "RootJoint", flip, flip)
+
+	motor(torso, head, "Neck",
+		CFrame.new(0, halfTorsoY, 0) * flip,
+		CFrame.new(0, -prop.cabeza.Y / 2, 0) * flip)
+
+	-- Los brazos cuelgan del cuarto superior del torso; los C1 los
+	-- enganchan por su propio cuarto superior.
+	for _, entry in {
+		{ name = "Right Shoulder", part = rightArm, side = 1 },
+		{ name = "Left Shoulder", part = leftArm, side = -1 },
+	} do
+		local turn = CFrame.Angles(0, entry.side * math.pi / 2, 0)
+		motor(torso, entry.part, entry.name,
+			CFrame.new(entry.side * halfTorsoX, prop.torso.Y / 4, 0) * turn,
+			CFrame.new(-entry.side * prop.brazo.X / 2, prop.brazo.Y / 4, 0) * turn)
+	end
+
+	for _, entry in {
+		{ name = "Right Hip", part = rightLeg, side = 1 },
+		{ name = "Left Hip", part = leftLeg, side = -1 },
+	} do
+		local turn = CFrame.Angles(0, entry.side * math.pi / 2, 0)
+		motor(torso, entry.part, entry.name,
+			CFrame.new(entry.side * halfTorsoX, -halfTorsoY, 0) * turn,
+			CFrame.new(entry.side * prop.pierna.X / 2, prop.pierna.Y / 2, 0) * turn)
+	end
+end
+
+export type Skin = {
+	piel: Color3,
+	pelo: Color3,
+	camisa: Color3,
+	pantalon: Color3,
+	zapato: Color3,
+}
+
+--[[
+	Arma un cuerpo entero y devuelve el modelo. No lo parenta: quien
+	llama decide donde va y cuando.
+--]]
+function Rig.build(name: string, prop: Proportions, skin: Skin): Model
+	local model = Instance.new("Model")
+	model.Name = name
+
+	local root = limb(model, "HumanoidRootPart", prop.torso, skin.camisa)
+	root.Transparency = 1
+	root.CanCollide = false
+
+	local torso = limb(model, "Torso", prop.torso, skin.camisa)
+	local head = limb(model, "Head", prop.cabeza, skin.piel)
+	local mesh = Instance.new("SpecialMesh")
+	mesh.MeshType = Enum.MeshType.Head
+	mesh.Scale = Vector3.new(prop.escalaCabeza, prop.escalaCabeza, prop.escalaCabeza)
+	mesh.Parent = head
+
+	-- Los brazos van del color de la piel: en la referencia las mangas
+	-- son cortas y lo que se ve del brazo es piel de color.
+	local leftArm = limb(model, "Left Arm", prop.brazo, skin.piel)
+	local rightArm = limb(model, "Right Arm", prop.brazo, skin.piel)
+	local leftLeg = limb(model, "Left Leg", prop.pierna, skin.pantalon)
+	local rightLeg = limb(model, "Right Leg", prop.pierna, skin.pantalon)
+
+	--[[
+		Como cualquier R6: todo colisiona menos la raiz. Con las piernas
+		atravesables el Humanoid se hunde en el piso al primer paso.
+	--]]
+	for _, part in { torso, head, leftArm, rightArm, leftLeg, rightLeg } do
+		part.CanCollide = true
+	end
+
+	local hipY = prop.pierna.Y + prop.torso.Y / 2
+	root.CFrame = CFrame.new(0, hipY, 0)
+	torso.CFrame = root.CFrame
+	head.CFrame = root.CFrame * CFrame.new(0, (prop.torso.Y + prop.cabeza.Y) / 2, 0)
+	leftArm.CFrame = root.CFrame
+		* CFrame.new(-(prop.torso.X + prop.brazo.X) / 2, 0, 0)
+	rightArm.CFrame = root.CFrame
+		* CFrame.new((prop.torso.X + prop.brazo.X) / 2, 0, 0)
+	leftLeg.CFrame = root.CFrame
+		* CFrame.new(-prop.pierna.X / 2, -(prop.torso.Y + prop.pierna.Y) / 2, 0)
+	rightLeg.CFrame = root.CFrame
+		* CFrame.new(prop.pierna.X / 2, -(prop.torso.Y + prop.pierna.Y) / 2, 0)
+
+	wireJoints(prop, root, torso, head, leftArm, rightArm, leftLeg, rightLeg)
+
+	-- Zapatos y pelo: dos piezas que cambian mucho la silueta por lo
+	-- poco que cuestan.
+	for _, leg in { leftLeg, rightLeg } do
+		Rig.attach(leg, "Zapato",
+			Vector3.new(prop.pierna.X + 0.12, 0.4, prop.pierna.Z + 0.3),
+			CFrame.new(0, -prop.pierna.Y / 2 + 0.16, -0.1), skin.zapato)
+	end
+
+	Rig.attach(head, "Pelo",
+		Vector3.new(prop.cabeza.X * 1.02, prop.cabeza.Y * 0.62, prop.cabeza.Z * 1.02),
+		CFrame.new(0, prop.cabeza.Y * 0.42, 0), skin.pelo)
+	Rig.attach(head, "Flequillo",
+		Vector3.new(prop.cabeza.X * 1.02, prop.cabeza.Y * 0.34, 0.3),
+		CFrame.new(0, prop.cabeza.Y * 0.2, -prop.cabeza.Z * 0.52), skin.pelo)
+
+	local humanoid = Instance.new("Humanoid")
+	humanoid.RigType = Enum.HumanoidRigType.R6
+	humanoid.NameDisplayDistance = 0
+	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	humanoid.Parent = model
+
+	model.PrimaryPart = root
+	return model
+end
+
+-- ── cara ───────────────────────────────────────────────────────────
+
+--[[
+	Ojos grandes y ovalados con esclerotica blanca y pupila oscura, mas
+	cejas. La version anterior dibujaba solo un cuadradito oscuro por
+	ojo: a esta escala de cabeza, el ojo es el rasgo que define al
+	personaje y tiene que tener blanco.
+
+	`angry` inclina las cejas: es la unica diferencia entre la cara del
+	profesor y la de un alumno.
+--]]
+function Rig.face(head: BasePart, prop: Proportions, angry: boolean)
+	local front = -prop.cabeza.Z * 0.5 - 0.02
+	local eyeX = prop.cabeza.X * 0.19
+	local eyeY = prop.cabeza.Y * 0.06
+
+	for _, side in { -1, 1 } do
+		Rig.attach(head, "Ojo",
+			Vector3.new(prop.cabeza.X * 0.2, prop.cabeza.Y * 0.34, 0.08),
+			CFrame.new(side * eyeX, eyeY, front),
+			Color3.fromRGB(252, 252, 250))
+		Rig.attach(head, "Pupila",
+			Vector3.new(prop.cabeza.X * 0.1, prop.cabeza.Y * 0.16, 0.06),
+			CFrame.new(side * eyeX, eyeY - prop.cabeza.Y * 0.03, front - 0.03),
+			Color3.fromRGB(28, 26, 34))
+		Rig.attach(head, "Ceja",
+			Vector3.new(prop.cabeza.X * 0.24, prop.cabeza.Y * 0.06, 0.07),
+			CFrame.new(side * eyeX, eyeY + prop.cabeza.Y * 0.26, front)
+				* CFrame.Angles(0, 0, math.rad(side * (angry and 20 or 4))),
+			Color3.fromRGB(48, 38, 44))
+	end
+
+	Rig.attach(head, "Boca",
+		Vector3.new(prop.cabeza.X * 0.24, prop.cabeza.Y * 0.05, 0.07),
+		CFrame.new(0, -prop.cabeza.Y * 0.24, front),
+		Color3.fromRGB(126, 62, 68))
+end
+
+return Rig
+]]></ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX7">
         <Properties>
           <string name="Name">Strings</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -1762,7 +2052,7 @@ return Strings
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX7">
+      <Item class="ModuleScript" referent="RBX8">
         <Properties>
           <string name="Name">Style</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -1929,7 +2219,7 @@ return Style
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX8">
+      <Item class="ModuleScript" referent="RBX9">
         <Properties>
           <string name="Name">Theme</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -2034,7 +2324,7 @@ return Theme
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX9">
+      <Item class="ModuleScript" referent="RBX10">
         <Properties>
           <string name="Name">UI</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -2907,7 +3197,7 @@ return UI
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX10">
+      <Item class="ModuleScript" referent="RBX11">
         <Properties>
           <string name="Name">Util</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -3054,7 +3344,7 @@ return Util
         </Properties>
       </Item>
     </Item>
-    <Item class="Script" referent="RBX33">
+    <Item class="Script" referent="RBX34">
       <Properties>
         <string name="Name">Server</string>
       <bool name="Disabled">true</bool>
@@ -3137,6 +3427,17 @@ end)
 
 step("modelos de respaldo en ServerStorage", function()
 	CharacterService.installBackup()
+end)
+
+--[[
+	Va antes de que entre nadie: un StarterCharacter colgado de
+	StarterPlayer reemplaza el avatar de Roblox de cada jugador por el
+	cuerpo caricaturesco. Es la unica forma que funciona tambien por el
+	.rbxmx todo-en-uno, donde un script no puede tocar el tipo de avatar
+	del lugar.
+--]]
+step("cuerpo del jugador", function()
+	CharacterService.installStarterCharacter()
 end)
 
 step("iluminacion y post-proceso", function()
@@ -3328,7 +3629,7 @@ end)
 print("[Finals Week] Servidor listo.")
 ]]></ProtectedString>
       </Properties>
-      <Item class="ModuleScript" referent="RBX12">
+      <Item class="ModuleScript" referent="RBX13">
         <Properties>
           <string name="Name">Atmosphere</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -3607,7 +3908,7 @@ return Atmosphere
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX13">
+      <Item class="ModuleScript" referent="RBX14">
         <Properties>
           <string name="Name">BookService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -3800,7 +4101,7 @@ return BookService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX14">
+      <Item class="ModuleScript" referent="RBX15">
         <Properties>
           <string name="Name">CharacterService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -3826,6 +4127,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local Util = require(Shared:WaitForChild("Util"))
+local Rig = require(Shared:WaitForChild("Rig"))
 
 local P = Config.Profesor
 
@@ -3836,11 +4138,33 @@ local rng = Random.new()
 -- ── uniforme del alumno ────────────────────────────────────────────
 
 local UNIFORME = {
-	Camisa = Color3.fromRGB(236, 238, 244),
-	Sueter = Color3.fromRGB(52, 72, 116),
-	Pantalon = Color3.fromRGB(44, 48, 60),
-	Zapato = Color3.fromRGB(28, 30, 36),
+	Camisa = Color3.fromRGB(246, 242, 228),
+	Pantalon = Color3.fromRGB(92, 116, 186),
+	Zapato = Color3.fromRGB(58, 58, 74),
+	Corbata = Color3.fromRGB(228, 140, 96),
 }
+
+--[[
+	La piel y el pelo salen del UserId, no de un valor guardado.
+
+	Podria persistirse en DataService, pero derivarlo del id es mejor en
+	todo sentido: es estable entre partidas sin ocupar almacenamiento,
+	funciona en Studio sin acceso a la API de DataStore, y dos jugadores
+	distintos casi nunca coinciden. El `% #tabla` con dos primos
+	distintos evita que piel y pelo queden correlacionados.
+--]]
+function CharacterService.skinFor(userId: number): Rig.Skin
+	local pieles = Config.Personaje.Pieles
+	local pelos = Config.Personaje.Pelos
+	local id = math.abs(userId)
+	return {
+		piel = pieles[(id * 7) % #pieles + 1],
+		pelo = pelos[(id * 13) % #pelos + 1],
+		camisa = UNIFORME.Camisa,
+		pantalon = UNIFORME.Pantalon,
+		zapato = UNIFORME.Zapato,
+	}
+end
 
 local TORSOS = { "Torso", "UpperTorso", "LowerTorso" }
 local BRAZOS = { "Left Arm", "Right Arm", "LeftUpperArm", "RightUpperArm",
@@ -3878,6 +4202,9 @@ local function attach(character: Model, anchorName: string, name: string,
 	part.TopSurface = Enum.SurfaceType.Smooth
 	part.BottomSurface = Enum.SurfaceType.Smooth
 	part.CFrame = anchor.CFrame * offset
+	-- La marca que permite que `dressStudent` sea idempotente: sin ella
+	-- cada compra en la tienda apilaba otra corbata.
+	part:SetAttribute("Accesorio", true)
 	part.Parent = character
 
 	local weld = Instance.new("WeldConstraint")
@@ -3887,29 +4214,48 @@ local function attach(character: Model, anchorName: string, name: string,
 	return part
 end
 
+--[[
+	Las cosmeticas de la tienda. Todos estos offsets estaban calibrados
+	contra una cabeza de 2x1x1 y un torso de 2x2x1 — el R6 estandar. Con
+	el cuerpo caricaturesco la cabeza es mucho mas grande, asi que ahora
+	se derivan de `Rig.Alumno` y siguen cualquier cambio de proporciones.
+--]]
+local A = Rig.Alumno
+
 local ESTETICAS: { [string]: (Model) -> () } = {
 	gorra = function(character)
-		attach(character, "Head", "Gorra", Vector3.new(2.1, 0.55, 2.1),
-			CFrame.new(0, 0.75, 0), Color3.fromRGB(168, 42, 52), Enum.Material.Fabric)
-		attach(character, "Head", "Visera", Vector3.new(2.1, 0.16, 1.1),
-			CFrame.new(0, 0.5, -1.05), Color3.fromRGB(140, 34, 44), Enum.Material.Fabric)
+		attach(character, "Head", "Gorra",
+			Vector3.new(A.cabeza.X * 1.06, A.cabeza.Y * 0.34, A.cabeza.Z * 1.06),
+			CFrame.new(0, A.cabeza.Y * 0.5, 0),
+			Color3.fromRGB(226, 84, 72), Enum.Material.SmoothPlastic)
+		attach(character, "Head", "Visera",
+			Vector3.new(A.cabeza.X * 1.06, 0.16, A.cabeza.Z * 0.7),
+			CFrame.new(0, A.cabeza.Y * 0.34, -A.cabeza.Z * 0.72),
+			Color3.fromRGB(198, 66, 58), Enum.Material.SmoothPlastic)
 	end,
 	anteojos = function(character)
-		attach(character, "Head", "Anteojos", Vector3.new(1.9, 0.42, 0.14),
-			CFrame.new(0, 0.06, -0.62), Color3.fromRGB(30, 32, 38), Enum.Material.SmoothPlastic)
+		attach(character, "Head", "Anteojos",
+			Vector3.new(A.cabeza.X * 0.86, A.cabeza.Y * 0.22, 0.14),
+			CFrame.new(0, A.cabeza.Y * 0.05, -A.cabeza.Z * 0.55),
+			Color3.fromRGB(52, 50, 66), Enum.Material.SmoothPlastic)
 	end,
 	mochila = function(character)
 		local anchor = character:FindFirstChild("UpperTorso") and "UpperTorso" or "Torso"
-		attach(character, anchor, "Mochila", Vector3.new(1.7, 1.9, 0.85),
-			CFrame.new(0, 0.1, 0.78), Color3.fromRGB(52, 92, 128), Enum.Material.Fabric)
-		attach(character, anchor, "Correa", Vector3.new(0.3, 1.7, 0.2),
-			CFrame.new(-0.55, 0.1, 0.42), Color3.fromRGB(38, 66, 94), Enum.Material.Fabric)
-		attach(character, anchor, "Correa", Vector3.new(0.3, 1.7, 0.2),
-			CFrame.new(0.55, 0.1, 0.42), Color3.fromRGB(38, 66, 94), Enum.Material.Fabric)
+		attach(character, anchor, "Mochila",
+			Vector3.new(A.torso.X * 0.8, A.torso.Y * 1, A.torso.Z * 0.8),
+			CFrame.new(0, 0.1, A.torso.Z * 0.78),
+			Color3.fromRGB(96, 176, 128), Enum.Material.SmoothPlastic)
+		for _, side in { -1, 1 } do
+			attach(character, anchor, "Correa",
+				Vector3.new(0.26, A.torso.Y * 0.9, 0.18),
+				CFrame.new(side * A.torso.X * 0.28, 0.1, A.torso.Z * 0.42),
+				Color3.fromRGB(72, 148, 104), Enum.Material.SmoothPlastic)
+		end
 	end,
 	campera = function(character)
-		paint(character, TORSOS, Color3.fromRGB(96, 32, 42))
-		paint(character, BRAZOS, Color3.fromRGB(96, 32, 42))
+		paint(character, TORSOS, Color3.fromRGB(214, 92, 76))
+		-- Solo el torso: los brazos son piel de color y taparlos borra
+		-- lo mas identificable del personaje.
 	end,
 }
 
@@ -3940,18 +4286,49 @@ local function nameTag(character: Model, text: string, color: Color3)
 	label.Parent = billboard
 end
 
---- Viste al alumno con el uniforme y le pone lo que tenga equipado.
+--[[
+	Viste al alumno y le pone lo que tenga equipado.
+
+	Antes esto no era idempotente: `ShopService` la vuelve a llamar cada
+	vez que comprás una cosmética, y `attach` no deduplicaba, así que se
+	apilaban corbatas y gorras una encima de otra hasta que el personaje
+	quedaba con seis. Ahora todo lo que cuelga sale marcado y se limpia
+	al principio.
+--]]
+local function stripAccessories(character: Model)
+	for _, child in character:GetChildren() do
+		if child:IsA("BasePart") and child:GetAttribute("Accesorio") then
+			child:Destroy()
+		end
+	end
+end
+
 function CharacterService.dressStudent(player: Player, character: Model, estetica: { [string]: boolean }?)
 	local ok, err = pcall(function()
-		paint(character, TORSOS, UNIFORME.Sueter)
-		paint(character, BRAZOS, UNIFORME.Camisa)
-		paint(character, PIERNAS, UNIFORME.Pantalon)
-		paint(character, PIES, UNIFORME.Zapato)
+		stripAccessories(character)
 
-		-- Corbata del colegio.
+		-- La piel de color es lo mas identificable del juego, y sale del
+		-- UserId: el mismo jugador se ve igual en todas las partidas.
+		local skin = CharacterService.skinFor(player.UserId)
+		paint(character, TORSOS, skin.camisa)
+		paint(character, BRAZOS, skin.piel)
+		paint(character, PIERNAS, skin.pantalon)
+		paint(character, PIES, skin.zapato)
+
+		local head = character:FindFirstChild("Head")
+		if head and head:IsA("BasePart") then
+			head.Color = skin.piel
+			for _, child in character:GetChildren() do
+				if child:IsA("BasePart")
+					and (child.Name == "Pelo" or child.Name == "Flequillo") then
+					child.Color = skin.pelo
+				end
+			end
+		end
+
 		local torso = character:FindFirstChild("UpperTorso") and "UpperTorso" or "Torso"
-		attach(character, torso, "Corbata", Vector3.new(0.34, 1.1, 0.14),
-			CFrame.new(0, 0.25, -0.55), Color3.fromRGB(122, 32, 44), Enum.Material.Fabric)
+		attach(character, torso, "Corbata", Vector3.new(0.34, 1, 0.14),
+			CFrame.new(0, 0.2, -0.55), UNIFORME.Corbata, Enum.Material.SmoothPlastic)
 
 		for id, on in (estetica or {}) do
 			if on and ESTETICAS[id] then
@@ -3964,6 +4341,48 @@ function CharacterService.dressStudent(player: Player, character: Model, estetic
 	if not ok then
 		warn("[Personajes] uniforme fallo: " .. tostring(err))
 	end
+end
+
+--[[
+	Fuerza el cuerpo caricaturesco para todos los jugadores.
+
+	Un modelo llamado `StarterCharacter` colgado de `StarterPlayer`
+	reemplaza el avatar de Roblox de cada jugador por este rig. Es el
+	unico metodo que sirve por las dos vias de instalacion: el tipo de
+	avatar del lugar es una opcion de Game Settings que un script no
+	puede tocar, asi que por el `.rbxmx` todo-en-uno no habria forma de
+	imponerlo. Un modelo, en cambio, se crea en runtime.
+
+	El color se lo pone `dressStudent` por jugador; de aca sale solo la
+	forma.
+--]]
+function CharacterService.installStarterCharacter()
+	local StarterPlayer = game:GetService("StarterPlayer")
+	local previous = StarterPlayer:FindFirstChild("StarterCharacter")
+	if previous then
+		previous:Destroy()
+	end
+
+	local model = Rig.build("StarterCharacter", Rig.Alumno, {
+		piel = Config.Personaje.Pieles[1],
+		pelo = Config.Personaje.Pelos[1],
+		camisa = UNIFORME.Camisa,
+		pantalon = UNIFORME.Pantalon,
+		zapato = UNIFORME.Zapato,
+	})
+
+	local head = model:FindFirstChild("Head")
+	if head and head:IsA("BasePart") then
+		Rig.face(head, Rig.Alumno, false)
+	end
+
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	end
+
+	model.Parent = StarterPlayer
+	print("[Personajes] cuerpo caricaturesco instalado (StarterCharacter).")
 end
 
 -- ── cono de la verguenza ───────────────────────────────────────────
@@ -3981,19 +4400,25 @@ function CharacterService.attachCone(character: Model)
 	cone.Name = "ConoDeLaVerguenza"
 	cone.Parent = character
 
+	-- El ancho y la altura salen de la cabeza: con el cuerpo
+	-- caricaturesco un cono de 2.2 studs quedaba de sombrerito.
+	local widest = Rig.Alumno.cabeza.X * 1.7
 	local layers = 6
+	local step = Rig.Alumno.cabeza.Y * 0.3
 	for i = 0, layers - 1 do
 		local alpha = i / layers
 		local disc = Instance.new("Part")
 		disc.Name = "Anillo" .. i
 		disc.Shape = Enum.PartType.Cylinder
-		disc.Size = Vector3.new(0.42, 2.2 * (1 - alpha) + 0.25, 2.2 * (1 - alpha) + 0.25)
+		disc.Size = Vector3.new(0.42, widest * (1 - alpha) + 0.3, widest * (1 - alpha) + 0.3)
 		disc.Color = i % 2 == 0 and Color3.fromRGB(228, 74, 62) or Color3.fromRGB(246, 246, 240)
 		disc.Material = Enum.Material.SmoothPlastic
 		disc.CanCollide = false
 		disc.CanQuery = false
 		disc.Massless = true
-		disc.CFrame = head.CFrame * CFrame.new(0, 0.75 + i * 0.4, 0) * CFrame.Angles(0, 0, math.rad(90))
+		disc.CFrame = head.CFrame
+			* CFrame.new(0, Rig.Alumno.cabeza.Y * 0.45 + i * step, 0)
+			* CFrame.Angles(0, 0, math.rad(90))
 		disc.Parent = cone
 
 		local weld = Instance.new("WeldConstraint")
@@ -4012,280 +4437,112 @@ end
 
 -- ── el profesor ────────────────────────────────────────────────────
 
-local function limb(model: Model, name: string, size: Vector3, color: Color3): BasePart
-	local part = Instance.new("Part")
-	part.Name = name
-	part.Size = size
-	part.Color = color
-	part.Material = Enum.Material.SmoothPlastic
-	part.TopSurface = Enum.SurfaceType.Smooth
-	part.BottomSurface = Enum.SurfaceType.Smooth
-	part.CanCollide = false
-	part.Parent = model
-	return part
-end
+--[[
+	Aca vivian `limb`, `motor`, `wireJoints` y `angryFace`, mas una copia
+	entera del esqueleto R6 dentro de `buildTeacher` y otra dentro de
+	`buildStudent`. Todo eso se mudo a `shared/Rig.lua`.
 
-local function motor(parent: BasePart, child: BasePart, name: string, c0: CFrame, c1: CFrame): Motor6D
-	local joint = Instance.new("Motor6D")
-	joint.Name = name
-	joint.Part0 = parent
-	joint.Part1 = child
-	joint.C0 = c0
-	joint.C1 = c1
-	joint.Parent = parent
-	return joint
-end
+	El motivo no es solo el orden: `wireJoints` se llamaba a si misma y
+	desbordaba la pila, era la unica llamada de `buildStudent`, y por eso
+	**ningun NPC empollon llegaba a existir**. Con un solo constructor
+	compartido ese error deja de ser posible.
+--]]
 
---- Las seis uniones de un rig R6. Los C0/C1 no son decorativos: si
---- alguno esta mal, el Humanoid camina desarmado. Estan una sola vez
---- para que profesor y alumnos compartan exactamente el mismo
---- esqueleto.
-local function wireJoints(root: BasePart, torso: BasePart, head: BasePart,
-	leftArm: BasePart, rightArm: BasePart, leftLeg: BasePart, rightLeg: BasePart)
-	wireJoints(root, torso, head, leftArm, rightArm, leftLeg, rightLeg)
-end
-
---- Cara enojada dibujada con partes: cejas caidas, ojos y boca torcida.
-local function angryFace(head: BasePart)
-	local function piece(name: string, size: Vector3, offset: CFrame, color: Color3)
-		local part = Instance.new("Part")
-		part.Name = name
-		part.Size = size
-		part.Color = color
-		part.Material = Enum.Material.SmoothPlastic
-		part.CanCollide = false
-		part.CanQuery = false
-		part.Massless = true
-		part.CFrame = head.CFrame * offset
-		part.Parent = head.Parent
-		local weld = Instance.new("WeldConstraint")
-		weld.Part0 = head
-		weld.Part1 = part
-		weld.Parent = part
-	end
-
-	for _, side in { -1, 1 } do
-		piece("Ojo", Vector3.new(0.24, 0.24, 0.1),
-			CFrame.new(side * 0.32, 0.06, -0.52), Color3.fromRGB(22, 24, 30))
-		piece("Ceja", Vector3.new(0.5, 0.11, 0.1),
-			CFrame.new(side * 0.34, 0.3, -0.52) * CFrame.Angles(0, 0, math.rad(side * 18)),
-			Color3.fromRGB(38, 32, 28))
-	end
-	piece("Boca", Vector3.new(0.62, 0.09, 0.1),
-		CFrame.new(0, -0.3, -0.52), Color3.fromRGB(60, 34, 34))
-	piece("Anteojos", Vector3.new(1.05, 0.3, 0.08),
-		CFrame.new(0, 0.06, -0.56), Color3.fromRGB(30, 32, 38))
-end
-
---- Arma el rig R6 completo del profesor, listo para Humanoid:MoveTo.
+--- Arma el rig del profesor, listo para Humanoid:MoveTo.
 function CharacterService.buildTeacher(name: string, position: Vector3): Model
-	local model = Instance.new("Model")
-	model.Name = "Profesor"
+	local prop = Rig.Profesor
+	local model = Rig.build("Profesor", prop, {
+		piel = P.ColorPiel,
+		pelo = Color3.fromRGB(88, 62, 74),
+		camisa = P.ColorTraje,
+		pantalon = Color3.fromRGB(58, 62, 88),
+		zapato = Color3.fromRGB(46, 44, 56),
+	})
+	model:PivotTo(CFrame.new(position))
 
-	local root = limb(model, "HumanoidRootPart", Vector3.new(2, 2, 1), P.ColorTraje)
-	root.Transparency = 1
-	root.CanCollide = false
+	local torso = model:FindFirstChild("Torso") :: BasePart
+	local head = model:FindFirstChild("Head") :: BasePart
 
-	local torso = limb(model, "Torso", Vector3.new(2, 2, 1), P.ColorTraje)
-	torso.CanCollide = true
-
-	local head = limb(model, "Head", Vector3.new(2, 1, 1), P.ColorPiel)
-	local mesh = Instance.new("SpecialMesh")
-	mesh.MeshType = Enum.MeshType.Head
-	mesh.Scale = Vector3.new(1.25, 1.25, 1.25)
-	mesh.Parent = head
-
-	local leftArm = limb(model, "Left Arm", Vector3.new(1, 2, 1), P.ColorTraje)
-	local rightArm = limb(model, "Right Arm", Vector3.new(1, 2, 1), P.ColorTraje)
-	local leftLeg = limb(model, "Left Leg", Vector3.new(1, 2, 1), Color3.fromRGB(30, 33, 42))
-	local rightLeg = limb(model, "Right Leg", Vector3.new(1, 2, 1), Color3.fromRGB(30, 33, 42))
-
-	-- Como cualquier R6: todo colisiona menos la raiz. Con las piernas
-	-- atravesables el Humanoid se hunde en el piso al primer paso.
-	for _, part in { torso, head, leftArm, rightArm, leftLeg, rightLeg } do
-		part.CanCollide = true
+	-- Camisa, corbata y solapas: capas finas encima del torso.
+	Rig.attach(torso, "Camisa", Vector3.new(prop.torso.X * 0.46, prop.torso.Y * 0.9, 0.14),
+		CFrame.new(0, 0, -prop.torso.Z / 2), P.ColorCamisa)
+	Rig.attach(torso, "Corbata", Vector3.new(0.3, prop.torso.Y * 0.66, 0.1),
+		CFrame.new(0, 0.1, -prop.torso.Z / 2 - 0.06), P.ColorCorbata)
+	for _, side in { -1, 1 } do
+		Rig.attach(torso, "Solapa", Vector3.new(0.42, prop.torso.Y * 0.52, 0.1),
+			CFrame.new(side * 0.45, 0.4, -prop.torso.Z / 2 - 0.02)
+				* CFrame.Angles(0, 0, math.rad(-side * 12)), P.ColorTraje)
 	end
+	Rig.attach(head, "Anteojos",
+		Vector3.new(prop.cabeza.X * 0.62, prop.cabeza.Y * 0.18, 0.08),
+		CFrame.new(0, prop.cabeza.Y * 0.06, -prop.cabeza.Z * 0.54),
+		Color3.fromRGB(46, 44, 58))
 
-	root.CFrame = CFrame.new(position)
-	torso.CFrame = root.CFrame
-	head.CFrame = root.CFrame * CFrame.new(0, 1.5, 0)
-	leftArm.CFrame = root.CFrame * CFrame.new(-1.5, 0, 0)
-	rightArm.CFrame = root.CFrame * CFrame.new(1.5, 0, 0)
-	leftLeg.CFrame = root.CFrame * CFrame.new(-0.5, -2, 0)
-	rightLeg.CFrame = root.CFrame * CFrame.new(0.5, -2, 0)
+	Rig.face(head, prop, true)
 
-	local flip = CFrame.Angles(-math.pi / 2, 0, math.pi)
-	motor(root, torso, "RootJoint", flip, flip)
-	motor(torso, head, "Neck", CFrame.new(0, 1, 0) * flip, CFrame.new(0, -0.5, 0) * flip)
-	motor(torso, rightArm, "Right Shoulder",
-		CFrame.new(1, 0.5, 0) * CFrame.Angles(0, math.pi / 2, 0),
-		CFrame.new(-0.5, 0.5, 0) * CFrame.Angles(0, math.pi / 2, 0))
-	motor(torso, leftArm, "Left Shoulder",
-		CFrame.new(-1, 0.5, 0) * CFrame.Angles(0, -math.pi / 2, 0),
-		CFrame.new(0.5, 0.5, 0) * CFrame.Angles(0, -math.pi / 2, 0))
-	motor(torso, rightLeg, "Right Hip",
-		CFrame.new(1, -1, 0) * CFrame.Angles(0, math.pi / 2, 0),
-		CFrame.new(0.5, 1, 0) * CFrame.Angles(0, math.pi / 2, 0))
-	motor(torso, leftLeg, "Left Hip",
-		CFrame.new(-1, -1, 0) * CFrame.Angles(0, -math.pi / 2, 0),
-		CFrame.new(-0.5, 1, 0) * CFrame.Angles(0, -math.pi / 2, 0))
-
-	-- Camisa, corbata y saco: capas finas encima del torso.
-	local function layer(part: BasePart, lname: string, size: Vector3, offset: CFrame, color: Color3)
-		local piece = Instance.new("Part")
-		piece.Name = lname
-		piece.Size = size
-		piece.Color = color
-		piece.Material = Enum.Material.Fabric
-		piece.CanCollide = false
-		piece.CanQuery = false
-		piece.Massless = true
-		piece.CFrame = part.CFrame * offset
-		piece.Parent = model
-		local weld = Instance.new("WeldConstraint")
-		weld.Part0 = part
-		weld.Part1 = piece
-		weld.Parent = piece
-	end
-
-	layer(torso, "Camisa", Vector3.new(0.9, 1.9, 0.14), CFrame.new(0, 0, -0.5), P.ColorCamisa)
-	layer(torso, "Corbata", Vector3.new(0.3, 1.4, 0.1), CFrame.new(0, 0.1, -0.6), P.ColorCorbata)
-	layer(torso, "Solapa", Vector3.new(0.42, 1.1, 0.1),
-		CFrame.new(-0.45, 0.4, -0.56) * CFrame.Angles(0, 0, math.rad(12)), P.ColorTraje)
-	layer(torso, "Solapa", Vector3.new(0.42, 1.1, 0.1),
-		CFrame.new(0.45, 0.4, -0.56) * CFrame.Angles(0, 0, math.rad(-12)), P.ColorTraje)
-	layer(head, "Pelo", Vector3.new(2.05, 0.42, 1.05), CFrame.new(0, 0.45, 0.02),
-		Color3.fromRGB(58, 48, 42))
-
-	angryFace(head)
-
-	local humanoid = Instance.new("Humanoid")
-	humanoid.RigType = Enum.HumanoidRigType.R6
+	local humanoid = model:FindFirstChildOfClass("Humanoid") :: Humanoid
 	humanoid.WalkSpeed = P.VelocidadPatrulla
 	humanoid.JumpPower = 0
 	humanoid.AutoRotate = true
 	humanoid.MaxHealth = 1000
 	humanoid.Health = 1000
-	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
 	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
-	humanoid.Parent = model
-
-	model.PrimaryPart = root
 
 	nameTag(model, name, Color3.fromRGB(244, 206, 122))
 
 	return model
 end
 
---- Cara neutra de alumno: ojos y una boca chiquita. Sin cejas
---- caidas, que esas son del profesor.
-local function calmFace(head: BasePart)
-	local function piece(name: string, size: Vector3, offset: CFrame, color: Color3)
-		local part = Instance.new("Part")
-		part.Name = name
-		part.Size = size
-		part.Color = color
-		part.Material = Enum.Material.SmoothPlastic
-		part.CanCollide = false
-		part.CanQuery = false
-		part.Massless = true
-		part.CFrame = head.CFrame * offset
-		part.Parent = head.Parent
-		local weld = Instance.new("WeldConstraint")
-		weld.Part0 = head
-		weld.Part1 = part
-		weld.Parent = part
-	end
+--[[
+	Un alumno NPC: el mismo esqueleto que el profesor, con uniforme y un
+	libro bajo el brazo. Son los que estudiaron — a los que se les pide
+	(o se les quita) la respuesta.
 
-	for _, side in { -1, 1 } do
-		piece("Ojo", Vector3.new(0.22, 0.26, 0.1),
-			CFrame.new(side * 0.3, 0.08, -0.52), Color3.fromRGB(26, 28, 34))
-	end
-	piece("Boca", Vector3.new(0.3, 0.08, 0.1),
-		CFrame.new(0, -0.26, -0.52), Color3.fromRGB(70, 44, 44))
-end
+	Esta es la funcion que no llegaba a terminar: su unica llamada al
+	viejo `wireJoints` desbordaba la pila y el `pcall` de NerdNPCs se
+	comia el error, asi que el pasillo quedaba sin un solo empollon.
 
---- Un alumno NPC: el mismo esqueleto que el profesor, con uniforme y
---- un libro bajo el brazo. Son los que estudiaron — a los que se les
---- pide (o se les quita) la respuesta.
+	Cada uno sale con una combinacion distinta de piel y pelo — el
+	indice del nombre alcanza como semilla y ademas los hace
+	distinguibles entre si de un vistazo.
+--]]
 function CharacterService.buildStudent(name: string, position: Vector3): Model
-	local model = Instance.new("Model")
-	model.Name = "Alumno"
+	local prop = Rig.Alumno
+	local pieles = Config.Personaje.Pieles
+	local pelos = Config.Personaje.Pelos
+	local seed = #name + string.byte(name, 1)
 
-	local skin = Color3.fromRGB(222, 184, 150)
-	local sweater = Config.Empollones.ColorSueter
+	local model = Rig.build("Alumno", prop, {
+		piel = pieles[seed % #pieles + 1],
+		pelo = pelos[(seed * 5) % #pelos + 1],
+		camisa = UNIFORME.Camisa,
+		pantalon = Config.Empollones.ColorSueter,
+		zapato = UNIFORME.Zapato,
+	})
+	model:PivotTo(CFrame.new(position))
 
-	local root = limb(model, "HumanoidRootPart", Vector3.new(2, 2, 1), sweater)
-	root.Transparency = 1
-	root.CanCollide = false
+	local torso = model:FindFirstChild("Torso") :: BasePart
+	local head = model:FindFirstChild("Head") :: BasePart
+	local leftArm = model:FindFirstChild("Left Arm") :: BasePart
 
-	local torso = limb(model, "Torso", Vector3.new(2, 2, 1), sweater)
-	local head = limb(model, "Head", Vector3.new(2, 1, 1), skin)
-	local mesh = Instance.new("SpecialMesh")
-	mesh.MeshType = Enum.MeshType.Head
-	mesh.Scale = Vector3.new(1.25, 1.25, 1.25)
-	mesh.Parent = head
-
-	local leftArm = limb(model, "Left Arm", Vector3.new(1, 2, 1), skin)
-	local rightArm = limb(model, "Right Arm", Vector3.new(1, 2, 1), skin)
-	local leftLeg = limb(model, "Left Leg", Vector3.new(1, 2, 1), Color3.fromRGB(48, 52, 66))
-	local rightLeg = limb(model, "Right Leg", Vector3.new(1, 2, 1), Color3.fromRGB(48, 52, 66))
-
-	root.CFrame = CFrame.new(position)
-	torso.CFrame = root.CFrame
-	head.CFrame = root.CFrame * CFrame.new(0, 1.5, 0)
-	leftArm.CFrame = root.CFrame * CFrame.new(-1.5, 0, 0)
-	rightArm.CFrame = root.CFrame * CFrame.new(1.5, 0, 0)
-	leftLeg.CFrame = root.CFrame * CFrame.new(-0.5, -2, 0)
-	rightLeg.CFrame = root.CFrame * CFrame.new(0.5, -2, 0)
-
-	for _, part in { torso, head, leftArm, rightArm, leftLeg, rightLeg } do
-		part.CanCollide = true
-	end
-
-	wireJoints(root, torso, head, leftArm, rightArm, leftLeg, rightLeg)
-
-	local function layer(anchor: BasePart, lname: string, size: Vector3, offset: CFrame,
-		color: Color3, material: Enum.Material)
-		local piece = Instance.new("Part")
-		piece.Name = lname
-		piece.Size = size
-		piece.Color = color
-		piece.Material = material
-		piece.CanCollide = false
-		piece.CanQuery = false
-		piece.Massless = true
-		piece.CFrame = anchor.CFrame * offset
-		piece.Parent = model
-		local weld = Instance.new("WeldConstraint")
-		weld.Part0 = anchor
-		weld.Part1 = piece
-		weld.Parent = piece
-	end
-
-	layer(torso, "Camisa", Vector3.new(0.85, 1.85, 0.14), CFrame.new(0, 0, -0.5),
-		Color3.fromRGB(238, 240, 244), Enum.Material.Fabric)
-	layer(torso, "Corbata", Vector3.new(0.28, 1.2, 0.1), CFrame.new(0, 0.1, -0.6),
-		Color3.fromRGB(122, 32, 44), Enum.Material.Fabric)
-	layer(head, "Pelo", Vector3.new(2.05, 0.5, 1.08), CFrame.new(0, 0.42, 0.04),
-		Color3.fromRGB(46, 36, 30), Enum.Material.SmoothPlastic)
-	layer(head, "Anteojos", Vector3.new(1.5, 0.34, 0.08), CFrame.new(0, 0.08, -0.56),
-		Color3.fromRGB(38, 40, 48), Enum.Material.SmoothPlastic)
+	Rig.attach(torso, "Corbata", Vector3.new(0.28, prop.torso.Y * 0.62, 0.1),
+		CFrame.new(0, 0.1, -prop.torso.Z / 2 - 0.06), UNIFORME.Corbata)
+	Rig.attach(head, "Anteojos",
+		Vector3.new(prop.cabeza.X * 0.66, prop.cabeza.Y * 0.16, 0.08),
+		CFrame.new(0, prop.cabeza.Y * 0.06, -prop.cabeza.Z * 0.54),
+		Color3.fromRGB(52, 50, 66))
 	-- El libro bajo el brazo: es la razon por la que sabe las respuestas.
-	layer(leftArm, "Libro", Vector3.new(0.4, 1.3, 1), CFrame.new(-0.45, -0.2, 0),
-		Color3.fromRGB(126, 44, 52), Enum.Material.Fabric)
+	Rig.attach(leftArm, "Libro", Vector3.new(0.4, 1.1, 0.9),
+		CFrame.new(-0.4, -0.2, 0), Color3.fromRGB(126, 44, 52))
 
-	calmFace(head)
+	Rig.face(head, prop, false)
 
-	local humanoid = Instance.new("Humanoid")
-	humanoid.RigType = Enum.HumanoidRigType.R6
+	local humanoid = model:FindFirstChildOfClass("Humanoid") :: Humanoid
 	humanoid.WalkSpeed = 8
 	humanoid.JumpPower = 0
 	humanoid.MaxHealth = 100
 	humanoid.Health = 100
-	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
 	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
-	humanoid.Parent = model
 
 	model.PrimaryPart = root
 	nameTag(model, name, Color3.fromRGB(186, 224, 168))
@@ -4404,7 +4661,7 @@ return CharacterService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX15">
+      <Item class="ModuleScript" referent="RBX16">
         <Properties>
           <string name="Name">DataService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -4645,7 +4902,7 @@ return DataService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX16">
+      <Item class="ModuleScript" referent="RBX17">
         <Properties>
           <string name="Name">ExamService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -5327,7 +5584,7 @@ return ExamService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX17">
+      <Item class="ModuleScript" referent="RBX18">
         <Properties>
           <string name="Name">GraffitiService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -5642,7 +5899,7 @@ return GraffitiService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX18">
+      <Item class="ModuleScript" referent="RBX19">
         <Properties>
           <string name="Name">ItemService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -6077,7 +6334,7 @@ return ItemService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX19">
+      <Item class="ModuleScript" referent="RBX20">
         <Properties>
           <string name="Name">KnockoutService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -6323,7 +6580,7 @@ return KnockoutService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX20">
+      <Item class="ModuleScript" referent="RBX21">
         <Properties>
           <string name="Name">LobbyService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -6611,7 +6868,7 @@ return LobbyService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX21">
+      <Item class="ModuleScript" referent="RBX22">
         <Properties>
           <string name="Name">MapBuilder</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -7557,7 +7814,7 @@ return MapBuilder
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX22">
+      <Item class="ModuleScript" referent="RBX23">
         <Properties>
           <string name="Name">NerdNPCs</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -7742,7 +7999,7 @@ return NerdNPCs
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX23">
+      <Item class="ModuleScript" referent="RBX24">
         <Properties>
           <string name="Name">PlaygroundService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -8127,7 +8384,7 @@ return PlaygroundService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX24">
+      <Item class="ModuleScript" referent="RBX25">
         <Properties>
           <string name="Name">PunishService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -8362,7 +8619,7 @@ return PunishService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX25">
+      <Item class="ModuleScript" referent="RBX26">
         <Properties>
           <string name="Name">QuestionBank</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -8648,7 +8905,7 @@ return QuestionBank
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX26">
+      <Item class="ModuleScript" referent="RBX27">
         <Properties>
           <string name="Name">RadioService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -8816,7 +9073,7 @@ return RadioService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX27">
+      <Item class="ModuleScript" referent="RBX28">
         <Properties>
           <string name="Name">RoundManager</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -9267,7 +9524,7 @@ return RoundManager
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX28">
+      <Item class="ModuleScript" referent="RBX29">
         <Properties>
           <string name="Name">ShopService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -9466,7 +9723,7 @@ return ShopService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX29">
+      <Item class="ModuleScript" referent="RBX30">
         <Properties>
           <string name="Name">SuspicionService</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -9667,7 +9924,7 @@ return SuspicionService
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX30">
+      <Item class="ModuleScript" referent="RBX31">
         <Properties>
           <string name="Name">TeacherAI</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -10347,7 +10604,7 @@ return TeacherAI
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX31">
+      <Item class="ModuleScript" referent="RBX32">
         <Properties>
           <string name="Name">Templates</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -10731,7 +10988,7 @@ return Templates
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX32">
+      <Item class="ModuleScript" referent="RBX33">
         <Properties>
           <string name="Name">TextFilter</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -10786,7 +11043,7 @@ return TextFilter
         </Properties>
       </Item>
     </Item>
-    <Item class="LocalScript" referent="RBX46">
+    <Item class="LocalScript" referent="RBX48">
       <Properties>
         <string name="Name">Client</string>
         <ProtectedString name="Source"><![CDATA[--!strict
@@ -10827,6 +11084,7 @@ local Poses = require(script:WaitForChild("Poses"))
 local GraffitiUI = require(script:WaitForChild("GraffitiUI"))
 local RadioUI = require(script:WaitForChild("RadioUI"))
 local ZoomUI = require(script:WaitForChild("ZoomUI"))
+local Viewmodel = require(script:WaitForChild("Viewmodel"))
 
 -- ── idioma ─────────────────────────────────────────────────────────
 -- Cada jugador ve el juego en SU idioma: el servidor manda claves.
@@ -10873,6 +11131,8 @@ GraffitiUI.mount(gui)
 RadioUI.mount(gui)
 ZoomUI.mount(gui)
 MainMenu.mount(gui)
+-- Primera persona con brazos propios, como el juego real.
+Viewmodel.mount()
 Music.start()
 
 ExamUI.onNotify = Hud.notify
@@ -10909,6 +11169,10 @@ MainMenu.onVisible = function(open: boolean)
 	GraffitiUI.setVisible(not open)
 	RadioUI.setVisible(not open)
 	ZoomUI.setVisible(not open)
+	-- El menu se queda con la camara para la toma del atrio: los brazos
+	-- flotando en el medio del encuadre arruinarian la pantalla de
+	-- titulo.
+	Viewmodel.setVisible(not open)
 	if open then
 		ShopUI.close()
 		LobbyUI.close()
@@ -11121,7 +11385,7 @@ end)
 print(string.format("[Finals Week] Cliente listo (%s).", Strings.locale()))
 ]]></ProtectedString>
       </Properties>
-      <Item class="ModuleScript" referent="RBX34">
+      <Item class="ModuleScript" referent="RBX35">
         <Properties>
           <string name="Name">CameraDirector</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -11156,8 +11420,6 @@ local shakeUntil = 0
 local shakeStrength = 0
 local seated = false
 
-local DEFAULT_MIN = 0.5
-local DEFAULT_MAX = 128
 
 function CameraDirector.mount(parent: ScreenGui)
 	fade = Instance.new("Frame")
@@ -11209,25 +11471,22 @@ function CameraDirector.transition(middle: (() -> ())?)
 	end)
 end
 
---- Al sentarse el zoom se acerca: la mesa, la hoja y los vecinos.
+--[[
+	Antes esto acercaba el zoom al sentarte, para que miraras la mesa y a
+	los vecinos en vez del techo. Con el juego en primera persona no hay
+	zoom que ajustar: `Viewmodel` traba la camara con LockFirstPerson y
+	forzar los limites aca la peleaba, dejandola temblando al sentarse.
+
+	Se conserva la funcion porque `init.client` la llama al sentarse y al
+	pararse, y el estado sirve para lo que venga; lo que se va es el
+	toqueteo del zoom.
+--]]
 function CameraDirector.setSeated(value: boolean)
-	if seated == value then
-		return
-	end
 	seated = value
-	local ok = pcall(function()
-		if value then
-			player.CameraMaxZoomDistance = 14
-			player.CameraMinZoomDistance = 4
-		else
-			player.CameraMinZoomDistance = DEFAULT_MIN
-			player.CameraMaxZoomDistance = DEFAULT_MAX
-		end
-	end)
-	if not ok then
-		-- Si la propiedad no se puede tocar, no pasa nada: el juego
-		-- sigue con la camara por defecto.
-	end
+end
+
+function CameraDirector.isSeated(): boolean
+	return seated
 end
 
 function CameraDirector.shake(strength: number, seconds: number?)
@@ -11239,7 +11498,7 @@ return CameraDirector
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX35">
+      <Item class="ModuleScript" referent="RBX36">
         <Properties>
           <string name="Name">ExamUI</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -11971,7 +12230,7 @@ return ExamUI
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX36">
+      <Item class="ModuleScript" referent="RBX37">
         <Properties>
           <string name="Name">GraffitiUI</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -12220,7 +12479,7 @@ return GraffitiUI
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX37">
+      <Item class="ModuleScript" referent="RBX38">
         <Properties>
           <string name="Name">Hud</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -12991,7 +13250,7 @@ return Hud
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX38">
+      <Item class="ModuleScript" referent="RBX39">
         <Properties>
           <string name="Name">LobbyUI</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -13396,7 +13655,7 @@ return LobbyUI
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX39">
+      <Item class="ModuleScript" referent="RBX40">
         <Properties>
           <string name="Name">MainMenu</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -14079,7 +14338,7 @@ return MainMenu
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX40">
+      <Item class="ModuleScript" referent="RBX41">
         <Properties>
           <string name="Name">Music</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -14311,7 +14570,7 @@ return Music
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX41">
+      <Item class="ModuleScript" referent="RBX42">
         <Properties>
           <string name="Name">NoteUI</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -14658,7 +14917,7 @@ return NoteUI
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX42">
+      <Item class="ModuleScript" referent="RBX43">
         <Properties>
           <string name="Name">Poses</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -14760,7 +15019,7 @@ return Poses
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX43">
+      <Item class="ModuleScript" referent="RBX44">
         <Properties>
           <string name="Name">RadioUI</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -14988,7 +15247,7 @@ return RadioUI
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX44">
+      <Item class="ModuleScript" referent="RBX45">
         <Properties>
           <string name="Name">ShopUI</string>
           <ProtectedString name="Source"><![CDATA[--!strict
@@ -15440,7 +15699,291 @@ return ShopUI
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX45">
+      <Item class="ModuleScript" referent="RBX46">
+        <Properties>
+          <string name="Name">Viewmodel</string>
+          <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	Viewmodel
+	------------------------------------------------------------------
+	Primera persona: la camara trabada y un par de brazos propios que
+	sostienen lo que llevas.
+
+	El juego real es en primera persona — en el trailer se ve una mano
+	sosteniendo un libro abierto y otra un lapiz gigante. Esta version
+	estaba en tercera, que era probablemente la diferencia mas grande
+	entre lo que teniamos y lo que se ve en la referencia.
+
+	Como funciona
+	-------------
+	`CameraMode = LockFirstPerson` traba la camara, pero en primera
+	persona Roblox no te muestra nada de tu propio cuerpo: la pantalla
+	queda vacia y las herramientas se ven flotando de costado. La
+	solucion estandar es un *viewmodel*: un par de brazos que no son el
+	personaje, viven en el espacio de la camara y se dibujan encima de
+	todo.
+
+	Van parentados a `workspace.CurrentCamera`. Eso es a proposito: lo
+	que cuelga de la camara se renderiza pero no se replica, no colisiona
+	y no le aparece a nadie mas. Son tuyos y de nadie mas.
+
+	Dos detalles que hacen la diferencia entre "brazos pegados a la
+	pantalla" y algo que se siente:
+
+	  bob   al caminar, los brazos suben y bajan en ocho, no en linea
+	        recta. Un bob vertical puro se lee como un ascensor.
+	  sway  al girar la camara, los brazos se quedan atras un instante y
+	        despues alcanzan. Es lo que da peso.
+
+	Lo que Roblox no deja hacer: no hay un paso de render aparte para el
+	viewmodel, asi que si te pegas a una pared los brazos la atraviesan.
+	Se compensa manteniendolos cerca del cuerpo y retrayendolos cuando
+	hay algo enfrente.
+--]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Rig = require(Shared:WaitForChild("Rig"))
+
+local player = Players.LocalPlayer
+
+local Viewmodel = {}
+
+local model: Model? = nil
+local leftArm: BasePart? = nil
+local rightArm: BasePart? = nil
+local held: BasePart? = nil
+
+local bobPhase = 0
+local swayX, swayY = 0, 0
+local lastLook: Vector3? = nil
+
+-- Donde se plantan los brazos respecto de la camara.
+local BASE = CFrame.new(0, -1.5, -0.9)
+local ARM_SPREAD = 0.85
+local ARM_FORWARD = -0.7
+
+local function newArm(name: string, side: number, color: Color3): BasePart
+	local prop = Rig.Alumno
+	local arm = Instance.new("Part")
+	arm.Name = name
+	arm.Size = Vector3.new(prop.brazo.X, prop.brazo.Y * 1.15, prop.brazo.Z)
+	arm.Color = color
+	arm.Material = Enum.Material.SmoothPlastic
+	arm.Anchored = true
+	arm.CanCollide = false
+	arm.CanQuery = false
+	arm.CastShadow = false
+	arm.TopSurface = Enum.SurfaceType.Smooth
+	arm.BottomSurface = Enum.SurfaceType.Smooth
+	-- Sin esto Roblox lo oculta como oculta tu propio cuerpo en primera
+	-- persona, y todo el modulo no serviria de nada.
+	arm.LocalTransparencyModifier = 0
+	return arm
+end
+
+--- El color de piel real del jugador, para que los brazos que ves sean
+--- los tuyos y no los de un maniqui.
+local function skinColor(): Color3
+	local character = player.Character
+	local arm = character and character:FindFirstChild("Right Arm")
+	if arm and arm:IsA("BasePart") then
+		return arm.Color
+	end
+	return Color3.fromRGB(198, 96, 168)
+end
+
+function Viewmodel.build()
+	local camera = workspace.CurrentCamera
+	if not camera then
+		return
+	end
+	if model then
+		model:Destroy()
+	end
+
+	local holder = Instance.new("Model")
+	holder.Name = "Viewmodel"
+
+	local color = skinColor()
+	local left = newArm("BrazoIzquierdo", -1, color)
+	local right = newArm("BrazoDerecho", 1, color)
+	left.Parent = holder
+	right.Parent = holder
+
+	holder.Parent = camera
+	model = holder
+	leftArm = left
+	rightArm = right
+end
+
+--[[
+	Muestra en la mano una copia de lo que tengas equipado. Es una copia
+	visual y nada mas: la herramienta de verdad sigue en el personaje y
+	es la que el servidor mira. Si esta copia se pierde no se rompe
+	ninguna mecanica.
+--]]
+local function refreshHeld()
+	if held then
+		held:Destroy()
+		held = nil
+	end
+	local character = player.Character
+	if not character then
+		return
+	end
+	local tool = character:FindFirstChildOfClass("Tool")
+	local handle = tool and tool:FindFirstChild("Handle")
+	if not handle or not handle:IsA("BasePart") then
+		return
+	end
+
+	local copy = handle:Clone()
+	-- Un Handle clonado se trae las soldaduras al personaje viejo y los
+	-- prompts; sin limpiarlos, el clon arrastra cosas al espacio de la
+	-- camara.
+	for _, child in copy:GetDescendants() do
+		if child:IsA("WeldConstraint") or child:IsA("Weld") or child:IsA("Motor6D")
+			or child:IsA("ProximityPrompt") or child:IsA("Attachment") then
+			child:Destroy()
+		end
+	end
+	copy.Anchored = true
+	copy.CanCollide = false
+	copy.CanQuery = false
+	copy.CastShadow = false
+	copy.LocalTransparencyModifier = 0
+	copy.Parent = model
+	held = copy
+end
+
+local function update(dt: number)
+	local camera = workspace.CurrentCamera
+	local character = player.Character
+	if not camera or not model or not leftArm or not rightArm then
+		return
+	end
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+	-- ── sway: los brazos alcanzan a la camara con retraso ──
+	local look = camera.CFrame.LookVector
+	if lastLook then
+		local delta = look - lastLook
+		swayX += (-delta.X * 6 - swayX) * math.min(1, dt * 9)
+		swayY += (-delta.Y * 6 - swayY) * math.min(1, dt * 9)
+	end
+	lastLook = look
+	swayX = math.clamp(swayX, -0.25, 0.25)
+	swayY = math.clamp(swayY, -0.25, 0.25)
+
+	-- ── bob: figura de ocho al caminar ──
+	local speed = 0
+	if humanoid then
+		speed = humanoid.MoveDirection.Magnitude * humanoid.WalkSpeed
+	end
+	bobPhase += dt * (4 + speed * 0.55)
+	local amount = math.clamp(speed / 16, 0, 1) * 0.09
+	local bobX = math.sin(bobPhase) * amount
+	local bobY = math.abs(math.cos(bobPhase)) * amount * 0.8
+
+	--[[
+		Retraccion: si hay algo justo delante de la camara, los brazos se
+		acercan al cuerpo. No arregla el atravesado — Roblox no tiene un
+		paso de render aparte para esto — pero evita el caso feo, que es
+		quedar mirando el interior de una pared.
+	--]]
+	local retreat = 0
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { character :: any, model :: any }
+	local hit = workspace:Raycast(camera.CFrame.Position, look * 3, params)
+	if hit then
+		retreat = (1 - hit.Distance / 3) * 0.8
+	end
+
+	local base = camera.CFrame
+		* BASE
+		* CFrame.new(bobX + swayX, bobY + swayY, retreat)
+		* CFrame.Angles(swayY * 1.2, swayX * 1.2, 0)
+
+	leftArm.CFrame = base
+		* CFrame.new(-ARM_SPREAD, 0, ARM_FORWARD)
+		* CFrame.Angles(math.rad(-72), 0, math.rad(9))
+	rightArm.CFrame = base
+		* CFrame.new(ARM_SPREAD, 0, ARM_FORWARD)
+		* CFrame.Angles(math.rad(-72), 0, math.rad(-9))
+
+	if held then
+		held.CFrame = rightArm.CFrame * CFrame.new(0, -0.9, -0.2)
+	end
+end
+
+function Viewmodel.mount()
+	-- Primera persona, trabada: es como se juega el original.
+	player.CameraMode = Enum.CameraMode.LockFirstPerson
+
+	Viewmodel.build()
+
+	player.CharacterAdded:Connect(function(character)
+		task.wait(0.4)
+		Viewmodel.build()
+		refreshHeld()
+		character.ChildAdded:Connect(function(child)
+			if child:IsA("Tool") then
+				task.wait(0.1)
+				refreshHeld()
+			end
+		end)
+		character.ChildRemoved:Connect(function(child)
+			if child:IsA("Tool") then
+				refreshHeld()
+			end
+		end)
+	end)
+
+	local character = player.Character
+	if character then
+		character.ChildAdded:Connect(function(child)
+			if child:IsA("Tool") then
+				task.wait(0.1)
+				refreshHeld()
+			end
+		end)
+		character.ChildRemoved:Connect(function(child)
+			if child:IsA("Tool") then
+				refreshHeld()
+			end
+		end)
+	end
+
+	-- Despues del paso de camara del motor: si corriera antes, la camara
+	-- se moveria despues de que colocamos los brazos y quedarian un
+	-- fotograma atrasados.
+	RunService:BindToRenderStep("FinalsWeekViewmodel",
+		Enum.RenderPriority.Camera.Value + 2, update)
+end
+
+--- El menu de inicio toma la camara: mientras tanto los brazos estorban.
+function Viewmodel.setVisible(visible: boolean)
+	if not model then
+		return
+	end
+	for _, part in model:GetChildren() do
+		if part:IsA("BasePart") then
+			part.LocalTransparencyModifier = visible and 0 or 1
+			part.Transparency = visible and 0 or 1
+		end
+	end
+end
+
+return Viewmodel
+]]></ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX47">
         <Properties>
           <string name="Name">ZoomUI</string>
           <ProtectedString name="Source"><![CDATA[--!strict

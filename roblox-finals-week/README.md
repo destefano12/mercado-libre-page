@@ -76,9 +76,14 @@ empezar.
 
 ### Controles
 
+Se juega en **primera persona**, como el original: la cámara va trabada y
+ves tus propias manos con lo que llevás. Los brazos están en el espacio de
+la cámara (`src/client/Viewmodel.lua`), con balanceo al caminar y sway al
+girar.
+
 | Tecla | Qué hace |
 |---|---|
-| `E` | Interactuar (casilleros, kiosco, libros, empollones, pelota) |
+| `E` | Interactuar (casilleros, kiosco, libros, empollones, cajones, pelota) |
 | `1`–`4` | Marcar la alternativa |
 | `←` `→` | Cambiar de pregunta |
 | `Q` | **Espiar** la hoja del de al lado |
@@ -178,212 +183,122 @@ mochila, anteojos, campera). Todo se guarda en `DataStore`.
 
 ## Dirección de arte
 
-El objetivo es que **no parezca Roblox**: nada de plástico saturado.
-Todo lo visual sale de dos archivos — `src/shared/Style.lua` (paleta,
-materiales, desgaste) y `src/server/Atmosphere.lua` (luz, cielo,
-post-proceso) — y de `Config.Estilo`.
+Esta sección estaba escrita al revés, y conviene decir por qué.
 
-### Dos precisiones antes de empezar
+La versión anterior perseguía **"que no parezca Roblox"**: nada por encima
+del 60 % de saturación, materiales PBR del motor (`Concrete`, `Brick`,
+`CeramicTiles`, `CorrodedMetal`) para que las superficies tuvieran grano
+real, desgaste geométrico encima — rayones, óxido, baldosas gastadas,
+manchas de roce — y un pasillo angosto de techo bajo, hecho claustrofóbico
+a propósito.
 
-**`Lighting.Technology` no está en Workspace, y no se puede escribir
-desde un script.** Es de sólo lectura en runtime; el único sitio donde
-Roblox la acepta es el archivo del lugar. Por eso `tools/build_studio.py`
-la lee de `Config.Estilo.Tecnologia` y la escribe en el `.rbxlx`. Si
-insertás el modelo en un lugar tuyo, ponela a mano: **Lighting →
-Technology → Future**. El juego avisa en el Output si quedó en Voxel.
+Después miramos el trailer del juego real. Es **lo contrario en todos los
+ejes**: superficies mates, planas y limpias, de color saturado; un atrio
+ancho, alto y luminoso; personajes cabezones de piel violeta, rosa y roja;
+y todo en primera persona.
 
-**No existe un objeto `AmbientOcclusion` en Roblox.** La oclusión
-ambiental viene incluida en Future — es una de las razones para usarlo.
-Con ShadowMap hay sombras proyectadas pero no SSAO, y el colegio se ve
-más chato.
+Así que la dirección de arte se dio vuelta entera.
 
-### Paleta exacta
+### La conclusión incómoda sobre el material
 
-Copiala tal cual en Studio si construís piezas a mano.
+`SmoothPlastic` con color saturado **es** el material correcto. Es la única
+superficie verdaderamente lisa de Roblox, y la referencia no tiene grano en
+ningún lado. El "plástico" que la versión anterior evitaba a toda costa era
+justamente lo que acercaba el resultado; los PBR del motor eran los que
+rompían el parecido.
 
-| Elemento | RGB | Material |
+Por lo mismo desaparecieron el desgaste geométrico y el camino de
+`SurfaceAppearance` (`Config.Texturas`): dependía de subir imágenes a
+Roblox, nunca tuvo un solo id cargado, y con un look plano no aporta nada.
+
+### Paleta
+
+| Elemento | RGB |
+|---|---|
+| Muro del atrio | `240, 230, 212` |
+| Banda turquesa | `86, 178, 176` |
+| Piso del atrio (damero) | `218, 156, 132` / `208, 146, 122` |
+| Casillero | `154, 180, 226` |
+| Casillero (puerta) | `172, 196, 236` |
+| Muro del aula | `150, 172, 146` |
+| Tablón del aula | `206, 158, 102` / `194, 148, 96` |
+| Pizarrón | `56, 80, 64` |
+| Marco del pizarrón (madera) | `152, 106, 66` |
+| Pupitre | `210, 166, 114` |
+| Asiento | `92, 122, 190` |
+| Puerta | `200, 134, 92` |
+| Estatua | `190, 188, 182` |
+| Tirador dorado | `228, 184, 84` |
+| Luz cálida | `255, 244, 218` |
+
+Todo en `SmoothPlastic`, salvo el `Neon` de las luminarias y el `Glass` del
+ventanal. Reflectancia cero en todo menos el vidrio: un solo brillo
+especular delata el motor y rompe el dibujo.
+
+### Iluminación
+
+El objetivo es **aplanar**, no dramatizar.
+
+| Propiedad | Antes | Ahora | Por qué |
+|---|---|---|---|
+| `Ambient` | `28, 30, 34` | `126, 122, 130` | Las sombras ya no caen a negro; una sombra que no llega a negro se lee como un tono pintado |
+| `OutdoorAmbient` | `86, 92, 104` | `168, 174, 186` | Ídem |
+| `Brightness` | `1.55` | `2.1` | Atrio luminoso |
+| `ClockTime` | `15.2` | `13.6` | Sol alto |
+| `ShadowSoftness` | `0.35` | `1` | Sombras blandas |
+| `EnvironmentSpecularScale` | `0.22` | `0.05` | Superficies mates |
+| Saturación (`ColorCorrection`) | `−0.26 … −0.46` | `+0.04 … +0.16` | El cambio más visible de todos |
+| `DepthOfFieldEffect` | fuerte | **eliminado** | Era lo que más delataba que esto no era un juego caricaturesco |
+| `SunRaysEffect` | `0.03` | `0` | Ídem |
+| Bloom | `0.5` | `0.12` | Sólo el ventanal respira |
+
+Se mantiene **Future** por la oclusión ambiental: sin SSAO las esquinas del
+atrio se aplanan tanto que se pierde la profundidad. `Lighting.Technology`
+es de sólo lectura en runtime, así que la escribe `tools/build_studio.py` en
+el archivo del lugar leyéndola de `Config.Estilo.Tecnologia`. Si insertás el
+modelo en un lugar tuyo, ponela a mano: **Lighting → Technology → Future**.
+
+### Arquitectura: por qué ya no es claustrofóbico
+
+| Pieza | Antes | Ahora |
 |---|---|---|
-| Muro (mitad alta) | `214, 208, 191` | `Concrete` |
-| Muro (friso bajo) | `47, 66, 58` | `Brick` |
-| Franja de acento | `92, 112, 96` | `Metal` |
-| Mancha de roce | `178, 172, 156` | `Concrete` |
-| Placa de falso techo | `226, 224, 214` | `Plaster` |
-| Placa manchada | `206, 200, 184` | `Plaster` |
-| Perfil de aluminio | `158, 160, 163` | `Metal` |
-| Losa | `120, 118, 112` | `Concrete` |
-| Baldosa A | `150, 146, 136` | `CeramicTiles` |
-| Baldosa B | `132, 128, 119` | `CeramicTiles` |
-| Baldosa gastada | `118, 114, 106` | `Pavement` |
-| Casillero | `40, 74, 82` | `Metal` |
-| Casillero (puerta) | `58, 96, 104` | `Metal` |
-| Rayón | `96, 116, 120` | `Metal` |
-| Óxido | `122, 76, 48` | `CorrodedMetal` |
-| Manija | `186, 188, 190` | `Metal` |
-| Madera de pupitre | `168, 130, 84` | `WoodPlanks` |
-| Madera gastada | `138, 104, 66` | `Wood` |
-| Madera oscura | `104, 76, 48` | `Wood` |
-| Metal de patas | `74, 78, 84` | `Metal` |
-| Asiento | `38, 54, 72` | `Wood` |
-| Pizarra | `38, 62, 52` | `Slate` |
-| Marco de pizarra | `176, 176, 172` | `Metal` |
-| Puerta | `116, 84, 54` | `WoodPlanks` |
-| Marco de puerta | `96, 100, 106` | `Metal` |
-| Vidrio | `178, 196, 206` | `Glass` |
-| Tubo fluorescente | `246, 250, 236` | `Neon` |
-| Luz fría | `226, 238, 255` | (color de luz) |
-| Cartel de salida | `226, 66, 54` | `Neon` |
+| Ancho del pasillo | 16 | **46** — es un atrio |
+| Altura de losa | 11 | **22** |
+| Falso techo | 9.4 | *eliminado* |
+| Largo del pasillo | 190 | 150 |
+| Altura del aula | 10 | 13 |
 
-Ningún color pasa de ~60% de saturación. Los únicos acentos cálidos son
-la madera y el óxido; el rojo del cartel de SALIDA es el único punto
-saturado del pasillo, y está ahí para anclar la vista.
+El atrio tiene una **claraboya** de neón a lo largo del eje y luminarias
+colgadas a los costados; en el centro, una **estatua** de figuras apiladas
+sobre pedestal redondo, marcada como pintable para que el sistema de
+grafiti la acepte. El aula estrena piso de tablones, **ventanal real** con
+marco y parteluces (la pared se arma en cuatro pedazos alrededor del hueco),
+pantalla de proyector y cajones con tirador dorado en el escritorio.
 
-Reflectancia: sólo el suelo encerado (`0.06`), el vidrio (`0.25`) y las
-manijas (`0.18`) reflejan algo. Un colegio con todo brillante parece un
-shopping.
+Afuera hay prado, una franja de agua y colinas lejanas: sin eso el ventanal
+daba al vacío del skybox y el efecto se caía.
 
-### Iluminación — parámetros exactos
+### El cuerpo
 
-`Lighting`:
+Los personajes eran R6 estándar — un monigote de Roblox. Ahora hay un
+`src/shared/Rig.lua` con **una** tabla de proporciones caricaturescas
+(cabeza de 1.7 sobre un total de ~4.8 studs, o sea un tercio del personaje)
+que alimenta al jugador, al profesor y a los NPC.
 
-| Propiedad | Valor |
-|---|---|
-| `Technology` | **Future** (en el archivo del lugar) |
-| `Brightness` | `1.55` |
-| `ClockTime` | `15.2` |
-| `GeographicLatitude` | `41` |
-| `ExposureCompensation` | `-0.12` |
-| `Ambient` | `28, 30, 34` |
-| `OutdoorAmbient` | `86, 92, 104` |
-| `EnvironmentDiffuseScale` | `0.35` |
-| `EnvironmentSpecularScale` | `0.22` |
-| `ShadowSoftness` | `0.35` (sólo Future) |
-| `GlobalShadows` | `true` |
+La piel de colores no humanos — violeta, rosa, rojo, celeste — es el rasgo
+más reconocible del juego, y sale del `UserId`: el mismo jugador se ve igual
+en todas las partidas, sin ocupar almacenamiento y sin depender de que la
+API de DataStore esté habilitada.
 
-`Atmosphere`: `Density 0.32`, `Offset 0.1`, `Color 188,192,198`,
-`Decay 110,118,130`, `Glare 0.22`, `Haze 1.7`.
+Al jugador se le impone el cuerpo con un modelo `StarterCharacter` colgado
+de `StarterPlayer`, creado en runtime. Es el único método que funciona
+también por el `.rbxmx` todo-en-uno: el tipo de avatar del lugar es una
+opción de Game Settings que un script no puede tocar.
 
-`Sky`: `StarCount 0`, `SunAngularSize 9`, `MoonAngularSize 0`. Sin un
-skybox propio queda el cielo por defecto, y la Atmosphere más las nubes
-lo apagan hasta que lee como día nublado. Si subís tus seis caras, van
-en ese objeto (`Lighting/Cielo`).
+> Nota de derechos: se replica el **estilo** (proporciones, paleta, tipo de
+> sombreado) y las **mecánicas** — nada de eso tiene copyright. No se copian
+> los personajes concretos del juego original ni se extraen sus assets.
 
-`Clouds` (en `Terrain`, **sin subir nada**): `Cover 0.86`,
-`Density 0.68`, `Color 206,208,214`. Es lo que da el cielo encapotado
-de semana de exámenes.
-
-Post-proceso:
-
-| Efecto | Parámetros |
-|---|---|
-| `BloomEffect` | `Intensity 0.5`, `Size 18`, `Threshold 1.62` |
-| `DepthOfFieldEffect` | `FarIntensity 0.06`, `FocusDistance 18`, `InFocusRadius 26`, `NearIntensity 0.1` |
-| `SunRaysEffect` | `Intensity 0.03`, `Spread 0.9` |
-| `ColorCorrectionEffect` | por clima (abajo) |
-
-El `Threshold` del Bloom es alto a propósito: así sólo florecen los
-tubos fluorescentes y el neón. Con el umbral bajo se lava todo y vuelve
-el aspecto de juguete.
-
-El `ColorCorrection` cambia con la fase, y es lo que hace que el aula
-*se sienta* distinta del pasillo sin tocar una sola luz:
-
-| Clima | Brightness | Contrast | Saturation | Tint |
-|---|---|---|---|---|
-| Pasillo | `-0.02` | `0.12` | `-0.26` | `236, 241, 248` |
-| Examen | `-0.05` | `0.20` | `-0.36` | `230, 238, 248` |
-| Tensión (últimos 30 s) | `-0.08` | `0.28` | `-0.46` | `248, 234, 232` |
-
-Las luminarias son `SurfaceLight` empotradas en el falso techo, no
-`PointLight`: una luz puntual dentro de un panel largo hace un charco
-redondo en el suelo; la de superficie reparte parejo, que es como se ve
-un fluorescente real. Cada una: `Face Bottom`, `Angle 110`, `Range 30`,
-`Brightness 1.35`, color `226,238,255`. **Sólo una de cada tres proyecta
-sombra en el pasillo** (en el aula, todas): en Future cada luz con
-sombra cuesta, y con todas encendidas el colegio no corre en una máquina
-modesta.
-
-### Materiales y desgaste
-
-Los materiales son los **PBR del propio motor** (`Concrete`, `Brick`,
-`CeramicTiles`, `WoodPlanks`, `Metal`, `CorrodedMetal`, `Slate`): ya
-traen mapas de normales y rugosidad reales, y con Future se leen como
-superficies, no como bloques pintados.
-
-El desgaste es **geometría**, no textura, y por eso no hace falta subir
-nada:
-
-- baldosas: damero de 4 studs, una de cada doce gastada (`Pavement`),
-  manchas de roce como láminas finas apenas más oscuras;
-- casilleros: de cero a tres rayones por puerta, en posición y ángulo
-  aleatorios, y óxido en la base de uno de cada tres;
-- pupitres: una a tres marcas talladas en la tapa;
-- paredes: catorce manchas de roce a la altura del hombro por tramo;
-- falso techo: una placa de cada once, manchada por filtración.
-
-Es semilla fija (`Random.new(20240607)`), así que el colegio se ve
-idéntico en todos los servidores.
-
-### Texturas PBR propias (opcional)
-
-`SurfaceAppearance` necesita imágenes **subidas a Roblox**: no hay forma
-de generarlas por código. Cuando las tengas:
-
-1. En Studio: **Asset Manager → Images → Add Images**, subí los cuatro
-   mapas de cada superficie (color, normales, rugosidad, metalidad).
-2. Copiá el id de cada uno.
-3. Pegalos en `Config.Texturas`:
-
-```lua
-Config.Texturas = {
-    Pared     = { color = "1234", normal = "1235", rugosidad = "1236", metalidad = "" },
-    Piso      = { color = "", normal = "", rugosidad = "", metalidad = "" },
-    Casillero = { color = "", normal = "", rugosidad = "", metalidad = "" },
-    Pupitre   = { color = "", normal = "", rugosidad = "", metalidad = "" },
-    Techo     = { color = "", normal = "", rugosidad = "", metalidad = "" },
-}
-```
-
-4. Volvé a empaquetar. `Style.applySurfaces` las cuelga sola de cada
-   pieza al construir el mapa, y el Output dice cuántas aplicó.
-
-Con los campos vacíos no pasa nada y se usan los materiales del motor.
-**Ojo con una cosa**: `SurfaceAppearance` manda sobre `Material`, así
-que el color base pasa a ser el del `ColorMap` y `part.Color` deja de
-verse. Es lo esperado — la paleta de arriba deja de aplicar a esa pieza.
-
-Qué buscar en cada mapa, si los generás vos:
-
-| Superficie | Cómo debería verse |
-|---|---|
-| Pared | Cemento pintado, con desconchones y roce a media altura |
-| Suelo | Terrazo o vinilo encerado, con vetas y desgaste en las juntas |
-| Casillero | Chapa con arañazos direccionales y óxido en los bordes |
-| Pupitre | Madera vieja con vetas marcadas y marcas de bolígrafo |
-| Techo | Placa acústica perforada, con manchas de humedad |
-
-### Arquitectura: por qué es claustrofóbico
-
-Las proporciones están en `Config.Escuela` y son la mitad del look:
-
-| Pieza | Medida | Por qué |
-|---|---|---|
-| Ancho del pasillo | **16** studs | Poco menos de tres personas de hombro a hombro. Cruzarse roza. |
-| Altura de losa | **11** | Bajo para un edificio público |
-| Falso techo | **9.4** | El techo real que ves. Comprime el pasillo. |
-| Friso (media pared) | **3.6** de alto | La franja oscura que llevan los institutos |
-| Baldosa | **4 × 4** | Repetición que da escala al corredor |
-| Placa de techo | **6 × 6** | Ídem, arriba |
-| Luminarias | cada **14** | Bandas de luz y sombra a lo largo del pasillo |
-| Casillero | **3.1 × 6.4 × 1.9** | 20 por lado, pegados |
-| Aula | **36 × 30 × 10** | Cabe justo: 4 filas × 5 pupitres + tarima |
-| Separación de pupitres | **6.4 × 6.0** | Lo justo para pasar entre ellos — y para espiar al de al lado |
-| Puerta del aula | **6 × 8.5** | Un solo vano; cuando se traba, no hay salida |
-| Ventanas | **4 × 6**, a 6.4 de alto | Entra luz de tarde pero no se ve afuera desde el pupitre |
-
-El pasillo tiene dos polos — la cancha en un extremo, el kiosco en el
-otro — para que la gente se reparta en el recreo en vez de amontonarse.
-
----
 
 ## Cómo está armado
 
@@ -452,12 +367,13 @@ Casi todo el balance está en `src/shared/Config.lua`:
 | Castigos más duros | `Config.Castigo.*` |
 | Que la goma tenga mejor puntería | `Config.Goma.Punteria` |
 | Exámenes más largos | `Config.Examen.PreguntasBase`, `PreguntasPorDia` |
-| Un pasillo más ancho o un techo más alto | `Config.Escuela.PasilloAncho`, `AlturaFalsoTecho` |
+| Un atrio más ancho o un techo más alto | `Config.Escuela.PasilloAncho`, `AlturaPiso` |
 | Más aulas | `Config.Escuela.Aulas` (el mapa se rearma solo) |
 | Toda la paleta y los materiales | `src/shared/Style.lua` |
 | Luz, nubes, bloom, saturación | `Config.Estilo` |
 | Future ↔ ShadowMap | `Config.Estilo.Tecnologia` (lo escribe el empaquetador) |
-| Texturas PBR propias | `Config.Texturas` |
+| Piel y pelo de los personajes | `Config.Personaje.Pieles`, `Pelos` |
+| Proporciones del cuerpo | `src/shared/Rig.lua` |
 | Cuánto se puede pintar | `Config.Grafiti.*` |
 | La pelota (rebote, fuerza, aro) | `Config.Pasillo.*` |
 | Empujones para tirar a alguien | `Config.Nocaut.EmpujonesParaKO` |

@@ -79,6 +79,17 @@ step("modelos de respaldo en ServerStorage", function()
 	CharacterService.installBackup()
 end)
 
+--[[
+	Va antes de que entre nadie: un StarterCharacter colgado de
+	StarterPlayer reemplaza el avatar de Roblox de cada jugador por el
+	cuerpo caricaturesco. Es la unica forma que funciona tambien por el
+	.rbxmx todo-en-uno, donde un script no puede tocar el tipo de avatar
+	del lugar.
+--]]
+step("cuerpo del jugador", function()
+	CharacterService.installStarterCharacter()
+end)
+
 step("iluminacion y post-proceso", function()
 	Atmosphere.apply()
 end)

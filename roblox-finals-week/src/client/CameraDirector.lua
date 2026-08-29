@@ -30,8 +30,6 @@ local shakeUntil = 0
 local shakeStrength = 0
 local seated = false
 
-local DEFAULT_MIN = 0.5
-local DEFAULT_MAX = 128
 
 function CameraDirector.mount(parent: ScreenGui)
 	fade = Instance.new("Frame")
@@ -83,25 +81,22 @@ function CameraDirector.transition(middle: (() -> ())?)
 	end)
 end
 
---- Al sentarse el zoom se acerca: la mesa, la hoja y los vecinos.
+--[[
+	Antes esto acercaba el zoom al sentarte, para que miraras la mesa y a
+	los vecinos en vez del techo. Con el juego en primera persona no hay
+	zoom que ajustar: `Viewmodel` traba la camara con LockFirstPerson y
+	forzar los limites aca la peleaba, dejandola temblando al sentarse.
+
+	Se conserva la funcion porque `init.client` la llama al sentarse y al
+	pararse, y el estado sirve para lo que venga; lo que se va es el
+	toqueteo del zoom.
+--]]
 function CameraDirector.setSeated(value: boolean)
-	if seated == value then
-		return
-	end
 	seated = value
-	local ok = pcall(function()
-		if value then
-			player.CameraMaxZoomDistance = 14
-			player.CameraMinZoomDistance = 4
-		else
-			player.CameraMinZoomDistance = DEFAULT_MIN
-			player.CameraMaxZoomDistance = DEFAULT_MAX
-		end
-	end)
-	if not ok then
-		-- Si la propiedad no se puede tocar, no pasa nada: el juego
-		-- sigue con la camara por defecto.
-	end
+end
+
+function CameraDirector.isSeated(): boolean
+	return seated
 end
 
 function CameraDirector.shake(strength: number, seconds: number?)

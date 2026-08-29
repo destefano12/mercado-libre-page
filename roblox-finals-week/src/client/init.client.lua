@@ -36,6 +36,7 @@ local Poses = require(script:WaitForChild("Poses"))
 local GraffitiUI = require(script:WaitForChild("GraffitiUI"))
 local RadioUI = require(script:WaitForChild("RadioUI"))
 local ZoomUI = require(script:WaitForChild("ZoomUI"))
+local Viewmodel = require(script:WaitForChild("Viewmodel"))
 
 -- ── idioma ─────────────────────────────────────────────────────────
 -- Cada jugador ve el juego en SU idioma: el servidor manda claves.
@@ -82,6 +83,8 @@ GraffitiUI.mount(gui)
 RadioUI.mount(gui)
 ZoomUI.mount(gui)
 MainMenu.mount(gui)
+-- Primera persona con brazos propios, como el juego real.
+Viewmodel.mount()
 Music.start()
 
 ExamUI.onNotify = Hud.notify
@@ -118,6 +121,10 @@ MainMenu.onVisible = function(open: boolean)
 	GraffitiUI.setVisible(not open)
 	RadioUI.setVisible(not open)
 	ZoomUI.setVisible(not open)
+	-- El menu se queda con la camara para la toma del atrio: los brazos
+	-- flotando en el medio del encuadre arruinarian la pantalla de
+	-- titulo.
+	Viewmodel.setVisible(not open)
 	if open then
 		ShopUI.close()
 		LobbyUI.close()
