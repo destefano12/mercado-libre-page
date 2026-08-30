@@ -548,16 +548,31 @@ local function buildDesk(parent: Instance, position: Vector3, look: Vector3,
 	Style.paint(seat, C.Asiento, M.MaderaLisa)
 	seat.Parent = parent
 
-	decor(parent, "Respaldo", Vector3.new(2.3, 2.3, 0.26),
-		seat.CFrame * CFrame.new(0, 1.25, 1), C.Asiento, M.MaderaLisa)
-	for _, dx in { -0.9, 0.9 } do
-		for _, dz in { -0.8, 0.8 } do
-			decor(parent, "PataSilla", Vector3.new(0.18, 2, 0.18),
-				seat.CFrame * CFrame.new(dx, -1, dz), C.Metal, M.MetalLiso)
-		end
-	end
+	--[[
+		Banqueta redonda pegada al pupitre, no una silla suelta con
+		respaldo. Es lo que se ve en el trailer y cambia bastante la
+		lectura del aula: un pupitre con su banqueta es una sola pieza de
+		mobiliario escolar, dos muebles sueltos parecen una cafeteria.
+	--]]
+	local stool = decor(parent, "Banqueta", Vector3.new(2.1, 0.34, 2.1),
+		seat.CFrame, C.Asiento, M.MaderaLisa)
+	local stoolMesh = Instance.new("SpecialMesh")
+	stoolMesh.MeshType = Enum.MeshType.Cylinder
+	stoolMesh.Parent = stool
 
-	local paper = decor(parent, "Hoja", Vector3.new(2.2, 0.04, 1.55),
+	-- Un solo pie central que sale del brazo del pupitre.
+	decor(parent, "PataBanqueta", Vector3.new(0.34, 2, 0.34),
+		seat.CFrame * CFrame.new(0, -1, 0), C.Metal, M.MetalLiso)
+	decor(parent, "BrazoBanqueta", Vector3.new(0.32, 0.32, 2.2),
+		seat.CFrame * CFrame.new(0, -1.85, -1.1), C.Metal, M.MetalLiso)
+
+	--[[
+		La hoja. Era de 2.2 x 1.55, que a 60 pixeles por stud da un lienzo
+		de 132x93 — no entra texto legible ahi. En el trailer la hoja es
+		el centro del examen: se lee y se marca en primera persona, con el
+		lapiz en la mano. Asi que crece para poder cumplir ese papel.
+	--]]
+	local paper = decor(parent, "Hoja", Vector3.new(3.2, 0.04, 2.3),
 		desk.CFrame * CFrame.new(0, 0.16, -0.05), Color3.fromRGB(248, 246, 238),
 		Enum.Material.SmoothPlastic)
 
@@ -800,6 +815,72 @@ local function buildClassroom(root: Instance, index: number): Classroom
 		table.insert(patrol, a)
 		table.insert(patrol, b)
 	end
+
+	--[[
+		Las aulas estaban peladas: cuatro paredes, pupitres y pizarron.
+		En la referencia son salas habitadas — hay estanterias con libros
+		al fondo, una cartelera con papeles pinchados, un reloj y un mapa
+		enrollable. Son props que no hacen nada y sostienen media
+		ambientacion.
+	--]]
+	local propColors = {
+		Color3.fromRGB(198, 96, 168), Color3.fromRGB(146, 108, 210),
+		Color3.fromRGB(226, 104, 88), Color3.fromRGB(96, 164, 214),
+		Color3.fromRGB(120, 190, 150), Color3.fromRGB(238, 168, 96),
+	}
+
+	-- Estanteria baja contra la pared del atrio, a un costado del vano.
+	local shelfZ = cz + doorWidth / 2 + 6
+	block(model, "EstanteAula", Vector3.new(1.5, 5, 8),
+		CFrame.new(wallX - dir.X * 1.2, 2.5, shelfZ), C.Madera, M.Madera)
+	for level = 0, 2 do
+		local y = 1.3 + level * 1.5
+		local z = shelfZ - 3.4
+		local guard = 0
+		while z < shelfZ + 3.4 and guard < 40 do
+			guard += 1
+			local thick = rng:NextNumber(0.18, 0.36)
+			local tall = rng:NextNumber(0.9, 1.3)
+			decor(model, "Lomo", Vector3.new(1, tall, thick),
+				CFrame.new(wallX - dir.X * 1.2, y + tall / 2, z + thick / 2),
+				propColors[rng:NextInteger(1, #propColors)], M.MuroAlto)
+			z += thick + 0.05
+		end
+	end
+
+	-- Cartelera con papeles pinchados, del otro lado del vano.
+	local boardZ = cz - doorWidth / 2 - 6
+	decor(model, "Cartelera", Vector3.new(0.3, 4.5, 7),
+		CFrame.new(wallX - dir.X * 0.6, 6.5, boardZ), C.MaderaOscura, M.Madera)
+	decor(model, "CarteleraFondo", Vector3.new(0.2, 3.9, 6.4),
+		CFrame.new(wallX - dir.X * 0.75, 6.5, boardZ),
+		Color3.fromRGB(196, 172, 138), M.Tela)
+	for _ = 1, 7 do
+		decor(model, "Papel", Vector3.new(0.1, rng:NextNumber(0.9, 1.5),
+			rng:NextNumber(0.8, 1.3)),
+			CFrame.new(wallX - dir.X * 0.85, 6.5 + rng:NextNumber(-1.4, 1.4),
+				boardZ + rng:NextNumber(-2.6, 2.6))
+				* CFrame.Angles(rng:NextNumber(-0.1, 0.1), 0, 0),
+			C.Pantalla, M.Placa)
+	end
+
+	-- Reloj sobre el pizarron.
+	local clockFace = decor(model, "Reloj", Vector3.new(0.3, 2.2, 2.2),
+		CFrame.new(boardX + dir.X * 0.2, height - 2.4, cz), C.Pantalla, M.Placa)
+	decor(model, "RelojMarco", Vector3.new(0.22, 2.6, 2.6),
+		clockFace.CFrame * CFrame.new(dir.X * 0.06, 0, 0), C.MaderaOscura, M.Madera)
+	for _, hand in { Vector3.new(0.12, 0.14, 0.8), Vector3.new(0.12, 0.6, 0.12) } do
+		decor(model, "Aguja", hand,
+			clockFace.CFrame * CFrame.new(-dir.X * 0.1, 0.1, 0.2),
+			Color3.fromRGB(48, 46, 56), M.MetalLiso)
+	end
+
+	-- Mapa enrollable colgado en una pared lateral.
+	decor(model, "TuboMapa", Vector3.new(6.5, 0.5, 0.5),
+		CFrame.new(cx + 5, height - 1.8, cz + halfL - 0.9), C.MaderaOscura, M.Madera)
+	decor(model, "Mapa", Vector3.new(6.2, 4.2, 0.16),
+		CFrame.new(cx + 5, height - 4.1, cz + halfL - 0.9),
+		Color3.fromRGB(226, 214, 186), M.Placa)
 
 	-- Techo del aula: mismo sistema que el pasillo, con TODAS las
 	-- luminarias proyectando sombra. Es la unica sala donde importa
@@ -1088,6 +1169,161 @@ local function buildLibrary(root: Instance): Model
 	return model
 end
 
+-- ── salas especiales ───────────────────────────────────────────────
+
+--[[
+	Un cuarto colgado del atrio, con su vano y su cartel. Es el molde que
+	comparten el laboratorio y la sala de computacion: la biblioteca ya
+	repetia estas mismas veinte lineas y no habia razon para una tercera
+	copia.
+
+	`side` dice de que lado del atrio cuelga y `cz` a que altura.
+--]]
+local function buildAnnex(root: Instance, name: string, label: string, side: number,
+	cz: number, wall: Color3, floorPlanks: boolean): (Model, number, number, number)
+	local model = Instance.new("Model")
+	model.Name = name
+	model.Parent = root
+
+	local halfW = E.AulaAncho / 2
+	local halfL = E.AulaLargo / 2
+	local height = E.AulaAltura
+	local cx = side * (E.PasilloAncho / 2 + halfW)
+	local center = Vector3.new(cx, 0, cz)
+	-- Hacia donde queda el atrio desde este cuarto.
+	local toHall = -side
+
+	if floorPlanks then
+		plankFloor(model, center, E.AulaAncho, E.AulaLargo)
+	else
+		tiledFloor(model, center, E.AulaAncho, E.AulaLargo)
+	end
+	block(model, "Losa", Vector3.new(E.AulaAncho, 1, E.AulaLargo),
+		CFrame.new(cx, height, cz), C.Losa, M.MuroAlto)
+
+	block(model, "ParedFondo", Vector3.new(E.EspesorPared, height, E.AulaLargo),
+		CFrame.new(cx - toHall * halfW, height / 2, cz), wall, M.MuroAlto)
+	for _, dz in { -1, 1 } do
+		block(model, "ParedLateral", Vector3.new(E.AulaAncho, height, E.EspesorPared),
+			CFrame.new(cx, height / 2, cz + dz * halfL), wall, M.MuroAlto)
+		wainscot(model, CFrame.new(cx, 0, cz + dz * (halfL - 0.55)), E.AulaAncho, "X",
+			C.MuroAulaBajo, C.MuroAulaBajo)
+	end
+
+	local doorWidth, doorHeight = 6, 8.5
+	local wallX = cx + toHall * halfW
+	local sidePiece = (E.AulaLargo - doorWidth) / 2
+	for _, dz in { -1, 1 } do
+		block(model, "ParedPasillo", Vector3.new(E.EspesorPared, height, sidePiece),
+			CFrame.new(wallX, height / 2, cz + dz * (doorWidth / 2 + sidePiece / 2)),
+			wall, M.MuroAlto)
+	end
+	block(model, "Dintel", Vector3.new(E.EspesorPared, height - doorHeight, doorWidth),
+		CFrame.new(wallX, doorHeight + (height - doorHeight) / 2, cz), wall, M.MuroAlto)
+	decor(model, "MarcoPuerta", Vector3.new(0.5, doorHeight + 0.4, doorWidth + 0.7),
+		CFrame.new(wallX, doorHeight / 2, cz), C.MarcoPuerta, M.MetalLiso)
+	sign(model, label, Vector2.new(6.4, 1.4),
+		CFrame.new(wallX + toHall * 0.7, doorHeight + 0.9, cz)
+			* CFrame.Angles(0, toHall > 0 and math.rad(-90) or math.rad(90), 0),
+		Enum.NormalId.Front)
+
+	dropCeiling(model, center, E.AulaAncho, E.AulaLargo, height - 1.2, 2)
+	return model, cx, cz, height
+end
+
+--[[
+	El laboratorio de ciencias: mesadas con equipo y, sobre todo, las
+	maquetas de planetas colgando del techo. Ese detalle es lo que lo
+	identifica de un vistazo en la referencia.
+--]]
+local function buildLab(root: Instance)
+	local model, cx, cz, height = buildAnnex(root, "Laboratorio", "LABORATORIO",
+		1, 18, C.MuroAula, false)
+
+	-- Mesadas con su equipo.
+	for _, dz in { -7, 0, 7 } do
+		local bench = block(model, "Mesada", Vector3.new(12, 0.4, 3),
+			CFrame.new(cx, 3.4, cz + dz), C.MuroAulaBajo, M.MuroAlto)
+		for _, dx in { -5, 0, 5 } do
+			decor(model, "PataMesada", Vector3.new(0.4, 3.2, 2.6),
+				bench.CFrame * CFrame.new(dx, -1.8, 0), C.MaderaOscura, M.MaderaLisa)
+		end
+		-- Frascos y matraces.
+		for i = -2, 2 do
+			decor(model, "Frasco", Vector3.new(0.5, rng:NextNumber(0.7, 1.2), 0.5),
+				bench.CFrame * CFrame.new(i * 2.2, 0.7, rng:NextNumber(-0.6, 0.6)),
+				Color3.fromRGB(168, 214, 200), M.Vidrio).Transparency = 0.4
+		end
+	end
+
+	--[[
+		Los planetas. Cuelgan de un hilo fino a distintas alturas; el mas
+		grande lleva sus anillos, que es lo que hace que se lea como un
+		sistema solar y no como pelotas sueltas.
+	--]]
+	local planets = {
+		{ size = 2.6, color = Color3.fromRGB(226, 176, 108), rings = true },
+		{ size = 3.2, color = Color3.fromRGB(212, 136, 92), rings = false },
+		{ size = 1.6, color = Color3.fromRGB(96, 148, 210), rings = false },
+		{ size = 1.3, color = Color3.fromRGB(198, 96, 84), rings = false },
+	}
+	for i, planet in planets do
+		local x = cx - 9 + (i - 1) * 6
+		local z = cz - 4 + ((i % 2 == 0) and 7 or 0)
+		local y = height - 3.4 - (i % 3) * 1.2
+
+		local ball = decor(model, "Planeta",
+			Vector3.new(planet.size, planet.size, planet.size),
+			CFrame.new(x, y, z), planet.color, M.MuroAlto)
+		local mesh = Instance.new("SpecialMesh")
+		mesh.MeshType = Enum.MeshType.Sphere
+		mesh.Parent = ball
+
+		decor(model, "Hilo", Vector3.new(0.06, height - y - 0.5, 0.06),
+			CFrame.new(x, (y + planet.size / 2 + height) / 2, z),
+			Color3.fromRGB(224, 224, 220), M.MetalLiso)
+
+		if planet.rings then
+			local ring = decor(model, "Anillo",
+				Vector3.new(planet.size * 2.1, 0.12, planet.size * 2.1),
+				CFrame.new(x, y, z) * CFrame.Angles(math.rad(18), 0, math.rad(12)),
+				Color3.fromRGB(232, 210, 168), M.MuroAlto)
+			local ringMesh = Instance.new("SpecialMesh")
+			ringMesh.MeshType = Enum.MeshType.Cylinder
+			ringMesh.Parent = ring
+		end
+	end
+end
+
+--- La sala de computacion: monitores de tubo en fila sobre las mesas.
+local function buildComputerRoom(root: Instance)
+	local model, cx, cz = buildAnnex(root, "Computacion", "COMPUTACION",
+		-1, -58, C.MuroAula, true)
+
+	for _, dz in { -8, 0, 8 } do
+		local bench = block(model, "MesaPC", Vector3.new(13, 0.4, 3.4),
+			CFrame.new(cx, 3.4, cz + dz), C.Madera, M.Madera)
+		for _, dx in { -5.6, 5.6 } do
+			decor(model, "PataMesaPC", Vector3.new(0.4, 3.2, 3),
+				bench.CFrame * CFrame.new(dx, -1.8, 0), C.MaderaOscura, M.MaderaLisa)
+		end
+
+		for i = -1, 1 do
+			local seat = bench.CFrame * CFrame.new(i * 4.4, 0, 0)
+			-- Monitor de tubo: cuerpo hondo y pantalla apenas hundida.
+			local box = decor(model, "Monitor", Vector3.new(2.4, 2.2, 2.6),
+				seat * CFrame.new(0, 1.3, -0.2), Color3.fromRGB(226, 218, 198),
+				M.MetalLiso)
+			decor(model, "MonitorVidrio", Vector3.new(1.8, 1.5, 0.12),
+				box.CFrame * CFrame.new(0, 0.1, 1.34),
+				Color3.fromRGB(88, 108, 116), M.MetalLiso)
+			decor(model, "Teclado", Vector3.new(2.2, 0.2, 0.9),
+				seat * CFrame.new(0, 0.3, 1.3), Color3.fromRGB(214, 208, 190),
+				M.MetalLiso)
+		end
+	end
+end
+
 -- ── sala de castigo ────────────────────────────────────────────────
 
 local function buildDetention(root: Instance): BasePart
@@ -1214,6 +1450,12 @@ function MapBuilder.build(): Map
 
 	safely("biblioteca", function()
 		buildLibrary(root)
+	end)
+	safely("laboratorio", function()
+		buildLab(root)
+	end)
+	safely("sala de computacion", function()
+		buildComputerRoom(root)
 	end)
 
 	local detention = buildDetention(root)

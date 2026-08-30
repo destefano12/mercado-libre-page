@@ -336,7 +336,11 @@ local function watchSeat(character: Model)
 	local humanoid = character:WaitForChild("Humanoid", 10)
 	if humanoid and humanoid:IsA("Humanoid") then
 		humanoid:GetPropertyChangedSignal("SeatPart"):Connect(function()
-			CameraDirector.setSeated(humanoid.SeatPart ~= nil)
+			local seated = humanoid.SeatPart ~= nil
+			CameraDirector.setSeated(seated)
+			-- Sentado en el pupitre aparece el lapiz en la mano; de pie
+			-- se va. Es lo que hace que rendir se vea como rendir.
+			Viewmodel.setPencil(seated)
 		end)
 	end
 end

@@ -71,9 +71,11 @@ local function paperGui(desk: any): SurfaceGui
 	gui.Name = "Hoja"
 	gui.Face = Enum.NormalId.Top
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	gui.PixelsPerStud = 60
+	-- 120 sobre una hoja de 3.2 studs da 384 px de ancho: alcanza para
+	-- que las filas se lean de cerca, que es como se usa.
+	gui.PixelsPerStud = 120
 	gui.LightInfluence = 0.35
-	gui.MaxDistance = 40
+	gui.MaxDistance = 60
 	gui.Parent = paper
 
 	local sheet = Instance.new("Frame")
@@ -83,64 +85,147 @@ local function paperGui(desk: any): SurfaceGui
 	sheet.BorderSizePixel = 0
 	sheet.Parent = gui
 
+	-- El margen rojo de toda hoja de examen.
+	local margin = Instance.new("Frame")
+	margin.Name = "Margen"
+	margin.Size = UDim2.new(0, 2, 1, 0)
+	margin.Position = UDim2.fromOffset(34, 0)
+	margin.BackgroundColor3 = Color3.fromRGB(216, 128, 124)
+	margin.BackgroundTransparency = 0.3
+	margin.BorderSizePixel = 0
+	margin.Parent = sheet
+
 	local title = Instance.new("TextLabel")
 	title.Name = "Titulo"
-	title.Size = UDim2.new(1, -14, 0, 16)
-	title.Position = UDim2.new(0, 7, 0, 4)
+	title.Size = UDim2.new(1, -56, 0, 22)
+	title.Position = UDim2.fromOffset(44, 8)
 	title.BackgroundTransparency = 1
 	title.Font = Theme.FontBold
+	title.TextSize = 18
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.TextColor3 = Theme.Paper.Ink
-	title.TextScaled = true
 	title.Text = ""
 	title.Parent = sheet
 
-	local grid = Instance.new("Frame")
-	grid.Name = "Grilla"
-	grid.Size = UDim2.new(1, -14, 1, -26)
-	grid.Position = UDim2.new(0, 7, 0, 22)
-	grid.BackgroundTransparency = 1
-	grid.Parent = sheet
+	-- El contador de avance, abajo a la derecha, como el "2/4" que se ve
+	-- en el trailer.
+	local progress = Instance.new("TextLabel")
+	progress.Name = "Avance"
+	progress.Size = UDim2.fromOffset(70, 22)
+	progress.Position = UDim2.new(1, -78, 1, -28)
+	progress.BackgroundTransparency = 1
+	progress.Font = Theme.FontBold
+	progress.TextSize = 18
+	progress.TextXAlignment = Enum.TextXAlignment.Right
+	progress.TextColor3 = Theme.Paper.InkSoft
+	progress.Text = ""
+	progress.Parent = sheet
 
-	local layout = Instance.new("UIGridLayout")
-	layout.CellSize = UDim2.new(0, 22, 0, 13)
-	layout.CellPadding = UDim2.new(0, 3, 0, 2)
+	--[[
+		Las filas: una por pregunta, con su numero y las casillas A-D. Es
+		una hoja de respuestas de burbujas, que es lo que se ve en la
+		referencia — no una lista de texto.
+	--]]
+	local rows = Instance.new("Frame")
+	rows.Name = "Filas"
+	rows.Size = UDim2.new(1, -56, 1, -66)
+	rows.Position = UDim2.fromOffset(44, 34)
+	rows.BackgroundTransparency = 1
+	rows.Parent = sheet
+
+	local layout = Instance.new("UIListLayout")
+	layout.Padding = UDim.new(0, 3)
 	layout.SortOrder = Enum.SortOrder.LayoutOrder
-	layout.Parent = grid
+	layout.Parent = rows
 
 	return gui
 end
 
---- Redibuja la hoja del pupitre: numero de pregunta + letra elegida.
+--[[
+	Redibuja la hoja del pupitre.
+
+	Una fila por pregunta: el numero y cuatro casillas A-D, la elegida
+	rellena. Es la hoja de burbujas que se ve en el trailer, y esta en el
+	mundo a proposito — por eso se puede espiar la del de al lado, y por
+	eso vale la pena que se lea bien.
+--]]
 local function refreshPaper(sitting: Sitting)
 	local ok = pcall(function()
 		local gui = paperGui(sitting.desk)
 		local sheet = gui:FindFirstChild("Papel") :: Frame
 		local title = sheet:FindFirstChild("Titulo") :: TextLabel
-		local grid = sheet:FindFirstChild("Grilla") :: Frame
+		local progress = sheet:FindFirstChild("Avance") :: TextLabel
+		local rows = sheet:FindFirstChild("Filas") :: Frame
 
 		title.Text = sitting.player.DisplayName
 
 		local questions = exams[sitting.aula] or {}
+		local answered = 0
+
 		for i = 1, #questions do
-			local cell = grid:FindFirstChild("Q" .. i) :: TextLabel?
-			if not cell then
-				local created = Instance.new("TextLabel")
+			local row = rows:FindFirstChild("Q" .. i) :: Frame?
+			if not row then
+				local created = Instance.new("Frame")
 				created.Name = "Q" .. i
 				created.LayoutOrder = i
-				created.BackgroundColor3 = Theme.Paper.Background
+				created.Size = UDim2.new(1, 0, 0, 20)
 				created.BackgroundTransparency = 1
-				created.Font = Theme.FontMono
-				created.TextScaled = true
-				created.TextColor3 = Theme.Paper.InkSoft
-				created.Parent = grid
-				cell = created
+				created.Parent = rows
+
+				local number = Instance.new("TextLabel")
+				number.Name = "N"
+				number.Size = UDim2.fromOffset(26, 20)
+				number.BackgroundTransparency = 1
+				number.Font = Theme.FontBold
+				number.TextSize = 15
+				number.TextXAlignment = Enum.TextXAlignment.Right
+				number.TextColor3 = Theme.Paper.InkSoft
+				number.Text = tostring(i) .. "."
+				number.Parent = created
+
+				for option = 1, Config.Examen.OpcionesPorPregunta do
+					local box = Instance.new("TextLabel")
+					box.Name = "O" .. option
+					box.Size = UDim2.fromOffset(18, 16)
+					box.Position = UDim2.fromOffset(34 + (option - 1) * 22, 2)
+					box.BackgroundColor3 = Theme.Paper.Background
+					box.BorderSizePixel = 0
+					box.Font = Theme.FontBold
+					box.TextSize = 11
+					box.TextColor3 = Theme.Paper.InkSoft
+					box.Text = LETRAS[option] or "?"
+					box.Parent = created
+
+					local corner = Instance.new("UICorner")
+					corner.CornerRadius = UDim.new(1, 0)
+					corner.Parent = box
+
+					local stroke = Instance.new("UIStroke")
+					stroke.Color = Theme.Paper.Line
+					stroke.Thickness = 1
+					stroke.Parent = box
+				end
+				row = created
 			end
+
 			local choice = sitting.answers[i]
-			local assert_cell = cell :: TextLabel
-			assert_cell.Text = string.format("%d.%s", i, choice and (LETRAS[choice] or "?") or "_")
-			assert_cell.TextColor3 = choice and Theme.Paper.Accent or Theme.Paper.Line
+			if choice then
+				answered += 1
+			end
+			local assertRow = row :: Frame
+			for option = 1, Config.Examen.OpcionesPorPregunta do
+				local box = assertRow:FindFirstChild("O" .. option) :: TextLabel?
+				if box then
+					local chosen = choice == option
+					box.BackgroundColor3 = chosen and Theme.Paper.Accent
+						or Theme.Paper.Background
+					box.TextColor3 = chosen and Color3.fromRGB(250, 250, 246)
+						or Theme.Paper.InkSoft
+				end
+			end
 		end
+
+		progress.Text = string.format("%d/%d", answered, #questions)
 	end)
 	if not ok then
 		-- Una hoja que no se dibuja no puede tumbar el examen.

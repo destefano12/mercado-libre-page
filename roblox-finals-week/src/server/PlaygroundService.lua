@@ -67,15 +67,25 @@ end
 local function buildHoop(parent: Instance, position: Vector3, facing: Vector3): BasePart
 	local look = CFrame.lookAt(position, position + facing)
 
-	-- Poste y tablero.
-	local pole = Instance.new("Part")
-	pole.Name = "Poste"
-	pole.Anchored = true
-	pole.Size = Vector3.new(0.9, P.CanastaAltura + 2, 0.9)
-	pole.CFrame = look * CFrame.new(0, (P.CanastaAltura + 2) / 2 - 1, 1.6)
-	pole.Color = Color3.fromRGB(64, 68, 78)
-	pole.Material = Enum.Material.Metal
-	pole.Parent = parent
+	--[[
+		El aro va montado en la pared, no sobre un poste.
+
+		En la referencia la cancha es un hall con el tablero atornillado
+		al muro del fondo; un poste exento en el medio del atrio se lee
+		como una plaza, no como un colegio. En vez del poste van dos
+		brazos de soporte que salen de la pared.
+	--]]
+	for _, dx in { -2.6, 2.6 } do
+		local arm = Instance.new("Part")
+		arm.Name = "Soporte"
+		arm.Anchored = true
+		arm.Size = Vector3.new(0.4, 0.4, 3.4)
+		arm.CFrame = look * CFrame.new(dx, P.CanastaAltura + 1.4, 2.6)
+		arm.Color = Color3.fromRGB(78, 82, 92)
+		arm.Material = Enum.Material.Metal
+		arm.CanCollide = false
+		arm.Parent = parent
+	end
 
 	local board = Instance.new("Part")
 	board.Name = "Tablero"

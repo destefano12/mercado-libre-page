@@ -21,6 +21,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Net = require(Shared:WaitForChild("Net"))
+local Theme = require(Shared:WaitForChild("Theme"))
+local Util = require(Shared:WaitForChild("Util"))
 
 local S = Config.Sospecha
 
@@ -86,11 +88,63 @@ function SuspicionService.distance(player: Player): number
 	return entry(player).distance
 end
 
+--[[
+	El signo de admiracion rojo sobre la cabeza.
+
+	En la referencia, cuando el profesor te fija aparece un `!` rojo
+	flotando encima tuyo — y lo ven todos, no solo vos. Es lo que
+	convierte "me estan mirando" en informacion publica: tus companeros
+	saben que estas quemado y se alejan.
+
+	La barra de sospecha del HUD sigue estando; esto es la senal en el
+	mundo, que es la que cambia como juega el resto.
+--]]
+local function alertMarker(player: Player, on: boolean)
+	local character = player.Character
+	local head = character and character:FindFirstChild("Head")
+	if not head or not head:IsA("BasePart") then
+		return
+	end
+
+	local existing = head:FindFirstChild("Alerta")
+	if not on then
+		if existing then
+			existing:Destroy()
+		end
+		return
+	end
+	if existing then
+		return
+	end
+
+	local billboard = Util.billboard(head, UDim2.fromOffset(70, 90), Vector3.new(0, 3.2, 0))
+	billboard.Name = "Alerta"
+	billboard.AlwaysOnTop = true
+	billboard.MaxDistance = 90
+	billboard.LightInfluence = 0
+	billboard.Parent = head
+
+	local mark = Instance.new("TextLabel")
+	mark.Size = UDim2.fromScale(1, 1)
+	mark.BackgroundTransparency = 1
+	mark.Font = Theme.FontBlack
+	mark.Text = "!"
+	mark.TextColor3 = Color3.fromRGB(232, 58, 48)
+	mark.TextStrokeColor3 = Color3.fromRGB(255, 255, 255)
+	mark.TextStrokeTransparency = 0.15
+	mark.TextScaled = true
+	mark.Parent = billboard
+end
+
 --- Lo llama TeacherAI en cada tick de vision.
 function SuspicionService.setSight(player: Player, visible: boolean, distance: number)
 	local data = entry(player)
+	local changed = data.visible ~= visible
 	data.visible = visible
 	data.distance = distance
+	if changed then
+		pcall(alertMarker, player, visible)
+	end
 end
 
 --- Congela/descongela la acumulacion (recreo, boletin, castigo).

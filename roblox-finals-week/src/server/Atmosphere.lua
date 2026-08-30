@@ -170,11 +170,13 @@ function Atmosphere.troffer(parent: Instance, cframe: CFrame, width: number,
 	frame.Name = "Luminaria"
 	frame.Anchored = true
 	frame.CanCollide = false
-	frame.Size = Vector3.new(width, 0.4, length)
+	frame.Size = Vector3.new(width, 0.2, length)
 	frame.CFrame = cframe
-	Style.paint(frame, Style.Color.Rejilla, Style.Material.MetalLiso, 0.1)
+	Style.paint(frame, Style.Color.Placa, Style.Material.MetalLiso, 0)
 	frame.Parent = parent
 
+	-- El marco va casi al ras: en la referencia los paneles del techo son
+	-- rectangulos blancos planos empotrados, no cajones que cuelgan.
 	local diffuser = Instance.new("Part")
 	diffuser.Name = "Difusor"
 	diffuser.Anchored = true

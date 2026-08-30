@@ -305,24 +305,36 @@ function CharacterService.attachCone(character: Model)
 	cone.Name = "ConoDeLaVerguenza"
 	cone.Parent = character
 
-	-- El ancho y la altura salen de la cabeza: con el cuerpo
-	-- caricaturesco un cono de 2.2 studs quedaba de sombrerito.
-	local widest = Rig.Alumno.cabeza.X * 1.7
-	local layers = 6
-	local step = Rig.Alumno.cabeza.Y * 0.3
+	--[[
+		El cono de la verguenza: blanco, grande y **al cuello**, como el
+		de un perro recien operado.
+
+		Antes eran discos rojos y blancos apilados SOBRE la cabeza, o sea
+		un gorro de fiesta. En la referencia es el cono veterinario de
+		toda la vida: se abre hacia arriba desde el cuello y le tapa al
+		jugador media pantalla, que es justamente el castigo.
+	--]]
+	local layers = 7
+	local narrow = Rig.Alumno.cabeza.X * 0.75
+	local widest = Rig.Alumno.cabeza.X * 2.6
+	local step = Rig.Alumno.cabeza.Y * 0.26
+
 	for i = 0, layers - 1 do
-		local alpha = i / layers
+		local alpha = i / (layers - 1)
+		local width = narrow + (widest - narrow) * alpha
 		local disc = Instance.new("Part")
 		disc.Name = "Anillo" .. i
 		disc.Shape = Enum.PartType.Cylinder
-		disc.Size = Vector3.new(0.42, widest * (1 - alpha) + 0.3, widest * (1 - alpha) + 0.3)
-		disc.Color = i % 2 == 0 and Color3.fromRGB(228, 74, 62) or Color3.fromRGB(246, 246, 240)
+		disc.Size = Vector3.new(0.3, width, width)
+		disc.Color = Color3.fromRGB(248, 248, 244)
 		disc.Material = Enum.Material.SmoothPlastic
 		disc.CanCollide = false
 		disc.CanQuery = false
 		disc.Massless = true
+		-- Arranca por debajo de la cabeza, a la altura del cuello, y se
+		-- va abriendo hacia arriba.
 		disc.CFrame = head.CFrame
-			* CFrame.new(0, Rig.Alumno.cabeza.Y * 0.45 + i * step, 0)
+			* CFrame.new(0, -Rig.Alumno.cabeza.Y * 0.45 + i * step, 0)
 			* CFrame.Angles(0, 0, math.rad(90))
 		disc.Parent = cone
 

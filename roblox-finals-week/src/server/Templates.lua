@@ -237,23 +237,44 @@ end
 
 --- Celular: le sopla una respuesta a UN companero cercano.
 local function buildCelular(): Tool
+	--[[
+		El celular es un ladrillo noventoso: cuerpo gris grueso, LCD verde
+		chiquito arriba y un teclado de botones abajo. Era un rectangulo
+		negro fino con pantalla azul — o sea un smartphone, que en una
+		escuela de los noventa no pinta nada.
+	--]]
 	local item = makeTool("Celular", "celular")
-	local body = handle(item, Vector3.new(0.62, 1.24, 0.09), Color3.fromRGB(22, 24, 30),
+	local body = handle(item, Vector3.new(0.7, 1.5, 0.28), Color3.fromRGB(96, 100, 106),
 		Enum.Material.SmoothPlastic)
 
-	local screen = Instance.new("Part")
-	screen.Name = "Pantalla"
-	screen.Size = Vector3.new(0.54, 1.08, 0.03)
-	screen.Color = Color3.fromRGB(96, 168, 240)
-	screen.Material = Enum.Material.Neon
-	screen.CanCollide = false
-	screen.Massless = true
-	screen.CFrame = body.CFrame * CFrame.new(0, 0.04, -0.06)
-	screen.Parent = item
-	local weld = Instance.new("WeldConstraint")
-	weld.Part0 = body
-	weld.Part1 = screen
-	weld.Parent = body
+	local function stick(name: string, size: Vector3, offset: CFrame, color: Color3,
+		material: Enum.Material)
+		local piece = Instance.new("Part")
+		piece.Name = name
+		piece.Size = size
+		piece.Color = color
+		piece.Material = material
+		piece.CanCollide = false
+		piece.Massless = true
+		piece.CFrame = body.CFrame * offset
+		piece.Parent = item
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = body
+		weld.Part1 = piece
+		weld.Parent = body
+	end
+
+	stick("Pantalla", Vector3.new(0.5, 0.42, 0.04), CFrame.new(0, 0.42, -0.15),
+		Color3.fromRGB(126, 208, 108), Enum.Material.Neon)
+	-- Teclado: tres filas de teclas, que es lo que le da la silueta.
+	for row = 0, 2 do
+		stick("Teclas", Vector3.new(0.52, 0.12, 0.04),
+			CFrame.new(0, -0.02 - row * 0.2, -0.15),
+			Color3.fromRGB(58, 60, 68), Enum.Material.SmoothPlastic)
+	end
+	-- La antena corta de goma.
+	stick("Antena", Vector3.new(0.09, 0.4, 0.09), CFrame.new(0.24, 0.92, 0),
+		Color3.fromRGB(38, 40, 46), Enum.Material.SmoothPlastic)
 
 	item:SetAttribute("Lanzable", false)
 	item:SetAttribute("Radio", "celular")

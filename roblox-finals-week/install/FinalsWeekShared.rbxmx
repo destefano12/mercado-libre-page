@@ -786,10 +786,18 @@ local BUILDERS: { [string]: (Model) -> () } = {
 	end,
 
 	celular = function(model)
-		part(model, Vector3.new(0.75, 1.5, 0.12), CFrame.new(0, 0, 0),
-			Color3.fromRGB(22, 24, 30))
-		part(model, Vector3.new(0.64, 1.28, 0.04), CFrame.new(0, 0.04, -0.07),
-			Color3.fromRGB(96, 168, 240), Enum.Material.Neon)
+		-- Ladrillo noventoso: LCD verde chico arriba y teclado abajo.
+		part(model, Vector3.new(0.8, 1.7, 0.32), CFrame.new(0, 0, 0),
+			Color3.fromRGB(96, 100, 106))
+		part(model, Vector3.new(0.56, 0.48, 0.06), CFrame.new(0, 0.48, -0.17),
+			Color3.fromRGB(126, 208, 108), Enum.Material.Neon)
+		for row = 0, 2 do
+			part(model, Vector3.new(0.58, 0.14, 0.06),
+				CFrame.new(0, -0.02 - row * 0.22, -0.17),
+				Color3.fromRGB(58, 60, 68))
+		end
+		part(model, Vector3.new(0.1, 0.44, 0.1), CFrame.new(0.28, 1.05, 0),
+			Color3.fromRGB(38, 40, 46))
 	end,
 
 	libro = function(model)

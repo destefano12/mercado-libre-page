@@ -52,6 +52,7 @@ local model: Model? = nil
 local leftArm: BasePart? = nil
 local rightArm: BasePart? = nil
 local held: BasePart? = nil
+local pencil: BasePart? = nil
 
 local bobPhase = 0
 local swayX, swayY = 0, 0
@@ -81,15 +82,17 @@ local function newArm(name: string, side: number, color: Color3): BasePart
 	return arm
 end
 
---- El color de piel real del jugador, para que los brazos que ves sean
---- los tuyos y no los de un maniqui.
+--[[
+	Las manos son guantes amarillos, no piel.
+
+	En el trailer, todo lo que se sostiene en primera persona — el libro,
+	el lapiz, la hoja — se sostiene con un guante amarillo. Es lo primero
+	que ve el jugador y estaba mostrando el color de piel de cada uno.
+--]]
+local GLOVE = Color3.fromRGB(240, 196, 78)
+
 local function skinColor(): Color3
-	local character = player.Character
-	local arm = character and character:FindFirstChild("Right Arm")
-	if arm and arm:IsA("BasePart") then
-		return arm.Color
-	end
-	return Color3.fromRGB(198, 96, 168)
+	return GLOVE
 end
 
 function Viewmodel.build()
@@ -156,6 +159,62 @@ local function refreshHeld()
 	held = copy
 end
 
+--[[
+	El lapiz del examen.
+
+	Mientras estas sentado rindiendo, la mano derecha sostiene un lapiz
+	desproporcionadamente grande. Es de las cosas que mas identifican al
+	juego: no es un cursor, es un objeto que se ve moverse.
+--]]
+function Viewmodel.setPencil(on: boolean)
+	if pencil then
+		pencil:Destroy()
+		pencil = nil
+	end
+	if not on or not model then
+		return
+	end
+
+	local shaft = Instance.new("Part")
+	shaft.Name = "Lapiz"
+	shaft.Size = Vector3.new(0.28, 0.28, 3.4)
+	shaft.Color = Color3.fromRGB(240, 186, 62)
+	shaft.Material = Enum.Material.SmoothPlastic
+	shaft.Anchored = true
+	shaft.CanCollide = false
+	shaft.CanQuery = false
+	shaft.CastShadow = false
+	shaft.LocalTransparencyModifier = 0
+	shaft.Parent = model
+
+	-- La punta y la goma, para que se lea como lapiz y no como un palo.
+	local tip = Instance.new("Part")
+	tip.Name = "Punta"
+	tip.Size = Vector3.new(0.26, 0.26, 0.5)
+	tip.Color = Color3.fromRGB(226, 196, 158)
+	tip.Material = Enum.Material.SmoothPlastic
+	tip.Anchored = true
+	tip.CanCollide = false
+	tip.CanQuery = false
+	tip.CastShadow = false
+	tip.LocalTransparencyModifier = 0
+	tip.Parent = shaft
+
+	local rubber = Instance.new("Part")
+	rubber.Name = "Goma"
+	rubber.Size = Vector3.new(0.3, 0.3, 0.34)
+	rubber.Color = Color3.fromRGB(228, 132, 148)
+	rubber.Material = Enum.Material.SmoothPlastic
+	rubber.Anchored = true
+	rubber.CanCollide = false
+	rubber.CanQuery = false
+	rubber.CastShadow = false
+	rubber.LocalTransparencyModifier = 0
+	rubber.Parent = shaft
+
+	pencil = shaft
+end
+
 local function update(dt: number)
 	local camera = workspace.CurrentCamera
 	local character = player.Character
@@ -214,6 +273,22 @@ local function update(dt: number)
 
 	if held then
 		held.CFrame = rightArm.CFrame * CFrame.new(0, -0.9, -0.2)
+	end
+
+	if pencil then
+		-- Inclinado y adelantado, como quien esta por apoyarlo en la
+		-- hoja. La punta y la goma cuelgan de el.
+		pencil.CFrame = rightArm.CFrame
+			* CFrame.new(0, -1.1, -0.5)
+			* CFrame.Angles(math.rad(-58), 0, math.rad(12))
+		local tip = pencil:FindFirstChild("Punta")
+		if tip and tip:IsA("BasePart") then
+			tip.CFrame = pencil.CFrame * CFrame.new(0, 0, -1.9)
+		end
+		local rubber = pencil:FindFirstChild("Goma")
+		if rubber and rubber:IsA("BasePart") then
+			rubber.CFrame = pencil.CFrame * CFrame.new(0, 0, 1.85)
+		end
 	end
 end
 
