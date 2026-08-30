@@ -379,6 +379,15 @@ function ItemService.start()
 			result = ExamService.useSheet(player)
 		elseif action == "book" then
 			result = ItemService.onReadBook(player)
+		elseif action == "passbook" then
+			-- Igual que "zoom": el cliente dice a quien apunta y el
+			-- servidor comprueba la distancia.
+			local mate = ItemService.playerFromId(extra)
+			if mate then
+				result = ItemService.onPassBook(player, mate)
+			else
+				result = { ok = false, reason = { key = "book.too_far" } }
+			end
 		elseif action == "zoom" then
 			-- El cliente dice a QUIEN apunta; el servidor comprueba que
 			-- esten en la misma aula y dentro del alcance del aparato.
@@ -411,6 +420,11 @@ end
 --- tiene por que saber como funcionan los libros.
 ItemService.onReadBook = function(_player: Player): any
 	return { ok = false, reason = { key = "cheat.none" } }
+end
+
+--- Idem para pasarle el libro a un companero.
+ItemService.onPassBook = function(_player: Player, _target: Player): any
+	return { ok = false, reason = { key = "book.none" } }
 end
 
 function ItemService.playerFromId(userId: any): Player?

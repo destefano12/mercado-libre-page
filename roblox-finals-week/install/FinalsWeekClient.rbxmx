@@ -264,6 +264,34 @@ end)
 
 -- ── atajos ─────────────────────────────────────────────────────────
 
+--[[
+	El jugador que tenes en la mira, si hay alguno. Se usa para pasarle
+	el libro a un companero.
+
+	Como en todo el resto del juego, esto es solo una intencion: el
+	cliente dice a quien cree estar apuntando y el servidor decide si la
+	jugada vale. Que la respuesta llegue de aca no la hace confiable.
+--]]
+local function aimedPlayer(): Player?
+	local camera = workspace.CurrentCamera
+	local character = player.Character
+	if not camera or not character then
+		return nil
+	end
+
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { character }
+
+	local hit = workspace:Raycast(camera.CFrame.Position,
+		camera.CFrame.LookVector * 24, params)
+	if not hit then
+		return nil
+	end
+	local model = hit.Instance:FindFirstAncestorOfClass("Model")
+	return model and Players:GetPlayerFromCharacter(model) or nil
+end
+
 UserInputService.InputBegan:Connect(function(input, processed)
 	if processed or MainMenu.isOpen() then
 		return
@@ -287,6 +315,16 @@ UserInputService.InputBegan:Connect(function(input, processed)
 	elseif input.KeyCode == Enum.KeyCode.H then
 		-- Leer el libro que llevas en la mano.
 		Net.event(Net.Events.Cheat):FireServer("book", 1)
+	elseif input.KeyCode == Enum.KeyCode.J then
+		--[[
+			Pasarle el libro al companero que tengas en la mira. El
+			cliente solo dice a QUIEN apunta; que este lo bastante cerca
+			y que realmente lleves un libro lo decide el servidor.
+		--]]
+		local target = aimedPlayer()
+		if target then
+			Net.event(Net.Events.Cheat):FireServer("passbook", 1, target.UserId)
+		end
 	elseif input.KeyCode == Enum.KeyCode.T then
 		if ShopUI.isOpen() then
 			ShopUI.close()
@@ -1503,6 +1541,7 @@ local reportCard: Frame
 -- Piezas del boletin, creadas una vez y rellenadas despues.
 local reportTitle: TextLabel
 local reportSubtitle: TextLabel
+local reportClass: TextLabel
 local reportGrade: TextLabel
 local reportRows: { { line: TextLabel, value: TextLabel } } = {}
 local reportFoot: TextLabel
@@ -1798,7 +1837,9 @@ function Hud.mount(parent: ScreenGui)
 	reportCard = UI.panel({
 		parent = root,
 		name = "Boletin",
-		size = UDim2.fromOffset(400, 320),
+		-- Mas alto que antes: ahora el boletin encabeza con el resultado
+		-- del curso y despues va el tuyo.
+		size = UDim2.fromOffset(400, 366),
 		position = UDim2.fromScale(0.5, 0.5),
 		anchor = Vector2.new(0.5, 0.5),
 		color = Theme.Surface.Base,
@@ -1828,11 +1869,30 @@ function Hud.mount(parent: ScreenGui)
 		color = Theme.Surface.Text,
 		layer = UI.Layer.Modal + 1,
 	})
+	--[[
+		El resultado del CURSO, encabezando el boletin.
+
+		Aprobar es colectivo: el dia se pierde si el promedio de la clase
+		no llega, sin importar como te fue a vos. Eso ya funcionaba, pero
+		el boletin solo mostraba tu nota, asi que la regla era invisible.
+		Va arriba de todo, antes que tu propio resultado.
+	--]]
+	reportClass = UI.label({
+		parent = reportCard,
+		name = "Curso",
+		size = UDim2.new(1, -36, 0, 22),
+		position = UDim2.fromOffset(18, 64),
+		font = Theme.FontBold,
+		textSize = UI.Type.subtitle,
+		color = Theme.Surface.Muted,
+		layer = UI.Layer.Modal + 1,
+	})
+
 	reportGrade = UI.label({
 		parent = reportCard,
 		name = "Nota",
 		size = UDim2.new(1, -36, 0, 56),
-		position = UDim2.fromOffset(18, 70),
+		position = UDim2.fromOffset(18, 88),
 		font = Theme.FontBlack,
 		textSize = UI.Type.hero,
 		color = Theme.Surface.Text,
@@ -1840,7 +1900,7 @@ function Hud.mount(parent: ScreenGui)
 	})
 
 	for i = 1, REPORT_ROWS do
-		local y = 138 + (i - 1) * 24
+		local y = 156 + (i - 1) * 24
 		reportRows[i] = {
 			line = UI.label({
 				parent = reportCard,
@@ -2114,6 +2174,21 @@ function Hud.report(data: any)
 		or Strings.get("report.day", { n = data.dia })
 	reportTitle.Text = Strings.get("report.title")
 	reportSubtitle.Text = subtitleText2
+
+	--[[
+		El curso primero. En el boletin semanal no hay promedio de clase
+		que mostrar, asi que la linea se apaga en vez de mentir un cero.
+	--]]
+	if data.promedioClase then
+		reportClass.Visible = true
+		reportClass.Text = Strings.get(
+			data.claseAprobo and "report.class_passed" or "report.class_failed",
+			{ n = data.promedioClase })
+		reportClass.TextColor3 = data.claseAprobo and Theme.Hud.Safe or Theme.Hud.Danger
+	else
+		reportClass.Visible = false
+	end
+
 	reportGrade.Text = tostring(data.final) .. "  " .. tostring(data.letra)
 	reportGrade.TextColor3 = Theme.gradeColor(data.letra)
 
@@ -4353,7 +4428,25 @@ local function row(entry: any, order: number)
 	local active = (isGear and wallet.objeto == entry.id)
 		or (not isGear and wallet.estetica and wallet.estetica[entry.id] == true)
 	local credits = wallet.creditos or 0
-	local affordable = owned or credits >= entry.precio
+
+	--[[
+		Lo bloqueado se dibuja aca, pero quien decide es el servidor:
+		esto es la misma cuenta que hace `ShopService.missingRequirement`,
+		repetida para poder avisar ANTES del clic. Si las dos difirieran,
+		manda el servidor y el jugador ve un rechazo — molesto, pero no
+		explotable.
+	--]]
+	local locked: any = nil
+	local needs = entry.requiere
+	if needs and not owned then
+		if needs.semanas and (wallet.semanas or 0) < needs.semanas then
+			locked = { key = "shop.need_weeks", args = { n = needs.semanas } }
+		elseif needs.promedio and (wallet.mejorPromedio or 0) < needs.promedio then
+			locked = { key = "shop.need_grade", args = { n = needs.promedio } }
+		end
+	end
+
+	local affordable = owned or (credits >= entry.precio and not locked)
 
 	local card = UI.new("Frame", {
 		Name = entry.id,
@@ -4396,9 +4489,30 @@ local function row(entry: any, order: number)
 	})
 	description.TextYAlignment = Enum.TextYAlignment.Top
 
+	-- Bloqueado: en vez del precio se dice QUE falta. Un candado sin
+	-- explicacion es peor que ningun candado.
+	if locked then
+		UI.icon(card, "candado", 14, Theme.Menu.Locked, layer + 1).Position =
+			UDim2.new(1, -30, 0, 16)
+		local why = UI.label({
+			parent = card,
+			name = "Requisito",
+			text = Strings.render(locked),
+			size = UDim2.fromOffset(150, 32),
+			position = UDim2.new(1, -188, 0, 12),
+			font = Theme.Font,
+			textSize = UI.Type.micro,
+			color = Theme.Menu.Locked,
+			align = Enum.TextXAlignment.Right,
+			wrapped = true,
+			layer = layer + 1,
+		})
+		why.TextYAlignment = Enum.TextYAlignment.Top
+	end
+
 	-- El precio, aparte del boton, para que se lea sin interpretar el
 	-- estado del boton. En rojo cuando no alcanza.
-	if not owned then
+	if not owned and not locked then
 		UI.label({
 			parent = card,
 			name = "Precio",
@@ -4416,7 +4530,10 @@ local function row(entry: any, order: number)
 
 	local text: string
 	local color: Color3
-	if not owned then
+	if locked then
+		text = Strings.get("shop.locked")
+		color = Theme.Menu.Locked
+	elseif not owned then
 		text = Strings.get("shop.buy")
 		color = affordable and Theme.Hud.Credit or Theme.Surface.Faint
 	elseif active then
@@ -4485,7 +4602,7 @@ local function row(entry: any, order: number)
 	if owned and active and not isGear then
 		button.setEnabled(false)
 	end
-	if not owned and not affordable then
+	if not owned and (not affordable or locked) then
 		button.setEnabled(false)
 	end
 end

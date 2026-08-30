@@ -145,7 +145,25 @@ local function row(entry: any, order: number)
 	local active = (isGear and wallet.objeto == entry.id)
 		or (not isGear and wallet.estetica and wallet.estetica[entry.id] == true)
 	local credits = wallet.creditos or 0
-	local affordable = owned or credits >= entry.precio
+
+	--[[
+		Lo bloqueado se dibuja aca, pero quien decide es el servidor:
+		esto es la misma cuenta que hace `ShopService.missingRequirement`,
+		repetida para poder avisar ANTES del clic. Si las dos difirieran,
+		manda el servidor y el jugador ve un rechazo — molesto, pero no
+		explotable.
+	--]]
+	local locked: any = nil
+	local needs = entry.requiere
+	if needs and not owned then
+		if needs.semanas and (wallet.semanas or 0) < needs.semanas then
+			locked = { key = "shop.need_weeks", args = { n = needs.semanas } }
+		elseif needs.promedio and (wallet.mejorPromedio or 0) < needs.promedio then
+			locked = { key = "shop.need_grade", args = { n = needs.promedio } }
+		end
+	end
+
+	local affordable = owned or (credits >= entry.precio and not locked)
 
 	local card = UI.new("Frame", {
 		Name = entry.id,
@@ -188,9 +206,30 @@ local function row(entry: any, order: number)
 	})
 	description.TextYAlignment = Enum.TextYAlignment.Top
 
+	-- Bloqueado: en vez del precio se dice QUE falta. Un candado sin
+	-- explicacion es peor que ningun candado.
+	if locked then
+		UI.icon(card, "candado", 14, Theme.Menu.Locked, layer + 1).Position =
+			UDim2.new(1, -30, 0, 16)
+		local why = UI.label({
+			parent = card,
+			name = "Requisito",
+			text = Strings.render(locked),
+			size = UDim2.fromOffset(150, 32),
+			position = UDim2.new(1, -188, 0, 12),
+			font = Theme.Font,
+			textSize = UI.Type.micro,
+			color = Theme.Menu.Locked,
+			align = Enum.TextXAlignment.Right,
+			wrapped = true,
+			layer = layer + 1,
+		})
+		why.TextYAlignment = Enum.TextYAlignment.Top
+	end
+
 	-- El precio, aparte del boton, para que se lea sin interpretar el
 	-- estado del boton. En rojo cuando no alcanza.
-	if not owned then
+	if not owned and not locked then
 		UI.label({
 			parent = card,
 			name = "Precio",
@@ -208,7 +247,10 @@ local function row(entry: any, order: number)
 
 	local text: string
 	local color: Color3
-	if not owned then
+	if locked then
+		text = Strings.get("shop.locked")
+		color = Theme.Menu.Locked
+	elseif not owned then
 		text = Strings.get("shop.buy")
 		color = affordable and Theme.Hud.Credit or Theme.Surface.Faint
 	elseif active then
@@ -277,7 +319,7 @@ local function row(entry: any, order: number)
 	if owned and active and not isGear then
 		button.setEnabled(false)
 	end
-	if not owned and not affordable then
+	if not owned and (not affordable or locked) then
 		button.setEnabled(false)
 	end
 end

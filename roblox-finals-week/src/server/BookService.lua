@@ -82,6 +82,53 @@ end
 
 -- ── libros del mapa ────────────────────────────────────────────────
 
+--[[
+	Pasarle el libro a un companero.
+
+	Es la mecanica cooperativa del que estudio repartiendo: el libro es
+	un recurso escaso del pasillo, y quien lo junto puede quedarselo o
+	hacerlo circular. Encaja con el "aprueban o reprueban juntos", porque
+	el promedio del curso es lo que decide el dia.
+
+	El cliente dice a quien apunta y el servidor comprueba la distancia,
+	igual que hacen los prismaticos.
+--]]
+function BookService.pass(player: Player, target: Player): any
+	if target == player then
+		return { ok = false }
+	end
+
+	local character = player.Character
+	local tool = character and character:FindFirstChildOfClass("Tool")
+	if not tool or tool:GetAttribute("Libro") ~= true then
+		return { ok = false, reason = { key = "book.none" } }
+	end
+
+	local from = character and character:FindFirstChild("HumanoidRootPart")
+	local targetCharacter = target.Character
+	local to = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
+	if not from or not from:IsA("BasePart") or not to or not to:IsA("BasePart") then
+		return { ok = false }
+	end
+	if (from.Position - to.Position).Magnitude > H.AlcancePase then
+		return { ok = false, reason = { key = "book.too_far" } }
+	end
+
+	-- La mochila, no el personaje: si va al personaje queda equipado a la
+	-- fuerza en medio de lo que el otro estuviera haciendo.
+	local backpack = target:FindFirstChildOfClass("Backpack")
+	if not backpack then
+		return { ok = false }
+	end
+	tool.Parent = backpack
+
+	Net.event(Net.Events.Notify):FireClient(target, {
+		key = "book.received",
+		args = { name = player.DisplayName },
+	})
+	return { ok = true, reason = { key = "book.passed", args = { name = target.DisplayName } } }
+end
+
 local function buildBook(parent: Instance, cf: CFrame, index: number): Model
 	local model = Instance.new("Model")
 	model.Name = "Libro" .. index

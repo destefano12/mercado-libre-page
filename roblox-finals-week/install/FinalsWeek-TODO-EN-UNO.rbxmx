@@ -162,6 +162,19 @@ Config.Examen = {
 	CopiarSegundos = 1.8,
 	CopiarAcierto = 0.72,
 	CopiarAlcance = 11,
+	--[[
+		Los dos escondites con la hoja de respuestas.
+
+		El cajon esta en el escritorio del profesor, o sea al alcance de
+		la mano durante el examen: revela poco y cuesta carisimo en
+		sospecha. La alcoba de la biblioteca revela el doble y no cuesta
+		sospecha ninguna, pero esta del otro lado del atrio — lo que
+		pagas es el recreo entero yendo y volviendo.
+	--]]
+	CajonRevela = 2,
+	CajonEnfriamiento = 25,
+	AlcobaRevela = 4,
+	AlcobaEnfriamiento = 40,
 }
 
 -- ── Profesor (IA del servidor) ─────────────────────────────────────
@@ -196,6 +209,9 @@ Config.Sospecha = {
 	PorSoplar = 0.2,
 	PorCorrerEnExamen = 0.18,
 	PorSegundoEnMira = 0.06,
+	-- Meter la mano en el escritorio del profesor, delante suyo, es la
+	-- jugada mas cara del juego: casi te delata sola.
+	PorCajon = 0.85,
 	Umbral = 1.0,
 	UmbralAviso = 0.55,
 	MultiplicadorDistancia = 1.6,
@@ -257,10 +273,22 @@ Config.Economia = {
 		{ id = "celular", precio = 140, tipo = "objeto" },
 		{ id = "aerosol", precio = 30, tipo = "objeto" },
 		{ id = "libro", precio = 55, tipo = "objeto" },
+		--[[
+			La estetica no se compra sola: hay que haberse ganado el
+			derecho. `semanas` son semanas finales sobrevividas y
+			`promedio` es el mejor promedio que sacaste alguna vez, dos
+			cosas que ya viven en el perfil de DataService.
+
+			La gorra queda libre para que la tienda no se vea toda
+			bloqueada la primera vez que entras.
+		--]]
 		{ id = "gorra", precio = 90, tipo = "estetica" },
-		{ id = "mochila", precio = 130, tipo = "estetica" },
-		{ id = "anteojos", precio = 75, tipo = "estetica" },
-		{ id = "campera", precio = 160, tipo = "estetica" },
+		{ id = "anteojos", precio = 75, tipo = "estetica",
+			requiere = { promedio = 70 } },
+		{ id = "mochila", precio = 130, tipo = "estetica",
+			requiere = { semanas = 1 } },
+		{ id = "campera", precio = 160, tipo = "estetica",
+			requiere = { semanas = 2, promedio = 80 } },
 	},
 }
 
@@ -324,6 +352,20 @@ Config.Pasillo = {
 	CreditosPorCanasta = 6,
 	AlcanceAgarre = 8,
 	EnfriamientoTiro = 0.4,
+	--[[
+		Pelotas de beisbol. A diferencia de la de basquet no hay aro ni
+		marcador: tirar es el fin en si mismo. Son mas chicas, mas
+		rapidas y casi no rebotan, y si le pegas a alguien lo aturdis un
+		momento — que es exactamente para lo que se usan.
+	--]]
+	BeisbolCantidad = 5,
+	BeisbolRadio = 0.55,
+	BeisbolRebote = 0.35,
+	BeisbolFriccion = 0.55,
+	BeisbolFuerza = 155,
+	BeisbolAlturaTiro = 0.1,
+	BeisbolAturde = 1.1,              -- segundos que aturde el impacto
+	BeisbolVelocidadMinima = 45,      -- por debajo de esto no aturde
 }
 
 -- ── Grafiti: dibujar en las paredes ────────────────────────────────
@@ -363,6 +405,9 @@ Config.Herramientas = {
 	LibroRevela = 2,
 	LibroSegundos = 3.5,
 	LibroEnfriamiento = 20,
+	-- Pasarle el libro a un companero: a distancia de brazo, no a
+	-- distancia de grito.
+	AlcancePase = 14,
 }
 
 -- ── Dejar KO ───────────────────────────────────────────────────────
@@ -1272,6 +1317,11 @@ local en: { [string]: string } = {
 	["cheat.whisper_got"] = "{name} whispers: {i} is {opt}",
 	["cheat.sheet_used"] = "Cheat sheet: {n} answers revealed",
 	["cheat.sheet_empty"] = "The cheat sheet is used up",
+	["stash.drawer"] = "You raided the drawer: {n} answers",
+	["stash.alcove"] = "The answer key: {n} answers learned",
+	["stash.empty"] = "There is nothing in there",
+	["stash.locked"] = "The library is closed during the exam",
+	["stash.cooling"] = "Not so fast",
 	["cheat.cooldown"] = "Wait a moment",
 	["cheat.seen"] = "The teacher saw you",
 	["cheat.none"] = "You have nothing to use",
@@ -1304,6 +1354,9 @@ local en: { [string]: string } = {
 	["shop.title"] = "School store",
 	["shop.buy"] = "Buy",
 	["shop.owned"] = "Owned",
+	["shop.locked"] = "Locked",
+	["shop.need_weeks"] = "Survive {n} finals weeks first",
+	["shop.need_grade"] = "Reach a {n} average first",
 	["shop.equip"] = "Equip",
 	["shop.equipped"] = "Equipped",
 	["shop.cannot"] = "Not enough credits",
@@ -1350,6 +1403,7 @@ local en: { [string]: string } = {
 	-- Pasillo: pelota y canasta
 	["ball.grab"] = "Grab the ball",
 	["ball.throw"] = "Click to shoot",
+	["ball.hit"] = "{name} beaned you",
 	["ball.basket"] = "{name} scored! +{n}",
 	["ball.taken"] = "Somebody else has the ball",
 	["ball.score"] = "Baskets: {n}",
@@ -1391,6 +1445,10 @@ local en: { [string]: string } = {
 	-- Libros y empollones
 	["book.read"] = "Read the textbook",
 	["book.learned"] = "You learned {n} answers",
+	["book.none"] = "You are not holding a textbook",
+	["book.too_far"] = "Too far away",
+	["book.passed"] = "You handed the book to {name}",
+	["book.received"] = "{name} handed you a textbook",
 	["book.busy"] = "You already read that one",
 	["book.only_recess"] = "There is no time to read now",
 	["nerd.ask"] = "Ask for answers",
@@ -1411,6 +1469,8 @@ local en: { [string]: string } = {
 	["eraser.miss"] = "The eraser whistled past",
 	-- Boletin
 	["report.title"] = "Report card",
+	["report.class_passed"] = "The class passed: {n} average",
+	["report.class_failed"] = "The class failed: {n} average",
 	["report.day"] = "Day {n}",
 	["report.exam"] = "Exam",
 	["report.behaviour"] = "Behaviour",
@@ -1533,6 +1593,11 @@ local es: { [string]: string } = {
 	["cheat.whisper_got"] = "{name} sopla: la {i} es {opt}",
 	["cheat.sheet_used"] = "Chuleta: {n} respuestas reveladas",
 	["cheat.sheet_empty"] = "La chuleta ya no da mas",
+	["stash.drawer"] = "Le robaste al cajon: {n} respuestas",
+	["stash.alcove"] = "La hoja de respuestas: aprendiste {n}",
+	["stash.empty"] = "Ahi adentro no hay nada",
+	["stash.locked"] = "La biblioteca cierra durante el examen",
+	["stash.cooling"] = "Para un poco",
 	["cheat.cooldown"] = "Espera un momento",
 	["cheat.seen"] = "El profesor te vio",
 	["cheat.none"] = "No tenes nada para usar",
@@ -1565,6 +1630,9 @@ local es: { [string]: string } = {
 	["shop.title"] = "Tienda del colegio",
 	["shop.buy"] = "Comprar",
 	["shop.owned"] = "Comprado",
+	["shop.locked"] = "Bloqueado",
+	["shop.need_weeks"] = "Primero sobrevivi {n} semanas finales",
+	["shop.need_grade"] = "Primero llega a un promedio de {n}",
 	["shop.equip"] = "Equipar",
 	["shop.equipped"] = "Equipado",
 	["shop.cannot"] = "No te alcanzan los creditos",
@@ -1611,6 +1679,7 @@ local es: { [string]: string } = {
 	-- Pasillo: pelota y canasta
 	["ball.grab"] = "Agarrar la pelota",
 	["ball.throw"] = "Clic para tirar",
+	["ball.hit"] = "{name} te dio un pelotazo",
 	["ball.basket"] = "Canasta de {name}! +{n}",
 	["ball.taken"] = "La pelota la tiene otro",
 	["ball.score"] = "Canastas: {n}",
@@ -1652,6 +1721,10 @@ local es: { [string]: string } = {
 	-- Libros y empollones
 	["book.read"] = "Leer el libro",
 	["book.learned"] = "Aprendiste {n} respuestas",
+	["book.none"] = "No llevas ningun libro",
+	["book.too_far"] = "Esta demasiado lejos",
+	["book.passed"] = "Le pasaste el libro a {name}",
+	["book.received"] = "{name} te paso un libro",
 	["book.busy"] = "Ese ya lo leiste",
 	["book.only_recess"] = "Ahora no hay tiempo de leer",
 	["nerd.ask"] = "Pedir respuestas",
@@ -1672,6 +1745,8 @@ local es: { [string]: string } = {
 	["eraser.miss"] = "La goma paso silbando",
 	-- Boletin
 	["report.title"] = "Boletin",
+	["report.class_passed"] = "El curso aprobo: promedio {n}",
+	["report.class_failed"] = "El curso desaprobo: promedio {n}",
 	["report.day"] = "Dia {n}",
 	["report.exam"] = "Examen",
 	["report.behaviour"] = "Conducta",
@@ -1794,6 +1869,11 @@ local pt: { [string]: string } = {
 	["cheat.whisper_got"] = "{name} sopra: a {i} e {opt}",
 	["cheat.sheet_used"] = "Cola: {n} respostas reveladas",
 	["cheat.sheet_empty"] = "A cola ja acabou",
+	["stash.drawer"] = "Voce roubou a gaveta: {n} respostas",
+	["stash.alcove"] = "O gabarito: {n} respostas aprendidas",
+	["stash.empty"] = "Nao tem nada ai dentro",
+	["stash.locked"] = "A biblioteca fecha durante a prova",
+	["stash.cooling"] = "Calma ai",
 	["cheat.cooldown"] = "Espere um pouco",
 	["cheat.seen"] = "O professor te viu",
 	["cheat.none"] = "Voce nao tem nada para usar",
@@ -1826,6 +1906,9 @@ local pt: { [string]: string } = {
 	["shop.title"] = "Loja da escola",
 	["shop.buy"] = "Comprar",
 	["shop.owned"] = "Comprado",
+	["shop.locked"] = "Bloqueado",
+	["shop.need_weeks"] = "Sobreviva {n} semanas de prova antes",
+	["shop.need_grade"] = "Chegue a uma media de {n} antes",
 	["shop.equip"] = "Equipar",
 	["shop.equipped"] = "Equipado",
 	["shop.cannot"] = "Creditos insuficientes",
@@ -1872,6 +1955,7 @@ local pt: { [string]: string } = {
 	-- Pasillo: pelota y canasta
 	["ball.grab"] = "Pegar a bola",
 	["ball.throw"] = "Clique para arremessar",
+	["ball.hit"] = "{name} te acertou com a bola",
 	["ball.basket"] = "Cesta de {name}! +{n}",
 	["ball.taken"] = "Outra pessoa esta com a bola",
 	["ball.score"] = "Cestas: {n}",
@@ -1913,6 +1997,10 @@ local pt: { [string]: string } = {
 	-- Libros y empollones
 	["book.read"] = "Ler o livro",
 	["book.learned"] = "Voce aprendeu {n} respostas",
+	["book.none"] = "Voce nao esta com nenhum livro",
+	["book.too_far"] = "Esta longe demais",
+	["book.passed"] = "Voce passou o livro para {name}",
+	["book.received"] = "{name} te passou um livro",
 	["book.busy"] = "Esse voce ja leu",
 	["book.only_recess"] = "Agora nao da tempo de ler",
 	["nerd.ask"] = "Pedir respostas",
@@ -1933,6 +2021,8 @@ local pt: { [string]: string } = {
 	["eraser.miss"] = "A borracha passou assobiando",
 	-- Boletin
 	["report.title"] = "Boletim",
+	["report.class_passed"] = "A turma passou: media {n}",
+	["report.class_failed"] = "A turma reprovou: media {n}",
 	["report.day"] = "Dia {n}",
 	["report.exam"] = "Prova",
 	["report.behaviour"] = "Conduta",
@@ -3491,12 +3581,20 @@ end)
 step("examenes", function()
 	ExamService.setMap(map)
 	ExamService.start()
+	-- Cajones del escritorio y alcoba secreta de la biblioteca. Sin esta
+	-- linea sus ProximityPrompt existen y no hacen nada.
+	if map then
+		ExamService.bindStashes(map.root)
+	end
 end)
 
 step("objetos y casilleros", function()
 	ItemService.start()
 	ItemService.onReadBook = function(player)
 		return BookService.readTool(player)
+	end
+	ItemService.onPassBook = function(player, target)
+		return BookService.pass(player, target)
 	end
 	if map then
 		ItemService.bindLockers(map.lockers)
@@ -3995,6 +4093,53 @@ end
 
 -- ── libros del mapa ────────────────────────────────────────────────
 
+--[[
+	Pasarle el libro a un companero.
+
+	Es la mecanica cooperativa del que estudio repartiendo: el libro es
+	un recurso escaso del pasillo, y quien lo junto puede quedarselo o
+	hacerlo circular. Encaja con el "aprueban o reprueban juntos", porque
+	el promedio del curso es lo que decide el dia.
+
+	El cliente dice a quien apunta y el servidor comprueba la distancia,
+	igual que hacen los prismaticos.
+--]]
+function BookService.pass(player: Player, target: Player): any
+	if target == player then
+		return { ok = false }
+	end
+
+	local character = player.Character
+	local tool = character and character:FindFirstChildOfClass("Tool")
+	if not tool or tool:GetAttribute("Libro") ~= true then
+		return { ok = false, reason = { key = "book.none" } }
+	end
+
+	local from = character and character:FindFirstChild("HumanoidRootPart")
+	local targetCharacter = target.Character
+	local to = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
+	if not from or not from:IsA("BasePart") or not to or not to:IsA("BasePart") then
+		return { ok = false }
+	end
+	if (from.Position - to.Position).Magnitude > H.AlcancePase then
+		return { ok = false, reason = { key = "book.too_far" } }
+	end
+
+	-- La mochila, no el personaje: si va al personaje queda equipado a la
+	-- fuerza en medio de lo que el otro estuviera haciendo.
+	local backpack = target:FindFirstChildOfClass("Backpack")
+	if not backpack then
+		return { ok = false }
+	end
+	tool.Parent = backpack
+
+	Net.event(Net.Events.Notify):FireClient(target, {
+		key = "book.received",
+		args = { name = player.DisplayName },
+	})
+	return { ok = true, reason = { key = "book.passed", args = { name = target.DisplayName } } }
+end
+
 local function buildBook(parent: Instance, cf: CFrame, index: number): Model
 	local model = Instance.new("Model")
 	model.Name = "Libro" .. index
@@ -4318,6 +4463,17 @@ function CharacterService.dressStudent(player: Player, character: Model, estetic
 		local head = character:FindFirstChild("Head")
 		if head and head:IsA("BasePart") then
 			head.Color = skin.piel
+			--[[
+				La cara es pintable. Es el mismo atributo que usan las
+				paredes, asi que dibujarle a alguien encima sale del
+				sistema de grafiti que ya existia — `GraffitiService`
+				nunca filtro a los otros jugadores del raycast, solo les
+				faltaba estar marcados.
+
+				Se borra solo al reaparecer: la cabeza es nueva y el
+				lienzo se fue con la vieja.
+			--]]
+			head:SetAttribute("Pintable", true)
 			for _, child in character:GetChildren() do
 				if child:IsA("BasePart")
 					and (child.Name == "Pelo" or child.Name == "Flequillo") then
@@ -5482,6 +5638,114 @@ function ExamService.useSheet(player: Player): any
 	return { ok = true, reason = { key = "cheat.sheet_used", args = { n = revealed } } }
 end
 
+--[[
+	Los escondites con la hoja de respuestas: el cajon del escritorio del
+	profesor y la alcoba secreta de la biblioteca.
+
+	Son la misma idea con costos opuestos, y esa oposicion es el diseno:
+
+	  cajon   esta al alcance de la mano durante el examen, revela poco y
+	          cuesta casi toda la barra de sospecha. Es la jugada
+	          desesperada del que ya no tiene nada que perder.
+	  alcoba  revela el doble y no cuesta sospecha, pero esta del otro
+	          lado del atrio y solo se puede abrir en el recreo. Lo que
+	          pagas es el tiempo: mientras vas y volves no estas
+	          comprando en el kiosco ni juntando libros.
+
+	Esta funcion es tambien el arreglo de un prompt muerto: el cajon se
+	construia con su ProximityPrompt desde la entrega anterior, pero
+	nadie escuchaba el Triggered, asi que mantener E no hacia nada.
+--]]
+local stashCooldowns: { [Player]: { [string]: number } } = {}
+
+function ExamService.openStash(player: Player, kind: string): any
+	local now = os.clock()
+	local perPlayer = stashCooldowns[player]
+	if not perPlayer then
+		perPlayer = {}
+		stashCooldowns[player] = perPlayer
+	end
+	if (perPlayer[kind] or 0) > now then
+		return { ok = false, reason = { key = "stash.cooling" } }
+	end
+
+	if kind == "cajon" then
+		local sitting = sittings[player]
+		if not running or not sitting then
+			-- Fuera del examen el cajon esta vacio: la hoja del dia
+			-- todavia no existe.
+			return { ok = false, reason = { key = "stash.empty" } }
+		end
+
+		local questions = exams[sitting.aula] or {}
+		local pending: { number } = {}
+		for i, question in questions do
+			if question.tipo == "opcion" and not sitting.revealed[i] then
+				table.insert(pending, i)
+			end
+		end
+		if #pending == 0 then
+			return { ok = false, reason = { key = "stash.empty" } }
+		end
+
+		perPlayer[kind] = now + Config.Examen.CajonEnfriamiento
+		SuspicionService.infraction(player, Config.Sospecha.PorCajon, "stash")
+
+		local revealed = 0
+		for _ = 1, math.min(Config.Examen.CajonRevela, #pending) do
+			local pick = table.remove(pending, math.random(1, #pending))
+			if pick then
+				sitting.revealed[pick] = true
+				revealed += 1
+			end
+		end
+
+		pushState(player)
+		return { ok = true, reason = { key = "stash.drawer", args = { n = revealed } } }
+	end
+
+	--[[
+		La alcoba se abre en el recreo, cuando todavia no hay pupitre
+		asignado, asi que las respuestas se anotan como conocimiento
+		pendiente — el mismo camino que usan los libros de texto. Se
+		cobran solas al sentarte.
+	--]]
+	if running then
+		return { ok = false, reason = { key = "stash.locked" } }
+	end
+	perPlayer[kind] = now + Config.Examen.AlcobaEnfriamiento
+	ExamService.grantKnowledge(player, Config.Examen.AlcobaRevela)
+	return {
+		ok = true,
+		reason = { key = "stash.alcove", args = { n = Config.Examen.AlcobaRevela } },
+	}
+end
+
+--[[
+	Engancha los ProximityPrompt de los escondites. Se llama una vez al
+	construir el mapa, igual que `ItemService.bindLockers`.
+
+	Sin esto el prompt del cajon existia y no hacia nada: la barra se
+	llenaba y no pasaba absolutamente nada. Es el arreglo del defecto.
+--]]
+function ExamService.bindStashes(root: Instance)
+	local bound = 0
+	for _, descendant in root:GetDescendants() do
+		if descendant:IsA("ProximityPrompt")
+			and (descendant.Name == "Cajon" or descendant.Name == "Alcoba") then
+			local kind = descendant.Name == "Cajon" and "cajon" or "alcoba"
+			descendant.Triggered:Connect(function(player)
+				local result = ExamService.openStash(player, kind)
+				if result and result.reason then
+					Net.event(Net.Events.Notify):FireClient(player, result.reason)
+				end
+			end)
+			bound += 1
+		end
+	end
+	print(string.format("[Examen] %d escondites enganchados.", bound))
+end
+
 --- Suma usos de chuleta. Si todavia no hay pupitre (estamos en el
 --- recreo), quedan anotados y se cobran al sentarse.
 function ExamService.grantSheetUses(player: Player, uses: number)
@@ -5721,9 +5985,19 @@ local function ensureCanvas(part: BasePart, face: Face): Frame
 	gui.Name = canvasName(face)
 	gui.Face = face.id
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	-- Pocos pixeles por stud: las paredes son enormes y no hace falta
-	-- resolucion, hace falta que no se coma la memoria del cliente.
-	gui.PixelsPerStud = G.PixelesPorStud
+	--[[
+		Pocos pixeles por stud: las paredes son enormes y no hace falta
+		resolucion, hace falta que no se coma la memoria del cliente.
+
+		Con una excepcion: en una superficie chica esa densidad no
+		alcanza. Una cabeza mide dos studs, o sea 24 pixeles de lienzo, y
+		la brocha mas fina caeria en 5 — no se veria un dibujo, se veria
+		un borron. Las superficies chicas suben a cuatro veces la
+		densidad, que sigue siendo barato justamente porque son chicas.
+	--]]
+	gui.PixelsPerStud = math.max(width, height) <= 4
+		and G.PixelesPorStud * 4
+		or G.PixelesPorStud
 	gui.LightInfluence = 0.6
 	gui.AlwaysOnTop = false
 	gui.MaxDistance = 140
@@ -5864,18 +6138,30 @@ function GraffitiService.markMap(map: any)
 	if not map then
 		return
 	end
+	--[[
+		Las superficies nuevas del atrio y la biblioteca hay que sumarlas
+		aca o no se pueden pintar: esta lista va por nombre exacto de
+		pieza, no por tipo. `Estatua` y `Pantalla` en particular son
+		mecanicas — decorar la estatua y dibujar sobre la pantalla del
+		proyector — que sin esta linea no existirian por mas geometria
+		que tuvieran.
+	--]]
+	local PINTABLES = {
+		Pared = true, ParedLateral = true, ParedFondo = true, ParedPasillo = true,
+		Puerta = true, Cuerpo = true, PuertaCasillero = true, Fondo = true,
+		Dintel = true, Baldosa = true, Friso = true, Tienda = true,
+		Pizarra = true,
+		-- Atrio y aula nuevos.
+		Estatua = true, Pedestal = true, Tablon = true, Pantalla = true,
+		-- Biblioteca.
+		Estante = true, MesaLectura = true, Alcoba = true,
+	}
+
 	local marked = 0
 	for _, descendant in map.root:GetDescendants() do
-		if descendant:IsA("BasePart") then
-			local name = descendant.Name
-			if name == "Pared" or name == "ParedLateral" or name == "ParedFondo"
-				or name == "ParedPasillo" or name == "Puerta" or name == "Cuerpo"
-				or name == "PuertaCasillero" or name == "Fondo" or name == "Dintel"
-				or name == "Baldosa" or name == "Friso" or name == "Tienda"
-				or name == "Pizarra" then
-				GraffitiService.markPaintable(descendant)
-				marked += 1
-			end
+		if descendant:IsA("BasePart") and PINTABLES[descendant.Name] then
+			GraffitiService.markPaintable(descendant)
+			marked += 1
 		end
 	end
 	print(string.format("[Grafiti] %d superficies pintables.", marked))
@@ -6283,6 +6569,15 @@ function ItemService.start()
 			result = ExamService.useSheet(player)
 		elseif action == "book" then
 			result = ItemService.onReadBook(player)
+		elseif action == "passbook" then
+			-- Igual que "zoom": el cliente dice a quien apunta y el
+			-- servidor comprueba la distancia.
+			local mate = ItemService.playerFromId(extra)
+			if mate then
+				result = ItemService.onPassBook(player, mate)
+			else
+				result = { ok = false, reason = { key = "book.too_far" } }
+			end
 		elseif action == "zoom" then
 			-- El cliente dice a QUIEN apunta; el servidor comprueba que
 			-- esten en la misma aula y dentro del alcance del aparato.
@@ -6315,6 +6610,11 @@ end
 --- tiene por que saber como funcionan los libros.
 ItemService.onReadBook = function(_player: Player): any
 	return { ok = false, reason = { key = "cheat.none" } }
+end
+
+--- Idem para pasarle el libro a un companero.
+ItemService.onPassBook = function(_player: Player, _target: Player): any
+	return { ok = false, reason = { key = "book.none" } }
 end
 
 function ItemService.playerFromId(userId: any): Player?
@@ -7259,10 +7559,16 @@ local function buildStatue(parent: Instance, center: Vector3): Model
 		return part
 	end
 
+	--[[
+		Todas las piezas del cuerpo se llaman "Estatua" a proposito:
+		`GraffitiService.markMap` marca lo pintable por nombre exacto de
+		pieza, asi que nombrarlas Cuerpo1/Cabeza1 las habria dejado fuera
+		y la mecanica de decorar la estatua no existiria.
+	--]]
 	local radius = E.EstatuaRadio
 	shaped("Pedestal", Vector3.new(radius * 2, 1.6, radius * 2),
 		CFrame.new(center.X, 0.8, center.Z), C.Pedestal, Enum.MeshType.Cylinder)
-	shaped("Base", Vector3.new(radius * 1.5, 1, radius * 1.5),
+	shaped("Estatua", Vector3.new(radius * 1.5, 1, radius * 1.5),
 		CFrame.new(center.X, 1.9, center.Z), C.Estatua, Enum.MeshType.Cylinder)
 
 	-- Cuatro cuerpos apilados, cada uno mas chico y girado.
@@ -7272,11 +7578,11 @@ local function buildStatue(parent: Instance, center: Vector3): Model
 	for i = 1, levels do
 		local shrink = 1 - (i - 1) * 0.17
 		local turn = i * 0.9
-		shaped("Cuerpo" .. i, Vector3.new(2.6 * shrink, step * 0.72, 1.7 * shrink),
+		shaped("Estatua", Vector3.new(2.6 * shrink, step * 0.72, 1.7 * shrink),
 			CFrame.new(center.X, height + (i - 1) * step + step * 0.4, center.Z)
 				* CFrame.Angles(0, turn, 0),
 			C.Estatua, Enum.MeshType.Sphere)
-		shaped("Cabeza" .. i, Vector3.new(1.5 * shrink, 1.5 * shrink, 1.5 * shrink),
+		shaped("Estatua", Vector3.new(1.5 * shrink, 1.5 * shrink, 1.5 * shrink),
 			CFrame.new(center.X, height + (i - 1) * step + step * 0.92, center.Z)
 				* CFrame.Angles(0, turn, 0),
 			C.Estatua, Enum.MeshType.Sphere)
@@ -7655,6 +7961,198 @@ local function buildClassroom(root: Instance, index: number): Classroom
 	}
 end
 
+-- ── biblioteca ─────────────────────────────────────────────────────
+
+--[[
+	La biblioteca, con su seccion secreta.
+
+	Va en `x = -41, z = +18`. No es un lugar arbitrario: las aulas ocupan
+	`z ∈ [-37, -7]` a los dos lados del atrio y la zona de recreo
+	`z ∈ [41, 75]`, asi que este es el unico hueco pegado al atrio que no
+	pisa nada. Comparte pared con el atrio, igual que las aulas.
+
+	Lo que la hace distinta de un cuarto decorativo es el fondo: una
+	estanteria que se corre y deja ver una alcoba con la hoja de
+	respuestas. El reparto lo hace `ExamService.openStash` — aca solo se
+	construye el mueble y se le cuelga el prompt.
+--]]
+local function buildLibrary(root: Instance): Model
+	local model = Instance.new("Model")
+	model.Name = "Biblioteca"
+	model.Parent = root
+
+	local halfW = E.AulaAncho / 2
+	local halfL = E.AulaLargo / 2
+	local height = E.AulaAltura
+	local cx = -(E.PasilloAncho / 2 + halfW)
+	local cz = 18
+	local center = Vector3.new(cx, 0, cz)
+	-- El atrio queda hacia +X desde aca.
+	local toHall = 1
+
+	plankFloor(model, center, E.AulaAncho, E.AulaLargo)
+	block(model, "Losa", Vector3.new(E.AulaAncho, 1, E.AulaLargo),
+		CFrame.new(cx, height, cz), C.Losa, M.MuroAlto)
+
+	-- Paredes: el fondo y las dos laterales, macizas.
+	block(model, "ParedFondo", Vector3.new(E.EspesorPared, height, E.AulaLargo),
+		CFrame.new(cx - halfW, height / 2, cz), C.MuroAlto, M.MuroAlto)
+	for _, dz in { -1, 1 } do
+		block(model, "ParedLateral", Vector3.new(E.AulaAncho, height, E.EspesorPared),
+			CFrame.new(cx, height / 2, cz + dz * halfL), C.MuroAlto, M.MuroAlto)
+		wainscot(model, CFrame.new(cx, 0, cz + dz * (halfL - 0.55)), E.AulaAncho, "X")
+	end
+
+	-- La pared del atrio, con su vano.
+	local doorWidth, doorHeight = 6, 8.5
+	local wallX = cx + halfW
+	local sidePiece = (E.AulaLargo - doorWidth) / 2
+	for _, dz in { -1, 1 } do
+		block(model, "ParedPasillo", Vector3.new(E.EspesorPared, height, sidePiece),
+			CFrame.new(wallX, height / 2, cz + dz * (doorWidth / 2 + sidePiece / 2)),
+			C.MuroAlto, M.MuroAlto)
+	end
+	block(model, "Dintel", Vector3.new(E.EspesorPared, height - doorHeight, doorWidth),
+		CFrame.new(wallX, doorHeight + (height - doorHeight) / 2, cz), C.MuroAlto, M.MuroAlto)
+	decor(model, "MarcoPuerta", Vector3.new(0.5, doorHeight + 0.4, doorWidth + 0.7),
+		CFrame.new(wallX, doorHeight / 2, cz), C.MarcoPuerta, M.MetalLiso)
+	sign(model, "BIBLIOTECA", Vector2.new(6.4, 1.4),
+		CFrame.new(wallX + toHall * 0.7, doorHeight + 0.9, cz)
+			* CFrame.Angles(0, math.rad(-90), 0),
+		Enum.NormalId.Front)
+
+	--[[
+		Una estanteria: el cuerpo, cuatro estantes y los lomos de los
+		libros. Los lomos son laminas finas de colores en la paleta
+		saturada; son lo que hace que la sala se lea como biblioteca y no
+		como un deposito de cajas.
+	--]]
+	local spineColors = {
+		Color3.fromRGB(198, 96, 168), Color3.fromRGB(146, 108, 210),
+		Color3.fromRGB(226, 104, 88), Color3.fromRGB(96, 164, 214),
+		Color3.fromRGB(120, 190, 150), Color3.fromRGB(238, 168, 96),
+	}
+
+	local function shelf(name: string, cf: CFrame, width: number): Model
+		local unit = Instance.new("Model")
+		unit.Name = name
+		unit.Parent = model
+
+		local tall = 8.5
+		block(unit, "Estante", Vector3.new(width, tall, 1.6), cf * CFrame.new(0, tall / 2, 0),
+			C.MaderaOscura, M.Madera)
+		for level = 1, 4 do
+			local y = 1.1 + (level - 1) * 1.9
+			decor(unit, "Balda", Vector3.new(width - 0.2, 0.16, 1.7),
+				cf * CFrame.new(0, y, 0), C.Madera, M.Madera)
+
+			-- Los lomos, apretados uno contra otro sobre cada balda.
+			local x = -width / 2 + 0.5
+			local guard = 0
+			while x < width / 2 - 0.5 and guard < 60 do
+				guard += 1
+				local thick = rng:NextNumber(0.16, 0.34)
+				local tallBook = rng:NextNumber(1.05, 1.55)
+				decor(unit, "Lomo", Vector3.new(thick, tallBook, 1.1),
+					cf * CFrame.new(x + thick / 2, y + tallBook / 2 + 0.08, 0),
+					spineColors[rng:NextInteger(1, #spineColors)], M.MuroAlto)
+				x += thick + 0.04
+			end
+		end
+		return unit
+	end
+
+	-- Contra las dos paredes laterales.
+	for _, dz in { -1, 1 } do
+		for i = -1, 1 do
+			shelf("Estanteria",
+				CFrame.new(cx + i * 10, 0, cz + dz * (halfL - 1.2))
+					* CFrame.Angles(0, dz > 0 and math.pi or 0, 0), 8)
+		end
+	end
+	-- Dos islas centrales, en el eje largo de la sala.
+	for _, dz in { -5.5, 5.5 } do
+		shelf("Estanteria", CFrame.new(cx - 4, 0, cz + dz) * CFrame.Angles(0, math.pi / 2, 0), 12)
+	end
+
+	-- Mesas de lectura con su lampara.
+	for _, dz in { -8, 8 } do
+		local table_ = block(model, "MesaLectura", Vector3.new(7, 0.3, 3.4),
+			CFrame.new(cx + 9, 3.4, cz + dz), C.Madera, M.Madera)
+		for _, dx in { -3, 3 } do
+			for _, dd in { -1.4, 1.4 } do
+				decor(model, "PataMesa", Vector3.new(0.26, 3.4, 0.26),
+					table_.CFrame * CFrame.new(dx, -1.85, dd), C.MaderaOscura, M.MaderaLisa)
+			end
+		end
+		local lamp = decor(model, "Lampara", Vector3.new(1.1, 0.5, 1.1),
+			table_.CFrame * CFrame.new(2.4, 0.9, 0), C.Dorado, M.MetalLiso)
+		local glow = Instance.new("PointLight")
+		glow.Brightness = 1.1
+		glow.Range = 14
+		glow.Color = C.LuzCalida
+		glow.Shadows = false
+		glow.Parent = lamp
+	end
+
+	--[[
+		La estanteria movible del fondo y lo que esconde.
+
+		El prompt se llama "Alcoba" y lo engancha `ExamService.bindStashes`
+		para repartir las respuestas. Aca se le suma una segunda conexion,
+		puramente visual, que corre el mueble y lo devuelve solo: son dos
+		conexiones al mismo Triggered y cada una hace lo suyo, sin que la
+		presentacion se meta con la mecanica.
+	--]]
+	local alcoveZ = cz
+	local backX = cx - halfW
+
+	block(model, "Alcoba", Vector3.new(3, 5, 8),
+		CFrame.new(backX + 1.6, 2.5, alcoveZ), C.MaderaOscura, M.Madera)
+	local paper = decor(model, "HojaRespuestas", Vector3.new(1.6, 0.06, 2.2),
+		CFrame.new(backX + 1.8, 3.2, alcoveZ), C.Pantalla, M.Placa)
+	paper.Color = Color3.fromRGB(250, 248, 238)
+
+	local movable = shelf("EstanteriaMovible",
+		CFrame.new(backX + 1.5, 0, alcoveZ) * CFrame.Angles(0, math.pi / 2, 0), 8)
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "Alcoba"
+	prompt.ActionText = "Correr"
+	prompt.ObjectText = "Estanteria"
+	prompt.HoldDuration = 1.4
+	prompt.MaxActivationDistance = 8
+	prompt.RequiresLineOfSight = false
+	local anchor = movable:FindFirstChild("Estante")
+	prompt.Parent = anchor or movable
+
+	local sliding = false
+	prompt.Triggered:Connect(function()
+		if sliding then
+			return
+		end
+		sliding = true
+		local origin = movable:GetPivot()
+		local aside = origin * CFrame.new(0, 0, -7)
+		local steps = 26
+		for i = 1, steps do
+			movable:PivotTo(origin:Lerp(aside, i / steps))
+			task.wait(0.012)
+		end
+		task.wait(4)
+		for i = 1, steps do
+			movable:PivotTo(aside:Lerp(origin, i / steps))
+			task.wait(0.012)
+		end
+		sliding = false
+	end)
+
+	-- Techo con luminarias, como el aula.
+	dropCeiling(model, center, E.AulaAncho, E.AulaLargo, height - 1.2, 2)
+
+	return model
+end
+
 -- ── sala de castigo ────────────────────────────────────────────────
 
 local function buildDetention(root: Instance): BasePart
@@ -7778,6 +8276,10 @@ function MapBuilder.build(): Map
 			table.insert(classrooms, buildClassroom(aulas, i))
 		end)
 	end
+
+	safely("biblioteca", function()
+		buildLibrary(root)
+	end)
 
 	local detention = buildDetention(root)
 
@@ -8036,7 +8538,20 @@ local PlaygroundService = {}
 
 local ball: BasePart? = nil
 local home = Vector3.new(0, 6, 0)
-local holder: Player? = nil
+--[[
+	Antes habia un unico `holder: Player?`, porque habia una unica pelota
+	en todo el colegio. Con las de beisbol hay varias cosas agarrables a
+	la vez, asi que el estado pasa a ser "quien lleva que":
+
+	  carrying   jugador -> pieza que tiene en la mano
+	  grabbable  todas las piezas que se pueden levantar
+
+	Cada pieza lleva un atributo `Tipo` ("basquet" o "beisbol") y de ahi
+	salen su fuerza, su elevacion y si aturde al impactar.
+--]]
+local carrying: { [Player]: BasePart } = {}
+local grabbable: { BasePart } = {}
+local origins: { [BasePart]: Vector3 } = {}
 local lastThrower: Player? = nil
 local lastThrow: { [Player]: number } = {}
 local scores: { [Player]: number } = {}
@@ -8164,7 +8679,72 @@ local function buildBall(parent: Instance, position: Vector3): BasePart
 	return part
 end
 
+--[[
+	Una pelota de beisbol: chica, rapida y casi sin rebote. No tiene aro
+	ni marcador — tirarla es el fin en si mismo, y si le pega a alguien
+	lo aturde un momento. El atributo `Tipo` es lo que despues consulta
+	`shoot` para saber con cuanta fuerza sale.
+--]]
+local function buildBaseball(parent: Instance, position: Vector3): BasePart
+	local part = Instance.new("Part")
+	part.Name = "Beisbol"
+	part.Shape = Enum.PartType.Ball
+	part.Size = Vector3.new(P.BeisbolRadio * 2, P.BeisbolRadio * 2, P.BeisbolRadio * 2)
+	part.Position = position
+	part.Color = Color3.fromRGB(248, 246, 238)
+	part.Material = Enum.Material.SmoothPlastic
+	part.Anchored = false
+	part.CanCollide = true
+	part.CustomPhysicalProperties = PhysicalProperties.new(
+		0.9, P.BeisbolFriccion, P.BeisbolRebote, 1, 1)
+	part:SetAttribute("Tipo", "beisbol")
+	part.Parent = parent
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "Agarrar"
+	prompt.ActionText = "Agarrar"
+	prompt.ObjectText = "Pelota de beisbol"
+	prompt.HoldDuration = 0
+	prompt.MaxActivationDistance = P.AlcanceAgarre
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = part
+
+	return part
+end
+
+--- El cesto donde viven las pelotas de beisbol.
+local function buildCrate(parent: Instance, position: Vector3): BasePart
+	local crate = Instance.new("Part")
+	crate.Name = "Cesto"
+	crate.Size = Vector3.new(4.4, 2.2, 4.4)
+	crate.Position = position + Vector3.new(0, 1.1, 0)
+	crate.Color = Color3.fromRGB(196, 148, 96)
+	crate.Material = Enum.Material.SmoothPlastic
+	crate.Anchored = true
+	crate.TopSurface = Enum.SurfaceType.Smooth
+	crate.BottomSurface = Enum.SurfaceType.Smooth
+	crate.Parent = parent
+	return crate
+end
+
 -- ── llevarla y tirarla ─────────────────────────────────────────────
+
+--[[
+	Registra una pieza como agarrable y recuerda de donde salio, para
+	poder devolverla si se pierde. El prompt se engancha aca mismo, asi
+	que agregar una pelota nueva es una sola llamada.
+--]]
+local function registerGrabbable(part: BasePart, origin: Vector3)
+	table.insert(grabbable, part)
+	origins[part] = origin
+
+	local prompt = part:FindFirstChild("Agarrar")
+	if prompt and prompt:IsA("ProximityPrompt") then
+		prompt.Triggered:Connect(function(player)
+			PlaygroundService.grab(player)
+		end)
+	end
+end
 
 local function handOf(player: Player): BasePart?
 	local character = player.Character
@@ -8180,8 +8760,8 @@ local function handOf(player: Player): BasePart?
 	return nil
 end
 
-local function release()
-	local part = ball
+local function release(player: Player)
+	local part = carrying[player]
 	if not part then
 		return
 	end
@@ -8191,27 +8771,108 @@ local function release()
 	end
 	part.CanCollide = true
 	part.Massless = false
-	holder = nil
+	carrying[player] = nil
+end
+
+--- Quien lleva esta pieza, si es que alguien la lleva.
+local function bearerOf(part: BasePart): Player?
+	for player, carried in carrying do
+		if carried == part and player.Parent then
+			return player
+		end
+	end
+	return nil
+end
+
+--- La pieza agarrable mas cercana a la mano que no tenga dueno.
+local function nearestGrabbable(hand: BasePart): BasePart?
+	local best: BasePart? = nil
+	local bestDistance = P.AlcanceAgarre
+	for _, part in grabbable do
+		if part.Parent and not bearerOf(part) then
+			local distance = (part.Position - hand.Position).Magnitude
+			if distance <= bestDistance then
+				best = part
+				bestDistance = distance
+			end
+		end
+	end
+	return best
+end
+
+--[[
+	Una pelota de beisbol en el aire aturde a quien le pegue. Tres
+	cuidados, todos aprendidos de la goma del profesor:
+
+	  * se cobra una sola vez por tiro, si no un rebote pega dos veces;
+	  * solo por encima de una velocidad, si no aturde rodando por el
+	    piso al primero que la pise;
+	  * nunca al que la tiro, que si no es imposible tirar de cerca.
+
+	La conexion se corta sola a los cinco segundos: pasado ese rato la
+	pelota ya es un objeto quieto, no un proyectil.
+--]]
+local function stunOnImpact(part: BasePart, thrower: Player)
+	local spent = false
+	local connection: RBXScriptConnection? = nil
+
+	connection = part.Touched:Connect(function(hit)
+		if spent then
+			return
+		end
+		if part.AssemblyLinearVelocity.Magnitude < P.BeisbolVelocidadMinima then
+			return
+		end
+		local model = hit:FindFirstAncestorOfClass("Model")
+		local victim = model and Players:GetPlayerFromCharacter(model) or nil
+		if not victim or victim == thrower then
+			return
+		end
+		spent = true
+
+		Net.event(Net.Events.Stunned):FireClient(victim, {
+			motivo = "pelotazo",
+			segundos = P.BeisbolAturde,
+		})
+		Net.event(Net.Events.Notify):FireClient(victim, {
+			key = "ball.hit",
+			args = { name = thrower.DisplayName },
+		})
+
+		local humanoid = model and model:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			humanoid.PlatformStand = true
+			task.delay(P.BeisbolAturde, function()
+				if humanoid.Parent then
+					humanoid.PlatformStand = false
+				end
+			end)
+		end
+	end)
+
+	task.delay(5, function()
+		if connection then
+			connection:Disconnect()
+		end
+	end)
 end
 
 function PlaygroundService.grab(player: Player): any
-	local part = ball
-	if not part then
-		return { ok = false }
-	end
-	if holder and holder ~= player and holder.Parent then
-		return { ok = false, reason = { key = "ball.taken" } }
-	end
 	local hand = handOf(player)
 	if not hand then
 		return { ok = false }
 	end
-	if (part.Position - hand.Position).Magnitude > P.AlcanceAgarre then
+	if carrying[player] then
+		-- Ya lleva algo: no se acumulan pelotas en la mano.
 		return { ok = false }
 	end
 
-	release()
-	holder = player
+	local part = nearestGrabbable(hand)
+	if not part then
+		return { ok = false, reason = { key = "ball.taken" } }
+	end
+
+	carrying[player] = part
 	part.CanCollide = false
 	part.Massless = true
 	part.CFrame = hand.CFrame * CFrame.new(0, -1.6, -0.6)
@@ -8228,8 +8889,8 @@ function PlaygroundService.grab(player: Player): any
 end
 
 function PlaygroundService.shoot(player: Player, direction: any): any
-	local part = ball
-	if not part or holder ~= player then
+	local part = carrying[player]
+	if not part then
 		return { ok = false }
 	end
 	if typeof(direction) ~= "Vector3" or direction.Magnitude < 0.05 then
@@ -8241,16 +8902,28 @@ function PlaygroundService.shoot(player: Player, direction: any): any
 	end
 	lastThrow[player] = now
 
-	release()
-	lastThrower = player
+	local baseball = part:GetAttribute("Tipo") == "beisbol"
+	release(player)
+	if not baseball then
+		lastThrower = player
+	end
 
-	-- Un poco hacia arriba: sin elevacion, un tiro de basquet es un
-	-- pase raso y nunca entra.
-	local aim = (direction.Unit + Vector3.new(0, P.PelotaAlturaTiro, 0)).Unit
-	part.AssemblyLinearVelocity = aim * P.PelotaFuerza
-	part.AssemblyAngularVelocity = Vector3.new(0, 0, -12)
+	--[[
+		Un poco hacia arriba: sin elevacion, un tiro de basquet es un
+		pase raso y nunca entra. La de beisbol se eleva mucho menos y
+		sale mucho mas rapido — es un tiro tenso, no un lanzamiento.
+	--]]
+	local lift = baseball and P.BeisbolAlturaTiro or P.PelotaAlturaTiro
+	local force = baseball and P.BeisbolFuerza or P.PelotaFuerza
+	local aim = (direction.Unit + Vector3.new(0, lift, 0)).Unit
+	part.AssemblyLinearVelocity = aim * force
+	part.AssemblyAngularVelocity = Vector3.new(0, 0, baseball and -26 or -12)
 
-	Util.playSound(Config.Sonidos.Impacto, part, 0.3, 1.5)
+	Util.playSound(Config.Sonidos.Impacto, part, 0.3, baseball and 1.9 or 1.5)
+
+	if baseball then
+		stunOnImpact(part, player)
+	end
 	return { ok = true }
 end
 
@@ -8301,10 +8974,14 @@ function PlaygroundService.build(map: any)
 	end
 	local parent = folder()
 	for _, child in parent:GetChildren() do
-		if child.Name == "Pelota" or child.Name == "Cancha" then
+		if child.Name == "Pelota" or child.Name == "Cancha"
+			or child.Name == "Beisbol" or child.Name == "Cesto" then
 			child:Destroy()
 		end
 	end
+	table.clear(grabbable)
+	table.clear(origins)
+	table.clear(carrying)
 
 	local court = Instance.new("Model")
 	court.Name = "Cancha"
@@ -8320,38 +8997,58 @@ function PlaygroundService.build(map: any)
 
 	home = Vector3.new(0, P.PelotaRadio + 3, z + P.CanastaDistancia)
 	ball = buildBall(parent, home)
+	registerGrabbable(ball :: BasePart, home)
 
-	local prompt = (ball :: BasePart):FindFirstChild("Agarrar")
-	if prompt and prompt:IsA("ProximityPrompt") then
-		prompt.Triggered:Connect(function(player)
-			PlaygroundService.grab(player)
-		end)
+	--[[
+		El cesto de pelotas de beisbol, en el lado opuesto del atrio: la
+		cancha esta contra una punta y la tienda contra la otra, asi que
+		esto va al costado, contra la pared, donde no compite con
+		ninguno de los dos polos.
+	--]]
+	local crateZ = -half + 40
+	local crateX = -(Config.Escuela.PasilloAncho / 2) + 6
+	buildCrate(parent, Vector3.new(crateX, 0, crateZ))
+
+	for i = 1, P.BeisbolCantidad do
+		local angle = (i / P.BeisbolCantidad) * math.pi * 2
+		local spot = Vector3.new(
+			crateX + math.cos(angle) * 1.4,
+			P.BeisbolRadio + 2.4,
+			crateZ + math.sin(angle) * 1.4)
+		registerGrabbable(buildBaseball(parent, spot), spot)
 	end
 end
 
---- Si la pelota se pierde (se cae del mapa o queda trabada), vuelve.
+--- Si una pelota se pierde (se cae del mapa o queda trabada), vuelve.
 function PlaygroundService.watch()
 	task.spawn(function()
 		while true do
 			task.wait(4)
-			local part = ball
-			if part and not holder and part.Position.Y < -30 then
-				part.AssemblyLinearVelocity = Vector3.zero
-				part.CFrame = CFrame.new(home)
+			for _, part in grabbable do
+				local origin = origins[part]
+				if part.Parent and origin and not bearerOf(part)
+					and part.Position.Y < -30 then
+					part.AssemblyLinearVelocity = Vector3.zero
+					part.CFrame = CFrame.new(origin)
+				end
 			end
 		end
 	end)
 end
 
---- Al empezar el examen la pelota vuelve a su sitio y nadie la lleva.
+--- Al empezar el examen todo vuelve a su sitio y nadie lleva nada.
 function PlaygroundService.reset()
-	release()
+	for player in carrying do
+		release(player)
+	end
 	lastThrower = nil
-	local part = ball
-	if part then
-		part.AssemblyLinearVelocity = Vector3.zero
-		part.AssemblyAngularVelocity = Vector3.zero
-		part.CFrame = CFrame.new(home)
+	for _, part in grabbable do
+		local origin = origins[part]
+		if part.Parent and origin then
+			part.AssemblyLinearVelocity = Vector3.zero
+			part.AssemblyAngularVelocity = Vector3.zero
+			part.CFrame = CFrame.new(origin)
+		end
 	end
 end
 
@@ -9364,6 +10061,17 @@ local function phaseReport()
 	PunishService.clearVisuals()
 	Net.event(Net.Events.Music):FireAllClients({ clima = "pasillo" })
 
+	--[[
+		El boletin se arma en dos vueltas y no en una.
+
+		El curso desaprueba el dia si el promedio de la clase no llega —
+		eso ya era asi — pero el boletin solo mostraba tu nota
+		individual, asi que nadie se enteraba de que aprobar es
+		colectivo. Para poder encabezar cada boletin con el resultado del
+		curso hay que tener el promedio ANTES de mandar ninguno, y por
+		eso primero se calculan todos y despues se reparten.
+	--]]
+	local reports: { [Player]: any } = {}
 	local sum, count = 0, 0
 	for _, player in Players:GetPlayers() do
 		local result = results[player] or { correct = 0, wrong = 0, blank = 0 }
@@ -9376,7 +10084,20 @@ local function phaseReport()
 
 		sum += report.final
 		count += 1
+		reports[player] = { report = report, result = result, punishments = punishments }
+	end
 
+	local classAverage = count > 0 and sum / count or 0
+	local classPassed = count > 0 and Grades.passed(classAverage)
+
+	for _, player in Players:GetPlayers() do
+		local entry = reports[player]
+		if not entry then
+			continue
+		end
+		local report = entry.report
+		local result = entry.result
+		local punishments = entry.punishments
 		local credits = ShopService.reward(player, result.correct, report.aprobado, punishments)
 
 		Net.event(Net.Events.Report):FireClient(player, {
@@ -9395,6 +10116,10 @@ local function phaseReport()
 			suspensos = fails,
 			maxSuspensos = R.SuspensosParaExpulsion,
 			semana = false,
+			-- Lo que hace visible el co-op: como le fue al CURSO.
+			promedioClase = math.floor(classAverage + 0.5),
+			claseAprobo = classPassed,
+			alumnos = count,
 		})
 		Net.event(Net.Events.Notify):FireClient(player, {
 			key = report.aprobado and "notify.passed" or "notify.failed",
@@ -9403,8 +10128,7 @@ local function phaseReport()
 	end
 
 	-- El curso desaprueba el dia si el promedio de la clase no llega.
-	local classAverage = count > 0 and sum / count or 0
-	if count > 0 and not Grades.passed(classAverage) then
+	if count > 0 and not classPassed then
 		fails += 1
 	end
 
@@ -9571,6 +10295,28 @@ function ShopService.isOpen(): boolean
 	return currentPhase == openDuringPhase or currentPhase == "espera" or currentPhase == "boletin"
 end
 
+--[[
+	Devuelve el aviso de por que un articulo esta bloqueado, o `nil` si
+	esta disponible.
+
+	Vive aca y no en el cliente porque es el servidor quien decide; la
+	tienda dibuja el candado con los mismos numeros, pero solo para que
+	el jugador se entere antes de hacer clic.
+--]]
+function ShopService.missingRequirement(profile: any, entry: any): any
+	local needs = entry.requiere
+	if not needs then
+		return nil
+	end
+	if needs.semanas and (profile.semanas or 0) < needs.semanas then
+		return { key = "shop.need_weeks", args = { n = needs.semanas } }
+	end
+	if needs.promedio and (profile.mejorPromedio or 0) < needs.promedio then
+		return { key = "shop.need_grade", args = { n = needs.promedio } }
+	end
+	return nil
+end
+
 --- Compra: descuenta creditos y marca el objeto como propio.
 function ShopService.buy(player: Player, id: any): any
 	if type(id) ~= "string" then
@@ -9593,6 +10339,22 @@ function ShopService.buy(player: Player, id: any): any
 	if entry.tipo == "estetica" and profile.comprados[id] then
 		return { ok = false, reason = { key = "shop.owned" } }
 	end
+
+	--[[
+		La estetica no se compra sola: hay que habersela ganado. En el
+		juego real la ropa se desbloquea aprobando, no pagando, y esto es
+		lo que traduce esa idea — los creditos siguen haciendo falta,
+		pero primero hay que cumplir el requisito.
+
+		`semanas` son semanas finales sobrevividas y `promedio` es el
+		mejor promedio que sacaste alguna vez; las dos ya viven en el
+		perfil desde siempre.
+	--]]
+	local needed = ShopService.missingRequirement(profile, entry)
+	if needed then
+		return { ok = false, reason = needed }
+	end
+
 	if profile.creditos < entry.precio then
 		return { ok = false, reason = { key = "shop.cannot" } }
 	end
@@ -11308,6 +12070,34 @@ end)
 
 -- ── atajos ─────────────────────────────────────────────────────────
 
+--[[
+	El jugador que tenes en la mira, si hay alguno. Se usa para pasarle
+	el libro a un companero.
+
+	Como en todo el resto del juego, esto es solo una intencion: el
+	cliente dice a quien cree estar apuntando y el servidor decide si la
+	jugada vale. Que la respuesta llegue de aca no la hace confiable.
+--]]
+local function aimedPlayer(): Player?
+	local camera = workspace.CurrentCamera
+	local character = player.Character
+	if not camera or not character then
+		return nil
+	end
+
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { character }
+
+	local hit = workspace:Raycast(camera.CFrame.Position,
+		camera.CFrame.LookVector * 24, params)
+	if not hit then
+		return nil
+	end
+	local model = hit.Instance:FindFirstAncestorOfClass("Model")
+	return model and Players:GetPlayerFromCharacter(model) or nil
+end
+
 UserInputService.InputBegan:Connect(function(input, processed)
 	if processed or MainMenu.isOpen() then
 		return
@@ -11331,6 +12121,16 @@ UserInputService.InputBegan:Connect(function(input, processed)
 	elseif input.KeyCode == Enum.KeyCode.H then
 		-- Leer el libro que llevas en la mano.
 		Net.event(Net.Events.Cheat):FireServer("book", 1)
+	elseif input.KeyCode == Enum.KeyCode.J then
+		--[[
+			Pasarle el libro al companero que tengas en la mira. El
+			cliente solo dice a QUIEN apunta; que este lo bastante cerca
+			y que realmente lleves un libro lo decide el servidor.
+		--]]
+		local target = aimedPlayer()
+		if target then
+			Net.event(Net.Events.Cheat):FireServer("passbook", 1, target.UserId)
+		end
 	elseif input.KeyCode == Enum.KeyCode.T then
 		if ShopUI.isOpen() then
 			ShopUI.close()
@@ -12547,6 +13347,7 @@ local reportCard: Frame
 -- Piezas del boletin, creadas una vez y rellenadas despues.
 local reportTitle: TextLabel
 local reportSubtitle: TextLabel
+local reportClass: TextLabel
 local reportGrade: TextLabel
 local reportRows: { { line: TextLabel, value: TextLabel } } = {}
 local reportFoot: TextLabel
@@ -12842,7 +13643,9 @@ function Hud.mount(parent: ScreenGui)
 	reportCard = UI.panel({
 		parent = root,
 		name = "Boletin",
-		size = UDim2.fromOffset(400, 320),
+		-- Mas alto que antes: ahora el boletin encabeza con el resultado
+		-- del curso y despues va el tuyo.
+		size = UDim2.fromOffset(400, 366),
 		position = UDim2.fromScale(0.5, 0.5),
 		anchor = Vector2.new(0.5, 0.5),
 		color = Theme.Surface.Base,
@@ -12872,11 +13675,30 @@ function Hud.mount(parent: ScreenGui)
 		color = Theme.Surface.Text,
 		layer = UI.Layer.Modal + 1,
 	})
+	--[[
+		El resultado del CURSO, encabezando el boletin.
+
+		Aprobar es colectivo: el dia se pierde si el promedio de la clase
+		no llega, sin importar como te fue a vos. Eso ya funcionaba, pero
+		el boletin solo mostraba tu nota, asi que la regla era invisible.
+		Va arriba de todo, antes que tu propio resultado.
+	--]]
+	reportClass = UI.label({
+		parent = reportCard,
+		name = "Curso",
+		size = UDim2.new(1, -36, 0, 22),
+		position = UDim2.fromOffset(18, 64),
+		font = Theme.FontBold,
+		textSize = UI.Type.subtitle,
+		color = Theme.Surface.Muted,
+		layer = UI.Layer.Modal + 1,
+	})
+
 	reportGrade = UI.label({
 		parent = reportCard,
 		name = "Nota",
 		size = UDim2.new(1, -36, 0, 56),
-		position = UDim2.fromOffset(18, 70),
+		position = UDim2.fromOffset(18, 88),
 		font = Theme.FontBlack,
 		textSize = UI.Type.hero,
 		color = Theme.Surface.Text,
@@ -12884,7 +13706,7 @@ function Hud.mount(parent: ScreenGui)
 	})
 
 	for i = 1, REPORT_ROWS do
-		local y = 138 + (i - 1) * 24
+		local y = 156 + (i - 1) * 24
 		reportRows[i] = {
 			line = UI.label({
 				parent = reportCard,
@@ -13158,6 +13980,21 @@ function Hud.report(data: any)
 		or Strings.get("report.day", { n = data.dia })
 	reportTitle.Text = Strings.get("report.title")
 	reportSubtitle.Text = subtitleText2
+
+	--[[
+		El curso primero. En el boletin semanal no hay promedio de clase
+		que mostrar, asi que la linea se apaga en vez de mentir un cero.
+	--]]
+	if data.promedioClase then
+		reportClass.Visible = true
+		reportClass.Text = Strings.get(
+			data.claseAprobo and "report.class_passed" or "report.class_failed",
+			{ n = data.promedioClase })
+		reportClass.TextColor3 = data.claseAprobo and Theme.Hud.Safe or Theme.Hud.Danger
+	else
+		reportClass.Visible = false
+	end
+
 	reportGrade.Text = tostring(data.final) .. "  " .. tostring(data.letra)
 	reportGrade.TextColor3 = Theme.gradeColor(data.letra)
 
@@ -15397,7 +16234,25 @@ local function row(entry: any, order: number)
 	local active = (isGear and wallet.objeto == entry.id)
 		or (not isGear and wallet.estetica and wallet.estetica[entry.id] == true)
 	local credits = wallet.creditos or 0
-	local affordable = owned or credits >= entry.precio
+
+	--[[
+		Lo bloqueado se dibuja aca, pero quien decide es el servidor:
+		esto es la misma cuenta que hace `ShopService.missingRequirement`,
+		repetida para poder avisar ANTES del clic. Si las dos difirieran,
+		manda el servidor y el jugador ve un rechazo — molesto, pero no
+		explotable.
+	--]]
+	local locked: any = nil
+	local needs = entry.requiere
+	if needs and not owned then
+		if needs.semanas and (wallet.semanas or 0) < needs.semanas then
+			locked = { key = "shop.need_weeks", args = { n = needs.semanas } }
+		elseif needs.promedio and (wallet.mejorPromedio or 0) < needs.promedio then
+			locked = { key = "shop.need_grade", args = { n = needs.promedio } }
+		end
+	end
+
+	local affordable = owned or (credits >= entry.precio and not locked)
 
 	local card = UI.new("Frame", {
 		Name = entry.id,
@@ -15440,9 +16295,30 @@ local function row(entry: any, order: number)
 	})
 	description.TextYAlignment = Enum.TextYAlignment.Top
 
+	-- Bloqueado: en vez del precio se dice QUE falta. Un candado sin
+	-- explicacion es peor que ningun candado.
+	if locked then
+		UI.icon(card, "candado", 14, Theme.Menu.Locked, layer + 1).Position =
+			UDim2.new(1, -30, 0, 16)
+		local why = UI.label({
+			parent = card,
+			name = "Requisito",
+			text = Strings.render(locked),
+			size = UDim2.fromOffset(150, 32),
+			position = UDim2.new(1, -188, 0, 12),
+			font = Theme.Font,
+			textSize = UI.Type.micro,
+			color = Theme.Menu.Locked,
+			align = Enum.TextXAlignment.Right,
+			wrapped = true,
+			layer = layer + 1,
+		})
+		why.TextYAlignment = Enum.TextYAlignment.Top
+	end
+
 	-- El precio, aparte del boton, para que se lea sin interpretar el
 	-- estado del boton. En rojo cuando no alcanza.
-	if not owned then
+	if not owned and not locked then
 		UI.label({
 			parent = card,
 			name = "Precio",
@@ -15460,7 +16336,10 @@ local function row(entry: any, order: number)
 
 	local text: string
 	local color: Color3
-	if not owned then
+	if locked then
+		text = Strings.get("shop.locked")
+		color = Theme.Menu.Locked
+	elseif not owned then
 		text = Strings.get("shop.buy")
 		color = affordable and Theme.Hud.Credit or Theme.Surface.Faint
 	elseif active then
@@ -15529,7 +16408,7 @@ local function row(entry: any, order: number)
 	if owned and active and not isGear then
 		button.setEnabled(false)
 	end
-	if not owned and not affordable then
+	if not owned and (not affordable or locked) then
 		button.setEnabled(false)
 	end
 end

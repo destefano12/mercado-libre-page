@@ -63,6 +63,7 @@ local reportCard: Frame
 -- Piezas del boletin, creadas una vez y rellenadas despues.
 local reportTitle: TextLabel
 local reportSubtitle: TextLabel
+local reportClass: TextLabel
 local reportGrade: TextLabel
 local reportRows: { { line: TextLabel, value: TextLabel } } = {}
 local reportFoot: TextLabel
@@ -358,7 +359,9 @@ function Hud.mount(parent: ScreenGui)
 	reportCard = UI.panel({
 		parent = root,
 		name = "Boletin",
-		size = UDim2.fromOffset(400, 320),
+		-- Mas alto que antes: ahora el boletin encabeza con el resultado
+		-- del curso y despues va el tuyo.
+		size = UDim2.fromOffset(400, 366),
 		position = UDim2.fromScale(0.5, 0.5),
 		anchor = Vector2.new(0.5, 0.5),
 		color = Theme.Surface.Base,
@@ -388,11 +391,30 @@ function Hud.mount(parent: ScreenGui)
 		color = Theme.Surface.Text,
 		layer = UI.Layer.Modal + 1,
 	})
+	--[[
+		El resultado del CURSO, encabezando el boletin.
+
+		Aprobar es colectivo: el dia se pierde si el promedio de la clase
+		no llega, sin importar como te fue a vos. Eso ya funcionaba, pero
+		el boletin solo mostraba tu nota, asi que la regla era invisible.
+		Va arriba de todo, antes que tu propio resultado.
+	--]]
+	reportClass = UI.label({
+		parent = reportCard,
+		name = "Curso",
+		size = UDim2.new(1, -36, 0, 22),
+		position = UDim2.fromOffset(18, 64),
+		font = Theme.FontBold,
+		textSize = UI.Type.subtitle,
+		color = Theme.Surface.Muted,
+		layer = UI.Layer.Modal + 1,
+	})
+
 	reportGrade = UI.label({
 		parent = reportCard,
 		name = "Nota",
 		size = UDim2.new(1, -36, 0, 56),
-		position = UDim2.fromOffset(18, 70),
+		position = UDim2.fromOffset(18, 88),
 		font = Theme.FontBlack,
 		textSize = UI.Type.hero,
 		color = Theme.Surface.Text,
@@ -400,7 +422,7 @@ function Hud.mount(parent: ScreenGui)
 	})
 
 	for i = 1, REPORT_ROWS do
-		local y = 138 + (i - 1) * 24
+		local y = 156 + (i - 1) * 24
 		reportRows[i] = {
 			line = UI.label({
 				parent = reportCard,
@@ -674,6 +696,21 @@ function Hud.report(data: any)
 		or Strings.get("report.day", { n = data.dia })
 	reportTitle.Text = Strings.get("report.title")
 	reportSubtitle.Text = subtitleText2
+
+	--[[
+		El curso primero. En el boletin semanal no hay promedio de clase
+		que mostrar, asi que la linea se apaga en vez de mentir un cero.
+	--]]
+	if data.promedioClase then
+		reportClass.Visible = true
+		reportClass.Text = Strings.get(
+			data.claseAprobo and "report.class_passed" or "report.class_failed",
+			{ n = data.promedioClase })
+		reportClass.TextColor3 = data.claseAprobo and Theme.Hud.Safe or Theme.Hud.Danger
+	else
+		reportClass.Visible = false
+	end
+
 	reportGrade.Text = tostring(data.final) .. "  " .. tostring(data.letra)
 	reportGrade.TextColor3 = Theme.gradeColor(data.letra)
 

@@ -32,7 +32,20 @@ local PlaygroundService = {}
 
 local ball: BasePart? = nil
 local home = Vector3.new(0, 6, 0)
-local holder: Player? = nil
+--[[
+	Antes habia un unico `holder: Player?`, porque habia una unica pelota
+	en todo el colegio. Con las de beisbol hay varias cosas agarrables a
+	la vez, asi que el estado pasa a ser "quien lleva que":
+
+	  carrying   jugador -> pieza que tiene en la mano
+	  grabbable  todas las piezas que se pueden levantar
+
+	Cada pieza lleva un atributo `Tipo` ("basquet" o "beisbol") y de ahi
+	salen su fuerza, su elevacion y si aturde al impactar.
+--]]
+local carrying: { [Player]: BasePart } = {}
+local grabbable: { BasePart } = {}
+local origins: { [BasePart]: Vector3 } = {}
 local lastThrower: Player? = nil
 local lastThrow: { [Player]: number } = {}
 local scores: { [Player]: number } = {}
@@ -160,7 +173,72 @@ local function buildBall(parent: Instance, position: Vector3): BasePart
 	return part
 end
 
+--[[
+	Una pelota de beisbol: chica, rapida y casi sin rebote. No tiene aro
+	ni marcador — tirarla es el fin en si mismo, y si le pega a alguien
+	lo aturde un momento. El atributo `Tipo` es lo que despues consulta
+	`shoot` para saber con cuanta fuerza sale.
+--]]
+local function buildBaseball(parent: Instance, position: Vector3): BasePart
+	local part = Instance.new("Part")
+	part.Name = "Beisbol"
+	part.Shape = Enum.PartType.Ball
+	part.Size = Vector3.new(P.BeisbolRadio * 2, P.BeisbolRadio * 2, P.BeisbolRadio * 2)
+	part.Position = position
+	part.Color = Color3.fromRGB(248, 246, 238)
+	part.Material = Enum.Material.SmoothPlastic
+	part.Anchored = false
+	part.CanCollide = true
+	part.CustomPhysicalProperties = PhysicalProperties.new(
+		0.9, P.BeisbolFriccion, P.BeisbolRebote, 1, 1)
+	part:SetAttribute("Tipo", "beisbol")
+	part.Parent = parent
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "Agarrar"
+	prompt.ActionText = "Agarrar"
+	prompt.ObjectText = "Pelota de beisbol"
+	prompt.HoldDuration = 0
+	prompt.MaxActivationDistance = P.AlcanceAgarre
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = part
+
+	return part
+end
+
+--- El cesto donde viven las pelotas de beisbol.
+local function buildCrate(parent: Instance, position: Vector3): BasePart
+	local crate = Instance.new("Part")
+	crate.Name = "Cesto"
+	crate.Size = Vector3.new(4.4, 2.2, 4.4)
+	crate.Position = position + Vector3.new(0, 1.1, 0)
+	crate.Color = Color3.fromRGB(196, 148, 96)
+	crate.Material = Enum.Material.SmoothPlastic
+	crate.Anchored = true
+	crate.TopSurface = Enum.SurfaceType.Smooth
+	crate.BottomSurface = Enum.SurfaceType.Smooth
+	crate.Parent = parent
+	return crate
+end
+
 -- ── llevarla y tirarla ─────────────────────────────────────────────
+
+--[[
+	Registra una pieza como agarrable y recuerda de donde salio, para
+	poder devolverla si se pierde. El prompt se engancha aca mismo, asi
+	que agregar una pelota nueva es una sola llamada.
+--]]
+local function registerGrabbable(part: BasePart, origin: Vector3)
+	table.insert(grabbable, part)
+	origins[part] = origin
+
+	local prompt = part:FindFirstChild("Agarrar")
+	if prompt and prompt:IsA("ProximityPrompt") then
+		prompt.Triggered:Connect(function(player)
+			PlaygroundService.grab(player)
+		end)
+	end
+end
 
 local function handOf(player: Player): BasePart?
 	local character = player.Character
@@ -176,8 +254,8 @@ local function handOf(player: Player): BasePart?
 	return nil
 end
 
-local function release()
-	local part = ball
+local function release(player: Player)
+	local part = carrying[player]
 	if not part then
 		return
 	end
@@ -187,27 +265,108 @@ local function release()
 	end
 	part.CanCollide = true
 	part.Massless = false
-	holder = nil
+	carrying[player] = nil
+end
+
+--- Quien lleva esta pieza, si es que alguien la lleva.
+local function bearerOf(part: BasePart): Player?
+	for player, carried in carrying do
+		if carried == part and player.Parent then
+			return player
+		end
+	end
+	return nil
+end
+
+--- La pieza agarrable mas cercana a la mano que no tenga dueno.
+local function nearestGrabbable(hand: BasePart): BasePart?
+	local best: BasePart? = nil
+	local bestDistance = P.AlcanceAgarre
+	for _, part in grabbable do
+		if part.Parent and not bearerOf(part) then
+			local distance = (part.Position - hand.Position).Magnitude
+			if distance <= bestDistance then
+				best = part
+				bestDistance = distance
+			end
+		end
+	end
+	return best
+end
+
+--[[
+	Una pelota de beisbol en el aire aturde a quien le pegue. Tres
+	cuidados, todos aprendidos de la goma del profesor:
+
+	  * se cobra una sola vez por tiro, si no un rebote pega dos veces;
+	  * solo por encima de una velocidad, si no aturde rodando por el
+	    piso al primero que la pise;
+	  * nunca al que la tiro, que si no es imposible tirar de cerca.
+
+	La conexion se corta sola a los cinco segundos: pasado ese rato la
+	pelota ya es un objeto quieto, no un proyectil.
+--]]
+local function stunOnImpact(part: BasePart, thrower: Player)
+	local spent = false
+	local connection: RBXScriptConnection? = nil
+
+	connection = part.Touched:Connect(function(hit)
+		if spent then
+			return
+		end
+		if part.AssemblyLinearVelocity.Magnitude < P.BeisbolVelocidadMinima then
+			return
+		end
+		local model = hit:FindFirstAncestorOfClass("Model")
+		local victim = model and Players:GetPlayerFromCharacter(model) or nil
+		if not victim or victim == thrower then
+			return
+		end
+		spent = true
+
+		Net.event(Net.Events.Stunned):FireClient(victim, {
+			motivo = "pelotazo",
+			segundos = P.BeisbolAturde,
+		})
+		Net.event(Net.Events.Notify):FireClient(victim, {
+			key = "ball.hit",
+			args = { name = thrower.DisplayName },
+		})
+
+		local humanoid = model and model:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			humanoid.PlatformStand = true
+			task.delay(P.BeisbolAturde, function()
+				if humanoid.Parent then
+					humanoid.PlatformStand = false
+				end
+			end)
+		end
+	end)
+
+	task.delay(5, function()
+		if connection then
+			connection:Disconnect()
+		end
+	end)
 end
 
 function PlaygroundService.grab(player: Player): any
-	local part = ball
-	if not part then
-		return { ok = false }
-	end
-	if holder and holder ~= player and holder.Parent then
-		return { ok = false, reason = { key = "ball.taken" } }
-	end
 	local hand = handOf(player)
 	if not hand then
 		return { ok = false }
 	end
-	if (part.Position - hand.Position).Magnitude > P.AlcanceAgarre then
+	if carrying[player] then
+		-- Ya lleva algo: no se acumulan pelotas en la mano.
 		return { ok = false }
 	end
 
-	release()
-	holder = player
+	local part = nearestGrabbable(hand)
+	if not part then
+		return { ok = false, reason = { key = "ball.taken" } }
+	end
+
+	carrying[player] = part
 	part.CanCollide = false
 	part.Massless = true
 	part.CFrame = hand.CFrame * CFrame.new(0, -1.6, -0.6)
@@ -224,8 +383,8 @@ function PlaygroundService.grab(player: Player): any
 end
 
 function PlaygroundService.shoot(player: Player, direction: any): any
-	local part = ball
-	if not part or holder ~= player then
+	local part = carrying[player]
+	if not part then
 		return { ok = false }
 	end
 	if typeof(direction) ~= "Vector3" or direction.Magnitude < 0.05 then
@@ -237,16 +396,28 @@ function PlaygroundService.shoot(player: Player, direction: any): any
 	end
 	lastThrow[player] = now
 
-	release()
-	lastThrower = player
+	local baseball = part:GetAttribute("Tipo") == "beisbol"
+	release(player)
+	if not baseball then
+		lastThrower = player
+	end
 
-	-- Un poco hacia arriba: sin elevacion, un tiro de basquet es un
-	-- pase raso y nunca entra.
-	local aim = (direction.Unit + Vector3.new(0, P.PelotaAlturaTiro, 0)).Unit
-	part.AssemblyLinearVelocity = aim * P.PelotaFuerza
-	part.AssemblyAngularVelocity = Vector3.new(0, 0, -12)
+	--[[
+		Un poco hacia arriba: sin elevacion, un tiro de basquet es un
+		pase raso y nunca entra. La de beisbol se eleva mucho menos y
+		sale mucho mas rapido — es un tiro tenso, no un lanzamiento.
+	--]]
+	local lift = baseball and P.BeisbolAlturaTiro or P.PelotaAlturaTiro
+	local force = baseball and P.BeisbolFuerza or P.PelotaFuerza
+	local aim = (direction.Unit + Vector3.new(0, lift, 0)).Unit
+	part.AssemblyLinearVelocity = aim * force
+	part.AssemblyAngularVelocity = Vector3.new(0, 0, baseball and -26 or -12)
 
-	Util.playSound(Config.Sonidos.Impacto, part, 0.3, 1.5)
+	Util.playSound(Config.Sonidos.Impacto, part, 0.3, baseball and 1.9 or 1.5)
+
+	if baseball then
+		stunOnImpact(part, player)
+	end
 	return { ok = true }
 end
 
@@ -297,10 +468,14 @@ function PlaygroundService.build(map: any)
 	end
 	local parent = folder()
 	for _, child in parent:GetChildren() do
-		if child.Name == "Pelota" or child.Name == "Cancha" then
+		if child.Name == "Pelota" or child.Name == "Cancha"
+			or child.Name == "Beisbol" or child.Name == "Cesto" then
 			child:Destroy()
 		end
 	end
+	table.clear(grabbable)
+	table.clear(origins)
+	table.clear(carrying)
 
 	local court = Instance.new("Model")
 	court.Name = "Cancha"
@@ -316,38 +491,58 @@ function PlaygroundService.build(map: any)
 
 	home = Vector3.new(0, P.PelotaRadio + 3, z + P.CanastaDistancia)
 	ball = buildBall(parent, home)
+	registerGrabbable(ball :: BasePart, home)
 
-	local prompt = (ball :: BasePart):FindFirstChild("Agarrar")
-	if prompt and prompt:IsA("ProximityPrompt") then
-		prompt.Triggered:Connect(function(player)
-			PlaygroundService.grab(player)
-		end)
+	--[[
+		El cesto de pelotas de beisbol, en el lado opuesto del atrio: la
+		cancha esta contra una punta y la tienda contra la otra, asi que
+		esto va al costado, contra la pared, donde no compite con
+		ninguno de los dos polos.
+	--]]
+	local crateZ = -half + 40
+	local crateX = -(Config.Escuela.PasilloAncho / 2) + 6
+	buildCrate(parent, Vector3.new(crateX, 0, crateZ))
+
+	for i = 1, P.BeisbolCantidad do
+		local angle = (i / P.BeisbolCantidad) * math.pi * 2
+		local spot = Vector3.new(
+			crateX + math.cos(angle) * 1.4,
+			P.BeisbolRadio + 2.4,
+			crateZ + math.sin(angle) * 1.4)
+		registerGrabbable(buildBaseball(parent, spot), spot)
 	end
 end
 
---- Si la pelota se pierde (se cae del mapa o queda trabada), vuelve.
+--- Si una pelota se pierde (se cae del mapa o queda trabada), vuelve.
 function PlaygroundService.watch()
 	task.spawn(function()
 		while true do
 			task.wait(4)
-			local part = ball
-			if part and not holder and part.Position.Y < -30 then
-				part.AssemblyLinearVelocity = Vector3.zero
-				part.CFrame = CFrame.new(home)
+			for _, part in grabbable do
+				local origin = origins[part]
+				if part.Parent and origin and not bearerOf(part)
+					and part.Position.Y < -30 then
+					part.AssemblyLinearVelocity = Vector3.zero
+					part.CFrame = CFrame.new(origin)
+				end
 			end
 		end
 	end)
 end
 
---- Al empezar el examen la pelota vuelve a su sitio y nadie la lleva.
+--- Al empezar el examen todo vuelve a su sitio y nadie lleva nada.
 function PlaygroundService.reset()
-	release()
+	for player in carrying do
+		release(player)
+	end
 	lastThrower = nil
-	local part = ball
-	if part then
-		part.AssemblyLinearVelocity = Vector3.zero
-		part.AssemblyAngularVelocity = Vector3.zero
-		part.CFrame = CFrame.new(home)
+	for _, part in grabbable do
+		local origin = origins[part]
+		if part.Parent and origin then
+			part.AssemblyLinearVelocity = Vector3.zero
+			part.AssemblyAngularVelocity = Vector3.zero
+			part.CFrame = CFrame.new(origin)
+		end
 	end
 end
 

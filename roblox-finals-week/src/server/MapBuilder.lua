@@ -386,10 +386,16 @@ local function buildStatue(parent: Instance, center: Vector3): Model
 		return part
 	end
 
+	--[[
+		Todas las piezas del cuerpo se llaman "Estatua" a proposito:
+		`GraffitiService.markMap` marca lo pintable por nombre exacto de
+		pieza, asi que nombrarlas Cuerpo1/Cabeza1 las habria dejado fuera
+		y la mecanica de decorar la estatua no existiria.
+	--]]
 	local radius = E.EstatuaRadio
 	shaped("Pedestal", Vector3.new(radius * 2, 1.6, radius * 2),
 		CFrame.new(center.X, 0.8, center.Z), C.Pedestal, Enum.MeshType.Cylinder)
-	shaped("Base", Vector3.new(radius * 1.5, 1, radius * 1.5),
+	shaped("Estatua", Vector3.new(radius * 1.5, 1, radius * 1.5),
 		CFrame.new(center.X, 1.9, center.Z), C.Estatua, Enum.MeshType.Cylinder)
 
 	-- Cuatro cuerpos apilados, cada uno mas chico y girado.
@@ -399,11 +405,11 @@ local function buildStatue(parent: Instance, center: Vector3): Model
 	for i = 1, levels do
 		local shrink = 1 - (i - 1) * 0.17
 		local turn = i * 0.9
-		shaped("Cuerpo" .. i, Vector3.new(2.6 * shrink, step * 0.72, 1.7 * shrink),
+		shaped("Estatua", Vector3.new(2.6 * shrink, step * 0.72, 1.7 * shrink),
 			CFrame.new(center.X, height + (i - 1) * step + step * 0.4, center.Z)
 				* CFrame.Angles(0, turn, 0),
 			C.Estatua, Enum.MeshType.Sphere)
-		shaped("Cabeza" .. i, Vector3.new(1.5 * shrink, 1.5 * shrink, 1.5 * shrink),
+		shaped("Estatua", Vector3.new(1.5 * shrink, 1.5 * shrink, 1.5 * shrink),
 			CFrame.new(center.X, height + (i - 1) * step + step * 0.92, center.Z)
 				* CFrame.Angles(0, turn, 0),
 			C.Estatua, Enum.MeshType.Sphere)
@@ -782,6 +788,198 @@ local function buildClassroom(root: Instance, index: number): Classroom
 	}
 end
 
+-- ── biblioteca ─────────────────────────────────────────────────────
+
+--[[
+	La biblioteca, con su seccion secreta.
+
+	Va en `x = -41, z = +18`. No es un lugar arbitrario: las aulas ocupan
+	`z ∈ [-37, -7]` a los dos lados del atrio y la zona de recreo
+	`z ∈ [41, 75]`, asi que este es el unico hueco pegado al atrio que no
+	pisa nada. Comparte pared con el atrio, igual que las aulas.
+
+	Lo que la hace distinta de un cuarto decorativo es el fondo: una
+	estanteria que se corre y deja ver una alcoba con la hoja de
+	respuestas. El reparto lo hace `ExamService.openStash` — aca solo se
+	construye el mueble y se le cuelga el prompt.
+--]]
+local function buildLibrary(root: Instance): Model
+	local model = Instance.new("Model")
+	model.Name = "Biblioteca"
+	model.Parent = root
+
+	local halfW = E.AulaAncho / 2
+	local halfL = E.AulaLargo / 2
+	local height = E.AulaAltura
+	local cx = -(E.PasilloAncho / 2 + halfW)
+	local cz = 18
+	local center = Vector3.new(cx, 0, cz)
+	-- El atrio queda hacia +X desde aca.
+	local toHall = 1
+
+	plankFloor(model, center, E.AulaAncho, E.AulaLargo)
+	block(model, "Losa", Vector3.new(E.AulaAncho, 1, E.AulaLargo),
+		CFrame.new(cx, height, cz), C.Losa, M.MuroAlto)
+
+	-- Paredes: el fondo y las dos laterales, macizas.
+	block(model, "ParedFondo", Vector3.new(E.EspesorPared, height, E.AulaLargo),
+		CFrame.new(cx - halfW, height / 2, cz), C.MuroAlto, M.MuroAlto)
+	for _, dz in { -1, 1 } do
+		block(model, "ParedLateral", Vector3.new(E.AulaAncho, height, E.EspesorPared),
+			CFrame.new(cx, height / 2, cz + dz * halfL), C.MuroAlto, M.MuroAlto)
+		wainscot(model, CFrame.new(cx, 0, cz + dz * (halfL - 0.55)), E.AulaAncho, "X")
+	end
+
+	-- La pared del atrio, con su vano.
+	local doorWidth, doorHeight = 6, 8.5
+	local wallX = cx + halfW
+	local sidePiece = (E.AulaLargo - doorWidth) / 2
+	for _, dz in { -1, 1 } do
+		block(model, "ParedPasillo", Vector3.new(E.EspesorPared, height, sidePiece),
+			CFrame.new(wallX, height / 2, cz + dz * (doorWidth / 2 + sidePiece / 2)),
+			C.MuroAlto, M.MuroAlto)
+	end
+	block(model, "Dintel", Vector3.new(E.EspesorPared, height - doorHeight, doorWidth),
+		CFrame.new(wallX, doorHeight + (height - doorHeight) / 2, cz), C.MuroAlto, M.MuroAlto)
+	decor(model, "MarcoPuerta", Vector3.new(0.5, doorHeight + 0.4, doorWidth + 0.7),
+		CFrame.new(wallX, doorHeight / 2, cz), C.MarcoPuerta, M.MetalLiso)
+	sign(model, "BIBLIOTECA", Vector2.new(6.4, 1.4),
+		CFrame.new(wallX + toHall * 0.7, doorHeight + 0.9, cz)
+			* CFrame.Angles(0, math.rad(-90), 0),
+		Enum.NormalId.Front)
+
+	--[[
+		Una estanteria: el cuerpo, cuatro estantes y los lomos de los
+		libros. Los lomos son laminas finas de colores en la paleta
+		saturada; son lo que hace que la sala se lea como biblioteca y no
+		como un deposito de cajas.
+	--]]
+	local spineColors = {
+		Color3.fromRGB(198, 96, 168), Color3.fromRGB(146, 108, 210),
+		Color3.fromRGB(226, 104, 88), Color3.fromRGB(96, 164, 214),
+		Color3.fromRGB(120, 190, 150), Color3.fromRGB(238, 168, 96),
+	}
+
+	local function shelf(name: string, cf: CFrame, width: number): Model
+		local unit = Instance.new("Model")
+		unit.Name = name
+		unit.Parent = model
+
+		local tall = 8.5
+		block(unit, "Estante", Vector3.new(width, tall, 1.6), cf * CFrame.new(0, tall / 2, 0),
+			C.MaderaOscura, M.Madera)
+		for level = 1, 4 do
+			local y = 1.1 + (level - 1) * 1.9
+			decor(unit, "Balda", Vector3.new(width - 0.2, 0.16, 1.7),
+				cf * CFrame.new(0, y, 0), C.Madera, M.Madera)
+
+			-- Los lomos, apretados uno contra otro sobre cada balda.
+			local x = -width / 2 + 0.5
+			local guard = 0
+			while x < width / 2 - 0.5 and guard < 60 do
+				guard += 1
+				local thick = rng:NextNumber(0.16, 0.34)
+				local tallBook = rng:NextNumber(1.05, 1.55)
+				decor(unit, "Lomo", Vector3.new(thick, tallBook, 1.1),
+					cf * CFrame.new(x + thick / 2, y + tallBook / 2 + 0.08, 0),
+					spineColors[rng:NextInteger(1, #spineColors)], M.MuroAlto)
+				x += thick + 0.04
+			end
+		end
+		return unit
+	end
+
+	-- Contra las dos paredes laterales.
+	for _, dz in { -1, 1 } do
+		for i = -1, 1 do
+			shelf("Estanteria",
+				CFrame.new(cx + i * 10, 0, cz + dz * (halfL - 1.2))
+					* CFrame.Angles(0, dz > 0 and math.pi or 0, 0), 8)
+		end
+	end
+	-- Dos islas centrales, en el eje largo de la sala.
+	for _, dz in { -5.5, 5.5 } do
+		shelf("Estanteria", CFrame.new(cx - 4, 0, cz + dz) * CFrame.Angles(0, math.pi / 2, 0), 12)
+	end
+
+	-- Mesas de lectura con su lampara.
+	for _, dz in { -8, 8 } do
+		local table_ = block(model, "MesaLectura", Vector3.new(7, 0.3, 3.4),
+			CFrame.new(cx + 9, 3.4, cz + dz), C.Madera, M.Madera)
+		for _, dx in { -3, 3 } do
+			for _, dd in { -1.4, 1.4 } do
+				decor(model, "PataMesa", Vector3.new(0.26, 3.4, 0.26),
+					table_.CFrame * CFrame.new(dx, -1.85, dd), C.MaderaOscura, M.MaderaLisa)
+			end
+		end
+		local lamp = decor(model, "Lampara", Vector3.new(1.1, 0.5, 1.1),
+			table_.CFrame * CFrame.new(2.4, 0.9, 0), C.Dorado, M.MetalLiso)
+		local glow = Instance.new("PointLight")
+		glow.Brightness = 1.1
+		glow.Range = 14
+		glow.Color = C.LuzCalida
+		glow.Shadows = false
+		glow.Parent = lamp
+	end
+
+	--[[
+		La estanteria movible del fondo y lo que esconde.
+
+		El prompt se llama "Alcoba" y lo engancha `ExamService.bindStashes`
+		para repartir las respuestas. Aca se le suma una segunda conexion,
+		puramente visual, que corre el mueble y lo devuelve solo: son dos
+		conexiones al mismo Triggered y cada una hace lo suyo, sin que la
+		presentacion se meta con la mecanica.
+	--]]
+	local alcoveZ = cz
+	local backX = cx - halfW
+
+	block(model, "Alcoba", Vector3.new(3, 5, 8),
+		CFrame.new(backX + 1.6, 2.5, alcoveZ), C.MaderaOscura, M.Madera)
+	local paper = decor(model, "HojaRespuestas", Vector3.new(1.6, 0.06, 2.2),
+		CFrame.new(backX + 1.8, 3.2, alcoveZ), C.Pantalla, M.Placa)
+	paper.Color = Color3.fromRGB(250, 248, 238)
+
+	local movable = shelf("EstanteriaMovible",
+		CFrame.new(backX + 1.5, 0, alcoveZ) * CFrame.Angles(0, math.pi / 2, 0), 8)
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "Alcoba"
+	prompt.ActionText = "Correr"
+	prompt.ObjectText = "Estanteria"
+	prompt.HoldDuration = 1.4
+	prompt.MaxActivationDistance = 8
+	prompt.RequiresLineOfSight = false
+	local anchor = movable:FindFirstChild("Estante")
+	prompt.Parent = anchor or movable
+
+	local sliding = false
+	prompt.Triggered:Connect(function()
+		if sliding then
+			return
+		end
+		sliding = true
+		local origin = movable:GetPivot()
+		local aside = origin * CFrame.new(0, 0, -7)
+		local steps = 26
+		for i = 1, steps do
+			movable:PivotTo(origin:Lerp(aside, i / steps))
+			task.wait(0.012)
+		end
+		task.wait(4)
+		for i = 1, steps do
+			movable:PivotTo(aside:Lerp(origin, i / steps))
+			task.wait(0.012)
+		end
+		sliding = false
+	end)
+
+	-- Techo con luminarias, como el aula.
+	dropCeiling(model, center, E.AulaAncho, E.AulaLargo, height - 1.2, 2)
+
+	return model
+end
+
 -- ── sala de castigo ────────────────────────────────────────────────
 
 local function buildDetention(root: Instance): BasePart
@@ -905,6 +1103,10 @@ function MapBuilder.build(): Map
 			table.insert(classrooms, buildClassroom(aulas, i))
 		end)
 	end
+
+	safely("biblioteca", function()
+		buildLibrary(root)
+	end)
 
 	local detention = buildDetention(root)
 

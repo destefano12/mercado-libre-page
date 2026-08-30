@@ -132,9 +132,19 @@ local function ensureCanvas(part: BasePart, face: Face): Frame
 	gui.Name = canvasName(face)
 	gui.Face = face.id
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	-- Pocos pixeles por stud: las paredes son enormes y no hace falta
-	-- resolucion, hace falta que no se coma la memoria del cliente.
-	gui.PixelsPerStud = G.PixelesPorStud
+	--[[
+		Pocos pixeles por stud: las paredes son enormes y no hace falta
+		resolucion, hace falta que no se coma la memoria del cliente.
+
+		Con una excepcion: en una superficie chica esa densidad no
+		alcanza. Una cabeza mide dos studs, o sea 24 pixeles de lienzo, y
+		la brocha mas fina caeria en 5 — no se veria un dibujo, se veria
+		un borron. Las superficies chicas suben a cuatro veces la
+		densidad, que sigue siendo barato justamente porque son chicas.
+	--]]
+	gui.PixelsPerStud = math.max(width, height) <= 4
+		and G.PixelesPorStud * 4
+		or G.PixelesPorStud
 	gui.LightInfluence = 0.6
 	gui.AlwaysOnTop = false
 	gui.MaxDistance = 140
@@ -275,18 +285,30 @@ function GraffitiService.markMap(map: any)
 	if not map then
 		return
 	end
+	--[[
+		Las superficies nuevas del atrio y la biblioteca hay que sumarlas
+		aca o no se pueden pintar: esta lista va por nombre exacto de
+		pieza, no por tipo. `Estatua` y `Pantalla` en particular son
+		mecanicas — decorar la estatua y dibujar sobre la pantalla del
+		proyector — que sin esta linea no existirian por mas geometria
+		que tuvieran.
+	--]]
+	local PINTABLES = {
+		Pared = true, ParedLateral = true, ParedFondo = true, ParedPasillo = true,
+		Puerta = true, Cuerpo = true, PuertaCasillero = true, Fondo = true,
+		Dintel = true, Baldosa = true, Friso = true, Tienda = true,
+		Pizarra = true,
+		-- Atrio y aula nuevos.
+		Estatua = true, Pedestal = true, Tablon = true, Pantalla = true,
+		-- Biblioteca.
+		Estante = true, MesaLectura = true, Alcoba = true,
+	}
+
 	local marked = 0
 	for _, descendant in map.root:GetDescendants() do
-		if descendant:IsA("BasePart") then
-			local name = descendant.Name
-			if name == "Pared" or name == "ParedLateral" or name == "ParedFondo"
-				or name == "ParedPasillo" or name == "Puerta" or name == "Cuerpo"
-				or name == "PuertaCasillero" or name == "Fondo" or name == "Dintel"
-				or name == "Baldosa" or name == "Friso" or name == "Tienda"
-				or name == "Pizarra" then
-				GraffitiService.markPaintable(descendant)
-				marked += 1
-			end
+		if descendant:IsA("BasePart") and PINTABLES[descendant.Name] then
+			GraffitiService.markPaintable(descendant)
+			marked += 1
 		end
 	end
 	print(string.format("[Grafiti] %d superficies pintables.", marked))

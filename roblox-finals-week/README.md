@@ -93,6 +93,7 @@ girar.
 | `B` | **Tirar a la canasta** |
 | `Z` | **Prismáticos** (mantener) — con `Q` lees una hoja de lejos |
 | `H` | Leer el libro que llevás en la mano |
+| `J` | **Pasarle el libro** al compañero que tengas en la mira |
 | Clic | Pintar con el aerosol |
 | Rueda / `C` | Grosor / color del aerosol |
 | `T` | Tienda |
@@ -106,17 +107,31 @@ El recreo no es una sala de espera. Hay:
   fricción y rebote), se agarra con `E`, se tira con `B`, y la canasta
   solo cuenta si la pelota cruza el aro **bajando**. Cada canasta da
   créditos.
+- **Pelotas de béisbol** en un cesto al costado del atrio. No hay aro ni
+  marcador: tirarlas es el fin en sí mismo. Salen mucho más rápido que la
+  de básquet y casi no rebotan, y si le pegás a alguien lo aturdís un
+  momento — que es exactamente para lo que se usan.
 - **Aerosoles** — pintás cualquier pared, casillero, puerta, pizarra o
-  baldosa del colegio. Ocho colores, cuatro grosores. Lo que pintás lo
-  ven todos y sigue ahí toda la semana.
+  baldosa del colegio, la estatua del atrio, la pantalla del proyector
+  del aula y **la cara de otro jugador**. Ocho colores, cuatro grosores.
+  Lo que pintás en el colegio queda toda la semana; lo de una cara se
+  borra cuando esa persona reaparece.
 - **Libros de texto** repartidos por el pasillo — leer uno te deja
   aprendidas **de verdad** dos respuestas del examen que viene, que
   aparecen ya marcadas cuando te sentás. Es la ruta honesta, y existe
   para que copiar sea una decisión y no la única opción.
+  Con `J` se lo **pasás a un compañero**: el libro es escaso y el que lo
+  juntó decide si se lo queda o lo hace circular. Como el día lo decide
+  el promedio del curso, repartir conviene.
 - **Alumnos que estudiaron** (NPC) con el libro bajo el brazo. Podés
   pedirles la respuesta — a veces te dicen que no — o tirarlos al piso
   y quedarte con la chuleta. La vía amable es incierta; la bruta es
   segura pero, en pleno examen, carísima.
+- **La biblioteca**, al costado del atrio. Estanterías, mesas de lectura
+  y, contra el fondo, una que **se corre**: detrás hay una alcoba con la
+  hoja de respuestas del examen del día. Revela el doble que el cajón del
+  escritorio y no cuesta sospecha — lo que pagás es el recreo entero
+  yendo y volviendo.
 
 ### Las trampas
 
@@ -126,6 +141,12 @@ El recreo no es una sala de espera. Hay:
 - **Soplar (`R`)** — le pasás tu respuesta a todos los que estén a menos
   de 14 studs. Es la mecánica cooperativa: el que estudió reparte.
 - **Chuleta** — revela 3 respuestas correctas del examen, dos veces.
+- **El cajón del escritorio del profesor** — con el tirador dorado, en la
+  tarima. Revela 2 respuestas y cuesta **casi toda la barra de sospecha**:
+  es meter la mano en su escritorio, delante suyo. La jugada del que ya no
+  tiene nada que perder. (Su gemela tranquila es la alcoba de la
+  biblioteca: el doble de respuestas, cero sospecha, pero hay que ir hasta
+  allá en el recreo.)
 - **Nota / avioncito** — escribís `pregunta → letra`, apuntás y lo
   lanzás. Al impactar, la respuesta se escribe **sola** en la hoja del
   que la recibe.

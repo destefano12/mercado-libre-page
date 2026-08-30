@@ -80,6 +80,19 @@ Config.Examen = {
 	CopiarSegundos = 1.8,
 	CopiarAcierto = 0.72,
 	CopiarAlcance = 11,
+	--[[
+		Los dos escondites con la hoja de respuestas.
+
+		El cajon esta en el escritorio del profesor, o sea al alcance de
+		la mano durante el examen: revela poco y cuesta carisimo en
+		sospecha. La alcoba de la biblioteca revela el doble y no cuesta
+		sospecha ninguna, pero esta del otro lado del atrio — lo que
+		pagas es el recreo entero yendo y volviendo.
+	--]]
+	CajonRevela = 2,
+	CajonEnfriamiento = 25,
+	AlcobaRevela = 4,
+	AlcobaEnfriamiento = 40,
 }
 
 -- ── Profesor (IA del servidor) ─────────────────────────────────────
@@ -114,6 +127,9 @@ Config.Sospecha = {
 	PorSoplar = 0.2,
 	PorCorrerEnExamen = 0.18,
 	PorSegundoEnMira = 0.06,
+	-- Meter la mano en el escritorio del profesor, delante suyo, es la
+	-- jugada mas cara del juego: casi te delata sola.
+	PorCajon = 0.85,
 	Umbral = 1.0,
 	UmbralAviso = 0.55,
 	MultiplicadorDistancia = 1.6,
@@ -175,10 +191,22 @@ Config.Economia = {
 		{ id = "celular", precio = 140, tipo = "objeto" },
 		{ id = "aerosol", precio = 30, tipo = "objeto" },
 		{ id = "libro", precio = 55, tipo = "objeto" },
+		--[[
+			La estetica no se compra sola: hay que haberse ganado el
+			derecho. `semanas` son semanas finales sobrevividas y
+			`promedio` es el mejor promedio que sacaste alguna vez, dos
+			cosas que ya viven en el perfil de DataService.
+
+			La gorra queda libre para que la tienda no se vea toda
+			bloqueada la primera vez que entras.
+		--]]
 		{ id = "gorra", precio = 90, tipo = "estetica" },
-		{ id = "mochila", precio = 130, tipo = "estetica" },
-		{ id = "anteojos", precio = 75, tipo = "estetica" },
-		{ id = "campera", precio = 160, tipo = "estetica" },
+		{ id = "anteojos", precio = 75, tipo = "estetica",
+			requiere = { promedio = 70 } },
+		{ id = "mochila", precio = 130, tipo = "estetica",
+			requiere = { semanas = 1 } },
+		{ id = "campera", precio = 160, tipo = "estetica",
+			requiere = { semanas = 2, promedio = 80 } },
 	},
 }
 
@@ -242,6 +270,20 @@ Config.Pasillo = {
 	CreditosPorCanasta = 6,
 	AlcanceAgarre = 8,
 	EnfriamientoTiro = 0.4,
+	--[[
+		Pelotas de beisbol. A diferencia de la de basquet no hay aro ni
+		marcador: tirar es el fin en si mismo. Son mas chicas, mas
+		rapidas y casi no rebotan, y si le pegas a alguien lo aturdis un
+		momento — que es exactamente para lo que se usan.
+	--]]
+	BeisbolCantidad = 5,
+	BeisbolRadio = 0.55,
+	BeisbolRebote = 0.35,
+	BeisbolFriccion = 0.55,
+	BeisbolFuerza = 155,
+	BeisbolAlturaTiro = 0.1,
+	BeisbolAturde = 1.1,              -- segundos que aturde el impacto
+	BeisbolVelocidadMinima = 45,      -- por debajo de esto no aturde
 }
 
 -- ── Grafiti: dibujar en las paredes ────────────────────────────────
@@ -281,6 +323,9 @@ Config.Herramientas = {
 	LibroRevela = 2,
 	LibroSegundos = 3.5,
 	LibroEnfriamiento = 20,
+	-- Pasarle el libro a un companero: a distancia de brazo, no a
+	-- distancia de grito.
+	AlcancePase = 14,
 }
 
 -- ── Dejar KO ───────────────────────────────────────────────────────

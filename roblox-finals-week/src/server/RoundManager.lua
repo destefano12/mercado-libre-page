@@ -286,6 +286,17 @@ local function phaseReport()
 	PunishService.clearVisuals()
 	Net.event(Net.Events.Music):FireAllClients({ clima = "pasillo" })
 
+	--[[
+		El boletin se arma en dos vueltas y no en una.
+
+		El curso desaprueba el dia si el promedio de la clase no llega —
+		eso ya era asi — pero el boletin solo mostraba tu nota
+		individual, asi que nadie se enteraba de que aprobar es
+		colectivo. Para poder encabezar cada boletin con el resultado del
+		curso hay que tener el promedio ANTES de mandar ninguno, y por
+		eso primero se calculan todos y despues se reparten.
+	--]]
+	local reports: { [Player]: any } = {}
 	local sum, count = 0, 0
 	for _, player in Players:GetPlayers() do
 		local result = results[player] or { correct = 0, wrong = 0, blank = 0 }
@@ -298,7 +309,20 @@ local function phaseReport()
 
 		sum += report.final
 		count += 1
+		reports[player] = { report = report, result = result, punishments = punishments }
+	end
 
+	local classAverage = count > 0 and sum / count or 0
+	local classPassed = count > 0 and Grades.passed(classAverage)
+
+	for _, player in Players:GetPlayers() do
+		local entry = reports[player]
+		if not entry then
+			continue
+		end
+		local report = entry.report
+		local result = entry.result
+		local punishments = entry.punishments
 		local credits = ShopService.reward(player, result.correct, report.aprobado, punishments)
 
 		Net.event(Net.Events.Report):FireClient(player, {
@@ -317,6 +341,10 @@ local function phaseReport()
 			suspensos = fails,
 			maxSuspensos = R.SuspensosParaExpulsion,
 			semana = false,
+			-- Lo que hace visible el co-op: como le fue al CURSO.
+			promedioClase = math.floor(classAverage + 0.5),
+			claseAprobo = classPassed,
+			alumnos = count,
 		})
 		Net.event(Net.Events.Notify):FireClient(player, {
 			key = report.aprobado and "notify.passed" or "notify.failed",
@@ -325,8 +353,7 @@ local function phaseReport()
 	end
 
 	-- El curso desaprueba el dia si el promedio de la clase no llega.
-	local classAverage = count > 0 and sum / count or 0
-	if count > 0 and not Grades.passed(classAverage) then
+	if count > 0 and not classPassed then
 		fails += 1
 	end
 

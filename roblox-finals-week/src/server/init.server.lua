@@ -141,12 +141,20 @@ end)
 step("examenes", function()
 	ExamService.setMap(map)
 	ExamService.start()
+	-- Cajones del escritorio y alcoba secreta de la biblioteca. Sin esta
+	-- linea sus ProximityPrompt existen y no hacen nada.
+	if map then
+		ExamService.bindStashes(map.root)
+	end
 end)
 
 step("objetos y casilleros", function()
 	ItemService.start()
 	ItemService.onReadBook = function(player)
 		return BookService.readTool(player)
+	end
+	ItemService.onPassBook = function(player, target)
+		return BookService.pass(player, target)
 	end
 	if map then
 		ItemService.bindLockers(map.lockers)

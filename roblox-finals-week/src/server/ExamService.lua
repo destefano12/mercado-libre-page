@@ -575,6 +575,114 @@ function ExamService.useSheet(player: Player): any
 	return { ok = true, reason = { key = "cheat.sheet_used", args = { n = revealed } } }
 end
 
+--[[
+	Los escondites con la hoja de respuestas: el cajon del escritorio del
+	profesor y la alcoba secreta de la biblioteca.
+
+	Son la misma idea con costos opuestos, y esa oposicion es el diseno:
+
+	  cajon   esta al alcance de la mano durante el examen, revela poco y
+	          cuesta casi toda la barra de sospecha. Es la jugada
+	          desesperada del que ya no tiene nada que perder.
+	  alcoba  revela el doble y no cuesta sospecha, pero esta del otro
+	          lado del atrio y solo se puede abrir en el recreo. Lo que
+	          pagas es el tiempo: mientras vas y volves no estas
+	          comprando en el kiosco ni juntando libros.
+
+	Esta funcion es tambien el arreglo de un prompt muerto: el cajon se
+	construia con su ProximityPrompt desde la entrega anterior, pero
+	nadie escuchaba el Triggered, asi que mantener E no hacia nada.
+--]]
+local stashCooldowns: { [Player]: { [string]: number } } = {}
+
+function ExamService.openStash(player: Player, kind: string): any
+	local now = os.clock()
+	local perPlayer = stashCooldowns[player]
+	if not perPlayer then
+		perPlayer = {}
+		stashCooldowns[player] = perPlayer
+	end
+	if (perPlayer[kind] or 0) > now then
+		return { ok = false, reason = { key = "stash.cooling" } }
+	end
+
+	if kind == "cajon" then
+		local sitting = sittings[player]
+		if not running or not sitting then
+			-- Fuera del examen el cajon esta vacio: la hoja del dia
+			-- todavia no existe.
+			return { ok = false, reason = { key = "stash.empty" } }
+		end
+
+		local questions = exams[sitting.aula] or {}
+		local pending: { number } = {}
+		for i, question in questions do
+			if question.tipo == "opcion" and not sitting.revealed[i] then
+				table.insert(pending, i)
+			end
+		end
+		if #pending == 0 then
+			return { ok = false, reason = { key = "stash.empty" } }
+		end
+
+		perPlayer[kind] = now + Config.Examen.CajonEnfriamiento
+		SuspicionService.infraction(player, Config.Sospecha.PorCajon, "stash")
+
+		local revealed = 0
+		for _ = 1, math.min(Config.Examen.CajonRevela, #pending) do
+			local pick = table.remove(pending, math.random(1, #pending))
+			if pick then
+				sitting.revealed[pick] = true
+				revealed += 1
+			end
+		end
+
+		pushState(player)
+		return { ok = true, reason = { key = "stash.drawer", args = { n = revealed } } }
+	end
+
+	--[[
+		La alcoba se abre en el recreo, cuando todavia no hay pupitre
+		asignado, asi que las respuestas se anotan como conocimiento
+		pendiente — el mismo camino que usan los libros de texto. Se
+		cobran solas al sentarte.
+	--]]
+	if running then
+		return { ok = false, reason = { key = "stash.locked" } }
+	end
+	perPlayer[kind] = now + Config.Examen.AlcobaEnfriamiento
+	ExamService.grantKnowledge(player, Config.Examen.AlcobaRevela)
+	return {
+		ok = true,
+		reason = { key = "stash.alcove", args = { n = Config.Examen.AlcobaRevela } },
+	}
+end
+
+--[[
+	Engancha los ProximityPrompt de los escondites. Se llama una vez al
+	construir el mapa, igual que `ItemService.bindLockers`.
+
+	Sin esto el prompt del cajon existia y no hacia nada: la barra se
+	llenaba y no pasaba absolutamente nada. Es el arreglo del defecto.
+--]]
+function ExamService.bindStashes(root: Instance)
+	local bound = 0
+	for _, descendant in root:GetDescendants() do
+		if descendant:IsA("ProximityPrompt")
+			and (descendant.Name == "Cajon" or descendant.Name == "Alcoba") then
+			local kind = descendant.Name == "Cajon" and "cajon" or "alcoba"
+			descendant.Triggered:Connect(function(player)
+				local result = ExamService.openStash(player, kind)
+				if result and result.reason then
+					Net.event(Net.Events.Notify):FireClient(player, result.reason)
+				end
+			end)
+			bound += 1
+		end
+	end
+	print(string.format("[Examen] %d escondites enganchados.", bound))
+end
+
 --- Suma usos de chuleta. Si todavia no hay pupitre (estamos en el
 --- recreo), quedan anotados y se cobran al sentarse.
 function ExamService.grantSheetUses(player: Player, uses: number)

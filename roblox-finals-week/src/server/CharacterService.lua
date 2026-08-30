@@ -212,6 +212,17 @@ function CharacterService.dressStudent(player: Player, character: Model, estetic
 		local head = character:FindFirstChild("Head")
 		if head and head:IsA("BasePart") then
 			head.Color = skin.piel
+			--[[
+				La cara es pintable. Es el mismo atributo que usan las
+				paredes, asi que dibujarle a alguien encima sale del
+				sistema de grafiti que ya existia — `GraffitiService`
+				nunca filtro a los otros jugadores del raycast, solo les
+				faltaba estar marcados.
+
+				Se borra solo al reaparecer: la cabeza es nueva y el
+				lienzo se fue con la vieja.
+			--]]
+			head:SetAttribute("Pintable", true)
 			for _, child in character:GetChildren() do
 				if child:IsA("BasePart")
 					and (child.Name == "Pelo" or child.Name == "Flequillo") then

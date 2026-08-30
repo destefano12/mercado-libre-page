@@ -42,6 +42,28 @@ function ShopService.isOpen(): boolean
 	return currentPhase == openDuringPhase or currentPhase == "espera" or currentPhase == "boletin"
 end
 
+--[[
+	Devuelve el aviso de por que un articulo esta bloqueado, o `nil` si
+	esta disponible.
+
+	Vive aca y no en el cliente porque es el servidor quien decide; la
+	tienda dibuja el candado con los mismos numeros, pero solo para que
+	el jugador se entere antes de hacer clic.
+--]]
+function ShopService.missingRequirement(profile: any, entry: any): any
+	local needs = entry.requiere
+	if not needs then
+		return nil
+	end
+	if needs.semanas and (profile.semanas or 0) < needs.semanas then
+		return { key = "shop.need_weeks", args = { n = needs.semanas } }
+	end
+	if needs.promedio and (profile.mejorPromedio or 0) < needs.promedio then
+		return { key = "shop.need_grade", args = { n = needs.promedio } }
+	end
+	return nil
+end
+
 --- Compra: descuenta creditos y marca el objeto como propio.
 function ShopService.buy(player: Player, id: any): any
 	if type(id) ~= "string" then
@@ -64,6 +86,22 @@ function ShopService.buy(player: Player, id: any): any
 	if entry.tipo == "estetica" and profile.comprados[id] then
 		return { ok = false, reason = { key = "shop.owned" } }
 	end
+
+	--[[
+		La estetica no se compra sola: hay que habersela ganado. En el
+		juego real la ropa se desbloquea aprobando, no pagando, y esto es
+		lo que traduce esa idea — los creditos siguen haciendo falta,
+		pero primero hay que cumplir el requisito.
+
+		`semanas` son semanas finales sobrevividas y `promedio` es el
+		mejor promedio que sacaste alguna vez; las dos ya viven en el
+		perfil desde siempre.
+	--]]
+	local needed = ShopService.missingRequirement(profile, entry)
+	if needed then
+		return { ok = false, reason = needed }
+	end
+
 	if profile.creditos < entry.precio then
 		return { ok = false, reason = { key = "shop.cannot" } }
 	end

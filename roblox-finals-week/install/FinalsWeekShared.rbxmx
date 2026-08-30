@@ -88,6 +88,19 @@ Config.Examen = {
 	CopiarSegundos = 1.8,
 	CopiarAcierto = 0.72,
 	CopiarAlcance = 11,
+	--[[
+		Los dos escondites con la hoja de respuestas.
+
+		El cajon esta en el escritorio del profesor, o sea al alcance de
+		la mano durante el examen: revela poco y cuesta carisimo en
+		sospecha. La alcoba de la biblioteca revela el doble y no cuesta
+		sospecha ninguna, pero esta del otro lado del atrio — lo que
+		pagas es el recreo entero yendo y volviendo.
+	--]]
+	CajonRevela = 2,
+	CajonEnfriamiento = 25,
+	AlcobaRevela = 4,
+	AlcobaEnfriamiento = 40,
 }
 
 -- ── Profesor (IA del servidor) ─────────────────────────────────────
@@ -122,6 +135,9 @@ Config.Sospecha = {
 	PorSoplar = 0.2,
 	PorCorrerEnExamen = 0.18,
 	PorSegundoEnMira = 0.06,
+	-- Meter la mano en el escritorio del profesor, delante suyo, es la
+	-- jugada mas cara del juego: casi te delata sola.
+	PorCajon = 0.85,
 	Umbral = 1.0,
 	UmbralAviso = 0.55,
 	MultiplicadorDistancia = 1.6,
@@ -183,10 +199,22 @@ Config.Economia = {
 		{ id = "celular", precio = 140, tipo = "objeto" },
 		{ id = "aerosol", precio = 30, tipo = "objeto" },
 		{ id = "libro", precio = 55, tipo = "objeto" },
+		--[[
+			La estetica no se compra sola: hay que haberse ganado el
+			derecho. `semanas` son semanas finales sobrevividas y
+			`promedio` es el mejor promedio que sacaste alguna vez, dos
+			cosas que ya viven en el perfil de DataService.
+
+			La gorra queda libre para que la tienda no se vea toda
+			bloqueada la primera vez que entras.
+		--]]
 		{ id = "gorra", precio = 90, tipo = "estetica" },
-		{ id = "mochila", precio = 130, tipo = "estetica" },
-		{ id = "anteojos", precio = 75, tipo = "estetica" },
-		{ id = "campera", precio = 160, tipo = "estetica" },
+		{ id = "anteojos", precio = 75, tipo = "estetica",
+			requiere = { promedio = 70 } },
+		{ id = "mochila", precio = 130, tipo = "estetica",
+			requiere = { semanas = 1 } },
+		{ id = "campera", precio = 160, tipo = "estetica",
+			requiere = { semanas = 2, promedio = 80 } },
 	},
 }
 
@@ -250,6 +278,20 @@ Config.Pasillo = {
 	CreditosPorCanasta = 6,
 	AlcanceAgarre = 8,
 	EnfriamientoTiro = 0.4,
+	--[[
+		Pelotas de beisbol. A diferencia de la de basquet no hay aro ni
+		marcador: tirar es el fin en si mismo. Son mas chicas, mas
+		rapidas y casi no rebotan, y si le pegas a alguien lo aturdis un
+		momento — que es exactamente para lo que se usan.
+	--]]
+	BeisbolCantidad = 5,
+	BeisbolRadio = 0.55,
+	BeisbolRebote = 0.35,
+	BeisbolFriccion = 0.55,
+	BeisbolFuerza = 155,
+	BeisbolAlturaTiro = 0.1,
+	BeisbolAturde = 1.1,              -- segundos que aturde el impacto
+	BeisbolVelocidadMinima = 45,      -- por debajo de esto no aturde
 }
 
 -- ── Grafiti: dibujar en las paredes ────────────────────────────────
@@ -289,6 +331,9 @@ Config.Herramientas = {
 	LibroRevela = 2,
 	LibroSegundos = 3.5,
 	LibroEnfriamiento = 20,
+	-- Pasarle el libro a un companero: a distancia de brazo, no a
+	-- distancia de grito.
+	AlcancePase = 14,
 }
 
 -- ── Dejar KO ───────────────────────────────────────────────────────
@@ -1198,6 +1243,11 @@ local en: { [string]: string } = {
 	["cheat.whisper_got"] = "{name} whispers: {i} is {opt}",
 	["cheat.sheet_used"] = "Cheat sheet: {n} answers revealed",
 	["cheat.sheet_empty"] = "The cheat sheet is used up",
+	["stash.drawer"] = "You raided the drawer: {n} answers",
+	["stash.alcove"] = "The answer key: {n} answers learned",
+	["stash.empty"] = "There is nothing in there",
+	["stash.locked"] = "The library is closed during the exam",
+	["stash.cooling"] = "Not so fast",
 	["cheat.cooldown"] = "Wait a moment",
 	["cheat.seen"] = "The teacher saw you",
 	["cheat.none"] = "You have nothing to use",
@@ -1230,6 +1280,9 @@ local en: { [string]: string } = {
 	["shop.title"] = "School store",
 	["shop.buy"] = "Buy",
 	["shop.owned"] = "Owned",
+	["shop.locked"] = "Locked",
+	["shop.need_weeks"] = "Survive {n} finals weeks first",
+	["shop.need_grade"] = "Reach a {n} average first",
 	["shop.equip"] = "Equip",
 	["shop.equipped"] = "Equipped",
 	["shop.cannot"] = "Not enough credits",
@@ -1276,6 +1329,7 @@ local en: { [string]: string } = {
 	-- Pasillo: pelota y canasta
 	["ball.grab"] = "Grab the ball",
 	["ball.throw"] = "Click to shoot",
+	["ball.hit"] = "{name} beaned you",
 	["ball.basket"] = "{name} scored! +{n}",
 	["ball.taken"] = "Somebody else has the ball",
 	["ball.score"] = "Baskets: {n}",
@@ -1317,6 +1371,10 @@ local en: { [string]: string } = {
 	-- Libros y empollones
 	["book.read"] = "Read the textbook",
 	["book.learned"] = "You learned {n} answers",
+	["book.none"] = "You are not holding a textbook",
+	["book.too_far"] = "Too far away",
+	["book.passed"] = "You handed the book to {name}",
+	["book.received"] = "{name} handed you a textbook",
 	["book.busy"] = "You already read that one",
 	["book.only_recess"] = "There is no time to read now",
 	["nerd.ask"] = "Ask for answers",
@@ -1337,6 +1395,8 @@ local en: { [string]: string } = {
 	["eraser.miss"] = "The eraser whistled past",
 	-- Boletin
 	["report.title"] = "Report card",
+	["report.class_passed"] = "The class passed: {n} average",
+	["report.class_failed"] = "The class failed: {n} average",
 	["report.day"] = "Day {n}",
 	["report.exam"] = "Exam",
 	["report.behaviour"] = "Behaviour",
@@ -1459,6 +1519,11 @@ local es: { [string]: string } = {
 	["cheat.whisper_got"] = "{name} sopla: la {i} es {opt}",
 	["cheat.sheet_used"] = "Chuleta: {n} respuestas reveladas",
 	["cheat.sheet_empty"] = "La chuleta ya no da mas",
+	["stash.drawer"] = "Le robaste al cajon: {n} respuestas",
+	["stash.alcove"] = "La hoja de respuestas: aprendiste {n}",
+	["stash.empty"] = "Ahi adentro no hay nada",
+	["stash.locked"] = "La biblioteca cierra durante el examen",
+	["stash.cooling"] = "Para un poco",
 	["cheat.cooldown"] = "Espera un momento",
 	["cheat.seen"] = "El profesor te vio",
 	["cheat.none"] = "No tenes nada para usar",
@@ -1491,6 +1556,9 @@ local es: { [string]: string } = {
 	["shop.title"] = "Tienda del colegio",
 	["shop.buy"] = "Comprar",
 	["shop.owned"] = "Comprado",
+	["shop.locked"] = "Bloqueado",
+	["shop.need_weeks"] = "Primero sobrevivi {n} semanas finales",
+	["shop.need_grade"] = "Primero llega a un promedio de {n}",
 	["shop.equip"] = "Equipar",
 	["shop.equipped"] = "Equipado",
 	["shop.cannot"] = "No te alcanzan los creditos",
@@ -1537,6 +1605,7 @@ local es: { [string]: string } = {
 	-- Pasillo: pelota y canasta
 	["ball.grab"] = "Agarrar la pelota",
 	["ball.throw"] = "Clic para tirar",
+	["ball.hit"] = "{name} te dio un pelotazo",
 	["ball.basket"] = "Canasta de {name}! +{n}",
 	["ball.taken"] = "La pelota la tiene otro",
 	["ball.score"] = "Canastas: {n}",
@@ -1578,6 +1647,10 @@ local es: { [string]: string } = {
 	-- Libros y empollones
 	["book.read"] = "Leer el libro",
 	["book.learned"] = "Aprendiste {n} respuestas",
+	["book.none"] = "No llevas ningun libro",
+	["book.too_far"] = "Esta demasiado lejos",
+	["book.passed"] = "Le pasaste el libro a {name}",
+	["book.received"] = "{name} te paso un libro",
 	["book.busy"] = "Ese ya lo leiste",
 	["book.only_recess"] = "Ahora no hay tiempo de leer",
 	["nerd.ask"] = "Pedir respuestas",
@@ -1598,6 +1671,8 @@ local es: { [string]: string } = {
 	["eraser.miss"] = "La goma paso silbando",
 	-- Boletin
 	["report.title"] = "Boletin",
+	["report.class_passed"] = "El curso aprobo: promedio {n}",
+	["report.class_failed"] = "El curso desaprobo: promedio {n}",
 	["report.day"] = "Dia {n}",
 	["report.exam"] = "Examen",
 	["report.behaviour"] = "Conducta",
@@ -1720,6 +1795,11 @@ local pt: { [string]: string } = {
 	["cheat.whisper_got"] = "{name} sopra: a {i} e {opt}",
 	["cheat.sheet_used"] = "Cola: {n} respostas reveladas",
 	["cheat.sheet_empty"] = "A cola ja acabou",
+	["stash.drawer"] = "Voce roubou a gaveta: {n} respostas",
+	["stash.alcove"] = "O gabarito: {n} respostas aprendidas",
+	["stash.empty"] = "Nao tem nada ai dentro",
+	["stash.locked"] = "A biblioteca fecha durante a prova",
+	["stash.cooling"] = "Calma ai",
 	["cheat.cooldown"] = "Espere um pouco",
 	["cheat.seen"] = "O professor te viu",
 	["cheat.none"] = "Voce nao tem nada para usar",
@@ -1752,6 +1832,9 @@ local pt: { [string]: string } = {
 	["shop.title"] = "Loja da escola",
 	["shop.buy"] = "Comprar",
 	["shop.owned"] = "Comprado",
+	["shop.locked"] = "Bloqueado",
+	["shop.need_weeks"] = "Sobreviva {n} semanas de prova antes",
+	["shop.need_grade"] = "Chegue a uma media de {n} antes",
 	["shop.equip"] = "Equipar",
 	["shop.equipped"] = "Equipado",
 	["shop.cannot"] = "Creditos insuficientes",
@@ -1798,6 +1881,7 @@ local pt: { [string]: string } = {
 	-- Pasillo: pelota y canasta
 	["ball.grab"] = "Pegar a bola",
 	["ball.throw"] = "Clique para arremessar",
+	["ball.hit"] = "{name} te acertou com a bola",
 	["ball.basket"] = "Cesta de {name}! +{n}",
 	["ball.taken"] = "Outra pessoa esta com a bola",
 	["ball.score"] = "Cestas: {n}",
@@ -1839,6 +1923,10 @@ local pt: { [string]: string } = {
 	-- Libros y empollones
 	["book.read"] = "Ler o livro",
 	["book.learned"] = "Voce aprendeu {n} respostas",
+	["book.none"] = "Voce nao esta com nenhum livro",
+	["book.too_far"] = "Esta longe demais",
+	["book.passed"] = "Voce passou o livro para {name}",
+	["book.received"] = "{name} te passou um livro",
 	["book.busy"] = "Esse voce ja leu",
 	["book.only_recess"] = "Agora nao da tempo de ler",
 	["nerd.ask"] = "Pedir respostas",
@@ -1859,6 +1947,8 @@ local pt: { [string]: string } = {
 	["eraser.miss"] = "A borracha passou assobiando",
 	-- Boletin
 	["report.title"] = "Boletim",
+	["report.class_passed"] = "A turma passou: media {n}",
+	["report.class_failed"] = "A turma reprovou: media {n}",
 	["report.day"] = "Dia {n}",
 	["report.exam"] = "Prova",
 	["report.behaviour"] = "Conduta",

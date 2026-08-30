@@ -260,6 +260,34 @@ end)
 
 -- ── atajos ─────────────────────────────────────────────────────────
 
+--[[
+	El jugador que tenes en la mira, si hay alguno. Se usa para pasarle
+	el libro a un companero.
+
+	Como en todo el resto del juego, esto es solo una intencion: el
+	cliente dice a quien cree estar apuntando y el servidor decide si la
+	jugada vale. Que la respuesta llegue de aca no la hace confiable.
+--]]
+local function aimedPlayer(): Player?
+	local camera = workspace.CurrentCamera
+	local character = player.Character
+	if not camera or not character then
+		return nil
+	end
+
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { character }
+
+	local hit = workspace:Raycast(camera.CFrame.Position,
+		camera.CFrame.LookVector * 24, params)
+	if not hit then
+		return nil
+	end
+	local model = hit.Instance:FindFirstAncestorOfClass("Model")
+	return model and Players:GetPlayerFromCharacter(model) or nil
+end
+
 UserInputService.InputBegan:Connect(function(input, processed)
 	if processed or MainMenu.isOpen() then
 		return
@@ -283,6 +311,16 @@ UserInputService.InputBegan:Connect(function(input, processed)
 	elseif input.KeyCode == Enum.KeyCode.H then
 		-- Leer el libro que llevas en la mano.
 		Net.event(Net.Events.Cheat):FireServer("book", 1)
+	elseif input.KeyCode == Enum.KeyCode.J then
+		--[[
+			Pasarle el libro al companero que tengas en la mira. El
+			cliente solo dice a QUIEN apunta; que este lo bastante cerca
+			y que realmente lleves un libro lo decide el servidor.
+		--]]
+		local target = aimedPlayer()
+		if target then
+			Net.event(Net.Events.Cheat):FireServer("passbook", 1, target.UserId)
+		end
 	elseif input.KeyCode == Enum.KeyCode.T then
 		if ShopUI.isOpen() then
 			ShopUI.close()
