@@ -49,26 +49,32 @@ export type Proportions = {
 }
 
 --[[
-	Alumno: cabezon. Con la cabeza a 1.7 de alto sobre un total de ~4.8
-	studs, la cabeza es un tercio del personaje — que es la proporcion
-	que se ve en la referencia.
+	Alumno: cabezon, pero menos de lo que yo tenia.
+
+	La primera version daba 1.7 de cabeza sobre 4.9 de alto — o sea unas
+	2.9 cabezas, casi un bebe. Midiendo contra los fotogramas del trailer
+	los personajes son mas esbeltos: rondan las 3.5 cabezas, con la
+	cabeza grande pero el cuerpo mas largo y los miembros claramente mas
+	finos.
+
+	1.5 de cabeza sobre 5.3 de alto total da 3.5 cabezas justas.
 --]]
 Rig.Alumno = {
-	cabeza = Vector3.new(2, 1.7, 1.6),
-	escalaCabeza = 1.55,
-	torso = Vector3.new(1.9, 1.7, 1),
-	brazo = Vector3.new(0.8, 1.6, 0.8),
-	pierna = Vector3.new(0.85, 1.5, 0.85),
+	cabeza = Vector3.new(1.9, 1.5, 1.5),
+	escalaCabeza = 1.35,
+	torso = Vector3.new(1.8, 1.9, 0.95),
+	brazo = Vector3.new(0.7, 1.8, 0.7),
+	pierna = Vector3.new(0.8, 1.9, 0.8),
 } :: Proportions
 
 --- El profesor es mas alto y menos cabezon: se lee como adulto sin
 --- salirse del estilo.
 Rig.Profesor = {
-	cabeza = Vector3.new(1.9, 1.5, 1.5),
-	escalaCabeza = 1.4,
-	torso = Vector3.new(2, 2.1, 1.05),
-	brazo = Vector3.new(0.85, 2, 0.85),
-	pierna = Vector3.new(0.9, 2, 0.9),
+	cabeza = Vector3.new(1.8, 1.4, 1.4),
+	escalaCabeza = 1.25,
+	torso = Vector3.new(1.95, 2.3, 1),
+	brazo = Vector3.new(0.72, 2.2, 0.72),
+	pierna = Vector3.new(0.82, 2.3, 0.82),
 } :: Proportions
 
 -- ── piezas ─────────────────────────────────────────────────────────

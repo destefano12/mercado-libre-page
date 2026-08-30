@@ -234,23 +234,31 @@ Roblox, nunca tuvo un solo id cargado, y con un look plano no aporta nada.
 
 ### Paleta
 
+Muestreada de los fotogramas del trailer con `ffmpeg`, no estimada a ojo.
+
 | Elemento | RGB |
 |---|---|
 | Muro del atrio | `240, 230, 212` |
 | Banda turquesa | `86, 178, 176` |
 | Piso del atrio (damero) | `218, 156, 132` / `208, 146, 122` |
 | Casillero | `154, 180, 226` |
-| Casillero (puerta) | `172, 196, 236` |
-| Muro del aula | `150, 172, 146` |
-| Tablón del aula | `206, 158, 102` / `194, 148, 96` |
-| Pizarrón | `56, 80, 64` |
-| Marco del pizarrón (madera) | `152, 106, 66` |
-| Pupitre | `210, 166, 114` |
-| Asiento | `92, 122, 190` |
-| Puerta | `200, 134, 92` |
+| Piso del aula (tablones) | `214, 152, 128` / `203, 141, 118` |
+| Pizarrón | `64, 58, 66` |
+| Marco del pizarrón | `176, 112, 84` |
+| Mobiliario / escritorio | `215, 145, 108` |
+| Silla del aula | `198, 132, 112` |
+| Marco de ventana | `206, 126, 102` |
+| Caoba de biblioteca | `109, 81, 86` |
+| Pantalla de lámpara | `46, 122, 86` |
+| Latón | `206, 168, 96` |
 | Estatua | `190, 188, 182` |
-| Tirador dorado | `228, 184, 84` |
 | Luz cálida | `255, 244, 218` |
+
+**Las aulas no comparten esquema.** `Style.Aulas` tiene una lista de pares
+(pared alta, banda baja) y `buildClassroom` toma uno por índice: periwinkle
+con banda coral, verde salvia con banda crema, lila con banda gris. Pintar
+todas las aulas iguales hacía que el colegio se leyera como un pasillo
+repetido.
 
 Todo en `SmoothPlastic`, salvo el `Neon` de las luminarias y el `Glass` del
 ventanal. Reflectancia cero en todo menos el vidrio: un solo brillo

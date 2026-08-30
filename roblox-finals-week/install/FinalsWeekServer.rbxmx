@@ -3749,17 +3749,19 @@ return LobbyService
 
 	Tres decisiones de arquitectura visual sostienen el look:
 
-	  * El pasillo mide 16 studs de ancho y 11 de alto, con el falso
-	    techo a 9.4. Es estrecho a proposito: dos personas cruzandose
-	    ya se rozan, y correr por el se siente arriesgado.
-	  * Nada de losas planas gigantes. El piso es un damero de baldosas
-	    de 4 studs (una de cada doce, gastada) y el techo es una grilla
-	    de placas acusticas de 6 con perfiles de aluminio entre medio.
-	    Esa repeticion es lo que le da escala al pasillo y lo que hace
-	    que se lea como un colegio y no como una caja.
-	  * El desgaste es geometria: rayones en los casilleros, oxido en
-	    las bases, manchas en las paredes, placas de techo manchadas.
-	    Nada de eso necesita una textura subida.
+	  * El pasillo es un atrio: 46 studs de ancho y 22 de alto, sin falso
+	    techo, con claraboya a lo largo del eje y una estatua en el
+	    medio. (Antes media 16 de ancho con el techo a 9.4, hecho
+	    estrecho a proposito — la referencia mostro lo contrario.)
+	  * Nada de losas planas gigantes. El atrio es un damero de baldosas
+	    de 4 studs y el aula un piso de tablones. Esa repeticion es lo
+	    que le da escala y lo que hace que se lea como un edificio.
+	  * Las superficies estan limpias y son de color plano. El desgaste
+	    geometrico que habia antes — rayones, oxido, manchas — se
+	    elimino: empujaba el look hacia lo realista, que es justo lo
+	    contrario de la referencia.
+
+	Cada aula toma un esquema de color distinto de `Style.Aulas`.
 
 	Cada pieza va en su propio pcall: si una silla explota, el resto
 	del colegio se construye igual y el Output dice cual fallo.
@@ -4320,8 +4322,16 @@ local function buildClassroom(root: Instance, index: number): Classroom
 	local dir = Vector3.new(-side, 0, 0)
 	local look = -dir
 
-	-- Piso de tablones de madera miel, no baldosa: el aula de la
-	-- referencia tiene parquet y es lo que la separa del atrio.
+	--[[
+		Cada aula con su esquema de color. En el trailer no hay una
+		paleta de aula sino varias — una periwinkle, otra verde salvia —
+		y pintarlas todas iguales hacia que el colegio se leyera como un
+		pasillo repetido.
+	--]]
+	local scheme = Style.Aulas[(index - 1) % #Style.Aulas + 1]
+
+	-- Piso de tablones terracota, no baldosa: el aula de la referencia
+	-- tiene parquet y es lo que la separa del atrio.
 	plankFloor(model, center, E.AulaAncho, E.AulaLargo)
 	block(model, "Losa", Vector3.new(E.AulaAncho, 1, E.AulaLargo),
 		CFrame.new(cx, height, cz), C.Losa, M.MuroAlto)
@@ -4343,23 +4353,23 @@ local function buildClassroom(root: Instance, index: number): Classroom
 	local jamb = (E.AulaAncho - glassSpan) / 2
 
 	block(model, "ParedLateral", Vector3.new(E.AulaAncho, height, E.EspesorPared),
-		CFrame.new(cx, height / 2, cz + halfL), C.MuroAula, M.MuroAlto)
+		CFrame.new(cx, height / 2, cz + halfL), scheme.alta, M.MuroAlto)
 	wainscot(model, CFrame.new(cx, 0, cz + halfL - 0.55), E.AulaAncho, "X",
-		C.MuroAulaBajo, C.MuroAulaBajo)
+		scheme.baja, scheme.baja)
 
 	local windowZ = cz - halfL
 	block(model, "ParedLateral", Vector3.new(E.AulaAncho, sill, E.EspesorPared),
-		CFrame.new(cx, sill / 2, windowZ), C.MuroAula, M.MuroAlto)
+		CFrame.new(cx, sill / 2, windowZ), scheme.alta, M.MuroAlto)
 	block(model, "ParedLateral", Vector3.new(E.AulaAncho, height - headHeight, E.EspesorPared),
-		CFrame.new(cx, headHeight + (height - headHeight) / 2, windowZ), C.MuroAula, M.MuroAlto)
+		CFrame.new(cx, headHeight + (height - headHeight) / 2, windowZ), scheme.alta, M.MuroAlto)
 	for _, dx in { -1, 1 } do
 		block(model, "ParedLateral",
 			Vector3.new(jamb, headHeight - sill, E.EspesorPared),
 			CFrame.new(cx + dx * (glassSpan / 2 + jamb / 2), (sill + headHeight) / 2, windowZ),
-			C.MuroAula, M.MuroAlto)
+			scheme.alta, M.MuroAlto)
 	end
 	wainscot(model, CFrame.new(cx, 0, windowZ + 0.55), E.AulaAncho, "X",
-		C.MuroAulaBajo, C.MuroAulaBajo)
+		scheme.baja, scheme.baja)
 
 	local glass = decor(model, "Ventana",
 		Vector3.new(glassSpan, headHeight - sill, 0.2),
@@ -4410,7 +4420,7 @@ local function buildClassroom(root: Instance, index: number): Classroom
 	-- La pared del pizarron, maciza: el ventanal esta enfrentado, en la
 	-- lateral, como en la referencia.
 	block(model, "ParedFondo", Vector3.new(E.EspesorPared, height, E.AulaLargo),
-		CFrame.new(cx - dir.X * halfW, height / 2, cz), C.MuroAula, M.MuroAlto)
+		CFrame.new(cx - dir.X * halfW, height / 2, cz), scheme.alta, M.MuroAlto)
 
 	local boardX = cx - dir.X * (halfW - 0.7)
 	local blackboard = block(model, "Pizarra", Vector3.new(0.35, 6, 20),
@@ -4451,6 +4461,30 @@ local function buildClassroom(root: Instance, index: number): Classroom
 		decor(model, "PataEscritorio", Vector3.new(2.6, 3.2, 0.35),
 			deskTeacher.CFrame * CFrame.new(0, -1.75, dz), C.Madera, M.MaderaLisa)
 	end
+
+	--[[
+		Los trastos del escritorio: un monitor de tubo con papeles
+		apilados encima y un globo terraqueo en la punta. Son cuatro
+		piezas que no hacen nada, pero un escritorio vacio se lee como un
+		bloque de madera y con esto se lee como el escritorio de alguien.
+	--]]
+	local screenBody = decor(model, "Monitor", Vector3.new(2, 1.8, 2.2),
+		deskTeacher.CFrame * CFrame.new(0, 1.05, -1.6), Color3.fromRGB(226, 218, 198),
+		M.MetalLiso)
+	decor(model, "MonitorVidrio", Vector3.new(0.12, 1.3, 1.7),
+		screenBody.CFrame * CFrame.new(dir.X * -1.02, 0.05, 0),
+		Color3.fromRGB(96, 112, 118), M.MetalLiso)
+	decor(model, "Papeles", Vector3.new(1.5, 0.35, 1.8),
+		deskTeacher.CFrame * CFrame.new(0, 0.34, 1.4), C.Pantalla, M.Placa)
+
+	local globe = decor(model, "Globo", Vector3.new(1.3, 1.3, 1.3),
+		deskTeacher.CFrame * CFrame.new(0, 0.95, 2.6),
+		Color3.fromRGB(96, 158, 202), M.MuroAlto)
+	local globeMesh = Instance.new("SpecialMesh")
+	globeMesh.MeshType = Enum.MeshType.Sphere
+	globeMesh.Parent = globe
+	decor(model, "GloboPie", Vector3.new(0.7, 0.3, 0.7),
+		deskTeacher.CFrame * CFrame.new(0, 0.32, 2.6), C.Laton, M.MetalLiso)
 
 	--[[
 		Los cajones del escritorio, con tirador dorado. Es una mecanica
@@ -4547,7 +4581,9 @@ local function buildLibrary(root: Instance): Model
 
 	local halfW = E.AulaAncho / 2
 	local halfL = E.AulaLargo / 2
-	local height = E.AulaAltura
+	-- Casi el doble que un aula: la biblioteca es de dos plantas y su
+	-- altura es la mitad de lo que la hace imponente.
+	local height = E.AulaAltura * 1.75
 	local cx = -(E.PasilloAncho / 2 + halfW)
 	local cz = 18
 	local center = Vector3.new(cx, 0, cz)
@@ -4597,18 +4633,31 @@ local function buildLibrary(root: Instance): Model
 		Color3.fromRGB(120, 190, 150), Color3.fromRGB(238, 168, 96),
 	}
 
-	local function shelf(name: string, cf: CFrame, width: number): Model
+	--[[
+		Una estanteria de caoba del piso al techo.
+
+		La version anterior las hacia de 8.5 studs en madera clara, o sea
+		muebles bajos en una sala luminosa. En la referencia la
+		biblioteca es lo contrario: caoba oscura, de doble altura, con
+		los estantes trepando hasta el techo. Es el espacio mas imponente
+		del juego y lo que lo hace imponente es justamente la altura.
+	--]]
+	local function shelf(name: string, cf: CFrame, width: number, tall: number): Model
 		local unit = Instance.new("Model")
 		unit.Name = name
 		unit.Parent = model
 
-		local tall = 8.5
 		block(unit, "Estante", Vector3.new(width, tall, 1.6), cf * CFrame.new(0, tall / 2, 0),
-			C.MaderaOscura, M.Madera)
-		for level = 1, 4 do
-			local y = 1.1 + (level - 1) * 1.9
+			C.Caoba, M.Madera)
+
+		local levels = math.max(2, math.floor(tall / 2))
+		for level = 1, levels do
+			local y = 1.2 + (level - 1) * ((tall - 1.6) / levels)
+			if y + 1.7 > tall then
+				break
+			end
 			decor(unit, "Balda", Vector3.new(width - 0.2, 0.16, 1.7),
-				cf * CFrame.new(0, y, 0), C.Madera, M.Madera)
+				cf * CFrame.new(0, y, 0), C.CaobaClara, M.Madera)
 
 			-- Los lomos, apretados uno contra otro sobre cada balda.
 			local x = -width / 2 + 0.5
@@ -4616,7 +4665,7 @@ local function buildLibrary(root: Instance): Model
 			while x < width / 2 - 0.5 and guard < 60 do
 				guard += 1
 				local thick = rng:NextNumber(0.16, 0.34)
-				local tallBook = rng:NextNumber(1.05, 1.55)
+				local tallBook = rng:NextNumber(1, 1.45)
 				decor(unit, "Lomo", Vector3.new(thick, tallBook, 1.1),
 					cf * CFrame.new(x + thick / 2, y + tallBook / 2 + 0.08, 0),
 					spineColors[rng:NextInteger(1, #spineColors)], M.MuroAlto)
@@ -4626,37 +4675,93 @@ local function buildLibrary(root: Instance): Model
 		return unit
 	end
 
-	-- Contra las dos paredes laterales.
+	-- Contra las paredes, del piso al techo.
 	for _, dz in { -1, 1 } do
 		for i = -1, 1 do
 			shelf("Estanteria",
 				CFrame.new(cx + i * 10, 0, cz + dz * (halfL - 1.2))
-					* CFrame.Angles(0, dz > 0 and math.pi or 0, 0), 8)
+					* CFrame.Angles(0, dz > 0 and math.pi or 0, 0), 8, height - 1)
 		end
 	end
-	-- Dos islas centrales, en el eje largo de la sala.
-	for _, dz in { -5.5, 5.5 } do
-		shelf("Estanteria", CFrame.new(cx - 4, 0, cz + dz) * CFrame.Angles(0, math.pi / 2, 0), 12)
+	-- Islas centrales, mas bajas para no tapar la sala.
+	for _, dz in { -6, 6 } do
+		shelf("Estanteria", CFrame.new(cx - 5, 0, cz + dz) * CFrame.Angles(0, math.pi / 2, 0),
+			12, 9)
 	end
 
-	-- Mesas de lectura con su lampara.
+	--[[
+		El entrepiso: una pasarela angosta contra tres paredes con su
+		baranda de balaustres, y una escalera para subir. Es lo que
+		convierte la sala en una biblioteca de dos plantas en vez de un
+		cuarto alto.
+	--]]
+	local deckY = height * 0.52
+	local deckWidth = 4.5
+
+	for _, dz in { -1, 1 } do
+		block(model, "Entrepiso", Vector3.new(E.AulaAncho - 2, 0.5, deckWidth),
+			CFrame.new(cx, deckY, cz + dz * (halfL - deckWidth / 2 - 1)), C.Caoba, M.Madera)
+	end
+	block(model, "Entrepiso", Vector3.new(deckWidth, 0.5, E.AulaLargo - 2 - deckWidth * 2),
+		CFrame.new(cx - halfW + deckWidth / 2 + 1, deckY, cz), C.Caoba, M.Madera)
+
+	-- Baranda: pasamanos corrido y balaustres cada stud y medio.
+	local function railing(from: Vector3, to: Vector3)
+		local span = (to - from).Magnitude
+		local middle = from:Lerp(to, 0.5)
+		local facing = CFrame.lookAt(middle, to)
+		decor(model, "Pasamanos", Vector3.new(0.25, 0.25, span),
+			facing * CFrame.new(0, 2.5, 0), C.CaobaClara, M.Madera)
+		local count = math.max(2, math.floor(span / 1.5))
+		for i = 0, count do
+			decor(model, "Balaustre", Vector3.new(0.18, 2.4, 0.18),
+				facing * CFrame.new(0, 1.25, -span / 2 + i * (span / count)),
+				C.CaobaClara, M.Madera)
+		end
+	end
+
+	local inner = halfL - deckWidth - 1
+	for _, dz in { -1, 1 } do
+		railing(Vector3.new(cx - halfW + 1, deckY, cz + dz * inner),
+			Vector3.new(cx + halfW - 1, deckY, cz + dz * inner))
+	end
+	railing(Vector3.new(cx - halfW + deckWidth + 1, deckY, cz - inner),
+		Vector3.new(cx - halfW + deckWidth + 1, deckY, cz + inner))
+
+	-- Escalera al entrepiso, contra la pared del atrio.
+	local steps = 12
+	for i = 1, steps do
+		block(model, "Escalon", Vector3.new(4, 0.4, 1.4),
+			CFrame.new(cx + halfW - 3, (deckY / steps) * i, cz - halfL + 3 + i * 1.4),
+			C.Caoba, M.Madera)
+	end
+
+	--[[
+		Mesas de lectura con lamparas de banquero: pantalla verde y una
+		luz calida adentro. Es el detalle que mas dice "biblioteca" de
+		toda la sala — antes eran lamparas doradas genericas.
+	--]]
 	for _, dz in { -8, 8 } do
 		local table_ = block(model, "MesaLectura", Vector3.new(7, 0.3, 3.4),
-			CFrame.new(cx + 9, 3.4, cz + dz), C.Madera, M.Madera)
+			CFrame.new(cx + 8, 3.4, cz + dz), C.Caoba, M.Madera)
 		for _, dx in { -3, 3 } do
 			for _, dd in { -1.4, 1.4 } do
 				decor(model, "PataMesa", Vector3.new(0.26, 3.4, 0.26),
-					table_.CFrame * CFrame.new(dx, -1.85, dd), C.MaderaOscura, M.MaderaLisa)
+					table_.CFrame * CFrame.new(dx, -1.85, dd), C.Caoba, M.MaderaLisa)
 			end
 		end
-		local lamp = decor(model, "Lampara", Vector3.new(1.1, 0.5, 1.1),
-			table_.CFrame * CFrame.new(2.4, 0.9, 0), C.Dorado, M.MetalLiso)
-		local glow = Instance.new("PointLight")
-		glow.Brightness = 1.1
-		glow.Range = 14
-		glow.Color = C.LuzCalida
-		glow.Shadows = false
-		glow.Parent = lamp
+		for _, dx in { -2, 2 } do
+			decor(model, "PieLampara", Vector3.new(0.22, 0.9, 0.22),
+				table_.CFrame * CFrame.new(dx, 0.6, 0), C.Laton, M.MetalLiso)
+			local shade = decor(model, "Lampara", Vector3.new(1.9, 0.5, 0.9),
+				table_.CFrame * CFrame.new(dx, 1.15, 0), C.PantallaLampara, M.MetalLiso)
+			local glow = Instance.new("PointLight")
+			glow.Brightness = 1.4
+			glow.Range = 16
+			glow.Color = C.LuzCalida
+			glow.Shadows = false
+			glow.Parent = shade
+		end
 	end
 
 	--[[
@@ -4677,8 +4782,11 @@ local function buildLibrary(root: Instance): Model
 		CFrame.new(backX + 1.8, 3.2, alcoveZ), C.Pantalla, M.Placa)
 	paper.Color = Color3.fromRGB(250, 248, 238)
 
+	-- Va mas baja que las de pared: tiene que poder correrse por debajo
+	-- del entrepiso, y ademas una que llega al techo no se leeria como
+	-- un mueble que se mueve.
 	local movable = shelf("EstanteriaMovible",
-		CFrame.new(backX + 1.5, 0, alcoveZ) * CFrame.Angles(0, math.pi / 2, 0), 8)
+		CFrame.new(backX + 1.5, 0, alcoveZ) * CFrame.Angles(0, math.pi / 2, 0), 8, 9)
 
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "Alcoba"

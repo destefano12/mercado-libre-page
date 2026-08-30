@@ -422,15 +422,17 @@ Config.Estilo = {
 	partidas.
 --]]
 Config.Personaje = {
+	-- Tonos afinados contra los fotogramas del trailer: ahi se ven
+	-- pieles amarillas, verdes, violetas y tostadas.
 	Pieles = {
-		Color3.fromRGB(198, 96, 168),   -- magenta
+		Color3.fromRGB(240, 200, 92),   -- amarillo
 		Color3.fromRGB(146, 108, 210),  -- violeta
-		Color3.fromRGB(226, 104, 88),   -- rojo coral
+		Color3.fromRGB(126, 184, 108),  -- verde
+		Color3.fromRGB(206, 148, 110),  -- tostado
+		Color3.fromRGB(198, 96, 168),   -- magenta
 		Color3.fromRGB(96, 164, 214),   -- celeste
 		Color3.fromRGB(232, 148, 176),  -- rosa
-		Color3.fromRGB(120, 190, 150),  -- verde menta
-		Color3.fromRGB(238, 168, 96),   -- naranja
-		Color3.fromRGB(168, 132, 216),  -- lavanda
+		Color3.fromRGB(226, 104, 88),   -- coral
 	},
 	Pelos = {
 		Color3.fromRGB(72, 96, 208),    -- azul
