@@ -44,6 +44,26 @@ local function rounded(piece: BasePart, shape: Enum.PartType)
 	mesh.Parent = piece
 end
 
+--[[
+	La cabeza de maniqui.
+
+	En el trailer las casillas de la grilla no muestran el peinado
+	suelto: muestran una cabeza puesta, con el pelo encima. Tiene
+	sentido — un peinado desprendido de la cabeza no se entiende, y dos
+	peinados distintos flotando se parecen entre si.
+
+	Sale gris palido a proposito: la casilla es de fondo tostado y lo
+	que tiene que resaltar es la prenda, no el maniqui.
+--]]
+local MANIQUI = Color3.fromRGB(236, 232, 226)
+local HAIR = Color3.fromRGB(126, 88, 62)
+
+local function head(model: Model): BasePart
+	local skull = part(model, Vector3.new(1.3, 1.3, 1.3), CFrame.new(0, -0.1, 0), MANIQUI)
+	rounded(skull, Enum.PartType.Ball)
+	return skull
+end
+
 -- Cada constructor recibe el modelo vacio y le cuelga las piezas.
 local BUILDERS: { [string]: (Model) -> () } = {
 	nota = function(model)
@@ -136,10 +156,49 @@ local BUILDERS: { [string]: (Model) -> () } = {
 	end,
 
 	gorra = function(model)
-		part(model, Vector3.new(1.5, 0.62, 1.5), CFrame.new(0, 0.1, 0),
-			Color3.fromRGB(44, 92, 148))
-		part(model, Vector3.new(1.5, 0.12, 0.85), CFrame.new(0, -0.2, -0.9),
-			Color3.fromRGB(32, 70, 118))
+		head(model)
+		local dome = part(model, Vector3.new(1.42, 0.86, 1.42), CFrame.new(0, 0.42, 0),
+			Color3.fromRGB(226, 84, 72))
+		rounded(dome, Enum.PartType.Ball)
+		part(model, Vector3.new(1.42, 0.14, 0.8), CFrame.new(0, 0.24, -0.82),
+			Color3.fromRGB(198, 66, 58))
+	end,
+
+	boina = function(model)
+		head(model)
+		local disc = part(model, Vector3.new(1.66, 0.3, 1.66), CFrame.new(0, 0.5, 0.08),
+			Color3.fromRGB(58, 76, 172))
+		rounded(disc, Enum.PartType.Cylinder)
+		part(model, Vector3.new(0.16, 0.24, 0.16), CFrame.new(0, 0.68, 0.08),
+			Color3.fromRGB(42, 58, 140))
+	end,
+
+	vincha = function(model)
+		head(model)
+		local band = part(model, Vector3.new(1.44, 0.26, 1.44), CFrame.new(0, 0.36, 0),
+			Color3.fromRGB(238, 96, 148))
+		rounded(band, Enum.PartType.Cylinder)
+		part(model, Vector3.new(0.3, 0.3, 0.12), CFrame.new(0.5, 0.42, -0.5),
+			Color3.fromRGB(252, 206, 92))
+	end,
+
+	antifaz = function(model)
+		head(model)
+		part(model, Vector3.new(1.24, 0.42, 0.2), CFrame.new(0, 0.06, -0.62),
+			Color3.fromRGB(32, 32, 46))
+		for _, side in { -1, 1 } do
+			part(model, Vector3.new(0.34, 0.2, 0.06), CFrame.new(side * 0.26, 0.08, -0.72),
+				Color3.fromRGB(238, 238, 242))
+		end
+	end,
+
+	bufanda = function(model)
+		head(model)
+		local loop = part(model, Vector3.new(1.5, 0.44, 1.5), CFrame.new(0, -0.86, 0),
+			Color3.fromRGB(198, 62, 78))
+		rounded(loop, Enum.PartType.Cylinder)
+		part(model, Vector3.new(0.42, 0.9, 0.24), CFrame.new(-0.34, -1.32, -0.4),
+			Color3.fromRGB(176, 48, 66))
 	end,
 
 	mochila = function(model)
@@ -154,15 +213,79 @@ local BUILDERS: { [string]: (Model) -> () } = {
 	end,
 
 	anteojos = function(model)
+		head(model)
 		for _, side in { -1, 1 } do
-			part(model, Vector3.new(0.62, 0.5, 0.06),
-				CFrame.new(side * 0.38, 0, 0), Color3.fromRGB(168, 208, 232),
+			part(model, Vector3.new(0.5, 0.42, 0.06),
+				CFrame.new(side * 0.3, 0.04, -0.66), Color3.fromRGB(168, 208, 232),
 				Enum.Material.Glass)
-			part(model, Vector3.new(0.14, 0.1, 0.6),
-				CFrame.new(side * 0.66, 0.14, 0.3), Color3.fromRGB(28, 30, 36))
+			part(model, Vector3.new(0.54, 0.06, 0.06),
+				CFrame.new(side * 0.3, 0.26, -0.66), Color3.fromRGB(52, 50, 66))
+			part(model, Vector3.new(0.06, 0.06, 0.5),
+				CFrame.new(side * 0.54, 0.14, -0.42), Color3.fromRGB(52, 50, 66))
 		end
-		part(model, Vector3.new(0.2, 0.08, 0.06), CFrame.new(0, 0, 0),
-			Color3.fromRGB(28, 30, 36))
+		part(model, Vector3.new(0.14, 0.06, 0.06), CFrame.new(0, 0.14, -0.66),
+			Color3.fromRGB(52, 50, 66))
+	end,
+
+	--[[
+		Los seis peinados. Se dibujan con el mismo tono de castano para
+		todos a proposito: en el carnet lo que hay que comparar es la
+		SILUETA, y seis colores distintos harian que el jugador elija por
+		color y despues se lleve una sorpresa (el color del pelo sale de
+		su UserId, no de la casilla).
+	--]]
+	pelo_corto = function(model)
+		head(model)
+		local cap = part(model, Vector3.new(1.36, 1.36, 1.36), CFrame.new(0, 0.14, 0), HAIR)
+		rounded(cap, Enum.PartType.Ball)
+		part(model, Vector3.new(1.24, 0.34, 0.26), CFrame.new(0, 0.3, -0.6), HAIR)
+	end,
+
+	pelo_rulos = function(model)
+		head(model)
+		for _, spot in {
+			Vector3.new(0, 0.62, 0), Vector3.new(-0.46, 0.42, 0.16),
+			Vector3.new(0.46, 0.42, 0.16), Vector3.new(-0.32, 0.36, -0.44),
+			Vector3.new(0.32, 0.36, -0.44), Vector3.new(0, 0.3, 0.56),
+		} do
+			local curl = part(model, Vector3.new(0.68, 0.68, 0.68), CFrame.new(spot), HAIR)
+			rounded(curl, Enum.PartType.Ball)
+		end
+	end,
+
+	pelo_largo = function(model)
+		head(model)
+		local cap = part(model, Vector3.new(1.4, 1.4, 1.4), CFrame.new(0, 0.16, 0), HAIR)
+		rounded(cap, Enum.PartType.Ball)
+		for _, side in { -1, 1 } do
+			part(model, Vector3.new(0.34, 1.3, 0.9), CFrame.new(side * 0.6, -0.5, 0.1), HAIR)
+		end
+		part(model, Vector3.new(1.2, 0.3, 0.24), CFrame.new(0, 0.34, -0.62), HAIR)
+	end,
+
+	pelo_cresta = function(model)
+		head(model)
+		part(model, Vector3.new(0.22, 0.9, 1.34), CFrame.new(0, 0.66, 0.04), HAIR)
+		part(model, Vector3.new(0.9, 0.28, 1.3), CFrame.new(0, 0.24, 0.04), HAIR)
+	end,
+
+	pelo_coletas = function(model)
+		head(model)
+		local cap = part(model, Vector3.new(1.36, 1.36, 1.36), CFrame.new(0, 0.14, 0), HAIR)
+		rounded(cap, Enum.PartType.Ball)
+		for _, side in { -1, 1 } do
+			local tail = part(model, Vector3.new(0.62, 0.62, 0.62),
+				CFrame.new(side * 0.86, 0.16, 0.2), HAIR)
+			rounded(tail, Enum.PartType.Ball)
+			part(model, Vector3.new(0.2, 0.2, 0.2), CFrame.new(side * 0.62, 0.3, 0.2),
+				Color3.fromRGB(238, 96, 148))
+		end
+	end,
+
+	pelo_afro = function(model)
+		head(model)
+		local puff = part(model, Vector3.new(2, 1.9, 2), CFrame.new(0, 0.28, 0), HAIR)
+		rounded(puff, Enum.PartType.Ball)
 	end,
 
 	campera = function(model)

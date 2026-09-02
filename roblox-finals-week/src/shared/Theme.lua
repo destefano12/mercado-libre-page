@@ -12,6 +12,9 @@ Theme.Font = Enum.Font.GothamMedium
 Theme.FontBold = Enum.Font.GothamBold
 Theme.FontBlack = Enum.Font.GothamBlack
 Theme.FontMono = Enum.Font.Code
+-- Para lo que en el mundo esta escrito a mano: el nombre en el carnet,
+-- las notas que se pasan los alumnos. No para interfaz de sistema.
+Theme.FontHand = Enum.Font.PatrickHand
 
 -- Hoja del examen sobre el pupitre.
 Theme.Paper = {

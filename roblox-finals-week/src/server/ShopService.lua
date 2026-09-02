@@ -34,6 +34,28 @@ local function entryOf(id: string): any
 	return nil
 end
 
+--[[
+	Las categorias exclusivas del carnet: `pelo`, `gorro`, `anteojos`.
+
+	Sin esto un jugador podia tener los seis peinados puestos a la vez —
+	`equip` solo alternaba una bandera por id y nadie miraba el resto —,
+	y el resultado era una bola de pelo con seis siluetas encimadas. Lo
+	decide el servidor y no el carnet: el cliente puede mandar dos
+	`Equip` seguidos.
+--]]
+local function exclusiveCategory(id: string): string?
+	local entry = entryOf(id)
+	if not entry or not entry.categoria then
+		return nil
+	end
+	for _, tab in Config.Carnet.Pestanas do
+		if tab.categoria == entry.categoria and tab.exclusiva then
+			return tab.categoria
+		end
+	end
+	return nil
+end
+
 function ShopService.setPhase(phase: string)
 	currentPhase = phase
 end
@@ -138,7 +160,20 @@ function ShopService.equip(player: Player, id: any): any
 	if entry.tipo == "objeto" then
 		profile.objeto = id
 	else
-		profile.estetica[id] = not profile.estetica[id] or nil
+		local turningOn = not profile.estetica[id]
+		profile.estetica[id] = turningOn or nil
+
+		if turningOn then
+			local category = exclusiveCategory(id)
+			if category then
+				for _, other in Config.Economia.Tienda do
+					if other.id ~= id and other.categoria == category then
+						profile.estetica[other.id] = nil
+					end
+				end
+			end
+		end
+
 		local character = player.Character
 		if character then
 			-- Repintar en caliente: se ve el cambio sin reaparecer.

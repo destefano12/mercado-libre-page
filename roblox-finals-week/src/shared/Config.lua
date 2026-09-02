@@ -181,33 +181,99 @@ Config.Economia = {
 	CreditosPorSemana = 120,
 	CreditosSinCastigos = 30,
 	GuardadoAutomatico = 90,
+	--[[
+		`categoria` es la pestana del carnet donde cae el articulo (ver
+		`Config.Carnet`). No cambia ninguna regla del servidor: la
+		economia sigue mirando `tipo`. Es puro ordenamiento.
+	--]]
 	Tienda = {
-		{ id = "chuleta", precio = 40, tipo = "objeto" },
-		{ id = "avion", precio = 25, tipo = "objeto" },
-		{ id = "bolita", precio = 15, tipo = "objeto" },
-		{ id = "nota", precio = 10, tipo = "objeto" },
-		{ id = "walkie", precio = 110, tipo = "objeto" },
-		{ id = "prismaticos", precio = 95, tipo = "objeto" },
-		{ id = "celular", precio = 140, tipo = "objeto" },
-		{ id = "aerosol", precio = 30, tipo = "objeto" },
-		{ id = "libro", precio = 55, tipo = "objeto" },
+		{ id = "chuleta", precio = 40, tipo = "objeto", categoria = "trampa" },
+		{ id = "avion", precio = 25, tipo = "objeto", categoria = "trampa" },
+		{ id = "bolita", precio = 15, tipo = "objeto", categoria = "trampa" },
+		{ id = "nota", precio = 10, tipo = "objeto", categoria = "trampa" },
+		{ id = "aerosol", precio = 30, tipo = "objeto", categoria = "trampa" },
+		{ id = "walkie", precio = 110, tipo = "objeto", categoria = "aparato" },
+		{ id = "prismaticos", precio = 95, tipo = "objeto", categoria = "aparato" },
+		{ id = "celular", precio = 140, tipo = "objeto", categoria = "aparato" },
+		{ id = "libro", precio = 55, tipo = "objeto", categoria = "aparato" },
 		--[[
 			La estetica no se compra sola: hay que haberse ganado el
 			derecho. `semanas` son semanas finales sobrevividas y
 			`promedio` es el mejor promedio que sacaste alguna vez, dos
 			cosas que ya viven en el perfil de DataService.
 
-			La gorra queda libre para que la tienda no se vea toda
-			bloqueada la primera vez que entras.
+			El pelo corto y la gorra quedan libres para que el carnet no
+			se vea todo bloqueado la primera vez que se abre.
 		--]]
-		{ id = "gorra", precio = 90, tipo = "estetica" },
-		{ id = "anteojos", precio = 75, tipo = "estetica",
-			requiere = { promedio = 70 } },
-		{ id = "mochila", precio = 130, tipo = "estetica",
+		{ id = "pelo_corto", precio = 0, tipo = "estetica", categoria = "pelo" },
+		{ id = "pelo_rulos", precio = 45, tipo = "estetica", categoria = "pelo" },
+		{ id = "pelo_largo", precio = 60, tipo = "estetica", categoria = "pelo" },
+		{ id = "pelo_cresta", precio = 85, tipo = "estetica", categoria = "pelo",
+			requiere = { promedio = 60 } },
+		{ id = "pelo_coletas", precio = 70, tipo = "estetica", categoria = "pelo" },
+		{ id = "pelo_afro", precio = 95, tipo = "estetica", categoria = "pelo",
 			requiere = { semanas = 1 } },
-		{ id = "campera", precio = 160, tipo = "estetica",
+		{ id = "gorra", precio = 90, tipo = "estetica", categoria = "gorro" },
+		{ id = "boina", precio = 65, tipo = "estetica", categoria = "gorro" },
+		{ id = "vincha", precio = 40, tipo = "estetica", categoria = "gorro" },
+		{ id = "anteojos", precio = 75, tipo = "estetica", categoria = "anteojos",
+			requiere = { promedio = 70 } },
+		{ id = "antifaz", precio = 120, tipo = "estetica", categoria = "anteojos",
+			requiere = { semanas = 1 } },
+		{ id = "mochila", precio = 130, tipo = "estetica", categoria = "ropa",
+			requiere = { semanas = 1 } },
+		{ id = "campera", precio = 160, tipo = "estetica", categoria = "ropa",
 			requiere = { semanas = 2, promedio = 80 } },
+		{ id = "bufanda", precio = 55, tipo = "estetica", categoria = "ropa" },
 	},
+}
+
+--[[
+	── Carnet de estudiante ───────────────────────────────────────────
+	La cosmetica no es un panel de tienda: es una libreta que se abre en
+	primera persona, con la credencial a la izquierda y una grilla de
+	articulos a la derecha. Del canto derecho asoman pestanas de colores,
+	una por categoria, y la elegida se corre hacia afuera.
+
+	Los colores estan muestreados de los fotogramas del trailer, tab por
+	tab y de arriba hacia abajo. El orden de esta lista ES el orden en
+	que se apilan las pestanas.
+
+	`exclusiva` significa que solo una cosa de esa categoria puede estar
+	puesta a la vez — no se puede llevar dos peinados. Lo hace cumplir el
+	servidor en ShopService.equip; el cliente solo lo dibuja.
+--]]
+Config.Carnet = {
+	Filas = 5,                      -- la grilla del video es de 4x5
+	Columnas = 4,
+	--[[
+		La clave se llama `categoria` y no `id` a proposito:
+		`tools/check.py` recorre este archivo buscando `{ id = "..."` para
+		verificar que cada articulo de la tienda tenga su nombre y su
+		descripcion en los tres idiomas, y con `id` aca adentro pediria
+		un `item.trampa` que no tiene sentido que exista.
+	--]]
+	Pestanas = {
+		{ categoria = "trampa", color = Color3.fromRGB(130, 78, 210), icono = "lapiz" },
+		{ categoria = "aparato", color = Color3.fromRGB(200, 105, 222), icono = "radio" },
+		{ categoria = "pelo", color = Color3.fromRGB(232, 192, 102), icono = "pelo",
+			exclusiva = true },
+		{ categoria = "gorro", color = Color3.fromRGB(208, 84, 94), icono = "gorra",
+			exclusiva = true },
+		{ categoria = "anteojos", color = Color3.fromRGB(78, 152, 192), icono = "anteojos",
+			exclusiva = true },
+		{ categoria = "ropa", color = Color3.fromRGB(118, 222, 220), icono = "campera" },
+	},
+	-- Paleta del carnet en si, tambien muestreada del video.
+	Papel = Color3.fromRGB(243, 226, 196),
+	PapelSombra = Color3.fromRGB(228, 208, 176),
+	Casilla = Color3.fromRGB(196, 178, 162),
+	Tinta = Color3.fromRGB(48, 44, 52),
+	Cinta = Color3.fromRGB(182, 168, 209),
+	Credencial = Color3.fromRGB(176, 42, 58),
+	CredencialFondo = Color3.fromRGB(206, 232, 238),
+	Remache = Color3.fromRGB(43, 40, 38),
+	Seleccion = Color3.fromRGB(226, 62, 74),
 }
 
 -- ── Salas multijugador ─────────────────────────────────────────────

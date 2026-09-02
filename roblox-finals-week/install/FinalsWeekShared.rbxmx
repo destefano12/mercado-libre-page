@@ -189,33 +189,99 @@ Config.Economia = {
 	CreditosPorSemana = 120,
 	CreditosSinCastigos = 30,
 	GuardadoAutomatico = 90,
+	--[[
+		`categoria` es la pestana del carnet donde cae el articulo (ver
+		`Config.Carnet`). No cambia ninguna regla del servidor: la
+		economia sigue mirando `tipo`. Es puro ordenamiento.
+	--]]
 	Tienda = {
-		{ id = "chuleta", precio = 40, tipo = "objeto" },
-		{ id = "avion", precio = 25, tipo = "objeto" },
-		{ id = "bolita", precio = 15, tipo = "objeto" },
-		{ id = "nota", precio = 10, tipo = "objeto" },
-		{ id = "walkie", precio = 110, tipo = "objeto" },
-		{ id = "prismaticos", precio = 95, tipo = "objeto" },
-		{ id = "celular", precio = 140, tipo = "objeto" },
-		{ id = "aerosol", precio = 30, tipo = "objeto" },
-		{ id = "libro", precio = 55, tipo = "objeto" },
+		{ id = "chuleta", precio = 40, tipo = "objeto", categoria = "trampa" },
+		{ id = "avion", precio = 25, tipo = "objeto", categoria = "trampa" },
+		{ id = "bolita", precio = 15, tipo = "objeto", categoria = "trampa" },
+		{ id = "nota", precio = 10, tipo = "objeto", categoria = "trampa" },
+		{ id = "aerosol", precio = 30, tipo = "objeto", categoria = "trampa" },
+		{ id = "walkie", precio = 110, tipo = "objeto", categoria = "aparato" },
+		{ id = "prismaticos", precio = 95, tipo = "objeto", categoria = "aparato" },
+		{ id = "celular", precio = 140, tipo = "objeto", categoria = "aparato" },
+		{ id = "libro", precio = 55, tipo = "objeto", categoria = "aparato" },
 		--[[
 			La estetica no se compra sola: hay que haberse ganado el
 			derecho. `semanas` son semanas finales sobrevividas y
 			`promedio` es el mejor promedio que sacaste alguna vez, dos
 			cosas que ya viven en el perfil de DataService.
 
-			La gorra queda libre para que la tienda no se vea toda
-			bloqueada la primera vez que entras.
+			El pelo corto y la gorra quedan libres para que el carnet no
+			se vea todo bloqueado la primera vez que se abre.
 		--]]
-		{ id = "gorra", precio = 90, tipo = "estetica" },
-		{ id = "anteojos", precio = 75, tipo = "estetica",
-			requiere = { promedio = 70 } },
-		{ id = "mochila", precio = 130, tipo = "estetica",
+		{ id = "pelo_corto", precio = 0, tipo = "estetica", categoria = "pelo" },
+		{ id = "pelo_rulos", precio = 45, tipo = "estetica", categoria = "pelo" },
+		{ id = "pelo_largo", precio = 60, tipo = "estetica", categoria = "pelo" },
+		{ id = "pelo_cresta", precio = 85, tipo = "estetica", categoria = "pelo",
+			requiere = { promedio = 60 } },
+		{ id = "pelo_coletas", precio = 70, tipo = "estetica", categoria = "pelo" },
+		{ id = "pelo_afro", precio = 95, tipo = "estetica", categoria = "pelo",
 			requiere = { semanas = 1 } },
-		{ id = "campera", precio = 160, tipo = "estetica",
+		{ id = "gorra", precio = 90, tipo = "estetica", categoria = "gorro" },
+		{ id = "boina", precio = 65, tipo = "estetica", categoria = "gorro" },
+		{ id = "vincha", precio = 40, tipo = "estetica", categoria = "gorro" },
+		{ id = "anteojos", precio = 75, tipo = "estetica", categoria = "anteojos",
+			requiere = { promedio = 70 } },
+		{ id = "antifaz", precio = 120, tipo = "estetica", categoria = "anteojos",
+			requiere = { semanas = 1 } },
+		{ id = "mochila", precio = 130, tipo = "estetica", categoria = "ropa",
+			requiere = { semanas = 1 } },
+		{ id = "campera", precio = 160, tipo = "estetica", categoria = "ropa",
 			requiere = { semanas = 2, promedio = 80 } },
+		{ id = "bufanda", precio = 55, tipo = "estetica", categoria = "ropa" },
 	},
+}
+
+--[[
+	── Carnet de estudiante ───────────────────────────────────────────
+	La cosmetica no es un panel de tienda: es una libreta que se abre en
+	primera persona, con la credencial a la izquierda y una grilla de
+	articulos a la derecha. Del canto derecho asoman pestanas de colores,
+	una por categoria, y la elegida se corre hacia afuera.
+
+	Los colores estan muestreados de los fotogramas del trailer, tab por
+	tab y de arriba hacia abajo. El orden de esta lista ES el orden en
+	que se apilan las pestanas.
+
+	`exclusiva` significa que solo una cosa de esa categoria puede estar
+	puesta a la vez — no se puede llevar dos peinados. Lo hace cumplir el
+	servidor en ShopService.equip; el cliente solo lo dibuja.
+--]]
+Config.Carnet = {
+	Filas = 5,                      -- la grilla del video es de 4x5
+	Columnas = 4,
+	--[[
+		La clave se llama `categoria` y no `id` a proposito:
+		`tools/check.py` recorre este archivo buscando `{ id = "..."` para
+		verificar que cada articulo de la tienda tenga su nombre y su
+		descripcion en los tres idiomas, y con `id` aca adentro pediria
+		un `item.trampa` que no tiene sentido que exista.
+	--]]
+	Pestanas = {
+		{ categoria = "trampa", color = Color3.fromRGB(130, 78, 210), icono = "lapiz" },
+		{ categoria = "aparato", color = Color3.fromRGB(200, 105, 222), icono = "radio" },
+		{ categoria = "pelo", color = Color3.fromRGB(232, 192, 102), icono = "pelo",
+			exclusiva = true },
+		{ categoria = "gorro", color = Color3.fromRGB(208, 84, 94), icono = "gorra",
+			exclusiva = true },
+		{ categoria = "anteojos", color = Color3.fromRGB(78, 152, 192), icono = "anteojos",
+			exclusiva = true },
+		{ categoria = "ropa", color = Color3.fromRGB(118, 222, 220), icono = "campera" },
+	},
+	-- Paleta del carnet en si, tambien muestreada del video.
+	Papel = Color3.fromRGB(243, 226, 196),
+	PapelSombra = Color3.fromRGB(228, 208, 176),
+	Casilla = Color3.fromRGB(196, 178, 162),
+	Tinta = Color3.fromRGB(48, 44, 52),
+	Cinta = Color3.fromRGB(182, 168, 209),
+	Credencial = Color3.fromRGB(176, 42, 58),
+	CredencialFondo = Color3.fromRGB(206, 232, 238),
+	Remache = Color3.fromRGB(43, 40, 38),
+	Seleccion = Color3.fromRGB(226, 62, 74),
 }
 
 -- ── Salas multijugador ─────────────────────────────────────────────
@@ -728,6 +794,26 @@ local function rounded(piece: BasePart, shape: Enum.PartType)
 	mesh.Parent = piece
 end
 
+--[[
+	La cabeza de maniqui.
+
+	En el trailer las casillas de la grilla no muestran el peinado
+	suelto: muestran una cabeza puesta, con el pelo encima. Tiene
+	sentido — un peinado desprendido de la cabeza no se entiende, y dos
+	peinados distintos flotando se parecen entre si.
+
+	Sale gris palido a proposito: la casilla es de fondo tostado y lo
+	que tiene que resaltar es la prenda, no el maniqui.
+--]]
+local MANIQUI = Color3.fromRGB(236, 232, 226)
+local HAIR = Color3.fromRGB(126, 88, 62)
+
+local function head(model: Model): BasePart
+	local skull = part(model, Vector3.new(1.3, 1.3, 1.3), CFrame.new(0, -0.1, 0), MANIQUI)
+	rounded(skull, Enum.PartType.Ball)
+	return skull
+end
+
 -- Cada constructor recibe el modelo vacio y le cuelga las piezas.
 local BUILDERS: { [string]: (Model) -> () } = {
 	nota = function(model)
@@ -820,10 +906,49 @@ local BUILDERS: { [string]: (Model) -> () } = {
 	end,
 
 	gorra = function(model)
-		part(model, Vector3.new(1.5, 0.62, 1.5), CFrame.new(0, 0.1, 0),
-			Color3.fromRGB(44, 92, 148))
-		part(model, Vector3.new(1.5, 0.12, 0.85), CFrame.new(0, -0.2, -0.9),
-			Color3.fromRGB(32, 70, 118))
+		head(model)
+		local dome = part(model, Vector3.new(1.42, 0.86, 1.42), CFrame.new(0, 0.42, 0),
+			Color3.fromRGB(226, 84, 72))
+		rounded(dome, Enum.PartType.Ball)
+		part(model, Vector3.new(1.42, 0.14, 0.8), CFrame.new(0, 0.24, -0.82),
+			Color3.fromRGB(198, 66, 58))
+	end,
+
+	boina = function(model)
+		head(model)
+		local disc = part(model, Vector3.new(1.66, 0.3, 1.66), CFrame.new(0, 0.5, 0.08),
+			Color3.fromRGB(58, 76, 172))
+		rounded(disc, Enum.PartType.Cylinder)
+		part(model, Vector3.new(0.16, 0.24, 0.16), CFrame.new(0, 0.68, 0.08),
+			Color3.fromRGB(42, 58, 140))
+	end,
+
+	vincha = function(model)
+		head(model)
+		local band = part(model, Vector3.new(1.44, 0.26, 1.44), CFrame.new(0, 0.36, 0),
+			Color3.fromRGB(238, 96, 148))
+		rounded(band, Enum.PartType.Cylinder)
+		part(model, Vector3.new(0.3, 0.3, 0.12), CFrame.new(0.5, 0.42, -0.5),
+			Color3.fromRGB(252, 206, 92))
+	end,
+
+	antifaz = function(model)
+		head(model)
+		part(model, Vector3.new(1.24, 0.42, 0.2), CFrame.new(0, 0.06, -0.62),
+			Color3.fromRGB(32, 32, 46))
+		for _, side in { -1, 1 } do
+			part(model, Vector3.new(0.34, 0.2, 0.06), CFrame.new(side * 0.26, 0.08, -0.72),
+				Color3.fromRGB(238, 238, 242))
+		end
+	end,
+
+	bufanda = function(model)
+		head(model)
+		local loop = part(model, Vector3.new(1.5, 0.44, 1.5), CFrame.new(0, -0.86, 0),
+			Color3.fromRGB(198, 62, 78))
+		rounded(loop, Enum.PartType.Cylinder)
+		part(model, Vector3.new(0.42, 0.9, 0.24), CFrame.new(-0.34, -1.32, -0.4),
+			Color3.fromRGB(176, 48, 66))
 	end,
 
 	mochila = function(model)
@@ -838,15 +963,79 @@ local BUILDERS: { [string]: (Model) -> () } = {
 	end,
 
 	anteojos = function(model)
+		head(model)
 		for _, side in { -1, 1 } do
-			part(model, Vector3.new(0.62, 0.5, 0.06),
-				CFrame.new(side * 0.38, 0, 0), Color3.fromRGB(168, 208, 232),
+			part(model, Vector3.new(0.5, 0.42, 0.06),
+				CFrame.new(side * 0.3, 0.04, -0.66), Color3.fromRGB(168, 208, 232),
 				Enum.Material.Glass)
-			part(model, Vector3.new(0.14, 0.1, 0.6),
-				CFrame.new(side * 0.66, 0.14, 0.3), Color3.fromRGB(28, 30, 36))
+			part(model, Vector3.new(0.54, 0.06, 0.06),
+				CFrame.new(side * 0.3, 0.26, -0.66), Color3.fromRGB(52, 50, 66))
+			part(model, Vector3.new(0.06, 0.06, 0.5),
+				CFrame.new(side * 0.54, 0.14, -0.42), Color3.fromRGB(52, 50, 66))
 		end
-		part(model, Vector3.new(0.2, 0.08, 0.06), CFrame.new(0, 0, 0),
-			Color3.fromRGB(28, 30, 36))
+		part(model, Vector3.new(0.14, 0.06, 0.06), CFrame.new(0, 0.14, -0.66),
+			Color3.fromRGB(52, 50, 66))
+	end,
+
+	--[[
+		Los seis peinados. Se dibujan con el mismo tono de castano para
+		todos a proposito: en el carnet lo que hay que comparar es la
+		SILUETA, y seis colores distintos harian que el jugador elija por
+		color y despues se lleve una sorpresa (el color del pelo sale de
+		su UserId, no de la casilla).
+	--]]
+	pelo_corto = function(model)
+		head(model)
+		local cap = part(model, Vector3.new(1.36, 1.36, 1.36), CFrame.new(0, 0.14, 0), HAIR)
+		rounded(cap, Enum.PartType.Ball)
+		part(model, Vector3.new(1.24, 0.34, 0.26), CFrame.new(0, 0.3, -0.6), HAIR)
+	end,
+
+	pelo_rulos = function(model)
+		head(model)
+		for _, spot in {
+			Vector3.new(0, 0.62, 0), Vector3.new(-0.46, 0.42, 0.16),
+			Vector3.new(0.46, 0.42, 0.16), Vector3.new(-0.32, 0.36, -0.44),
+			Vector3.new(0.32, 0.36, -0.44), Vector3.new(0, 0.3, 0.56),
+		} do
+			local curl = part(model, Vector3.new(0.68, 0.68, 0.68), CFrame.new(spot), HAIR)
+			rounded(curl, Enum.PartType.Ball)
+		end
+	end,
+
+	pelo_largo = function(model)
+		head(model)
+		local cap = part(model, Vector3.new(1.4, 1.4, 1.4), CFrame.new(0, 0.16, 0), HAIR)
+		rounded(cap, Enum.PartType.Ball)
+		for _, side in { -1, 1 } do
+			part(model, Vector3.new(0.34, 1.3, 0.9), CFrame.new(side * 0.6, -0.5, 0.1), HAIR)
+		end
+		part(model, Vector3.new(1.2, 0.3, 0.24), CFrame.new(0, 0.34, -0.62), HAIR)
+	end,
+
+	pelo_cresta = function(model)
+		head(model)
+		part(model, Vector3.new(0.22, 0.9, 1.34), CFrame.new(0, 0.66, 0.04), HAIR)
+		part(model, Vector3.new(0.9, 0.28, 1.3), CFrame.new(0, 0.24, 0.04), HAIR)
+	end,
+
+	pelo_coletas = function(model)
+		head(model)
+		local cap = part(model, Vector3.new(1.36, 1.36, 1.36), CFrame.new(0, 0.14, 0), HAIR)
+		rounded(cap, Enum.PartType.Ball)
+		for _, side in { -1, 1 } do
+			local tail = part(model, Vector3.new(0.62, 0.62, 0.62),
+				CFrame.new(side * 0.86, 0.16, 0.2), HAIR)
+			rounded(tail, Enum.PartType.Ball)
+			part(model, Vector3.new(0.2, 0.2, 0.2), CFrame.new(side * 0.62, 0.3, 0.2),
+				Color3.fromRGB(238, 96, 148))
+		end
+	end,
+
+	pelo_afro = function(model)
+		head(model)
+		local puff = part(model, Vector3.new(2, 1.9, 2), CFrame.new(0, 0.28, 0), HAIR)
+		rounded(puff, Enum.PartType.Ball)
 	end,
 
 	campera = function(model)
@@ -1276,6 +1465,26 @@ local en: { [string]: string } = {
 	["item.mochila"] = "Backpack",
 	["item.anteojos"] = "Glasses",
 	["item.campera"] = "Jacket",
+	["item.pelo_corto"] = "Short hair",
+	["item.pelo_rulos"] = "Curls",
+	["item.pelo_largo"] = "Long hair",
+	["item.pelo_cresta"] = "Mohawk",
+	["item.pelo_coletas"] = "Pigtails",
+	["item.pelo_afro"] = "Afro",
+	["item.boina"] = "Beret",
+	["item.vincha"] = "Headband",
+	["item.antifaz"] = "Domino mask",
+	["item.bufanda"] = "Scarf",
+	["item.desc_pelo_corto"] = "Neat and forgettable. Comes free.",
+	["item.desc_pelo_rulos"] = "A head of curls with a life of its own",
+	["item.desc_pelo_largo"] = "Down to the shoulders",
+	["item.desc_pelo_cresta"] = "The teacher will remember your face",
+	["item.desc_pelo_coletas"] = "Two pigtails with ribbons",
+	["item.desc_pelo_afro"] = "Takes up half the desk behind you",
+	["item.desc_boina"] = "You look like you paint on weekends",
+	["item.desc_vincha"] = "Keeps the hair out of the exam",
+	["item.desc_antifaz"] = "Nobody will ever know it was you",
+	["item.desc_bufanda"] = "For the classroom with the broken window",
 	["item.desc_nota"] = "Write an answer and throw it to a classmate",
 	["item.desc_avion"] = "Flies further and straighter than the ball",
 	["item.desc_bolita"] = "Throw it far away: the teacher goes to the noise",
@@ -1307,6 +1516,15 @@ local en: { [string]: string } = {
 	["shop.tab_items"] = "Gear",
 	["shop.tab_looks"] = "Looks",
 	["shop.price"] = "{n} cr",
+	["carnet.student_id"] = "Student ID",
+	["carnet.page"] = "{a}/{b}",
+	["carnet.free"] = "Free",
+	["carnet.tab_trampa"] = "Cheating",
+	["carnet.tab_aparato"] = "Gadgets",
+	["carnet.tab_pelo"] = "Hair",
+	["carnet.tab_gorro"] = "Headwear",
+	["carnet.tab_anteojos"] = "Eyewear",
+	["carnet.tab_ropa"] = "Clothes",
 	-- El profesor
 	["teacher.greet"] = "Sit down. Now.",
 	["teacher.start_exam"] = "You have {s} seconds. Do not talk.",
@@ -1552,6 +1770,26 @@ local es: { [string]: string } = {
 	["item.mochila"] = "Mochila",
 	["item.anteojos"] = "Anteojos",
 	["item.campera"] = "Campera",
+	["item.pelo_corto"] = "Pelo corto",
+	["item.pelo_rulos"] = "Rulos",
+	["item.pelo_largo"] = "Pelo largo",
+	["item.pelo_cresta"] = "Cresta",
+	["item.pelo_coletas"] = "Coletas",
+	["item.pelo_afro"] = "Afro",
+	["item.boina"] = "Boina",
+	["item.vincha"] = "Vincha",
+	["item.antifaz"] = "Antifaz",
+	["item.bufanda"] = "Bufanda",
+	["item.desc_pelo_corto"] = "Prolijo y olvidable. Viene gratis.",
+	["item.desc_pelo_rulos"] = "Una mata de rulos con vida propia",
+	["item.desc_pelo_largo"] = "Hasta los hombros",
+	["item.desc_pelo_cresta"] = "El profesor te va a recordar la cara",
+	["item.desc_pelo_coletas"] = "Dos coletas con sus cintas",
+	["item.desc_pelo_afro"] = "Ocupa medio pupitre del de atras",
+	["item.desc_boina"] = "Parece que pintas los fines de semana",
+	["item.desc_vincha"] = "Te saca el pelo de encima del examen",
+	["item.desc_antifaz"] = "Nadie va a saber nunca que fuiste vos",
+	["item.desc_bufanda"] = "Para el aula de la ventana rota",
 	["item.desc_nota"] = "Escribi una respuesta y lanzasela a un companero",
 	["item.desc_avion"] = "Vuela mas lejos y mas derecho que la bolita",
 	["item.desc_bolita"] = "Lanzala lejos: el profe va hacia el ruido",
@@ -1583,6 +1821,15 @@ local es: { [string]: string } = {
 	["shop.tab_items"] = "Objetos",
 	["shop.tab_looks"] = "Estetica",
 	["shop.price"] = "{n} cr",
+	["carnet.student_id"] = "Carnet",
+	["carnet.page"] = "{a}/{b}",
+	["carnet.free"] = "Gratis",
+	["carnet.tab_trampa"] = "Trampa",
+	["carnet.tab_aparato"] = "Aparatos",
+	["carnet.tab_pelo"] = "Pelo",
+	["carnet.tab_gorro"] = "Gorros",
+	["carnet.tab_anteojos"] = "Anteojos",
+	["carnet.tab_ropa"] = "Ropa",
 	-- El profesor
 	["teacher.greet"] = "Sientense. Ya.",
 	["teacher.start_exam"] = "Tienen {s} segundos. Nadie habla.",
@@ -1828,6 +2075,26 @@ local pt: { [string]: string } = {
 	["item.mochila"] = "Mochila",
 	["item.anteojos"] = "Oculos",
 	["item.campera"] = "Jaqueta",
+	["item.pelo_corto"] = "Cabelo curto",
+	["item.pelo_rulos"] = "Cachos",
+	["item.pelo_largo"] = "Cabelo longo",
+	["item.pelo_cresta"] = "Moicano",
+	["item.pelo_coletas"] = "Maria-chiquinha",
+	["item.pelo_afro"] = "Black power",
+	["item.boina"] = "Boina",
+	["item.vincha"] = "Tiara",
+	["item.antifaz"] = "Mascara",
+	["item.bufanda"] = "Cachecol",
+	["item.desc_pelo_corto"] = "Arrumado e esquecivel. Vem de graca.",
+	["item.desc_pelo_rulos"] = "Uma mata de cachos com vida propria",
+	["item.desc_pelo_largo"] = "Ate os ombros",
+	["item.desc_pelo_cresta"] = "O professor vai lembrar da sua cara",
+	["item.desc_pelo_coletas"] = "Duas chiquinhas com fitas",
+	["item.desc_pelo_afro"] = "Ocupa meia carteira de quem senta atras",
+	["item.desc_boina"] = "Parece que voce pinta nos fins de semana",
+	["item.desc_vincha"] = "Tira o cabelo de cima da prova",
+	["item.desc_antifaz"] = "Ninguem vai saber que foi voce",
+	["item.desc_bufanda"] = "Para a sala da janela quebrada",
 	["item.desc_nota"] = "Escreva uma resposta e jogue para um colega",
 	["item.desc_avion"] = "Voa mais longe e mais reto que a bolinha",
 	["item.desc_bolita"] = "Jogue longe: o professor vai ate o barulho",
@@ -1859,6 +2126,15 @@ local pt: { [string]: string } = {
 	["shop.tab_items"] = "Objetos",
 	["shop.tab_looks"] = "Estetica",
 	["shop.price"] = "{n} cr",
+	["carnet.student_id"] = "Carteirinha",
+	["carnet.page"] = "{a}/{b}",
+	["carnet.free"] = "Gratis",
+	["carnet.tab_trampa"] = "Cola",
+	["carnet.tab_aparato"] = "Aparelhos",
+	["carnet.tab_pelo"] = "Cabelo",
+	["carnet.tab_gorro"] = "Chapeus",
+	["carnet.tab_anteojos"] = "Oculos",
+	["carnet.tab_ropa"] = "Roupa",
 	-- El profesor
 	["teacher.greet"] = "Sentem-se. Agora.",
 	["teacher.start_exam"] = "Voces tem {s} segundos. Ninguem fala.",
@@ -2306,6 +2582,9 @@ Theme.Font = Enum.Font.GothamMedium
 Theme.FontBold = Enum.Font.GothamBold
 Theme.FontBlack = Enum.Font.GothamBlack
 Theme.FontMono = Enum.Font.Code
+-- Para lo que en el mundo esta escrito a mano: el nombre en el carnet,
+-- las notas que se pasan los alumnos. No para interfaz de sistema.
+Theme.FontHand = Enum.Font.PatrickHand
 
 -- Hoja del examen sobre el pupitre.
 Theme.Paper = {
@@ -3234,6 +3513,110 @@ local ICONS: { [string]: (Frame, Color3, number) -> () } = {
 	tilde = function(root, color, layer)
 		bar(root, UDim2.fromScale(0.1, 0.4), UDim2.fromScale(0.36, 0.62), color, -45, layer)
 		bar(root, UDim2.fromScale(0.1, 0.78), UDim2.fromScale(0.6, 0.44), color, 45, layer)
+	end,
+
+	--[[
+		Los seis de abajo son los glifos de las pestanas del carnet. En
+		el trailer son siluetas negras chiquitas sobre la lengueta de
+		color, asi que se dibujan al mismo tamano y con la misma idea:
+		una forma reconocible de un vistazo, sin detalle interno.
+	--]]
+	lapiz = function(root, color, layer)
+		bar(root, UDim2.fromScale(0.24, 0.9), UDim2.fromScale(0.5, 0.5), color, 42, layer)
+		-- La punta: un cuadrado girado que sobresale del cuerpo.
+		bar(root, UDim2.fromScale(0.2, 0.2), UDim2.fromScale(0.78, 0.24), color, 45, layer + 1)
+	end,
+	pelo = function(root, color, layer)
+		-- Media luna de pelo apoyada sobre una cara vacia.
+		local clip = UI.new("Frame", {
+			Size = UDim2.fromScale(0.9, 0.5),
+			Position = UDim2.fromScale(0.5, 0.42),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			ClipsDescendants = true,
+			ZIndex = layer,
+			Parent = root,
+		})
+		UI.new("Frame", {
+			Size = UDim2.fromScale(1, 2),
+			Position = UDim2.fromScale(0.5, 0.5),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			ZIndex = layer,
+			Parent = clip,
+		}, { UI.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }) })
+		for _, side in { -1, 1 } do
+			bar(root, UDim2.fromScale(0.16, 0.44), UDim2.fromScale(0.5 + side * 0.34, 0.6),
+				color, 0, layer)
+		end
+	end,
+	gorra = function(root, color, layer)
+		local clip = UI.new("Frame", {
+			Size = UDim2.fromScale(0.72, 0.4),
+			Position = UDim2.fromScale(0.5, 0.42),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			ClipsDescendants = true,
+			ZIndex = layer,
+			Parent = root,
+		})
+		UI.new("Frame", {
+			Size = UDim2.fromScale(1, 2),
+			Position = UDim2.fromScale(0.5, 0.5),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			ZIndex = layer,
+			Parent = clip,
+		}, { UI.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }) })
+		bar(root, UDim2.fromScale(0.94, 0.12), UDim2.fromScale(0.44, 0.64), color, 0, layer)
+	end,
+	anteojos = function(root, color, layer)
+		for _, side in { -1, 1 } do
+			local lens = ring(root, 10, color, 1.5, layer)
+			lens.Position = UDim2.fromScale(0.5 + side * 0.27, 0.5)
+			lens.Size = UDim2.fromScale(0.44, 0.44)
+		end
+		bar(root, UDim2.fromScale(0.16, 0.08), UDim2.fromScale(0.5, 0.5), color, 0, layer)
+	end,
+	campera = function(root, color, layer)
+		UI.new("Frame", {
+			Size = UDim2.fromScale(0.56, 0.68),
+			Position = UDim2.fromScale(0.5, 0.56),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			ZIndex = layer,
+			Parent = root,
+		}, { UI.new("UICorner", { CornerRadius = UDim.new(0, 3) }) })
+		for _, side in { -1, 1 } do
+			bar(root, UDim2.fromScale(0.18, 0.5), UDim2.fromScale(0.5 + side * 0.36, 0.5),
+				color, side * 8, layer)
+		end
+		bar(root, UDim2.fromScale(0.34, 0.16), UDim2.fromScale(0.5, 0.26), color, 0, layer + 1)
+	end,
+	flecha = function(root, color, layer)
+		-- Triangulo apuntando a la derecha: el "pasar de pagina".
+		local clip = UI.new("Frame", {
+			Size = UDim2.fromScale(0.58, 1),
+			Position = UDim2.fromScale(0.42, 0.5),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			ClipsDescendants = true,
+			ZIndex = layer,
+			Parent = root,
+		})
+		UI.new("Frame", {
+			Size = UDim2.fromScale(1.1, 1.1),
+			Position = UDim2.fromScale(0, 0.5),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Rotation = 45,
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			ZIndex = layer,
+			Parent = clip,
+		})
 	end,
 }
 

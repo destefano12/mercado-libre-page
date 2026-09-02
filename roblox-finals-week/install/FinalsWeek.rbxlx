@@ -224,33 +224,99 @@ Config.Economia = {
 	CreditosPorSemana = 120,
 	CreditosSinCastigos = 30,
 	GuardadoAutomatico = 90,
+	--[[
+		`categoria` es la pestana del carnet donde cae el articulo (ver
+		`Config.Carnet`). No cambia ninguna regla del servidor: la
+		economia sigue mirando `tipo`. Es puro ordenamiento.
+	--]]
 	Tienda = {
-		{ id = "chuleta", precio = 40, tipo = "objeto" },
-		{ id = "avion", precio = 25, tipo = "objeto" },
-		{ id = "bolita", precio = 15, tipo = "objeto" },
-		{ id = "nota", precio = 10, tipo = "objeto" },
-		{ id = "walkie", precio = 110, tipo = "objeto" },
-		{ id = "prismaticos", precio = 95, tipo = "objeto" },
-		{ id = "celular", precio = 140, tipo = "objeto" },
-		{ id = "aerosol", precio = 30, tipo = "objeto" },
-		{ id = "libro", precio = 55, tipo = "objeto" },
+		{ id = "chuleta", precio = 40, tipo = "objeto", categoria = "trampa" },
+		{ id = "avion", precio = 25, tipo = "objeto", categoria = "trampa" },
+		{ id = "bolita", precio = 15, tipo = "objeto", categoria = "trampa" },
+		{ id = "nota", precio = 10, tipo = "objeto", categoria = "trampa" },
+		{ id = "aerosol", precio = 30, tipo = "objeto", categoria = "trampa" },
+		{ id = "walkie", precio = 110, tipo = "objeto", categoria = "aparato" },
+		{ id = "prismaticos", precio = 95, tipo = "objeto", categoria = "aparato" },
+		{ id = "celular", precio = 140, tipo = "objeto", categoria = "aparato" },
+		{ id = "libro", precio = 55, tipo = "objeto", categoria = "aparato" },
 		--[[
 			La estetica no se compra sola: hay que haberse ganado el
 			derecho. `semanas` son semanas finales sobrevividas y
 			`promedio` es el mejor promedio que sacaste alguna vez, dos
 			cosas que ya viven en el perfil de DataService.
 
-			La gorra queda libre para que la tienda no se vea toda
-			bloqueada la primera vez que entras.
+			El pelo corto y la gorra quedan libres para que el carnet no
+			se vea todo bloqueado la primera vez que se abre.
 		--]]
-		{ id = "gorra", precio = 90, tipo = "estetica" },
-		{ id = "anteojos", precio = 75, tipo = "estetica",
-			requiere = { promedio = 70 } },
-		{ id = "mochila", precio = 130, tipo = "estetica",
+		{ id = "pelo_corto", precio = 0, tipo = "estetica", categoria = "pelo" },
+		{ id = "pelo_rulos", precio = 45, tipo = "estetica", categoria = "pelo" },
+		{ id = "pelo_largo", precio = 60, tipo = "estetica", categoria = "pelo" },
+		{ id = "pelo_cresta", precio = 85, tipo = "estetica", categoria = "pelo",
+			requiere = { promedio = 60 } },
+		{ id = "pelo_coletas", precio = 70, tipo = "estetica", categoria = "pelo" },
+		{ id = "pelo_afro", precio = 95, tipo = "estetica", categoria = "pelo",
 			requiere = { semanas = 1 } },
-		{ id = "campera", precio = 160, tipo = "estetica",
+		{ id = "gorra", precio = 90, tipo = "estetica", categoria = "gorro" },
+		{ id = "boina", precio = 65, tipo = "estetica", categoria = "gorro" },
+		{ id = "vincha", precio = 40, tipo = "estetica", categoria = "gorro" },
+		{ id = "anteojos", precio = 75, tipo = "estetica", categoria = "anteojos",
+			requiere = { promedio = 70 } },
+		{ id = "antifaz", precio = 120, tipo = "estetica", categoria = "anteojos",
+			requiere = { semanas = 1 } },
+		{ id = "mochila", precio = 130, tipo = "estetica", categoria = "ropa",
+			requiere = { semanas = 1 } },
+		{ id = "campera", precio = 160, tipo = "estetica", categoria = "ropa",
 			requiere = { semanas = 2, promedio = 80 } },
+		{ id = "bufanda", precio = 55, tipo = "estetica", categoria = "ropa" },
 	},
+}
+
+--[[
+	── Carnet de estudiante ───────────────────────────────────────────
+	La cosmetica no es un panel de tienda: es una libreta que se abre en
+	primera persona, con la credencial a la izquierda y una grilla de
+	articulos a la derecha. Del canto derecho asoman pestanas de colores,
+	una por categoria, y la elegida se corre hacia afuera.
+
+	Los colores estan muestreados de los fotogramas del trailer, tab por
+	tab y de arriba hacia abajo. El orden de esta lista ES el orden en
+	que se apilan las pestanas.
+
+	`exclusiva` significa que solo una cosa de esa categoria puede estar
+	puesta a la vez — no se puede llevar dos peinados. Lo hace cumplir el
+	servidor en ShopService.equip; el cliente solo lo dibuja.
+--]]
+Config.Carnet = {
+	Filas = 5,                      -- la grilla del video es de 4x5
+	Columnas = 4,
+	--[[
+		La clave se llama `categoria` y no `id` a proposito:
+		`tools/check.py` recorre este archivo buscando `{ id = "..."` para
+		verificar que cada articulo de la tienda tenga su nombre y su
+		descripcion en los tres idiomas, y con `id` aca adentro pediria
+		un `item.trampa` que no tiene sentido que exista.
+	--]]
+	Pestanas = {
+		{ categoria = "trampa", color = Color3.fromRGB(130, 78, 210), icono = "lapiz" },
+		{ categoria = "aparato", color = Color3.fromRGB(200, 105, 222), icono = "radio" },
+		{ categoria = "pelo", color = Color3.fromRGB(232, 192, 102), icono = "pelo",
+			exclusiva = true },
+		{ categoria = "gorro", color = Color3.fromRGB(208, 84, 94), icono = "gorra",
+			exclusiva = true },
+		{ categoria = "anteojos", color = Color3.fromRGB(78, 152, 192), icono = "anteojos",
+			exclusiva = true },
+		{ categoria = "ropa", color = Color3.fromRGB(118, 222, 220), icono = "campera" },
+	},
+	-- Paleta del carnet en si, tambien muestreada del video.
+	Papel = Color3.fromRGB(243, 226, 196),
+	PapelSombra = Color3.fromRGB(228, 208, 176),
+	Casilla = Color3.fromRGB(196, 178, 162),
+	Tinta = Color3.fromRGB(48, 44, 52),
+	Cinta = Color3.fromRGB(182, 168, 209),
+	Credencial = Color3.fromRGB(176, 42, 58),
+	CredencialFondo = Color3.fromRGB(206, 232, 238),
+	Remache = Color3.fromRGB(43, 40, 38),
+	Seleccion = Color3.fromRGB(226, 62, 74),
 }
 
 -- ── Salas multijugador ─────────────────────────────────────────────
@@ -763,6 +829,26 @@ local function rounded(piece: BasePart, shape: Enum.PartType)
 	mesh.Parent = piece
 end
 
+--[[
+	La cabeza de maniqui.
+
+	En el trailer las casillas de la grilla no muestran el peinado
+	suelto: muestran una cabeza puesta, con el pelo encima. Tiene
+	sentido — un peinado desprendido de la cabeza no se entiende, y dos
+	peinados distintos flotando se parecen entre si.
+
+	Sale gris palido a proposito: la casilla es de fondo tostado y lo
+	que tiene que resaltar es la prenda, no el maniqui.
+--]]
+local MANIQUI = Color3.fromRGB(236, 232, 226)
+local HAIR = Color3.fromRGB(126, 88, 62)
+
+local function head(model: Model): BasePart
+	local skull = part(model, Vector3.new(1.3, 1.3, 1.3), CFrame.new(0, -0.1, 0), MANIQUI)
+	rounded(skull, Enum.PartType.Ball)
+	return skull
+end
+
 -- Cada constructor recibe el modelo vacio y le cuelga las piezas.
 local BUILDERS: { [string]: (Model) -> () } = {
 	nota = function(model)
@@ -855,10 +941,49 @@ local BUILDERS: { [string]: (Model) -> () } = {
 	end,
 
 	gorra = function(model)
-		part(model, Vector3.new(1.5, 0.62, 1.5), CFrame.new(0, 0.1, 0),
-			Color3.fromRGB(44, 92, 148))
-		part(model, Vector3.new(1.5, 0.12, 0.85), CFrame.new(0, -0.2, -0.9),
-			Color3.fromRGB(32, 70, 118))
+		head(model)
+		local dome = part(model, Vector3.new(1.42, 0.86, 1.42), CFrame.new(0, 0.42, 0),
+			Color3.fromRGB(226, 84, 72))
+		rounded(dome, Enum.PartType.Ball)
+		part(model, Vector3.new(1.42, 0.14, 0.8), CFrame.new(0, 0.24, -0.82),
+			Color3.fromRGB(198, 66, 58))
+	end,
+
+	boina = function(model)
+		head(model)
+		local disc = part(model, Vector3.new(1.66, 0.3, 1.66), CFrame.new(0, 0.5, 0.08),
+			Color3.fromRGB(58, 76, 172))
+		rounded(disc, Enum.PartType.Cylinder)
+		part(model, Vector3.new(0.16, 0.24, 0.16), CFrame.new(0, 0.68, 0.08),
+			Color3.fromRGB(42, 58, 140))
+	end,
+
+	vincha = function(model)
+		head(model)
+		local band = part(model, Vector3.new(1.44, 0.26, 1.44), CFrame.new(0, 0.36, 0),
+			Color3.fromRGB(238, 96, 148))
+		rounded(band, Enum.PartType.Cylinder)
+		part(model, Vector3.new(0.3, 0.3, 0.12), CFrame.new(0.5, 0.42, -0.5),
+			Color3.fromRGB(252, 206, 92))
+	end,
+
+	antifaz = function(model)
+		head(model)
+		part(model, Vector3.new(1.24, 0.42, 0.2), CFrame.new(0, 0.06, -0.62),
+			Color3.fromRGB(32, 32, 46))
+		for _, side in { -1, 1 } do
+			part(model, Vector3.new(0.34, 0.2, 0.06), CFrame.new(side * 0.26, 0.08, -0.72),
+				Color3.fromRGB(238, 238, 242))
+		end
+	end,
+
+	bufanda = function(model)
+		head(model)
+		local loop = part(model, Vector3.new(1.5, 0.44, 1.5), CFrame.new(0, -0.86, 0),
+			Color3.fromRGB(198, 62, 78))
+		rounded(loop, Enum.PartType.Cylinder)
+		part(model, Vector3.new(0.42, 0.9, 0.24), CFrame.new(-0.34, -1.32, -0.4),
+			Color3.fromRGB(176, 48, 66))
 	end,
 
 	mochila = function(model)
@@ -873,15 +998,79 @@ local BUILDERS: { [string]: (Model) -> () } = {
 	end,
 
 	anteojos = function(model)
+		head(model)
 		for _, side in { -1, 1 } do
-			part(model, Vector3.new(0.62, 0.5, 0.06),
-				CFrame.new(side * 0.38, 0, 0), Color3.fromRGB(168, 208, 232),
+			part(model, Vector3.new(0.5, 0.42, 0.06),
+				CFrame.new(side * 0.3, 0.04, -0.66), Color3.fromRGB(168, 208, 232),
 				Enum.Material.Glass)
-			part(model, Vector3.new(0.14, 0.1, 0.6),
-				CFrame.new(side * 0.66, 0.14, 0.3), Color3.fromRGB(28, 30, 36))
+			part(model, Vector3.new(0.54, 0.06, 0.06),
+				CFrame.new(side * 0.3, 0.26, -0.66), Color3.fromRGB(52, 50, 66))
+			part(model, Vector3.new(0.06, 0.06, 0.5),
+				CFrame.new(side * 0.54, 0.14, -0.42), Color3.fromRGB(52, 50, 66))
 		end
-		part(model, Vector3.new(0.2, 0.08, 0.06), CFrame.new(0, 0, 0),
-			Color3.fromRGB(28, 30, 36))
+		part(model, Vector3.new(0.14, 0.06, 0.06), CFrame.new(0, 0.14, -0.66),
+			Color3.fromRGB(52, 50, 66))
+	end,
+
+	--[[
+		Los seis peinados. Se dibujan con el mismo tono de castano para
+		todos a proposito: en el carnet lo que hay que comparar es la
+		SILUETA, y seis colores distintos harian que el jugador elija por
+		color y despues se lleve una sorpresa (el color del pelo sale de
+		su UserId, no de la casilla).
+	--]]
+	pelo_corto = function(model)
+		head(model)
+		local cap = part(model, Vector3.new(1.36, 1.36, 1.36), CFrame.new(0, 0.14, 0), HAIR)
+		rounded(cap, Enum.PartType.Ball)
+		part(model, Vector3.new(1.24, 0.34, 0.26), CFrame.new(0, 0.3, -0.6), HAIR)
+	end,
+
+	pelo_rulos = function(model)
+		head(model)
+		for _, spot in {
+			Vector3.new(0, 0.62, 0), Vector3.new(-0.46, 0.42, 0.16),
+			Vector3.new(0.46, 0.42, 0.16), Vector3.new(-0.32, 0.36, -0.44),
+			Vector3.new(0.32, 0.36, -0.44), Vector3.new(0, 0.3, 0.56),
+		} do
+			local curl = part(model, Vector3.new(0.68, 0.68, 0.68), CFrame.new(spot), HAIR)
+			rounded(curl, Enum.PartType.Ball)
+		end
+	end,
+
+	pelo_largo = function(model)
+		head(model)
+		local cap = part(model, Vector3.new(1.4, 1.4, 1.4), CFrame.new(0, 0.16, 0), HAIR)
+		rounded(cap, Enum.PartType.Ball)
+		for _, side in { -1, 1 } do
+			part(model, Vector3.new(0.34, 1.3, 0.9), CFrame.new(side * 0.6, -0.5, 0.1), HAIR)
+		end
+		part(model, Vector3.new(1.2, 0.3, 0.24), CFrame.new(0, 0.34, -0.62), HAIR)
+	end,
+
+	pelo_cresta = function(model)
+		head(model)
+		part(model, Vector3.new(0.22, 0.9, 1.34), CFrame.new(0, 0.66, 0.04), HAIR)
+		part(model, Vector3.new(0.9, 0.28, 1.3), CFrame.new(0, 0.24, 0.04), HAIR)
+	end,
+
+	pelo_coletas = function(model)
+		head(model)
+		local cap = part(model, Vector3.new(1.36, 1.36, 1.36), CFrame.new(0, 0.14, 0), HAIR)
+		rounded(cap, Enum.PartType.Ball)
+		for _, side in { -1, 1 } do
+			local tail = part(model, Vector3.new(0.62, 0.62, 0.62),
+				CFrame.new(side * 0.86, 0.16, 0.2), HAIR)
+			rounded(tail, Enum.PartType.Ball)
+			part(model, Vector3.new(0.2, 0.2, 0.2), CFrame.new(side * 0.62, 0.3, 0.2),
+				Color3.fromRGB(238, 96, 148))
+		end
+	end,
+
+	pelo_afro = function(model)
+		head(model)
+		local puff = part(model, Vector3.new(2, 1.9, 2), CFrame.new(0, 0.28, 0), HAIR)
+		rounded(puff, Enum.PartType.Ball)
 	end,
 
 	campera = function(model)
@@ -1311,6 +1500,26 @@ local en: { [string]: string } = {
 	["item.mochila"] = "Backpack",
 	["item.anteojos"] = "Glasses",
 	["item.campera"] = "Jacket",
+	["item.pelo_corto"] = "Short hair",
+	["item.pelo_rulos"] = "Curls",
+	["item.pelo_largo"] = "Long hair",
+	["item.pelo_cresta"] = "Mohawk",
+	["item.pelo_coletas"] = "Pigtails",
+	["item.pelo_afro"] = "Afro",
+	["item.boina"] = "Beret",
+	["item.vincha"] = "Headband",
+	["item.antifaz"] = "Domino mask",
+	["item.bufanda"] = "Scarf",
+	["item.desc_pelo_corto"] = "Neat and forgettable. Comes free.",
+	["item.desc_pelo_rulos"] = "A head of curls with a life of its own",
+	["item.desc_pelo_largo"] = "Down to the shoulders",
+	["item.desc_pelo_cresta"] = "The teacher will remember your face",
+	["item.desc_pelo_coletas"] = "Two pigtails with ribbons",
+	["item.desc_pelo_afro"] = "Takes up half the desk behind you",
+	["item.desc_boina"] = "You look like you paint on weekends",
+	["item.desc_vincha"] = "Keeps the hair out of the exam",
+	["item.desc_antifaz"] = "Nobody will ever know it was you",
+	["item.desc_bufanda"] = "For the classroom with the broken window",
 	["item.desc_nota"] = "Write an answer and throw it to a classmate",
 	["item.desc_avion"] = "Flies further and straighter than the ball",
 	["item.desc_bolita"] = "Throw it far away: the teacher goes to the noise",
@@ -1342,6 +1551,15 @@ local en: { [string]: string } = {
 	["shop.tab_items"] = "Gear",
 	["shop.tab_looks"] = "Looks",
 	["shop.price"] = "{n} cr",
+	["carnet.student_id"] = "Student ID",
+	["carnet.page"] = "{a}/{b}",
+	["carnet.free"] = "Free",
+	["carnet.tab_trampa"] = "Cheating",
+	["carnet.tab_aparato"] = "Gadgets",
+	["carnet.tab_pelo"] = "Hair",
+	["carnet.tab_gorro"] = "Headwear",
+	["carnet.tab_anteojos"] = "Eyewear",
+	["carnet.tab_ropa"] = "Clothes",
 	-- El profesor
 	["teacher.greet"] = "Sit down. Now.",
 	["teacher.start_exam"] = "You have {s} seconds. Do not talk.",
@@ -1587,6 +1805,26 @@ local es: { [string]: string } = {
 	["item.mochila"] = "Mochila",
 	["item.anteojos"] = "Anteojos",
 	["item.campera"] = "Campera",
+	["item.pelo_corto"] = "Pelo corto",
+	["item.pelo_rulos"] = "Rulos",
+	["item.pelo_largo"] = "Pelo largo",
+	["item.pelo_cresta"] = "Cresta",
+	["item.pelo_coletas"] = "Coletas",
+	["item.pelo_afro"] = "Afro",
+	["item.boina"] = "Boina",
+	["item.vincha"] = "Vincha",
+	["item.antifaz"] = "Antifaz",
+	["item.bufanda"] = "Bufanda",
+	["item.desc_pelo_corto"] = "Prolijo y olvidable. Viene gratis.",
+	["item.desc_pelo_rulos"] = "Una mata de rulos con vida propia",
+	["item.desc_pelo_largo"] = "Hasta los hombros",
+	["item.desc_pelo_cresta"] = "El profesor te va a recordar la cara",
+	["item.desc_pelo_coletas"] = "Dos coletas con sus cintas",
+	["item.desc_pelo_afro"] = "Ocupa medio pupitre del de atras",
+	["item.desc_boina"] = "Parece que pintas los fines de semana",
+	["item.desc_vincha"] = "Te saca el pelo de encima del examen",
+	["item.desc_antifaz"] = "Nadie va a saber nunca que fuiste vos",
+	["item.desc_bufanda"] = "Para el aula de la ventana rota",
 	["item.desc_nota"] = "Escribi una respuesta y lanzasela a un companero",
 	["item.desc_avion"] = "Vuela mas lejos y mas derecho que la bolita",
 	["item.desc_bolita"] = "Lanzala lejos: el profe va hacia el ruido",
@@ -1618,6 +1856,15 @@ local es: { [string]: string } = {
 	["shop.tab_items"] = "Objetos",
 	["shop.tab_looks"] = "Estetica",
 	["shop.price"] = "{n} cr",
+	["carnet.student_id"] = "Carnet",
+	["carnet.page"] = "{a}/{b}",
+	["carnet.free"] = "Gratis",
+	["carnet.tab_trampa"] = "Trampa",
+	["carnet.tab_aparato"] = "Aparatos",
+	["carnet.tab_pelo"] = "Pelo",
+	["carnet.tab_gorro"] = "Gorros",
+	["carnet.tab_anteojos"] = "Anteojos",
+	["carnet.tab_ropa"] = "Ropa",
 	-- El profesor
 	["teacher.greet"] = "Sientense. Ya.",
 	["teacher.start_exam"] = "Tienen {s} segundos. Nadie habla.",
@@ -1863,6 +2110,26 @@ local pt: { [string]: string } = {
 	["item.mochila"] = "Mochila",
 	["item.anteojos"] = "Oculos",
 	["item.campera"] = "Jaqueta",
+	["item.pelo_corto"] = "Cabelo curto",
+	["item.pelo_rulos"] = "Cachos",
+	["item.pelo_largo"] = "Cabelo longo",
+	["item.pelo_cresta"] = "Moicano",
+	["item.pelo_coletas"] = "Maria-chiquinha",
+	["item.pelo_afro"] = "Black power",
+	["item.boina"] = "Boina",
+	["item.vincha"] = "Tiara",
+	["item.antifaz"] = "Mascara",
+	["item.bufanda"] = "Cachecol",
+	["item.desc_pelo_corto"] = "Arrumado e esquecivel. Vem de graca.",
+	["item.desc_pelo_rulos"] = "Uma mata de cachos com vida propria",
+	["item.desc_pelo_largo"] = "Ate os ombros",
+	["item.desc_pelo_cresta"] = "O professor vai lembrar da sua cara",
+	["item.desc_pelo_coletas"] = "Duas chiquinhas com fitas",
+	["item.desc_pelo_afro"] = "Ocupa meia carteira de quem senta atras",
+	["item.desc_boina"] = "Parece que voce pinta nos fins de semana",
+	["item.desc_vincha"] = "Tira o cabelo de cima da prova",
+	["item.desc_antifaz"] = "Ninguem vai saber que foi voce",
+	["item.desc_bufanda"] = "Para a sala da janela quebrada",
 	["item.desc_nota"] = "Escreva uma resposta e jogue para um colega",
 	["item.desc_avion"] = "Voa mais longe e mais reto que a bolinha",
 	["item.desc_bolita"] = "Jogue longe: o professor vai ate o barulho",
@@ -1894,6 +2161,15 @@ local pt: { [string]: string } = {
 	["shop.tab_items"] = "Objetos",
 	["shop.tab_looks"] = "Estetica",
 	["shop.price"] = "{n} cr",
+	["carnet.student_id"] = "Carteirinha",
+	["carnet.page"] = "{a}/{b}",
+	["carnet.free"] = "Gratis",
+	["carnet.tab_trampa"] = "Cola",
+	["carnet.tab_aparato"] = "Aparelhos",
+	["carnet.tab_pelo"] = "Cabelo",
+	["carnet.tab_gorro"] = "Chapeus",
+	["carnet.tab_anteojos"] = "Oculos",
+	["carnet.tab_ropa"] = "Roupa",
 	-- El profesor
 	["teacher.greet"] = "Sentem-se. Agora.",
 	["teacher.start_exam"] = "Voces tem {s} segundos. Ninguem fala.",
@@ -2341,6 +2617,9 @@ Theme.Font = Enum.Font.GothamMedium
 Theme.FontBold = Enum.Font.GothamBold
 Theme.FontBlack = Enum.Font.GothamBlack
 Theme.FontMono = Enum.Font.Code
+-- Para lo que en el mundo esta escrito a mano: el nombre en el carnet,
+-- las notas que se pasan los alumnos. No para interfaz de sistema.
+Theme.FontHand = Enum.Font.PatrickHand
 
 -- Hoja del examen sobre el pupitre.
 Theme.Paper = {
@@ -3269,6 +3548,110 @@ local ICONS: { [string]: (Frame, Color3, number) -> () } = {
 	tilde = function(root, color, layer)
 		bar(root, UDim2.fromScale(0.1, 0.4), UDim2.fromScale(0.36, 0.62), color, -45, layer)
 		bar(root, UDim2.fromScale(0.1, 0.78), UDim2.fromScale(0.6, 0.44), color, 45, layer)
+	end,
+
+	--[[
+		Los seis de abajo son los glifos de las pestanas del carnet. En
+		el trailer son siluetas negras chiquitas sobre la lengueta de
+		color, asi que se dibujan al mismo tamano y con la misma idea:
+		una forma reconocible de un vistazo, sin detalle interno.
+	--]]
+	lapiz = function(root, color, layer)
+		bar(root, UDim2.fromScale(0.24, 0.9), UDim2.fromScale(0.5, 0.5), color, 42, layer)
+		-- La punta: un cuadrado girado que sobresale del cuerpo.
+		bar(root, UDim2.fromScale(0.2, 0.2), UDim2.fromScale(0.78, 0.24), color, 45, layer + 1)
+	end,
+	pelo = function(root, color, layer)
+		-- Media luna de pelo apoyada sobre una cara vacia.
+		local clip = UI.new("Frame", {
+			Size = UDim2.fromScale(0.9, 0.5),
+			Position = UDim2.fromScale(0.5, 0.42),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			ClipsDescendants = true,
+			ZIndex = layer,
+			Parent = root,
+		})
+		UI.new("Frame", {
+			Size = UDim2.fromScale(1, 2),
+			Position = UDim2.fromScale(0.5, 0.5),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			ZIndex = layer,
+			Parent = clip,
+		}, { UI.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }) })
+		for _, side in { -1, 1 } do
+			bar(root, UDim2.fromScale(0.16, 0.44), UDim2.fromScale(0.5 + side * 0.34, 0.6),
+				color, 0, layer)
+		end
+	end,
+	gorra = function(root, color, layer)
+		local clip = UI.new("Frame", {
+			Size = UDim2.fromScale(0.72, 0.4),
+			Position = UDim2.fromScale(0.5, 0.42),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			ClipsDescendants = true,
+			ZIndex = layer,
+			Parent = root,
+		})
+		UI.new("Frame", {
+			Size = UDim2.fromScale(1, 2),
+			Position = UDim2.fromScale(0.5, 0.5),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			ZIndex = layer,
+			Parent = clip,
+		}, { UI.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }) })
+		bar(root, UDim2.fromScale(0.94, 0.12), UDim2.fromScale(0.44, 0.64), color, 0, layer)
+	end,
+	anteojos = function(root, color, layer)
+		for _, side in { -1, 1 } do
+			local lens = ring(root, 10, color, 1.5, layer)
+			lens.Position = UDim2.fromScale(0.5 + side * 0.27, 0.5)
+			lens.Size = UDim2.fromScale(0.44, 0.44)
+		end
+		bar(root, UDim2.fromScale(0.16, 0.08), UDim2.fromScale(0.5, 0.5), color, 0, layer)
+	end,
+	campera = function(root, color, layer)
+		UI.new("Frame", {
+			Size = UDim2.fromScale(0.56, 0.68),
+			Position = UDim2.fromScale(0.5, 0.56),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			ZIndex = layer,
+			Parent = root,
+		}, { UI.new("UICorner", { CornerRadius = UDim.new(0, 3) }) })
+		for _, side in { -1, 1 } do
+			bar(root, UDim2.fromScale(0.18, 0.5), UDim2.fromScale(0.5 + side * 0.36, 0.5),
+				color, side * 8, layer)
+		end
+		bar(root, UDim2.fromScale(0.34, 0.16), UDim2.fromScale(0.5, 0.26), color, 0, layer + 1)
+	end,
+	flecha = function(root, color, layer)
+		-- Triangulo apuntando a la derecha: el "pasar de pagina".
+		local clip = UI.new("Frame", {
+			Size = UDim2.fromScale(0.58, 1),
+			Position = UDim2.fromScale(0.42, 0.5),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			ClipsDescendants = true,
+			ZIndex = layer,
+			Parent = root,
+		})
+		UI.new("Frame", {
+			Size = UDim2.fromScale(1.1, 1.1),
+			Position = UDim2.fromScale(0, 0.5),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Rotation = 45,
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			ZIndex = layer,
+			Parent = clip,
+		})
 	end,
 }
 
@@ -4387,23 +4770,176 @@ end
 	se derivan de `Rig.Alumno` y siguen cualquier cambio de proporciones.
 --]]
 local A = Rig.Alumno
+local FLAT = Enum.Material.SmoothPlastic
 
-local ESTETICAS: { [string]: (Model) -> () } = {
+--[[
+	Los peinados tapan el pelo de fabrica en vez de sumarse a el.
+
+	`Rig.build` le pone a todo el mundo un casquete `Pelo` y un
+	`Flequillo`: es lo que hace que un alumno recien creado no sea un
+	pelado. Cuando el jugador elige un peinado del carnet hay que sacar
+	ese pelo base de en medio, o la silueta nueva sale montada sobre la
+	vieja y se ve como dos gorros apilados.
+
+	Se esconde en vez de destruirse porque el pelo base no lleva el
+	atributo `Accesorio` — `stripAccessories` no lo toca —, asi que si
+	lo borraramos no habria forma de recuperarlo al desequipar el
+	peinado sin reaparecer al personaje.
+--]]
+local function hideBaseHair(character: Model)
+	for _, child in character:GetChildren() do
+		if child:IsA("BasePart") and (child.Name == "Pelo" or child.Name == "Flequillo") then
+			child.Transparency = 1
+		end
+	end
+end
+
+local ESTETICAS: { [string]: (Model, Rig.Skin) -> () } = {
+	-- ── peinados ───────────────────────────────────────────────────
+	pelo_corto = function(character, skin)
+		hideBaseHair(character)
+		attach(character, "Head", "Peinado",
+			Vector3.new(A.cabeza.X * 1.04, A.cabeza.Y * 0.6, A.cabeza.Z * 1.04),
+			CFrame.new(0, A.cabeza.Y * 0.4, 0), skin.pelo, FLAT)
+		attach(character, "Head", "Peinado",
+			Vector3.new(A.cabeza.X * 1.04, A.cabeza.Y * 0.3, 0.28),
+			CFrame.new(0, A.cabeza.Y * 0.22, -A.cabeza.Z * 0.52), skin.pelo, FLAT)
+	end,
+
+	pelo_rulos = function(character, skin)
+		hideBaseHair(character)
+		-- Seis bollos alrededor de la coronilla. El del medio es mas
+		-- grande para que el conjunto se lea como una masa, no como
+		-- seis pelotas sueltas.
+		local r = A.cabeza.X * 0.42
+		attach(character, "Head", "Peinado", Vector3.new(r * 1.5, r * 1.5, r * 1.5),
+			CFrame.new(0, A.cabeza.Y * 0.55, 0), skin.pelo, FLAT)
+		for _, spot in {
+			Vector3.new(-0.6, 0.34, 0.16), Vector3.new(0.6, 0.34, 0.16),
+			Vector3.new(-0.42, 0.28, -0.5), Vector3.new(0.42, 0.28, -0.5),
+			Vector3.new(0, 0.24, 0.62),
+		} do
+			attach(character, "Head", "Peinado", Vector3.new(r * 1.2, r * 1.2, r * 1.2),
+				CFrame.new(spot.X * A.cabeza.X, A.cabeza.Y * spot.Y, spot.Z * A.cabeza.Z),
+				skin.pelo, FLAT)
+		end
+	end,
+
+	pelo_largo = function(character, skin)
+		hideBaseHair(character)
+		attach(character, "Head", "Peinado",
+			Vector3.new(A.cabeza.X * 1.06, A.cabeza.Y * 0.64, A.cabeza.Z * 1.06),
+			CFrame.new(0, A.cabeza.Y * 0.4, 0), skin.pelo, FLAT)
+		attach(character, "Head", "Peinado",
+			Vector3.new(A.cabeza.X * 1.06, A.cabeza.Y * 0.28, 0.28),
+			CFrame.new(0, A.cabeza.Y * 0.24, -A.cabeza.Z * 0.54), skin.pelo, FLAT)
+		-- Las dos cortinas que caen hasta el hombro.
+		for _, side in { -1, 1 } do
+			attach(character, "Head", "Peinado",
+				Vector3.new(0.34, A.cabeza.Y * 1.15, A.cabeza.Z * 0.9),
+				CFrame.new(side * A.cabeza.X * 0.52, -A.cabeza.Y * 0.3, A.cabeza.Z * 0.06),
+				skin.pelo, FLAT)
+		end
+	end,
+
+	pelo_cresta = function(character, skin)
+		hideBaseHair(character)
+		attach(character, "Head", "Peinado",
+			Vector3.new(0.26, A.cabeza.Y * 0.72, A.cabeza.Z * 1.02),
+			CFrame.new(0, A.cabeza.Y * 0.62, 0), skin.pelo, FLAT)
+		attach(character, "Head", "Peinado",
+			Vector3.new(A.cabeza.X * 0.7, A.cabeza.Y * 0.24, A.cabeza.Z * 1.02),
+			CFrame.new(0, A.cabeza.Y * 0.42, 0), skin.pelo, FLAT)
+	end,
+
+	pelo_coletas = function(character, skin)
+		hideBaseHair(character)
+		attach(character, "Head", "Peinado",
+			Vector3.new(A.cabeza.X * 1.04, A.cabeza.Y * 0.58, A.cabeza.Z * 1.04),
+			CFrame.new(0, A.cabeza.Y * 0.4, 0), skin.pelo, FLAT)
+		for _, side in { -1, 1 } do
+			attach(character, "Head", "Peinado",
+				Vector3.new(A.cabeza.X * 0.46, A.cabeza.Y * 0.46, A.cabeza.Z * 0.46),
+				CFrame.new(side * A.cabeza.X * 0.68, A.cabeza.Y * 0.34, A.cabeza.Z * 0.14),
+				skin.pelo, FLAT)
+			attach(character, "Head", "Cinta",
+				Vector3.new(0.2, 0.2, 0.2),
+				CFrame.new(side * A.cabeza.X * 0.5, A.cabeza.Y * 0.4, A.cabeza.Z * 0.14),
+				Color3.fromRGB(238, 96, 148), FLAT)
+		end
+	end,
+
+	pelo_afro = function(character, skin)
+		hideBaseHair(character)
+		attach(character, "Head", "Peinado",
+			Vector3.new(A.cabeza.X * 1.55, A.cabeza.Y * 1.5, A.cabeza.Z * 1.55),
+			CFrame.new(0, A.cabeza.Y * 0.42, 0), skin.pelo, FLAT)
+	end,
+
+	-- ── gorros ─────────────────────────────────────────────────────
 	gorra = function(character)
 		attach(character, "Head", "Gorra",
 			Vector3.new(A.cabeza.X * 1.06, A.cabeza.Y * 0.34, A.cabeza.Z * 1.06),
 			CFrame.new(0, A.cabeza.Y * 0.5, 0),
-			Color3.fromRGB(226, 84, 72), Enum.Material.SmoothPlastic)
+			Color3.fromRGB(226, 84, 72), FLAT)
 		attach(character, "Head", "Visera",
 			Vector3.new(A.cabeza.X * 1.06, 0.16, A.cabeza.Z * 0.7),
 			CFrame.new(0, A.cabeza.Y * 0.34, -A.cabeza.Z * 0.72),
-			Color3.fromRGB(198, 66, 58), Enum.Material.SmoothPlastic)
+			Color3.fromRGB(198, 66, 58), FLAT)
 	end,
+	boina = function(character)
+		attach(character, "Head", "Boina",
+			Vector3.new(A.cabeza.X * 1.2, 0.28, A.cabeza.Z * 1.2),
+			CFrame.new(0, A.cabeza.Y * 0.48, A.cabeza.Z * 0.06),
+			Color3.fromRGB(58, 76, 172), FLAT)
+		attach(character, "Head", "Rabito",
+			Vector3.new(0.16, 0.22, 0.16),
+			CFrame.new(0, A.cabeza.Y * 0.6, A.cabeza.Z * 0.06),
+			Color3.fromRGB(42, 58, 140), FLAT)
+	end,
+	vincha = function(character)
+		attach(character, "Head", "Vincha",
+			Vector3.new(A.cabeza.X * 1.06, 0.24, A.cabeza.Z * 1.06),
+			CFrame.new(0, A.cabeza.Y * 0.32, 0),
+			Color3.fromRGB(238, 96, 148), FLAT)
+		attach(character, "Head", "Mono",
+			Vector3.new(0.3, 0.3, 0.14),
+			CFrame.new(A.cabeza.X * 0.4, A.cabeza.Y * 0.38, -A.cabeza.Z * 0.42),
+			Color3.fromRGB(252, 206, 92), FLAT)
+	end,
+
+	-- ── cara ───────────────────────────────────────────────────────
 	anteojos = function(character)
 		attach(character, "Head", "Anteojos",
 			Vector3.new(A.cabeza.X * 0.86, A.cabeza.Y * 0.22, 0.14),
 			CFrame.new(0, A.cabeza.Y * 0.05, -A.cabeza.Z * 0.55),
-			Color3.fromRGB(52, 50, 66), Enum.Material.SmoothPlastic)
+			Color3.fromRGB(52, 50, 66), FLAT)
+	end,
+	antifaz = function(character)
+		attach(character, "Head", "Antifaz",
+			Vector3.new(A.cabeza.X * 0.92, A.cabeza.Y * 0.3, 0.16),
+			CFrame.new(0, A.cabeza.Y * 0.06, -A.cabeza.Z * 0.54),
+			Color3.fromRGB(32, 32, 46), FLAT)
+		-- Los dos ojos blancos recortados: sin esto es una venda.
+		for _, side in { -1, 1 } do
+			attach(character, "Head", "Ojal",
+				Vector3.new(A.cabeza.X * 0.26, A.cabeza.Y * 0.14, 0.06),
+				CFrame.new(side * A.cabeza.X * 0.2, A.cabeza.Y * 0.07, -A.cabeza.Z * 0.61),
+				Color3.fromRGB(238, 238, 242), FLAT)
+		end
+	end,
+
+	-- ── ropa ───────────────────────────────────────────────────────
+	bufanda = function(character)
+		local anchor = character:FindFirstChild("UpperTorso") and "UpperTorso" or "Torso"
+		attach(character, anchor, "Bufanda",
+			Vector3.new(A.torso.X * 0.78, 0.42, A.torso.Z * 1.15),
+			CFrame.new(0, A.torso.Y * 0.44, 0),
+			Color3.fromRGB(198, 62, 78), FLAT)
+		attach(character, anchor, "Punta",
+			Vector3.new(0.36, A.torso.Y * 0.62, 0.2),
+			CFrame.new(-A.torso.X * 0.2, A.torso.Y * 0.08, -A.torso.Z * 0.6),
+			Color3.fromRGB(176, 48, 66), FLAT)
 	end,
 	mochila = function(character)
 		local anchor = character:FindFirstChild("UpperTorso") and "UpperTorso" or "Torso"
@@ -4499,6 +5035,10 @@ function CharacterService.dressStudent(player: Player, character: Model, estetic
 				if child:IsA("BasePart")
 					and (child.Name == "Pelo" or child.Name == "Flequillo") then
 					child.Color = skin.pelo
+					-- Se vuelve a mostrar en cada pasada: si el jugador
+					-- se saco el peinado del carnet, esto es lo que lo
+					-- deja de nuevo con pelo en vez de pelado.
+					child.Transparency = 0
 				end
 			end
 		end
@@ -4507,9 +5047,18 @@ function CharacterService.dressStudent(player: Player, character: Model, estetic
 		attach(character, torso, "Corbata", Vector3.new(0.34, 1, 0.14),
 			CFrame.new(0, 0.2, -0.55), UNIFORME.Corbata, Enum.Material.SmoothPlastic)
 
-		for id, on in (estetica or {}) do
-			if on and ESTETICAS[id] then
-				ESTETICAS[id](character)
+		--[[
+			El orden importa: los peinados esconden el pelo base y los
+			gorros se apoyan encima del peinado, asi que se recorre la
+			tienda en su orden declarado en vez del orden arbitrario de
+			un mapa. Iterar `estetica` directamente daba resultados
+			distintos entre partidas para el mismo conjunto de prendas.
+		--]]
+		local puestas = estetica or {}
+		for _, entry in Config.Economia.Tienda do
+			local build = ESTETICAS[entry.id]
+			if build and puestas[entry.id] then
+				build(character, skin)
 			end
 		end
 
@@ -10765,6 +11314,28 @@ local function entryOf(id: string): any
 	return nil
 end
 
+--[[
+	Las categorias exclusivas del carnet: `pelo`, `gorro`, `anteojos`.
+
+	Sin esto un jugador podia tener los seis peinados puestos a la vez —
+	`equip` solo alternaba una bandera por id y nadie miraba el resto —,
+	y el resultado era una bola de pelo con seis siluetas encimadas. Lo
+	decide el servidor y no el carnet: el cliente puede mandar dos
+	`Equip` seguidos.
+--]]
+local function exclusiveCategory(id: string): string?
+	local entry = entryOf(id)
+	if not entry or not entry.categoria then
+		return nil
+	end
+	for _, tab in Config.Carnet.Pestanas do
+		if tab.categoria == entry.categoria and tab.exclusiva then
+			return tab.categoria
+		end
+	end
+	return nil
+end
+
 function ShopService.setPhase(phase: string)
 	currentPhase = phase
 end
@@ -10869,7 +11440,20 @@ function ShopService.equip(player: Player, id: any): any
 	if entry.tipo == "objeto" then
 		profile.objeto = id
 	else
-		profile.estetica[id] = not profile.estetica[id] or nil
+		local turningOn = not profile.estetica[id]
+		profile.estetica[id] = turningOn or nil
+
+		if turningOn then
+			local category = exclusiveCategory(id)
+			if category then
+				for _, other in Config.Economia.Tienda do
+					if other.id ~= id and other.categoria == category then
+						profile.estetica[other.id] = nil
+					end
+				end
+			end
+		end
+
 		local character = player.Character
 		if character then
 			-- Repintar en caliente: se ve el cambio sin reaparecer.
@@ -12399,7 +12983,7 @@ local UI = require(Shared:WaitForChild("UI"))
 local Hud = require(script:WaitForChild("Hud"))
 local ExamUI = require(script:WaitForChild("ExamUI"))
 local NoteUI = require(script:WaitForChild("NoteUI"))
-local ShopUI = require(script:WaitForChild("ShopUI"))
+local IdBook = require(script:WaitForChild("IdBook"))
 local MainMenu = require(script:WaitForChild("MainMenu"))
 local LobbyUI = require(script:WaitForChild("LobbyUI"))
 local CameraDirector = require(script:WaitForChild("CameraDirector"))
@@ -12449,7 +13033,7 @@ Poses.mount()
 Hud.mount(gui)
 ExamUI.mount(gui)
 NoteUI.mount(gui)
-ShopUI.mount(gui)
+IdBook.mount(gui)
 LobbyUI.mount(gui)
 GraffitiUI.mount(gui)
 RadioUI.mount(gui)
@@ -12460,7 +13044,7 @@ Viewmodel.mount()
 Music.start()
 
 ExamUI.onNotify = Hud.notify
-ShopUI.onNotify = Hud.notify
+IdBook.onNotify = Hud.notify
 LobbyUI.onNotify = Hud.notify
 ExamUI.onWrite = function()
 	Poses.write()
@@ -12498,7 +13082,7 @@ MainMenu.onVisible = function(open: boolean)
 	-- titulo.
 	Viewmodel.setVisible(not open)
 	if open then
-		ShopUI.close()
+		IdBook.close()
 		LobbyUI.close()
 	end
 end
@@ -12509,7 +13093,7 @@ end
 -- menu (100): se abren *sobre* el menu en vez de detras, que es lo que
 -- pasaba cuando la tienda estaba fija en ZIndex 12 y el scrim en 20.
 MainMenu.onShop = function()
-	ShopUI.open()
+	IdBook.open()
 end
 MainMenu.onMusic = function(on: boolean)
 	Music.setEnabled(on)
@@ -12594,9 +13178,9 @@ end)
 
 Net.event(Net.Events.Wallet).OnClientEvent:Connect(function(data)
 	Hud.setWallet(data)
-	ShopUI.setWallet(data)
+	IdBook.setWallet(data)
 	if data.abrir then
-		ShopUI.open()
+		IdBook.open()
 	end
 end)
 
@@ -12694,10 +13278,10 @@ UserInputService.InputBegan:Connect(function(input, processed)
 			Net.event(Net.Events.Cheat):FireServer("passbook", 1, target.UserId)
 		end
 	elseif input.KeyCode == Enum.KeyCode.T then
-		if ShopUI.isOpen() then
-			ShopUI.close()
+		if IdBook.isOpen() then
+			IdBook.close()
 		else
-			ShopUI.open()
+			IdBook.open()
 		end
 	end
 end)
@@ -12739,7 +13323,7 @@ task.spawn(function()
 	if ok and state then
 		if state.billetera then
 			Hud.setWallet(state.billetera)
-			ShopUI.setWallet(state.billetera)
+			IdBook.setWallet(state.billetera)
 		end
 		if state.examen then
 			ExamUI.setState(state.examen)
@@ -14655,6 +15239,917 @@ return Hud
         </Item>
         <Item class="ModuleScript" referent="RBX46">
           <Properties>
+            <string name="Name">IdBook</string>
+            <ProtectedString name="Source"><![CDATA[--!strict
+--[[
+	IdBook — el carnet de estudiante
+	------------------------------------------------------------------
+	Reemplaza a `ShopUI`, que era un panel oscuro de tienda con dos
+	pestanas de texto y tarjetas en fila. Funcionaba, pero no se parecia
+	a nada de lo que hay en el juego de referencia.
+
+	En el trailer la cosmetica no se compra en un panel: se abre una
+	libreta. Pagina izquierda, la credencial — nombre escrito a mano,
+	foto tuya, codigo de barras y `STUDENT ID` girado en el canto.
+	Pagina derecha, una grilla de 4x5 con lo que hay en esa categoria y
+	un contador de paginas abajo. Del canto derecho asoman lenguetas de
+	colores, una por categoria, y la elegida se corre hacia afuera.
+
+	Todas las medidas y todos los colores salen de los fotogramas
+	`f029` y `f030`, muestreados pixel a pixel; los colores viven en
+	`Config.Carnet` para que se toquen sin abrir este archivo.
+
+	Lo que cambia respecto de la version anterior, aparte del aspecto:
+
+	- Las trece miniaturas giraban todas a la vez en un RenderStepped.
+	  En la referencia las casillas estan quietas: ahora gira solo la
+	  que senala el cursor, que ademas es como se lee cual esta por
+	  elegirse.
+	- La grilla pagina de verdad. Con seis peinados, tres gorros y
+	  cinco objetos de trampa, una lista sola dejo de alcanzar.
+	- La foto es un clon del personaje del jugador, con los brazos
+	  arriba como en la foto del carnet del trailer.
+
+	Quien decide sigue siendo el servidor: esto manda "quiero esto" y
+	dibuja lo que vuelve.
+--]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Theme = require(Shared:WaitForChild("Theme"))
+local Strings = require(Shared:WaitForChild("Strings"))
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+local UI = require(Shared:WaitForChild("UI"))
+local Previews = require(Shared:WaitForChild("Previews"))
+
+local IdBook = {}
+
+local player = Players.LocalPlayer
+local C = Config.Carnet
+
+-- ── medidas ────────────────────────────────────────────────────────
+-- Todo en pixeles de diseno de 1280x720; `UI.responsive` los escala.
+
+local PAGE_H = 400
+local LEFT_W, RIGHT_W, SPINE_W = 290, 300, 10
+local TAB_W, TAB_H, TAB_GAP = 46, 46, 8
+local SLOT, SLOT_GAP = 52, 10
+local MARGIN = 18
+
+local COLS, ROWS = C.Columnas, C.Filas
+local PER_PAGE = COLS * ROWS
+local GRID_W = COLS * SLOT + (COLS - 1) * SLOT_GAP
+local GRID_H = ROWS * SLOT + (ROWS - 1) * SLOT_GAP
+
+local ROOT_W = MARGIN + LEFT_W + SPINE_W + RIGHT_W + TAB_W + MARGIN
+local ROOT_H = MARGIN * 2 + PAGE_H
+
+--[[
+	Las capas. Con `ZIndexBehavior.Sibling` (lo que pone
+	`init.client.lua`) el ZIndex solo ordena entre hermanos, y los hijos
+	van siempre encima de su padre, con su propio ZIndex o sin el. Asi
+	que alcanza con ordenar los cuatro hijos directos de la raiz y cada
+	subarbol viaja con su padre.
+
+	Las lenguetas van ENCIMA de las paginas: en reposo arrancan justo en
+	el canto derecho del papel, y la elegida se corre hacia la izquierda
+	montandose sobre la hoja. Es lo que en el video hace que se vea cual
+	esta abierta.
+--]]
+local Z_SPINE, Z_PAGE, Z_TABS, Z_CHROME = 1, 2, 3, 4
+
+-- ── estado ─────────────────────────────────────────────────────────
+
+local root: Frame
+local rightPage: Frame
+local portrait: ViewportFrame
+local portraitCamera: Camera
+local titleLabel: TextLabel
+local hintLabel: TextLabel
+local counterLabel: TextLabel
+local creditLabel: TextLabel
+local gridHolder: Frame
+local nextArrow: Frame
+
+type Tab = { button: TextButton, color: Color3 }
+local tabs: { [string]: Tab } = {}
+
+local currentTab: string = C.Pestanas[1].categoria
+local currentPage = 1
+
+local wallet: any = { creditos = 0, comprados = {}, estetica = {}, objeto = "nota" }
+
+-- Solo gira la miniatura que el cursor esta senalando.
+local hovered: Model? = nil
+local spinLoop: RBXScriptConnection? = nil
+
+IdBook.onNotify = function(_packet: any) end
+
+-- ── datos ──────────────────────────────────────────────────────────
+
+local function entriesFor(category: string): { any }
+	local list = {}
+	for _, entry in Config.Economia.Tienda do
+		if entry.categoria == category then
+			table.insert(list, entry)
+		end
+	end
+	return list
+end
+
+local function pageCount(category: string): number
+	return math.max(1, math.ceil(#entriesFor(category) / PER_PAGE))
+end
+
+--[[
+	Por que esta prenda esta bloqueada, o `nil` si esta disponible.
+
+	Es la misma cuenta que hace `ShopService.missingRequirement`,
+	repetida aca para poder avisar ANTES del clic. Si las dos difirieran
+	manda el servidor y el jugador ve un rechazo: molesto, pero no
+	explotable.
+--]]
+local function lockOf(entry: any): any?
+	if wallet.comprados and wallet.comprados[entry.id] then
+		return nil
+	end
+	local needs = entry.requiere
+	if not needs then
+		return nil
+	end
+	if needs.semanas and (wallet.semanas or 0) < needs.semanas then
+		return { key = "shop.need_weeks", args = { n = needs.semanas } }
+	end
+	if needs.promedio and (wallet.mejorPromedio or 0) < needs.promedio then
+		return { key = "shop.need_grade", args = { n = needs.promedio } }
+	end
+	return nil
+end
+
+local function isEquipped(entry: any): boolean
+	if entry.tipo == "objeto" then
+		return wallet.objeto == entry.id
+	end
+	return wallet.estetica ~= nil and wallet.estetica[entry.id] == true
+end
+
+-- ── giro de la miniatura senalada ───────────────────────────────────
+
+local function startSpin()
+	if spinLoop then
+		return
+	end
+	local angle = 0
+	spinLoop = RunService.RenderStepped:Connect(function(dt: number)
+		local model = hovered
+		if not model or not model.Parent then
+			return
+		end
+		angle += dt * 1.2
+		model:PivotTo(CFrame.Angles(math.sin(angle * 0.6) * 0.14, angle, 0))
+	end)
+end
+
+local function stopSpin()
+	if spinLoop then
+		spinLoop:Disconnect()
+		spinLoop = nil
+	end
+	hovered = nil
+end
+
+-- ── piezas de la credencial ────────────────────────────────────────
+
+--[[
+	El codigo de barras.
+
+	Sale de `Random.new(UserId)`: el mismo jugador tiene siempre el
+	mismo carnet, en todas las partidas y sin guardar nada. Es el mismo
+	truco que usa `CharacterService.skinFor` para la piel.
+--]]
+local function barcode(parent: Instance, width: number, height: number, position: UDim2)
+	local strip = UI.new("Frame", {
+		Name = "Codigo",
+		Size = UDim2.fromOffset(width, height),
+		Position = position,
+		BackgroundTransparency = 1,
+		Parent = parent,
+	})
+
+	local rng = Random.new(player.UserId)
+	local x = 0
+	while x < width - 2 do
+		local barWidth = rng:NextInteger(1, 4)
+		if x + barWidth > width then
+			break
+		end
+		UI.new("Frame", {
+			Size = UDim2.fromOffset(barWidth, height),
+			Position = UDim2.fromOffset(x, 0),
+			BackgroundColor3 = C.Tinta,
+			BorderSizePixel = 0,
+			Parent = strip,
+		})
+		x += barWidth + rng:NextInteger(1, 3)
+	end
+end
+
+--[[
+	La foto del carnet.
+
+	Es un clon del personaje real dentro de un ViewportFrame. Tres
+	cosas que hay que hacer si o si:
+
+	  * `Archivable = true` — los personajes de jugador vienen con el
+	    clonado desactivado y `:Clone()` devolveria nil;
+	  * sacarle el Humanoid y los BillboardGui — el cartel del nombre
+	    flotando dentro de la foto se ve pesimo;
+	  * `PivotTo(CFrame.new())` para normalizar la pose, porque el
+	    personaje puede estar mirando a cualquier lado cuando se abre
+	    el carnet.
+
+	Los brazos se levantan girandolos sobre su hombro: es la pose de la
+	foto del trailer, y ademas tapa que el clon esta congelado.
+--]]
+local function raiseArms(model: Model)
+	local torso = model:FindFirstChild("Torso")
+	if not torso or not torso:IsA("BasePart") then
+		return
+	end
+	for _, entry in { { name = "Right Arm", side = 1 }, { name = "Left Arm", side = -1 } } do
+		local arm = model:FindFirstChild(entry.name)
+		if arm and arm:IsA("BasePart") then
+			local shoulder = torso.CFrame
+				* CFrame.new(entry.side * (torso.Size.X + arm.Size.X) / 2, torso.Size.Y / 2, 0)
+			arm.CFrame = shoulder
+				* CFrame.Angles(0, 0, entry.side * 2.2)
+				* CFrame.new(0, -arm.Size.Y / 2, 0)
+		end
+	end
+end
+
+local function refreshPortrait()
+	if not portrait then
+		return
+	end
+	for _, child in portrait:GetChildren() do
+		if child:IsA("Model") then
+			child:Destroy()
+		end
+	end
+
+	local character = player.Character
+	if not character then
+		return
+	end
+
+	local ok, clone = pcall(function(): Model
+		character.Archivable = true
+		return character:Clone()
+	end)
+	if not ok or not clone then
+		return
+	end
+
+	for _, descendant in clone:GetDescendants() do
+		if descendant:IsA("Humanoid") or descendant:IsA("BillboardGui")
+			or descendant:IsA("LuaSourceContainer") then
+			descendant:Destroy()
+		end
+	end
+
+	clone:PivotTo(CFrame.new())
+	raiseArms(clone)
+	clone.Parent = portrait
+
+	--[[
+		El rig mira a -Z, asi que la camara se planta de ese lado. Y se
+		planta LEJOS: con los brazos arriba el personaje mide unos cinco
+		studs de ancho, y a la distancia con la que se encuadra una
+		cabeza sola las manos quedaban fuera del recorte.
+
+		El foco es fijo, no la posicion de la cabeza: despues del
+		`PivotTo` la raiz esta en el origen y el pecho cae siempre a la
+		misma altura, sea cual sea la pose con la que se abrio el
+		carnet.
+	--]]
+	local focus = Vector3.new(0, 1.1, 0)
+	portraitCamera.CFrame = CFrame.lookAt(focus + Vector3.new(0, 0, -9), focus)
+end
+
+-- ── casillas de la grilla ──────────────────────────────────────────
+
+--[[
+	Las cuatro esquinas rojas de lo que esta puesto.
+
+	En el video la seleccion no es un borde entero: son cuatro angulos
+	discontinuos en las esquinas de la casilla, que dejan ver el fondo
+	entre medio. Un `UIStroke` daria un marco cerrado y se veria como
+	otra cosa.
+--]]
+local function selectionCorners(parent: Instance)
+	local arm, thick, inset = 15, 3, -2
+	for _, corner in {
+		{ x = 0, y = 0, dx = 1, dy = 1 },
+		{ x = 1, y = 0, dx = -1, dy = 1 },
+		{ x = 0, y = 1, dx = 1, dy = -1 },
+		{ x = 1, y = 1, dx = -1, dy = -1 },
+	} do
+		for _, leg in {
+			{ w = arm, h = thick },
+			{ w = thick, h = arm },
+		} do
+			UI.new("Frame", {
+				Name = "Esquina",
+				Size = UDim2.fromOffset(leg.w, leg.h),
+				Position = UDim2.new(
+					corner.x, corner.dx > 0 and inset or -(leg.w + inset),
+					corner.y, corner.dy > 0 and inset or -(leg.h + inset)
+				),
+				BackgroundColor3 = C.Seleccion,
+				BorderSizePixel = 0,
+				Parent = parent,
+			}, { UI.new("UICorner", { CornerRadius = UDim.new(0, 1) }) })
+		end
+	end
+end
+
+local function slotPreview(parent: Instance, id: string): Model?
+	local model = Previews.build(id)
+	if not model then
+		UI.icon(parent, "moneda", 22, C.Tinta).Position = UDim2.new(0.5, -11, 0.5, -11)
+		return nil
+	end
+
+	local viewport: ViewportFrame = UI.new("ViewportFrame", {
+		Name = "Vista",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Ambient = Color3.fromRGB(196, 190, 182),
+		LightColor = Color3.fromRGB(255, 252, 244),
+		LightDirection = Vector3.new(-0.4, -1, -0.6),
+		Parent = parent,
+	})
+	local camera = UI.new("Camera", {
+		CFrame = CFrame.lookAt(Vector3.new(0, 0.5, 4.6), Vector3.new(0, 0.15, 0)),
+		FieldOfView = 44,
+		Parent = viewport,
+	})
+	viewport.CurrentCamera = camera
+	model.Parent = viewport
+	return model
+end
+
+local function buildSlot(entry: any, index: number)
+	local column = (index - 1) % COLS
+	local rowIndex = math.floor((index - 1) / COLS)
+
+	local owned = wallet.comprados ~= nil and wallet.comprados[entry.id] == true
+	local locked = lockOf(entry)
+	local credits = wallet.creditos or 0
+	local affordable = owned or (credits >= entry.precio and not locked)
+	local equipped = owned and isEquipped(entry)
+
+	local cell = UI.new("TextButton", {
+		Name = entry.id,
+		Text = "",
+		AutoButtonColor = false,
+		Size = UDim2.fromOffset(SLOT, SLOT),
+		Position = UDim2.fromOffset(
+			column * (SLOT + SLOT_GAP),
+			rowIndex * (SLOT + SLOT_GAP)
+		),
+		BackgroundColor3 = C.Casilla,
+		BackgroundTransparency = affordable and 0 or 0.45,
+		BorderSizePixel = 0,
+		Parent = gridHolder,
+	})
+	UI.corner(cell, 14)
+
+	local model = slotPreview(cell, entry.id)
+
+	if equipped then
+		selectionCorners(cell)
+	end
+
+	if locked then
+		UI.icon(cell, "candado", 18, C.Tinta).Position = UDim2.new(0.5, -9, 0.5, -9)
+	elseif not owned then
+		-- El precio va DENTRO de la casilla, chiquito y abajo: es la
+		-- unica forma de que la grilla siga leyendose como grilla y no
+		-- como una lista de precios.
+		UI.label({
+			parent = cell,
+			name = "Precio",
+			text = entry.precio > 0 and tostring(entry.precio)
+				or Strings.get("carnet.free"),
+			size = UDim2.new(1, 0, 0, 13),
+			position = UDim2.new(0, 0, 1, -15),
+			font = Theme.FontBold,
+			textSize = UI.Type.micro,
+			color = affordable and C.Tinta or C.Seleccion,
+			align = Enum.TextXAlignment.Center,
+		})
+	end
+
+	--[[
+		Al pasar por encima: el nombre en el pie de la pagina y, si esta
+		bloqueada, POR QUE. Un candado sin explicacion es peor que
+		ningun candado.
+	--]]
+	cell.MouseEnter:Connect(function()
+		hovered = model
+		hintLabel.Text = locked and Strings.render(locked)
+			or Strings.get("item." .. entry.id)
+		hintLabel.TextColor3 = locked and C.Seleccion or C.Tinta
+		UI.hover()
+	end)
+	cell.MouseLeave:Connect(function()
+		if hovered == model then
+			hovered = nil
+			if model then
+				model:PivotTo(CFrame.new())
+			end
+		end
+		hintLabel.Text = ""
+	end)
+
+	if locked or (not owned and not affordable) then
+		cell.Active = false
+		cell.Selectable = false
+		return
+	end
+
+	local pending = false
+	cell.Activated:Connect(function()
+		if pending then
+			return
+		end
+		pending = true
+		UI.click()
+		task.spawn(function()
+			local remote = owned and Net.func(Net.Functions.Equip) or Net.func(Net.Functions.Buy)
+			local ok, result = pcall(function()
+				return remote:InvokeServer(entry.id)
+			end)
+			pending = false
+			if not ok or not result then
+				return
+			end
+			if result.reason then
+				IdBook.onNotify(result.reason)
+			end
+			if result.ok and cell.Parent then
+				-- La grilla se rehace sola cuando llega la billetera
+				-- nueva, pero el servidor puede tardar y el silencio se
+				-- lee como que el clic no entro.
+				TweenService:Create(cell, UI.Motion.snap, {
+					BackgroundColor3 = C.Seleccion,
+				}):Play()
+				task.delay(0.16, function()
+					if cell.Parent then
+						TweenService:Create(cell, UI.Motion.base, {
+							BackgroundColor3 = C.Casilla,
+						}):Play()
+					end
+				end)
+			end
+		end)
+	end)
+end
+
+local function rebuildGrid()
+	if not gridHolder then
+		return
+	end
+	hovered = nil
+	gridHolder:ClearAllChildren()
+
+	local list = entriesFor(currentTab)
+	local total = pageCount(currentTab)
+	currentPage = math.clamp(currentPage, 1, total)
+
+	local first = (currentPage - 1) * PER_PAGE
+	for offset = 1, PER_PAGE do
+		local entry = list[first + offset]
+		if entry then
+			buildSlot(entry, offset)
+		end
+	end
+
+	titleLabel.Text = string.upper(Strings.get("carnet.tab_" .. currentTab))
+	counterLabel.Text = Strings.get("carnet.page", { a = currentPage, b = total })
+	nextArrow.Visible = total > 1
+	hintLabel.Text = ""
+	creditLabel.Text = Strings.get("shop.price", { n = wallet.creditos or 0 })
+end
+
+-- ── lenguetas ──────────────────────────────────────────────────────
+
+local function selectTab(category: string)
+	if currentTab ~= category then
+		currentPage = 1
+	end
+	currentTab = category
+
+	for id, tab in tabs do
+		local on = id == category
+		-- La elegida se corre hacia afuera y se aclara. El trozo que
+		-- sobresale hacia la pagina queda tapado por el papel, que es
+		-- exactamente lo que se ve en el trailer.
+		TweenService:Create(tab.button, UI.Motion.base, {
+			Position = UDim2.fromOffset(
+				on and -14 or 0,
+				tab.button.Position.Y.Offset
+			),
+			BackgroundColor3 = on and tab.color:Lerp(Color3.new(1, 1, 1), 0.3) or tab.color,
+		}):Play()
+	end
+
+	rebuildGrid()
+end
+
+-- ── construccion ───────────────────────────────────────────────────
+
+local function buildLeftPage(parent: Instance)
+	local page = UI.new("Frame", {
+		Name = "PaginaIzquierda",
+		Size = UDim2.fromOffset(LEFT_W, PAGE_H),
+		Position = UDim2.fromOffset(MARGIN, MARGIN),
+		BackgroundColor3 = C.Papel,
+		BorderSizePixel = 0,
+		ZIndex = Z_PAGE,
+		Parent = parent,
+	})
+	UI.corner(page, UI.Radius.lg)
+
+	-- La sombra del lomo: el degradado que hace que la pagina se lea
+	-- curvandose hacia adentro en vez de plana.
+	UI.new("UIGradient", {
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+			ColorSequenceKeypoint.new(0.82, Color3.new(1, 1, 1)),
+			ColorSequenceKeypoint.new(1, C.PapelSombra),
+		}),
+		Parent = page,
+	})
+
+	-- La cinta lila del marcapaginas.
+	UI.new("Frame", {
+		Name = "Cinta",
+		Size = UDim2.fromOffset(26, PAGE_H),
+		Position = UDim2.fromOffset(44, 0),
+		BackgroundColor3 = C.Cinta,
+		BackgroundTransparency = 0.25,
+		BorderSizePixel = 0,
+		Parent = page,
+	})
+
+	-- ── la credencial ──
+	local card = UI.new("Frame", {
+		Name = "Credencial",
+		Size = UDim2.fromOffset(200, 300),
+		Position = UDim2.fromOffset(74, 40),
+		BackgroundColor3 = C.Credencial,
+		BorderSizePixel = 0,
+		Parent = page,
+	})
+	UI.corner(card, UI.Radius.md)
+
+	local inner = UI.new("Frame", {
+		Name = "Interior",
+		Size = UDim2.fromOffset(168, 284),
+		Position = UDim2.fromOffset(8, 8),
+		BackgroundColor3 = C.CredencialFondo,
+		BorderSizePixel = 0,
+		Parent = card,
+	})
+	UI.corner(inner, UI.Radius.sm)
+
+	-- "STUDENT ID" girado 90 grados sobre el canto carmesi.
+	UI.label({
+		parent = card,
+		name = "Titulo",
+		text = string.upper(Strings.get("carnet.student_id")),
+		size = UDim2.fromOffset(284, 24),
+		position = UDim2.fromOffset(188, 150),
+		anchor = Vector2.new(0.5, 0.5),
+		font = Theme.FontBlack,
+		textSize = UI.Type.subtitle,
+		color = Color3.fromRGB(252, 246, 244),
+		align = Enum.TextXAlignment.Center,
+	}).Rotation = 90
+
+	UI.label({
+		parent = inner,
+		name = "Nombre",
+		text = player.DisplayName,
+		size = UDim2.fromOffset(136, 22),
+		position = UDim2.fromOffset(16, 12),
+		font = Theme.FontHand,
+		textSize = UI.Type.subtitle,
+		color = C.Tinta,
+	})
+	UI.new("Frame", {
+		Name = "Renglon",
+		Size = UDim2.fromOffset(136, 2),
+		Position = UDim2.fromOffset(16, 34),
+		BackgroundColor3 = C.Tinta,
+		BackgroundTransparency = 0.4,
+		BorderSizePixel = 0,
+		Parent = inner,
+	})
+
+	local frame = UI.new("Frame", {
+		Name = "Foto",
+		Size = UDim2.fromOffset(136, 160),
+		Position = UDim2.fromOffset(16, 46),
+		BackgroundColor3 = Color3.fromRGB(226, 240, 244),
+		BorderSizePixel = 0,
+		ClipsDescendants = true,
+		Parent = inner,
+	})
+	UI.corner(frame, UI.Radius.sm)
+
+	portrait = UI.new("ViewportFrame", {
+		Name = "Retrato",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Ambient = Color3.fromRGB(190, 196, 206),
+		LightColor = Color3.fromRGB(255, 250, 240),
+		LightDirection = Vector3.new(-0.3, -1, -0.5),
+		Parent = frame,
+	})
+	portraitCamera = UI.new("Camera", { FieldOfView = 40, Parent = portrait })
+	portrait.CurrentCamera = portraitCamera
+
+	barcode(inner, 136, 34, UDim2.fromOffset(16, 220))
+
+	UI.icon(page, "moneda", 16, Theme.Hud.Credit).Position = UDim2.fromOffset(74, 352)
+	creditLabel = UI.label({
+		parent = page,
+		name = "Creditos",
+		text = "0 cr",
+		size = UDim2.fromOffset(170, 18),
+		position = UDim2.fromOffset(96, 351),
+		font = Theme.FontBold,
+		textSize = UI.Type.small,
+		color = C.Tinta,
+	})
+
+	-- El remache de abajo a la izquierda. En el video son dos botones
+	-- metalicos que sujetan las tapas; el de la derecha ademas pasa de
+	-- pagina, este es solo adorno.
+	UI.new("Frame", {
+		Name = "Remache",
+		Size = UDim2.fromOffset(22, 22),
+		Position = UDim2.fromOffset(22, 356),
+		BackgroundColor3 = C.Remache,
+		BorderSizePixel = 0,
+		Parent = page,
+	}, { UI.new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
+end
+
+local function buildRightPage(parent: Instance)
+	local left = MARGIN + LEFT_W + SPINE_W
+
+	rightPage = UI.new("Frame", {
+		Name = "PaginaDerecha",
+		Size = UDim2.fromOffset(RIGHT_W, PAGE_H),
+		Position = UDim2.fromOffset(left, MARGIN),
+		BackgroundColor3 = C.Papel,
+		BorderSizePixel = 0,
+		ZIndex = Z_PAGE,
+		Parent = parent,
+	})
+	UI.corner(rightPage, UI.Radius.lg)
+
+	UI.new("UIGradient", {
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, C.PapelSombra),
+			ColorSequenceKeypoint.new(0.18, Color3.new(1, 1, 1)),
+			ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1)),
+		}),
+		Parent = rightPage,
+	})
+
+	titleLabel = UI.label({
+		parent = rightPage,
+		name = "Categoria",
+		text = "",
+		size = UDim2.fromOffset(RIGHT_W - 40, 24),
+		position = UDim2.fromOffset(20, 16),
+		font = Theme.FontBlack,
+		textSize = UI.Type.subtitle,
+		color = C.Tinta,
+		align = Enum.TextXAlignment.Right,
+	})
+
+	gridHolder = UI.new("Frame", {
+		Name = "Grilla",
+		Size = UDim2.fromOffset(GRID_W, GRID_H),
+		Position = UDim2.fromOffset((RIGHT_W - GRID_W) / 2, 48),
+		BackgroundTransparency = 1,
+		Parent = rightPage,
+	})
+
+	hintLabel = UI.label({
+		parent = rightPage,
+		name = "Detalle",
+		text = "",
+		size = UDim2.fromOffset(RIGHT_W - 40, 18),
+		position = UDim2.fromOffset(20, PAGE_H - 48),
+		font = Theme.Font,
+		textSize = UI.Type.small,
+		color = C.Tinta,
+		align = Enum.TextXAlignment.Center,
+	})
+
+	counterLabel = UI.label({
+		parent = rightPage,
+		name = "Paginas",
+		text = "1/1",
+		size = UDim2.fromOffset(80, 18),
+		position = UDim2.fromOffset(RIGHT_W / 2 - 46, PAGE_H - 26),
+		font = Theme.FontBold,
+		textSize = UI.Type.small,
+		color = C.Tinta,
+		align = Enum.TextXAlignment.Center,
+	})
+
+	nextArrow = UI.icon(rightPage, "flecha", 12, C.Cinta)
+	nextArrow.Position = UDim2.fromOffset(RIGHT_W / 2 + 38, PAGE_H - 23)
+	nextArrow.Visible = false
+
+	--[[
+		El remache de la derecha pasa de pagina. En el trailer lleva un
+		chevron adentro y esta en la esquina, justo donde uno apoyaria
+		el pulgar para dar vuelta la hoja.
+	--]]
+	local turn = UI.new("TextButton", {
+		Name = "Pasar",
+		Text = "",
+		AutoButtonColor = false,
+		Size = UDim2.fromOffset(26, 26),
+		Position = UDim2.fromOffset(RIGHT_W - 46, PAGE_H - 34),
+		BackgroundColor3 = C.Remache,
+		BorderSizePixel = 0,
+		Parent = rightPage,
+	}, { UI.new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
+	UI.icon(turn, "flecha", 11, Color3.fromRGB(226, 222, 216)).Position =
+		UDim2.fromOffset(8, 7)
+
+	turn.Activated:Connect(function()
+		local total = pageCount(currentTab)
+		currentPage = currentPage % total + 1
+		UI.click()
+		rebuildGrid()
+	end)
+end
+
+local function buildTabs(parent: Instance)
+	-- Arrancan pegadas al canto derecho de la pagina; la elegida se
+	-- monta sobre ella.
+	local left = MARGIN + LEFT_W + SPINE_W + RIGHT_W
+	local top = MARGIN + 34
+
+	for index, tab in C.Pestanas do
+		--[[
+			El marco lleva la posicion fija de la lengueta y el boton se
+			mueve DENTRO de el. Asi el tween de seleccion toca una sola
+			coordenada — la horizontal — y no hay que recalcular la
+			vertical, que depende del indice, en cada cambio de pestana.
+		--]]
+		local holder = UI.new("Frame", {
+			Name = tab.categoria .. "Marco",
+			Size = UDim2.fromOffset(TAB_W + 14, TAB_H),
+			Position = UDim2.fromOffset(left, top + (index - 1) * (TAB_H + TAB_GAP)),
+			BackgroundTransparency = 1,
+			ZIndex = Z_TABS,
+			Parent = parent,
+		})
+
+		local button = UI.new("TextButton", {
+			Name = tab.categoria,
+			Text = "",
+			AutoButtonColor = false,
+			Size = UDim2.fromScale(1, 1),
+			Position = UDim2.fromOffset(0, 0),
+			BackgroundColor3 = tab.color,
+			BorderSizePixel = 0,
+			Parent = holder,
+		})
+		UI.corner(button, UI.Radius.sm)
+
+		UI.icon(button, tab.icono, 20, Color3.fromRGB(28, 26, 32)).Position =
+			UDim2.fromOffset((TAB_W + 14 - 20) / 2, (TAB_H - 20) / 2)
+
+		tabs[tab.categoria] = { button = button, color = tab.color }
+		button.Activated:Connect(function()
+			UI.click()
+			selectTab(tab.categoria)
+		end)
+	end
+end
+
+function IdBook.mount(parent: ScreenGui)
+	root = UI.new("Frame", {
+		Name = "Carnet",
+		Size = UDim2.fromOffset(ROOT_W, ROOT_H),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		-- La libreta no esta recta: en el video el jugador la sostiene
+		-- con una mano y cae un par de grados.
+		Rotation = -1.5,
+		Visible = false,
+		ZIndex = UI.Layer.Modal,
+		Parent = parent,
+	})
+
+	-- El lomo, entre las dos paginas.
+	UI.new("Frame", {
+		Name = "Lomo",
+		Size = UDim2.fromOffset(SPINE_W, PAGE_H - 24),
+		Position = UDim2.fromOffset(MARGIN + LEFT_W, MARGIN + 12),
+		BackgroundColor3 = C.PapelSombra,
+		BorderSizePixel = 0,
+		ZIndex = Z_SPINE,
+		Parent = root,
+	})
+
+	buildTabs(root)
+	buildLeftPage(root)
+	buildRightPage(root)
+
+	local close = UI.closeButton(root, Z_CHROME, function()
+		IdBook.close()
+	end)
+	close.BackgroundTransparency = 1
+	close.TextColor3 = C.Tinta
+
+	--[[
+		El carnet se puede abrir desde el menu, antes de que el jugador
+		tenga cuerpo: ahi la foto sale vacia. Y se puede quedar abierto
+		mientras al jugador lo expulsan del aula y reaparece, con lo
+		cual la foto muestra el personaje viejo, que ya no existe.
+
+		Las dos cosas las arregla lo mismo: rehacer la foto cuando llega
+		un cuerpo nuevo, si el carnet esta a la vista.
+	--]]
+	player.CharacterAdded:Connect(function()
+		task.wait(0.4)
+		if root and root.Visible then
+			refreshPortrait()
+		end
+	end)
+
+	selectTab(currentTab)
+end
+
+function IdBook.setWallet(data: any)
+	wallet = data
+	if root and root.Visible then
+		rebuildGrid()
+	elseif creditLabel then
+		creditLabel.Text = Strings.get("shop.price", { n = data.creditos or 0 })
+	end
+end
+
+function IdBook.open()
+	if not root or root.Visible then
+		return
+	end
+	refreshPortrait()
+	rebuildGrid()
+	startSpin()
+	UI.sound(Config.Sonidos.Papel, 0.5, 0.9)
+	UI.show(root)
+end
+
+function IdBook.close()
+	if not root or not root.Visible then
+		return
+	end
+	stopSpin()
+	UI.hide(root)
+end
+
+function IdBook.isOpen(): boolean
+	return root ~= nil and root.Visible
+end
+
+return IdBook
+]]></ProtectedString>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="RBX47">
+          <Properties>
             <string name="Name">LobbyUI</string>
             <ProtectedString name="Source"><![CDATA[--!strict
 --[[
@@ -15058,7 +16553,7 @@ return LobbyUI
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX47">
+        <Item class="ModuleScript" referent="RBX48">
           <Properties>
             <string name="Name">MainMenu</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -15741,7 +17236,7 @@ return MainMenu
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX48">
+        <Item class="ModuleScript" referent="RBX49">
           <Properties>
             <string name="Name">Music</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -15973,7 +17468,7 @@ return Music
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX49">
+        <Item class="ModuleScript" referent="RBX50">
           <Properties>
             <string name="Name">NoteUI</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -16320,7 +17815,7 @@ return NoteUI
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX50">
+        <Item class="ModuleScript" referent="RBX51">
           <Properties>
             <string name="Name">Poses</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -16422,7 +17917,7 @@ return Poses
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX51">
+        <Item class="ModuleScript" referent="RBX52">
           <Properties>
             <string name="Name">RadioUI</string>
             <ProtectedString name="Source"><![CDATA[--!strict
@@ -16647,500 +18142,6 @@ function RadioUI.setVisible(visible: boolean)
 end
 
 return RadioUI
-]]></ProtectedString>
-          </Properties>
-        </Item>
-        <Item class="ModuleScript" referent="RBX52">
-          <Properties>
-            <string name="Name">ShopUI</string>
-            <ProtectedString name="Source"><![CDATA[--!strict
---[[
-	ShopUI
-	------------------------------------------------------------------
-	La tienda del pasillo: dos pestanas, objetos de trampa y estetica.
-
-	El cliente solo dibuja precios y manda "quiero esto". Quien decide
-	si alcanza la plata, si ya lo tenias y si la tienda esta abierta es
-	el servidor (ShopService).
-
-	Lo que cambio respecto de la version anterior:
-
-	- Cada articulo tenia una tarjeta de texto plano. Ahora tiene un
-	  ViewportFrame con el modelo 3D girando (ver `shared/Previews`).
-	- El boton de precio se veia igual tuvieras o no tuvieras los
-	  creditos: te enterabas de que no alcanzaba *despues* de hacer
-	  clic, por un aviso generico. Ahora la tarjeta lo dice antes.
-	- No habia estado de "esperando al servidor": se podia disparar la
-	  compra cinco veces seguidas. Ahora el boton se apaga mientras el
-	  remote viaja.
-	- Vivia en ZIndex 12, debajo del scrim del menu (20), asi que
-	  abrirla desde el menu la dibujaba por detras. Ahora esta en
-	  UI.Layer.Modal, por encima.
---]]
-
-local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local Shared = ReplicatedStorage:WaitForChild("Shared")
-local Theme = require(Shared:WaitForChild("Theme"))
-local Strings = require(Shared:WaitForChild("Strings"))
-local Config = require(Shared:WaitForChild("Config"))
-local Net = require(Shared:WaitForChild("Net"))
-local UI = require(Shared:WaitForChild("UI"))
-local Previews = require(Shared:WaitForChild("Previews"))
-
-local ShopUI = {}
-
-local root: Frame
-local creditLabel: TextLabel
-local list: ScrollingFrame
-local tabButtons: { [string]: TextButton } = {}
-local tabUnderline: Frame
-local currentTab = "objeto"
-local wallet: any = { creditos = 0, comprados = {}, estetica = {}, objeto = "nota" }
-
--- Los modelos que hay que girar. Una sola conexion para todas las
--- tarjetas: una por tarjeta serian trece Heartbeat en paralelo.
-local spinning: { Model } = {}
-local spinLoop: RBXScriptConnection? = nil
-
-local CARD_HEIGHT = 96
-local THUMB = 76
-
-ShopUI.onNotify = function(_packet: any) end
-
--- ── giro de las miniaturas ─────────────────────────────────────────
-
-local function startSpin()
-	if spinLoop then
-		return
-	end
-	local angle = 0
-	spinLoop = RunService.RenderStepped:Connect(function(dt: number)
-		angle += dt * 0.9
-		for index = #spinning, 1, -1 do
-			local model = spinning[index]
-			if not model.Parent then
-				table.remove(spinning, index)
-			else
-				-- Un balanceo leve en X ademas del giro: un objeto que
-				-- gira sobre un solo eje se lee como una animacion de
-				-- carga, no como un objeto.
-				model:PivotTo(CFrame.Angles(math.sin(angle * 0.6) * 0.18, angle, 0))
-			end
-		end
-	end)
-end
-
-local function stopSpin()
-	if spinLoop then
-		spinLoop:Disconnect()
-		spinLoop = nil
-	end
-	table.clear(spinning)
-end
-
---[[
-	Un ViewportFrame con su propia camara. La camara se planta a una
-	distancia fija mirando al origen: como todos los modelos de
-	`Previews` entran en un cubo de ~2 studs, no hay que encuadrar uno
-	por uno.
---]]
-local function thumbnail(parent: Instance, id: string, layer: number): Frame
-	local frame = UI.new("Frame", {
-		Name = "Miniatura",
-		Size = UDim2.fromOffset(THUMB, THUMB),
-		Position = UDim2.fromOffset(12, (CARD_HEIGHT - THUMB) * 0.5),
-		BackgroundColor3 = Theme.Surface.Deep,
-		BorderSizePixel = 0,
-		ZIndex = layer,
-		Parent = parent,
-	})
-	UI.corner(frame, UI.Radius.sm)
-
-	local model = Previews.build(id)
-	if not model then
-		-- Sin silueta definida cae en el icono plano. Es peor, pero no
-		-- deja un cuadrado vacio.
-		UI.icon(frame, "moneda", 34, Theme.Surface.Faint, layer + 1).Position =
-			UDim2.new(0.5, -17, 0.5, -17)
-		return frame
-	end
-
-	local viewport: ViewportFrame = UI.new("ViewportFrame", {
-		Name = "Vista",
-		Size = UDim2.fromScale(1, 1),
-		BackgroundTransparency = 1,
-		Ambient = Color3.fromRGB(170, 175, 185),
-		LightColor = Color3.fromRGB(255, 250, 238),
-		LightDirection = Vector3.new(-0.4, -1, -0.6),
-		ZIndex = layer + 1,
-		Parent = frame,
-	})
-
-	local camera = UI.new("Camera", {
-		CFrame = CFrame.lookAt(Vector3.new(0, 0.6, 4.2), Vector3.new(0, 0, 0)),
-		FieldOfView = 42,
-		Parent = viewport,
-	})
-	viewport.CurrentCamera = camera
-	model.Parent = viewport
-	table.insert(spinning, model)
-
-	return frame
-end
-
--- ── tarjetas ───────────────────────────────────────────────────────
-
-local function row(entry: any, order: number)
-	local layer = UI.Layer.Modal + 1
-	local owned = wallet.comprados and wallet.comprados[entry.id] == true
-	local isGear = entry.tipo == "objeto"
-	local active = (isGear and wallet.objeto == entry.id)
-		or (not isGear and wallet.estetica and wallet.estetica[entry.id] == true)
-	local credits = wallet.creditos or 0
-
-	--[[
-		Lo bloqueado se dibuja aca, pero quien decide es el servidor:
-		esto es la misma cuenta que hace `ShopService.missingRequirement`,
-		repetida para poder avisar ANTES del clic. Si las dos difirieran,
-		manda el servidor y el jugador ve un rechazo — molesto, pero no
-		explotable.
-	--]]
-	local locked: any = nil
-	local needs = entry.requiere
-	if needs and not owned then
-		if needs.semanas and (wallet.semanas or 0) < needs.semanas then
-			locked = { key = "shop.need_weeks", args = { n = needs.semanas } }
-		elseif needs.promedio and (wallet.mejorPromedio or 0) < needs.promedio then
-			locked = { key = "shop.need_grade", args = { n = needs.promedio } }
-		end
-	end
-
-	local affordable = owned or (credits >= entry.precio and not locked)
-
-	local card = UI.new("Frame", {
-		Name = entry.id,
-		LayoutOrder = order,
-		Size = UDim2.new(1, -8, 0, CARD_HEIGHT),
-		BackgroundColor3 = Theme.Surface.Raised,
-		BackgroundTransparency = affordable and 0 or 0.45,
-		BorderSizePixel = 0,
-		ZIndex = layer,
-		Parent = list,
-	})
-	UI.corner(card, UI.Radius.md)
-	UI.stroke(card, active and Theme.Brand.Mint or Theme.Surface.Line, 1, active and 0.2 or 0.6)
-
-	thumbnail(card, entry.id, layer + 1)
-
-	UI.label({
-		parent = card,
-		name = "Nombre",
-		text = Strings.get("item." .. entry.id),
-		size = UDim2.new(1, -230, 0, 22),
-		position = UDim2.fromOffset(THUMB + 26, 16),
-		font = Theme.FontBold,
-		textSize = UI.Type.subtitle,
-		color = affordable and Theme.Surface.Text or Theme.Surface.Faint,
-		layer = layer + 1,
-	})
-
-	local description = UI.label({
-		parent = card,
-		name = "Detalle",
-		text = Strings.get("item.desc_" .. entry.id, { n = Config.Objetos.ChuletaRevela }),
-		size = UDim2.new(1, -240, 0, 38),
-		position = UDim2.fromOffset(THUMB + 26, 40),
-		font = Theme.Font,
-		textSize = UI.Type.small,
-		color = Theme.Surface.Muted,
-		wrapped = true,
-		layer = layer + 1,
-	})
-	description.TextYAlignment = Enum.TextYAlignment.Top
-
-	-- Bloqueado: en vez del precio se dice QUE falta. Un candado sin
-	-- explicacion es peor que ningun candado.
-	if locked then
-		UI.icon(card, "candado", 14, Theme.Menu.Locked, layer + 1).Position =
-			UDim2.new(1, -30, 0, 16)
-		local why = UI.label({
-			parent = card,
-			name = "Requisito",
-			text = Strings.render(locked),
-			size = UDim2.fromOffset(150, 32),
-			position = UDim2.new(1, -188, 0, 12),
-			font = Theme.Font,
-			textSize = UI.Type.micro,
-			color = Theme.Menu.Locked,
-			align = Enum.TextXAlignment.Right,
-			wrapped = true,
-			layer = layer + 1,
-		})
-		why.TextYAlignment = Enum.TextYAlignment.Top
-	end
-
-	-- El precio, aparte del boton, para que se lea sin interpretar el
-	-- estado del boton. En rojo cuando no alcanza.
-	if not owned and not locked then
-		UI.label({
-			parent = card,
-			name = "Precio",
-			text = Strings.get("shop.price", { n = entry.precio }),
-			size = UDim2.fromOffset(110, 18),
-			position = UDim2.new(1, -122, 0, 14),
-			anchor = Vector2.new(0, 0),
-			font = Theme.FontBold,
-			textSize = UI.Type.small,
-			color = affordable and Theme.Hud.Credit or Theme.Brand.Tomato,
-			align = Enum.TextXAlignment.Right,
-			layer = layer + 1,
-		})
-	end
-
-	local text: string
-	local color: Color3
-	if locked then
-		text = Strings.get("shop.locked")
-		color = Theme.Menu.Locked
-	elseif not owned then
-		text = Strings.get("shop.buy")
-		color = affordable and Theme.Hud.Credit or Theme.Surface.Faint
-	elseif active then
-		text = Strings.get("shop.equipped")
-		color = Theme.Brand.Mint
-	else
-		text = Strings.get("shop.equip")
-		color = Theme.Brand.Teal
-	end
-
-	local pending = false
-	local button: UI.Button
-	button = UI.button({
-		parent = card,
-		name = "Accion",
-		text = text,
-		size = UDim2.fromOffset(110, 34),
-		position = UDim2.new(1, -122, 0, 44),
-		color = color,
-		ghost = true,
-		textSize = UI.Type.small,
-		radius = UI.Radius.sm,
-		layer = layer + 1,
-		onClick = function()
-			if pending then
-				return
-			end
-			pending = true
-			button.setEnabled(false)
-			task.spawn(function()
-				local remote = owned and Net.func(Net.Functions.Equip)
-					or Net.func(Net.Functions.Buy)
-				local ok, result = pcall(function()
-					return remote:InvokeServer(entry.id)
-				end)
-				pending = false
-				if ok and result then
-					if result.reason then
-						ShopUI.onNotify(result.reason)
-					end
-					if result.ok then
-						-- Un destello verde: la lista se reconstruye
-						-- sola cuando llega la billetera nueva, pero el
-						-- servidor puede tardar y el silencio se lee
-						-- como que el clic no entro.
-						TweenService:Create(card, UI.Motion.snap, {
-							BackgroundColor3 = Theme.Brand.Mint,
-						}):Play()
-						task.delay(0.16, function()
-							if card.Parent then
-								TweenService:Create(card, UI.Motion.base, {
-									BackgroundColor3 = Theme.Surface.Raised,
-								}):Play()
-							end
-						end)
-					end
-				end
-				if card.Parent then
-					button.setEnabled(true)
-				end
-			end)
-		end,
-	})
-
-	-- Ya comprado y ya equipado: no hay nada que hacer con el boton.
-	if owned and active and not isGear then
-		button.setEnabled(false)
-	end
-	if not owned and (not affordable or locked) then
-		button.setEnabled(false)
-	end
-end
-
-local function rebuild()
-	if not list then
-		return
-	end
-	table.clear(spinning)
-	for _, child in list:GetChildren() do
-		if child:IsA("Frame") then
-			child:Destroy()
-		end
-	end
-	local order = 0
-	for _, entry in Config.Economia.Tienda do
-		if entry.tipo == currentTab then
-			order += 1
-			row(entry, order)
-		end
-	end
-	creditLabel.Text = Strings.get("shop.price", { n = wallet.creditos or 0 })
-end
-
-local function selectTab(id: string)
-	currentTab = id
-	local target = tabButtons[id]
-	for otherId, other in tabButtons do
-		TweenService:Create(other, UI.Motion.snap, {
-			TextColor3 = otherId == id and Theme.Surface.Text or Theme.Surface.Muted,
-		}):Play()
-	end
-	if target and tabUnderline then
-		TweenService:Create(tabUnderline, UI.Motion.base, {
-			Position = UDim2.fromOffset(target.Position.X.Offset, 82),
-			Size = UDim2.fromOffset(target.Size.X.Offset, 3),
-		}):Play()
-	end
-	rebuild()
-end
-
--- ── construccion ───────────────────────────────────────────────────
-
-function ShopUI.mount(parent: ScreenGui)
-	root = UI.new("Frame", {
-		Name = "Tienda",
-		Size = UDim2.fromOffset(560, 520),
-		Position = UDim2.fromScale(0.5, 0.5),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = Theme.Surface.Base,
-		BorderSizePixel = 0,
-		Visible = false,
-		ZIndex = UI.Layer.Modal,
-		Parent = parent,
-	})
-	UI.corner(root, UI.Radius.lg)
-	UI.stroke(root, Theme.Surface.Line, 1, 0.35)
-
-	UI.icon(root, "moneda", 22, Theme.Hud.Credit, UI.Layer.Modal + 1).Position =
-		UDim2.fromOffset(20, 20)
-
-	UI.label({
-		parent = root,
-		name = "Titulo",
-		text = Strings.get("shop.title"),
-		size = UDim2.new(1, -220, 0, 28),
-		position = UDim2.fromOffset(52, 16),
-		font = Theme.FontBlack,
-		textSize = UI.Type.title,
-		color = Theme.Surface.Text,
-		layer = UI.Layer.Modal + 1,
-	})
-
-	creditLabel = UI.label({
-		parent = root,
-		name = "Creditos",
-		text = "0 cr",
-		size = UDim2.fromOffset(120, 24),
-		position = UDim2.new(1, -172, 0, 20),
-		font = Theme.FontBold,
-		textSize = UI.Type.subtitle,
-		color = Theme.Hud.Credit,
-		align = Enum.TextXAlignment.Right,
-		layer = UI.Layer.Modal + 1,
-	})
-
-	UI.closeButton(root, UI.Layer.Modal + 1, function()
-		ShopUI.close()
-	end)
-
-	local tabs = { { "objeto", "shop.tab_items" }, { "estetica", "shop.tab_looks" } }
-	for i, tab in tabs do
-		local button = UI.button({
-			parent = root,
-			name = tab[1],
-			text = Strings.get(tab[2]),
-			size = UDim2.fromOffset(130, 32),
-			position = UDim2.fromOffset(20 + (i - 1) * 138, 50),
-			color = Theme.Brand.Teal,
-			ghost = true,
-			textSize = UI.Type.small,
-			radius = UI.Radius.sm,
-			layer = UI.Layer.Modal + 1,
-			onClick = function()
-				selectTab(tab[1])
-			end,
-		})
-		button.instance.TextColor3 = Theme.Surface.Muted
-		tabButtons[tab[1]] = button.instance
-	end
-
-	-- El subrayado que se desliza entre pestanas. Antes el estado de la
-	-- pestana activa se comunicaba cambiando dos colores de golpe.
-	tabUnderline = UI.new("Frame", {
-		Name = "Subrayado",
-		Size = UDim2.fromOffset(130, 3),
-		Position = UDim2.fromOffset(20, 82),
-		BackgroundColor3 = Theme.Brand.Teal,
-		BorderSizePixel = 0,
-		ZIndex = UI.Layer.Modal + 2,
-		Parent = root,
-	})
-	UI.corner(tabUnderline, 2)
-
-	list = UI.scroller(
-		root,
-		UDim2.new(1, -32, 1, -112),
-		UDim2.fromOffset(16, 96),
-		UI.Layer.Modal + 1,
-		UI.Space.sm
-	)
-
-	tabButtons.objeto.TextColor3 = Theme.Surface.Text
-end
-
-function ShopUI.setWallet(data: any)
-	wallet = data
-	if root and root.Visible then
-		rebuild()
-	elseif creditLabel then
-		creditLabel.Text = Strings.get("shop.price", { n = data.creditos or 0 })
-	end
-end
-
-function ShopUI.open()
-	if not root or root.Visible then
-		return
-	end
-	rebuild()
-	startSpin()
-	UI.show(root)
-end
-
-function ShopUI.close()
-	if not root or not root.Visible then
-		return
-	end
-	stopSpin()
-	UI.hide(root)
-end
-
-function ShopUI.isOpen(): boolean
-	return root ~= nil and root.Visible
-end
-
-return ShopUI
 ]]></ProtectedString>
           </Properties>
         </Item>

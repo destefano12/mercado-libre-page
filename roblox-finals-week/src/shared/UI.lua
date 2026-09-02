@@ -836,6 +836,110 @@ local ICONS: { [string]: (Frame, Color3, number) -> () } = {
 		bar(root, UDim2.fromScale(0.1, 0.4), UDim2.fromScale(0.36, 0.62), color, -45, layer)
 		bar(root, UDim2.fromScale(0.1, 0.78), UDim2.fromScale(0.6, 0.44), color, 45, layer)
 	end,
+
+	--[[
+		Los seis de abajo son los glifos de las pestanas del carnet. En
+		el trailer son siluetas negras chiquitas sobre la lengueta de
+		color, asi que se dibujan al mismo tamano y con la misma idea:
+		una forma reconocible de un vistazo, sin detalle interno.
+	--]]
+	lapiz = function(root, color, layer)
+		bar(root, UDim2.fromScale(0.24, 0.9), UDim2.fromScale(0.5, 0.5), color, 42, layer)
+		-- La punta: un cuadrado girado que sobresale del cuerpo.
+		bar(root, UDim2.fromScale(0.2, 0.2), UDim2.fromScale(0.78, 0.24), color, 45, layer + 1)
+	end,
+	pelo = function(root, color, layer)
+		-- Media luna de pelo apoyada sobre una cara vacia.
+		local clip = UI.new("Frame", {
+			Size = UDim2.fromScale(0.9, 0.5),
+			Position = UDim2.fromScale(0.5, 0.42),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			ClipsDescendants = true,
+			ZIndex = layer,
+			Parent = root,
+		})
+		UI.new("Frame", {
+			Size = UDim2.fromScale(1, 2),
+			Position = UDim2.fromScale(0.5, 0.5),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			ZIndex = layer,
+			Parent = clip,
+		}, { UI.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }) })
+		for _, side in { -1, 1 } do
+			bar(root, UDim2.fromScale(0.16, 0.44), UDim2.fromScale(0.5 + side * 0.34, 0.6),
+				color, 0, layer)
+		end
+	end,
+	gorra = function(root, color, layer)
+		local clip = UI.new("Frame", {
+			Size = UDim2.fromScale(0.72, 0.4),
+			Position = UDim2.fromScale(0.5, 0.42),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			ClipsDescendants = true,
+			ZIndex = layer,
+			Parent = root,
+		})
+		UI.new("Frame", {
+			Size = UDim2.fromScale(1, 2),
+			Position = UDim2.fromScale(0.5, 0.5),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			ZIndex = layer,
+			Parent = clip,
+		}, { UI.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }) })
+		bar(root, UDim2.fromScale(0.94, 0.12), UDim2.fromScale(0.44, 0.64), color, 0, layer)
+	end,
+	anteojos = function(root, color, layer)
+		for _, side in { -1, 1 } do
+			local lens = ring(root, 10, color, 1.5, layer)
+			lens.Position = UDim2.fromScale(0.5 + side * 0.27, 0.5)
+			lens.Size = UDim2.fromScale(0.44, 0.44)
+		end
+		bar(root, UDim2.fromScale(0.16, 0.08), UDim2.fromScale(0.5, 0.5), color, 0, layer)
+	end,
+	campera = function(root, color, layer)
+		UI.new("Frame", {
+			Size = UDim2.fromScale(0.56, 0.68),
+			Position = UDim2.fromScale(0.5, 0.56),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			ZIndex = layer,
+			Parent = root,
+		}, { UI.new("UICorner", { CornerRadius = UDim.new(0, 3) }) })
+		for _, side in { -1, 1 } do
+			bar(root, UDim2.fromScale(0.18, 0.5), UDim2.fromScale(0.5 + side * 0.36, 0.5),
+				color, side * 8, layer)
+		end
+		bar(root, UDim2.fromScale(0.34, 0.16), UDim2.fromScale(0.5, 0.26), color, 0, layer + 1)
+	end,
+	flecha = function(root, color, layer)
+		-- Triangulo apuntando a la derecha: el "pasar de pagina".
+		local clip = UI.new("Frame", {
+			Size = UDim2.fromScale(0.58, 1),
+			Position = UDim2.fromScale(0.42, 0.5),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			ClipsDescendants = true,
+			ZIndex = layer,
+			Parent = root,
+		})
+		UI.new("Frame", {
+			Size = UDim2.fromScale(1.1, 1.1),
+			Position = UDim2.fromScale(0, 0.5),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Rotation = 45,
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			ZIndex = layer,
+			Parent = clip,
+		})
+	end,
 }
 
 --[[

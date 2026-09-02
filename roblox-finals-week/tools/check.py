@@ -43,7 +43,8 @@ VALID_ENUMS = {
     "Font": {"Gotham", "GothamMedium", "GothamBold", "GothamBlack", "GothamSemibold", "Code",
              "SourceSans", "SourceSansBold", "SourceSansSemibold", "PermanentMarker", "Arcade",
              "Fantasy", "Cartoon", "Highway", "Legacy", "Michroma", "Nunito", "Oswald", "Roboto",
-             "RobotoCondensed", "RobotoMono", "Ubuntu", "LuckiestGuy", "Bangers", "Arial"},
+             "RobotoCondensed", "RobotoMono", "Ubuntu", "LuckiestGuy", "Bangers", "Arial",
+             "PatrickHand", "IndieFlower", "Kalam"},
     "HumanoidRigType": {"R6", "R15"},
     "HumanoidHealthDisplayType": {"DisplayWhenDamaged", "AlwaysOn", "AlwaysOff"},
     "EasingStyle": {"Linear", "Sine", "Back", "Quad", "Quart", "Quint", "Bounce", "Elastic",
@@ -189,6 +190,14 @@ def check_dynamic_keys(defined: set[str]) -> list[str]:
         for key in (f"item.{item_id}", f"item.desc_{item_id}"):
             if key not in defined:
                 problems.append(f"falta la clave {key!r} (id de la tienda {item_id!r})")
+
+    # Las pestanas del carnet: el titulo de cada pagina sale de
+    # Strings.get("carnet.tab_" .. categoria), otra concatenacion que
+    # ningun literal cubre.
+    for tab in re.findall(r'\{ categoria = "(\w+)"', config):
+        key = f"carnet.tab_{tab}"
+        if key not in defined:
+            problems.append(f"falta la clave {key!r} (pestana del carnet {tab!r})")
 
     rounds = (SRC / "server" / "RoundManager.lua").read_text(encoding="utf-8")
     for phase in set(re.findall(r'runPhase\("(\w+)"', rounds)) | {"espera"}:

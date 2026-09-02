@@ -932,23 +932,176 @@ end
 	se derivan de `Rig.Alumno` y siguen cualquier cambio de proporciones.
 --]]
 local A = Rig.Alumno
+local FLAT = Enum.Material.SmoothPlastic
 
-local ESTETICAS: { [string]: (Model) -> () } = {
+--[[
+	Los peinados tapan el pelo de fabrica en vez de sumarse a el.
+
+	`Rig.build` le pone a todo el mundo un casquete `Pelo` y un
+	`Flequillo`: es lo que hace que un alumno recien creado no sea un
+	pelado. Cuando el jugador elige un peinado del carnet hay que sacar
+	ese pelo base de en medio, o la silueta nueva sale montada sobre la
+	vieja y se ve como dos gorros apilados.
+
+	Se esconde en vez de destruirse porque el pelo base no lleva el
+	atributo `Accesorio` — `stripAccessories` no lo toca —, asi que si
+	lo borraramos no habria forma de recuperarlo al desequipar el
+	peinado sin reaparecer al personaje.
+--]]
+local function hideBaseHair(character: Model)
+	for _, child in character:GetChildren() do
+		if child:IsA("BasePart") and (child.Name == "Pelo" or child.Name == "Flequillo") then
+			child.Transparency = 1
+		end
+	end
+end
+
+local ESTETICAS: { [string]: (Model, Rig.Skin) -> () } = {
+	-- ── peinados ───────────────────────────────────────────────────
+	pelo_corto = function(character, skin)
+		hideBaseHair(character)
+		attach(character, "Head", "Peinado",
+			Vector3.new(A.cabeza.X * 1.04, A.cabeza.Y * 0.6, A.cabeza.Z * 1.04),
+			CFrame.new(0, A.cabeza.Y * 0.4, 0), skin.pelo, FLAT)
+		attach(character, "Head", "Peinado",
+			Vector3.new(A.cabeza.X * 1.04, A.cabeza.Y * 0.3, 0.28),
+			CFrame.new(0, A.cabeza.Y * 0.22, -A.cabeza.Z * 0.52), skin.pelo, FLAT)
+	end,
+
+	pelo_rulos = function(character, skin)
+		hideBaseHair(character)
+		-- Seis bollos alrededor de la coronilla. El del medio es mas
+		-- grande para que el conjunto se lea como una masa, no como
+		-- seis pelotas sueltas.
+		local r = A.cabeza.X * 0.42
+		attach(character, "Head", "Peinado", Vector3.new(r * 1.5, r * 1.5, r * 1.5),
+			CFrame.new(0, A.cabeza.Y * 0.55, 0), skin.pelo, FLAT)
+		for _, spot in {
+			Vector3.new(-0.6, 0.34, 0.16), Vector3.new(0.6, 0.34, 0.16),
+			Vector3.new(-0.42, 0.28, -0.5), Vector3.new(0.42, 0.28, -0.5),
+			Vector3.new(0, 0.24, 0.62),
+		} do
+			attach(character, "Head", "Peinado", Vector3.new(r * 1.2, r * 1.2, r * 1.2),
+				CFrame.new(spot.X * A.cabeza.X, A.cabeza.Y * spot.Y, spot.Z * A.cabeza.Z),
+				skin.pelo, FLAT)
+		end
+	end,
+
+	pelo_largo = function(character, skin)
+		hideBaseHair(character)
+		attach(character, "Head", "Peinado",
+			Vector3.new(A.cabeza.X * 1.06, A.cabeza.Y * 0.64, A.cabeza.Z * 1.06),
+			CFrame.new(0, A.cabeza.Y * 0.4, 0), skin.pelo, FLAT)
+		attach(character, "Head", "Peinado",
+			Vector3.new(A.cabeza.X * 1.06, A.cabeza.Y * 0.28, 0.28),
+			CFrame.new(0, A.cabeza.Y * 0.24, -A.cabeza.Z * 0.54), skin.pelo, FLAT)
+		-- Las dos cortinas que caen hasta el hombro.
+		for _, side in { -1, 1 } do
+			attach(character, "Head", "Peinado",
+				Vector3.new(0.34, A.cabeza.Y * 1.15, A.cabeza.Z * 0.9),
+				CFrame.new(side * A.cabeza.X * 0.52, -A.cabeza.Y * 0.3, A.cabeza.Z * 0.06),
+				skin.pelo, FLAT)
+		end
+	end,
+
+	pelo_cresta = function(character, skin)
+		hideBaseHair(character)
+		attach(character, "Head", "Peinado",
+			Vector3.new(0.26, A.cabeza.Y * 0.72, A.cabeza.Z * 1.02),
+			CFrame.new(0, A.cabeza.Y * 0.62, 0), skin.pelo, FLAT)
+		attach(character, "Head", "Peinado",
+			Vector3.new(A.cabeza.X * 0.7, A.cabeza.Y * 0.24, A.cabeza.Z * 1.02),
+			CFrame.new(0, A.cabeza.Y * 0.42, 0), skin.pelo, FLAT)
+	end,
+
+	pelo_coletas = function(character, skin)
+		hideBaseHair(character)
+		attach(character, "Head", "Peinado",
+			Vector3.new(A.cabeza.X * 1.04, A.cabeza.Y * 0.58, A.cabeza.Z * 1.04),
+			CFrame.new(0, A.cabeza.Y * 0.4, 0), skin.pelo, FLAT)
+		for _, side in { -1, 1 } do
+			attach(character, "Head", "Peinado",
+				Vector3.new(A.cabeza.X * 0.46, A.cabeza.Y * 0.46, A.cabeza.Z * 0.46),
+				CFrame.new(side * A.cabeza.X * 0.68, A.cabeza.Y * 0.34, A.cabeza.Z * 0.14),
+				skin.pelo, FLAT)
+			attach(character, "Head", "Cinta",
+				Vector3.new(0.2, 0.2, 0.2),
+				CFrame.new(side * A.cabeza.X * 0.5, A.cabeza.Y * 0.4, A.cabeza.Z * 0.14),
+				Color3.fromRGB(238, 96, 148), FLAT)
+		end
+	end,
+
+	pelo_afro = function(character, skin)
+		hideBaseHair(character)
+		attach(character, "Head", "Peinado",
+			Vector3.new(A.cabeza.X * 1.55, A.cabeza.Y * 1.5, A.cabeza.Z * 1.55),
+			CFrame.new(0, A.cabeza.Y * 0.42, 0), skin.pelo, FLAT)
+	end,
+
+	-- ── gorros ─────────────────────────────────────────────────────
 	gorra = function(character)
 		attach(character, "Head", "Gorra",
 			Vector3.new(A.cabeza.X * 1.06, A.cabeza.Y * 0.34, A.cabeza.Z * 1.06),
 			CFrame.new(0, A.cabeza.Y * 0.5, 0),
-			Color3.fromRGB(226, 84, 72), Enum.Material.SmoothPlastic)
+			Color3.fromRGB(226, 84, 72), FLAT)
 		attach(character, "Head", "Visera",
 			Vector3.new(A.cabeza.X * 1.06, 0.16, A.cabeza.Z * 0.7),
 			CFrame.new(0, A.cabeza.Y * 0.34, -A.cabeza.Z * 0.72),
-			Color3.fromRGB(198, 66, 58), Enum.Material.SmoothPlastic)
+			Color3.fromRGB(198, 66, 58), FLAT)
 	end,
+	boina = function(character)
+		attach(character, "Head", "Boina",
+			Vector3.new(A.cabeza.X * 1.2, 0.28, A.cabeza.Z * 1.2),
+			CFrame.new(0, A.cabeza.Y * 0.48, A.cabeza.Z * 0.06),
+			Color3.fromRGB(58, 76, 172), FLAT)
+		attach(character, "Head", "Rabito",
+			Vector3.new(0.16, 0.22, 0.16),
+			CFrame.new(0, A.cabeza.Y * 0.6, A.cabeza.Z * 0.06),
+			Color3.fromRGB(42, 58, 140), FLAT)
+	end,
+	vincha = function(character)
+		attach(character, "Head", "Vincha",
+			Vector3.new(A.cabeza.X * 1.06, 0.24, A.cabeza.Z * 1.06),
+			CFrame.new(0, A.cabeza.Y * 0.32, 0),
+			Color3.fromRGB(238, 96, 148), FLAT)
+		attach(character, "Head", "Mono",
+			Vector3.new(0.3, 0.3, 0.14),
+			CFrame.new(A.cabeza.X * 0.4, A.cabeza.Y * 0.38, -A.cabeza.Z * 0.42),
+			Color3.fromRGB(252, 206, 92), FLAT)
+	end,
+
+	-- ── cara ───────────────────────────────────────────────────────
 	anteojos = function(character)
 		attach(character, "Head", "Anteojos",
 			Vector3.new(A.cabeza.X * 0.86, A.cabeza.Y * 0.22, 0.14),
 			CFrame.new(0, A.cabeza.Y * 0.05, -A.cabeza.Z * 0.55),
-			Color3.fromRGB(52, 50, 66), Enum.Material.SmoothPlastic)
+			Color3.fromRGB(52, 50, 66), FLAT)
+	end,
+	antifaz = function(character)
+		attach(character, "Head", "Antifaz",
+			Vector3.new(A.cabeza.X * 0.92, A.cabeza.Y * 0.3, 0.16),
+			CFrame.new(0, A.cabeza.Y * 0.06, -A.cabeza.Z * 0.54),
+			Color3.fromRGB(32, 32, 46), FLAT)
+		-- Los dos ojos blancos recortados: sin esto es una venda.
+		for _, side in { -1, 1 } do
+			attach(character, "Head", "Ojal",
+				Vector3.new(A.cabeza.X * 0.26, A.cabeza.Y * 0.14, 0.06),
+				CFrame.new(side * A.cabeza.X * 0.2, A.cabeza.Y * 0.07, -A.cabeza.Z * 0.61),
+				Color3.fromRGB(238, 238, 242), FLAT)
+		end
+	end,
+
+	-- ── ropa ───────────────────────────────────────────────────────
+	bufanda = function(character)
+		local anchor = character:FindFirstChild("UpperTorso") and "UpperTorso" or "Torso"
+		attach(character, anchor, "Bufanda",
+			Vector3.new(A.torso.X * 0.78, 0.42, A.torso.Z * 1.15),
+			CFrame.new(0, A.torso.Y * 0.44, 0),
+			Color3.fromRGB(198, 62, 78), FLAT)
+		attach(character, anchor, "Punta",
+			Vector3.new(0.36, A.torso.Y * 0.62, 0.2),
+			CFrame.new(-A.torso.X * 0.2, A.torso.Y * 0.08, -A.torso.Z * 0.6),
+			Color3.fromRGB(176, 48, 66), FLAT)
 	end,
 	mochila = function(character)
 		local anchor = character:FindFirstChild("UpperTorso") and "UpperTorso" or "Torso"
@@ -1044,6 +1197,10 @@ function CharacterService.dressStudent(player: Player, character: Model, estetic
 				if child:IsA("BasePart")
 					and (child.Name == "Pelo" or child.Name == "Flequillo") then
 					child.Color = skin.pelo
+					-- Se vuelve a mostrar en cada pasada: si el jugador
+					-- se saco el peinado del carnet, esto es lo que lo
+					-- deja de nuevo con pelo en vez de pelado.
+					child.Transparency = 0
 				end
 			end
 		end
@@ -1052,9 +1209,18 @@ function CharacterService.dressStudent(player: Player, character: Model, estetic
 		attach(character, torso, "Corbata", Vector3.new(0.34, 1, 0.14),
 			CFrame.new(0, 0.2, -0.55), UNIFORME.Corbata, Enum.Material.SmoothPlastic)
 
-		for id, on in (estetica or {}) do
-			if on and ESTETICAS[id] then
-				ESTETICAS[id](character)
+		--[[
+			El orden importa: los peinados esconden el pelo base y los
+			gorros se apoyan encima del peinado, asi que se recorre la
+			tienda en su orden declarado en vez del orden arbitrario de
+			un mapa. Iterar `estetica` directamente daba resultados
+			distintos entre partidas para el mismo conjunto de prendas.
+		--]]
+		local puestas = estetica or {}
+		for _, entry in Config.Economia.Tienda do
+			local build = ESTETICAS[entry.id]
+			if build and puestas[entry.id] then
+				build(character, skin)
 			end
 		end
 
@@ -7310,6 +7476,28 @@ local function entryOf(id: string): any
 	return nil
 end
 
+--[[
+	Las categorias exclusivas del carnet: `pelo`, `gorro`, `anteojos`.
+
+	Sin esto un jugador podia tener los seis peinados puestos a la vez —
+	`equip` solo alternaba una bandera por id y nadie miraba el resto —,
+	y el resultado era una bola de pelo con seis siluetas encimadas. Lo
+	decide el servidor y no el carnet: el cliente puede mandar dos
+	`Equip` seguidos.
+--]]
+local function exclusiveCategory(id: string): string?
+	local entry = entryOf(id)
+	if not entry or not entry.categoria then
+		return nil
+	end
+	for _, tab in Config.Carnet.Pestanas do
+		if tab.categoria == entry.categoria and tab.exclusiva then
+			return tab.categoria
+		end
+	end
+	return nil
+end
+
 function ShopService.setPhase(phase: string)
 	currentPhase = phase
 end
@@ -7414,7 +7602,20 @@ function ShopService.equip(player: Player, id: any): any
 	if entry.tipo == "objeto" then
 		profile.objeto = id
 	else
-		profile.estetica[id] = not profile.estetica[id] or nil
+		local turningOn = not profile.estetica[id]
+		profile.estetica[id] = turningOn or nil
+
+		if turningOn then
+			local category = exclusiveCategory(id)
+			if category then
+				for _, other in Config.Economia.Tienda do
+					if other.id ~= id and other.categoria == category then
+						profile.estetica[other.id] = nil
+					end
+				end
+			end
+		end
+
 		local character = player.Character
 		if character then
 			-- Repintar en caliente: se ve el cambio sin reaparecer.

@@ -197,8 +197,43 @@ castiguen tres veces seguidas en el mismo lugar.
 
 Los créditos salen del rendimiento: por acierto, por aprobar, por
 terminar el examen sin castigos y por sobrevivir la semana. Se gastan en
-el kiosco del pasillo, en objetos de trampa y en estética (gorra,
-mochila, anteojos, campera). Todo se guarda en `DataStore`.
+el kiosco del pasillo. Todo se guarda en `DataStore`.
+
+### El carnet de estudiante
+
+El kiosco no abre un panel de tienda: abre **una libreta**. Es la misma
+que se ve en el trailer, y está reconstruida contra los fotogramas
+`f029` y `f030`, con los colores muestreados píxel a píxel — viven en
+`Config.Carnet`, no repartidos por el código de la interfaz.
+
+    ┌─────────────────────┬──────────────────────┐▌ trampa
+    │  ▐ nombre a mano    │            PELO      │▌ aparatos
+    │  ▐ ┌─────────┐  S   │  ▢  ▢  ▢  ▢          ├──▌ pelo  ◀ elegida
+    │  ▐ │  FOTO   │  T   │  ▢  ▢  ▢  ▢          │▌ gorros
+    │  ▐ │  DEL    │  U   │  ▢  ▢  ▢  ▢          │▌ anteojos
+    │  ▐ │ JUGADOR │  D   │  ▢  ▢  ▢  ▢          │▌ ropa
+    │  ▐ └─────────┘  I   │  ▢  ▢  ▢  ▢          │
+    │  ▐ ║║▌║▌▌║▌║║   D   │        1/2  ▸     ●  │
+    │  ● 240 cr           │                      │
+    └─────────────────────┴──────────────────────┘
+
+La página izquierda es la credencial: el nombre sobre un renglón en
+letra manuscrita, la **foto del personaje real** — un clon dentro de un
+`ViewportFrame`, con los brazos arriba como en el trailer —, un código
+de barras que sale de tu `UserId` (el mismo carnet en todas las
+partidas, sin guardar nada) y `STUDENT ID` girado 90° en el canto.
+
+La derecha es la grilla de 4×5 de la categoría abierta, con paginación
+real. Lo que tenés puesto lleva **cuatro esquinas rojas**, no un borde:
+en el video la selección se ve así y un `UIStroke` habría dado otra cosa.
+
+Del canto derecho asoman las seis lengüetas de colores. La elegida se
+corre hacia la izquierda y se aclara, montándose sobre el papel.
+
+Las categorías `pelo`, `gorro` y `anteojos` son **exclusivas**: ponerse
+un peinado saca el anterior. Lo decide `ShopService.equip`, no el
+carnet — el cliente puede mandar dos `Equip` seguidos, y sin esa regla
+se podían llevar los seis peinados apilados a la vez.
 
 ---
 
@@ -359,14 +394,15 @@ src/server/      nada de esto lo puede leer el cliente
   SuspicionService la barra de sospecha
   PunishService    cono, expulsión, penalización
   RoundManager     el ciclo escolar
-  ShopService      tienda y premios
+  ShopService      economía, compras y exclusividad por categoría
   DataService      guardado persistente
   CharacterService uniformes, rigs de profesor y alumno, el cono
   LobbyService     salas entre servidores
 
 src/client/      sólo dibuja y manda intenciones
-  Hud, ExamUI, NoteUI, ShopUI, MainMenu, LobbyUI,
-  GraffitiUI, RadioUI, ZoomUI, CameraDirector, Poses, Music
+  Hud, ExamUI, NoteUI, IdBook, MainMenu, LobbyUI,
+  GraffitiUI, RadioUI, ZoomUI, CameraDirector, Poses, Music,
+  Viewmodel
 ```
 
 ### Dos reglas que se respetan en todo el código
@@ -432,8 +468,9 @@ te dejó parado en el vacío sin ningún mensaje:
 5. **propiedades de solo lectura** — `Lighting.Technology` y compañía;
 6. **idiomas** — que las tres tablas tengan exactamente las mismas
    claves, que ninguna clave usada falte, y que las que se arman por
-   concatenación (`"item." .. id`) existan para **todos** los ids de la
-   tienda.
+   concatenación (`"item." .. id`, `"carnet.tab_" .. categoría`)
+   existan para **todos** los ids de la tienda y **todas** las pestañas
+   del carnet.
 
 ```bash
 python3 tools/check.py

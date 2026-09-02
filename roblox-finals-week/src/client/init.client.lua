@@ -27,7 +27,7 @@ local UI = require(Shared:WaitForChild("UI"))
 local Hud = require(script:WaitForChild("Hud"))
 local ExamUI = require(script:WaitForChild("ExamUI"))
 local NoteUI = require(script:WaitForChild("NoteUI"))
-local ShopUI = require(script:WaitForChild("ShopUI"))
+local IdBook = require(script:WaitForChild("IdBook"))
 local MainMenu = require(script:WaitForChild("MainMenu"))
 local LobbyUI = require(script:WaitForChild("LobbyUI"))
 local CameraDirector = require(script:WaitForChild("CameraDirector"))
@@ -77,7 +77,7 @@ Poses.mount()
 Hud.mount(gui)
 ExamUI.mount(gui)
 NoteUI.mount(gui)
-ShopUI.mount(gui)
+IdBook.mount(gui)
 LobbyUI.mount(gui)
 GraffitiUI.mount(gui)
 RadioUI.mount(gui)
@@ -88,7 +88,7 @@ Viewmodel.mount()
 Music.start()
 
 ExamUI.onNotify = Hud.notify
-ShopUI.onNotify = Hud.notify
+IdBook.onNotify = Hud.notify
 LobbyUI.onNotify = Hud.notify
 ExamUI.onWrite = function()
 	Poses.write()
@@ -126,7 +126,7 @@ MainMenu.onVisible = function(open: boolean)
 	-- titulo.
 	Viewmodel.setVisible(not open)
 	if open then
-		ShopUI.close()
+		IdBook.close()
 		LobbyUI.close()
 	end
 end
@@ -137,7 +137,7 @@ end
 -- menu (100): se abren *sobre* el menu en vez de detras, que es lo que
 -- pasaba cuando la tienda estaba fija en ZIndex 12 y el scrim en 20.
 MainMenu.onShop = function()
-	ShopUI.open()
+	IdBook.open()
 end
 MainMenu.onMusic = function(on: boolean)
 	Music.setEnabled(on)
@@ -222,9 +222,9 @@ end)
 
 Net.event(Net.Events.Wallet).OnClientEvent:Connect(function(data)
 	Hud.setWallet(data)
-	ShopUI.setWallet(data)
+	IdBook.setWallet(data)
 	if data.abrir then
-		ShopUI.open()
+		IdBook.open()
 	end
 end)
 
@@ -322,10 +322,10 @@ UserInputService.InputBegan:Connect(function(input, processed)
 			Net.event(Net.Events.Cheat):FireServer("passbook", 1, target.UserId)
 		end
 	elseif input.KeyCode == Enum.KeyCode.T then
-		if ShopUI.isOpen() then
-			ShopUI.close()
+		if IdBook.isOpen() then
+			IdBook.close()
 		else
-			ShopUI.open()
+			IdBook.open()
 		end
 	end
 end)
@@ -367,7 +367,7 @@ task.spawn(function()
 	if ok and state then
 		if state.billetera then
 			Hud.setWallet(state.billetera)
-			ShopUI.setWallet(state.billetera)
+			IdBook.setWallet(state.billetera)
 		end
 		if state.examen then
 			ExamUI.setState(state.examen)
