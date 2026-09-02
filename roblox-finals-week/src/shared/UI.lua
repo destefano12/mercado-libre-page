@@ -918,6 +918,24 @@ local ICONS: { [string]: (Frame, Color3, number) -> () } = {
 		end
 		bar(root, UDim2.fromScale(0.34, 0.16), UDim2.fromScale(0.5, 0.26), color, 0, layer + 1)
 	end,
+	boca = function(root, color, layer)
+		--[[
+			Labios: un ovalo lleno partido por una linea horizontal. Las
+			dos medias lunas por separado no se leen a 20 pixeles — se
+			ven como dos rayas —, y esto si.
+		--]]
+		UI.new("Frame", {
+			Size = UDim2.fromScale(0.94, 0.54),
+			Position = UDim2.fromScale(0.5, 0.5),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			ZIndex = layer,
+			Parent = root,
+		}, { UI.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }) })
+		bar(root, UDim2.fromScale(0.8, 0.08), UDim2.fromScale(0.5, 0.5),
+			Theme.Surface.Deep, 0, layer + 1)
+	end,
 	flecha = function(root, color, layer)
 		-- Triangulo apuntando a la derecha: el "pasar de pagina".
 		local clip = UI.new("Frame", {

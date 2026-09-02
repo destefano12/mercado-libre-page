@@ -935,24 +935,67 @@ local A = Rig.Alumno
 local FLAT = Enum.Material.SmoothPlastic
 
 --[[
-	Los peinados tapan el pelo de fabrica en vez de sumarse a el.
+	Las cosmeticas que reemplazan un rasgo de fabrica lo tapan primero.
 
-	`Rig.build` le pone a todo el mundo un casquete `Pelo` y un
-	`Flequillo`: es lo que hace que un alumno recien creado no sea un
-	pelado. Cuando el jugador elige un peinado del carnet hay que sacar
-	ese pelo base de en medio, o la silueta nueva sale montada sobre la
-	vieja y se ve como dos gorros apilados.
+	`Rig.build` y `Rig.face` le ponen a todo el mundo un casquete `Pelo`,
+	un `Flequillo` y un par de `Ceja`: es lo que hace que un alumno
+	recien creado no sea un pelado sin cara. Cuando el jugador elige un
+	peinado o unas cejas del carnet hay que sacar el rasgo base de en
+	medio, o la silueta nueva sale montada sobre la vieja — dos gorros
+	apilados, cuatro cejas.
 
-	Se esconde en vez de destruirse porque el pelo base no lleva el
-	atributo `Accesorio` — `stripAccessories` no lo toca —, asi que si
-	lo borraramos no habria forma de recuperarlo al desequipar el
-	peinado sin reaparecer al personaje.
+	Se esconden en vez de destruirse porque esas piezas no llevan el
+	atributo `Accesorio` — `stripAccessories` no las toca —, asi que si
+	las borraramos no habria forma de recuperarlas al desequipar sin
+	reaparecer al personaje. `dressStudent` las vuelve a mostrar al
+	principio de cada pasada.
 --]]
-local function hideBaseHair(character: Model)
+local function hideBase(character: Model, ...: string)
+	local names: { [string]: boolean } = {}
+	for _, name in { ... } do
+		names[name] = true
+	end
 	for _, child in character:GetChildren() do
-		if child:IsA("BasePart") and (child.Name == "Pelo" or child.Name == "Flequillo") then
+		if child:IsA("BasePart") and names[child.Name] then
 			child.Transparency = 1
 		end
+	end
+end
+
+local function hideBaseHair(character: Model)
+	hideBase(character, "Pelo", "Flequillo")
+end
+
+--[[
+	Los anclajes de la cara, derivados igual que en `Rig.face`.
+
+	Se recalculan aca en vez de exportarlos porque `Rig.face` los usa
+	para el profesor tambien, con otras proporciones; lo que comparten
+	es la formula, no los numeros.
+--]]
+local CARA = {
+	frente = -A.cabeza.Z * 0.5 - 0.02,
+	ojoX = A.cabeza.X * 0.19,
+	ojoY = A.cabeza.Y * 0.06,
+}
+CARA.cejaY = CARA.ojoY + A.cabeza.Y * 0.26
+
+--[[
+	Un par de cejas, que es lo unico que cambia entre los seis estilos.
+
+	Van del color del pelo y no de un marron fijo: en el trailer el
+	personaje de pelo violeta tiene las cejas violetas, y es lo que hace
+	que la cabeza se lea como una sola pieza en vez de como una peluca
+	apoyada encima.
+--]]
+local function brows(character: Model, skin: Rig.Skin, size: Vector3,
+	angle: number, lift: number)
+	hideBase(character, "Ceja")
+	for _, side in { -1, 1 } do
+		attach(character, "Head", "CejaEstetica", size,
+			CFrame.new(side * CARA.ojoX, CARA.cejaY + lift, CARA.frente)
+				* CFrame.Angles(0, 0, math.rad(side * angle)),
+			skin.pelo, FLAT)
 	end
 end
 
@@ -1091,6 +1134,112 @@ local ESTETICAS: { [string]: (Model, Rig.Skin) -> () } = {
 		end
 	end,
 
+	-- ── cejas ──────────────────────────────────────────────────────
+	--[[
+		La pagina de ACCESSORIES del trailer es, en su mayoria, cejas:
+		catorce casillas con formas distintas del mismo rasgo. Tiene
+		sentido — con la cabeza a esta escala y los ojos tan grandes, la
+		ceja es lo unico que le cambia la expresion a un personaje.
+
+		Los seis estilos son la misma pieza con otras medidas y otro
+		angulo, asi que van por `brows` y no repiten el `attach`.
+	--]]
+	cejas_rectas = function(character, skin)
+		brows(character, skin, Vector3.new(A.cabeza.X * 0.24, A.cabeza.Y * 0.06, 0.07), 0, 0)
+	end,
+	cejas_finas = function(character, skin)
+		brows(character, skin, Vector3.new(A.cabeza.X * 0.26, A.cabeza.Y * 0.03, 0.07), 4, 0)
+	end,
+	cejas_gruesas = function(character, skin)
+		brows(character, skin, Vector3.new(A.cabeza.X * 0.3, A.cabeza.Y * 0.11, 0.08), 3, 0)
+	end,
+	cejas_arqueadas = function(character, skin)
+		-- El arco se arma con dos piezas: el tramo largo inclinado
+		-- hacia afuera y una cola corta que baja. Una sola barra
+		-- rotada da un acento, no un arco.
+		brows(character, skin, Vector3.new(A.cabeza.X * 0.2, A.cabeza.Y * 0.05, 0.07), -16, 0)
+		for _, side in { -1, 1 } do
+			attach(character, "Head", "CejaEstetica",
+				Vector3.new(A.cabeza.X * 0.12, A.cabeza.Y * 0.05, 0.07),
+				CFrame.new(side * CARA.ojoX * 1.7, CARA.cejaY - A.cabeza.Y * 0.03, CARA.frente)
+					* CFrame.Angles(0, 0, math.rad(side * -48)),
+				skin.pelo, FLAT)
+		end
+	end,
+	cejas_enojadas = function(character, skin)
+		brows(character, skin, Vector3.new(A.cabeza.X * 0.26, A.cabeza.Y * 0.07, 0.07), 24, 0)
+	end,
+	cejas_unica = function(character, skin)
+		hideBase(character, "Ceja")
+		attach(character, "Head", "CejaEstetica",
+			Vector3.new(A.cabeza.X * 0.62, A.cabeza.Y * 0.08, 0.07),
+			CFrame.new(0, CARA.cejaY, CARA.frente), skin.pelo, FLAT)
+	end,
+
+	-- ── marcas de la cara ──────────────────────────────────────────
+	--[[
+		Estas NO son exclusivas: se pueden llevar pecas y lunar y
+		tirita a la vez, que es lo que uno espera de una cara. Por eso
+		la categoria `marcas` no lleva `exclusiva` en `Config.Carnet`.
+	--]]
+	lunar = function(character)
+		attach(character, "Head", "Lunar",
+			Vector3.new(A.cabeza.X * 0.05, A.cabeza.Y * 0.05, 0.06),
+			CFrame.new(A.cabeza.X * 0.3, -A.cabeza.Y * 0.16, CARA.frente),
+			Color3.fromRGB(64, 40, 42), FLAT)
+	end,
+	pecas = function(character)
+		-- Tres por mejilla, en diagonal. Simetricas exactas se ven
+		-- estampadas; el desfase de la fila del medio alcanza.
+		for _, side in { -1, 1 } do
+			for i = 0, 2 do
+				attach(character, "Head", "Peca",
+					Vector3.new(A.cabeza.X * 0.035, A.cabeza.Y * 0.035, 0.06),
+					CFrame.new(
+						side * (A.cabeza.X * 0.2 + i * A.cabeza.X * 0.055),
+						-A.cabeza.Y * 0.1 + (i % 2) * A.cabeza.Y * 0.04,
+						CARA.frente),
+					Color3.fromRGB(178, 116, 96), FLAT)
+			end
+		end
+	end,
+	rubor = function(character)
+		for _, side in { -1, 1 } do
+			attach(character, "Head", "Rubor",
+				Vector3.new(A.cabeza.X * 0.16, A.cabeza.Y * 0.09, 0.05),
+				CFrame.new(side * A.cabeza.X * 0.28, -A.cabeza.Y * 0.12, CARA.frente),
+				Color3.fromRGB(240, 138, 152), FLAT)
+		end
+	end,
+	cicatriz = function(character)
+		attach(character, "Head", "Cicatriz",
+			Vector3.new(A.cabeza.X * 0.035, A.cabeza.Y * 0.3, 0.06),
+			CFrame.new(A.cabeza.X * 0.19, CARA.cejaY - A.cabeza.Y * 0.06, CARA.frente)
+				* CFrame.Angles(0, 0, math.rad(14)),
+			Color3.fromRGB(198, 128, 122), FLAT)
+	end,
+	tirita = function(character)
+		attach(character, "Head", "Tirita",
+			Vector3.new(A.cabeza.X * 0.26, A.cabeza.Y * 0.08, 0.06),
+			CFrame.new(-A.cabeza.X * 0.24, -A.cabeza.Y * 0.1, CARA.frente)
+				* CFrame.Angles(0, 0, math.rad(-22)),
+			Color3.fromRGB(238, 206, 168), FLAT)
+		attach(character, "Head", "TiritaGasa",
+			Vector3.new(A.cabeza.X * 0.1, A.cabeza.Y * 0.06, 0.05),
+			CFrame.new(-A.cabeza.X * 0.24, -A.cabeza.Y * 0.1, CARA.frente - 0.02)
+				* CFrame.Angles(0, 0, math.rad(-22)),
+			Color3.fromRGB(250, 244, 236), FLAT)
+	end,
+	bigote = function(character, skin)
+		for _, side in { -1, 1 } do
+			attach(character, "Head", "Bigote",
+				Vector3.new(A.cabeza.X * 0.16, A.cabeza.Y * 0.06, 0.07),
+				CFrame.new(side * A.cabeza.X * 0.09, -A.cabeza.Y * 0.16, CARA.frente)
+					* CFrame.Angles(0, 0, math.rad(side * -12)),
+				skin.pelo, FLAT)
+		end
+	end,
+
 	-- ── ropa ───────────────────────────────────────────────────────
 	bufanda = function(character)
 		local anchor = character:FindFirstChild("UpperTorso") and "UpperTorso" or "Torso"
@@ -1193,14 +1342,21 @@ function CharacterService.dressStudent(player: Player, character: Model, estetic
 				lienzo se fue con la vieja.
 			--]]
 			head:SetAttribute("Pintable", true)
+			--[[
+				Los rasgos de fabrica se restauran ANTES de vestir. Si el
+				jugador se saco el peinado o las cejas del carnet, esto es
+				lo que lo deja de nuevo con pelo y con cara en vez de
+				pelado y sin cejas; si se los dejo puestos, la cosmetica
+				los vuelve a esconder dos lineas mas abajo.
+			--]]
 			for _, child in character:GetChildren() do
-				if child:IsA("BasePart")
-					and (child.Name == "Pelo" or child.Name == "Flequillo") then
-					child.Color = skin.pelo
-					-- Se vuelve a mostrar en cada pasada: si el jugador
-					-- se saco el peinado del carnet, esto es lo que lo
-					-- deja de nuevo con pelo en vez de pelado.
-					child.Transparency = 0
+				if child:IsA("BasePart") then
+					if child.Name == "Pelo" or child.Name == "Flequillo" then
+						child.Color = skin.pelo
+						child.Transparency = 0
+					elseif child.Name == "Ceja" then
+						child.Transparency = 0
+					end
 				end
 			end
 		end

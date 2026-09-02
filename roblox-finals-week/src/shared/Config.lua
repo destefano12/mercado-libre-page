@@ -225,6 +225,31 @@ Config.Economia = {
 		{ id = "campera", precio = 160, tipo = "estetica", categoria = "ropa",
 			requiere = { semanas = 2, promedio = 80 } },
 		{ id = "bufanda", precio = 55, tipo = "estetica", categoria = "ropa" },
+		--[[
+			La pagina de ACCESSORIES del trailer no son accesorios: son
+			RASGOS DE CARA — cejas de formas distintas, un lunar, pecas.
+			Van en dos categorias porque se comportan distinto: de cejas
+			se lleva un par (exclusiva), de marcas se llevan las que uno
+			quiera a la vez.
+
+			Ninguna cuesta mucho. Son lo primero que alguien toca al
+			abrir el carnet y dejarlas todas bloqueadas seria decirle
+			que vuelva en tres semanas.
+		--]]
+		{ id = "cejas_rectas", precio = 0, tipo = "estetica", categoria = "cejas" },
+		{ id = "cejas_finas", precio = 20, tipo = "estetica", categoria = "cejas" },
+		{ id = "cejas_gruesas", precio = 20, tipo = "estetica", categoria = "cejas" },
+		{ id = "cejas_arqueadas", precio = 35, tipo = "estetica", categoria = "cejas" },
+		{ id = "cejas_enojadas", precio = 35, tipo = "estetica", categoria = "cejas" },
+		{ id = "cejas_unica", precio = 50, tipo = "estetica", categoria = "cejas" },
+		{ id = "lunar", precio = 15, tipo = "estetica", categoria = "marcas" },
+		{ id = "pecas", precio = 25, tipo = "estetica", categoria = "marcas" },
+		{ id = "rubor", precio = 25, tipo = "estetica", categoria = "marcas" },
+		{ id = "cicatriz", precio = 45, tipo = "estetica", categoria = "marcas",
+			requiere = { semanas = 1 } },
+		{ id = "tirita", precio = 30, tipo = "estetica", categoria = "marcas" },
+		{ id = "bigote", precio = 60, tipo = "estetica", categoria = "marcas",
+			requiere = { promedio = 60 } },
 	},
 }
 
@@ -253,6 +278,12 @@ Config.Carnet = {
 		descripcion en los tres idiomas, y con `id` aca adentro pediria
 		un `item.trampa` que no tiene sentido que exista.
 	--]]
+	--[[
+		Las ocho, en el orden y con los colores exactos en que estan
+		apiladas en el canto del carnet del trailer, muestreadas de
+		arriba hacia abajo sobre `f030`. El orden de esta lista ES el
+		orden en que se dibujan.
+	--]]
 	Pestanas = {
 		{ categoria = "trampa", color = Color3.fromRGB(130, 78, 210), icono = "lapiz" },
 		{ categoria = "aparato", color = Color3.fromRGB(200, 105, 222), icono = "radio" },
@@ -260,9 +291,12 @@ Config.Carnet = {
 			exclusiva = true },
 		{ categoria = "gorro", color = Color3.fromRGB(208, 84, 94), icono = "gorra",
 			exclusiva = true },
-		{ categoria = "anteojos", color = Color3.fromRGB(78, 152, 192), icono = "anteojos",
+		{ categoria = "cejas", color = Color3.fromRGB(78, 152, 192), icono = "ojo",
 			exclusiva = true },
-		{ categoria = "ropa", color = Color3.fromRGB(118, 222, 220), icono = "campera" },
+		{ categoria = "anteojos", color = Color3.fromRGB(118, 222, 220), icono = "anteojos",
+			exclusiva = true },
+		{ categoria = "marcas", color = Color3.fromRGB(94, 232, 144), icono = "boca" },
+		{ categoria = "ropa", color = Color3.fromRGB(196, 214, 120), icono = "campera" },
 	},
 	-- Paleta del carnet en si, tambien muestreada del video.
 	Papel = Color3.fromRGB(243, 226, 196),

@@ -64,6 +64,37 @@ local function head(model: Model): BasePart
 	return skull
 end
 
+--[[
+	Ojos y boca del maniqui.
+
+	Las casillas de cejas y marcas son rasgos planos: sobre una esfera
+	lisa no se entiende ni cual es el derecho de la cabeza, y una ceja
+	flotando sobre nada no se lee como una ceja. Con dos ojos dibujados,
+	si.
+--]]
+local function face(model: Model)
+	head(model)
+	for _, side in { -1, 1 } do
+		part(model, Vector3.new(0.26, 0.36, 0.06), CFrame.new(side * 0.26, 0, -0.62),
+			Color3.fromRGB(252, 252, 250))
+		part(model, Vector3.new(0.13, 0.18, 0.05), CFrame.new(side * 0.26, -0.05, -0.65),
+			Color3.fromRGB(28, 26, 34))
+	end
+	part(model, Vector3.new(0.3, 0.06, 0.06), CFrame.new(0, -0.46, -0.62),
+		Color3.fromRGB(126, 62, 68))
+end
+
+--- Un par de cejas simetricas sobre los ojos de `face`.
+local function brow(model: Model, width: number, thick: number, angle: number,
+	offsetX: number?, offsetY: number?)
+	for _, side in { -1, 1 } do
+		part(model, Vector3.new(width, thick, 0.06),
+			CFrame.new(side * (offsetX or 0.26), 0.3 + (offsetY or 0), -0.64)
+				* CFrame.Angles(0, 0, math.rad(side * angle)),
+			HAIR)
+	end
+end
+
 -- Cada constructor recibe el modelo vacio y le cuelga las piezas.
 local BUILDERS: { [string]: (Model) -> () } = {
 	nota = function(model)
@@ -286,6 +317,91 @@ local BUILDERS: { [string]: (Model) -> () } = {
 		head(model)
 		local puff = part(model, Vector3.new(2, 1.9, 2), CFrame.new(0, 0.28, 0), HAIR)
 		rounded(puff, Enum.PartType.Ball)
+	end,
+
+	--[[
+		Cejas y marcas.
+
+		Se dibujan sobre la MISMA cabeza de maniqui que los peinados, y
+		girada un poco hacia el costado no se entenderian: son rasgos
+		planos sobre la cara. Por eso la camara del carnet las mira de
+		frente y el giro al senalar con el cursor es leve.
+
+		Los ojos van en todas: una ceja flotando sobre una esfera lisa
+		no se lee como una ceja.
+	--]]
+	cejas_rectas = function(model)
+		face(model)
+		brow(model, 0.34, 0.07, 0)
+	end,
+	cejas_finas = function(model)
+		face(model)
+		brow(model, 0.36, 0.04, 4)
+	end,
+	cejas_gruesas = function(model)
+		face(model)
+		brow(model, 0.4, 0.14, 3)
+	end,
+	cejas_arqueadas = function(model)
+		face(model)
+		brow(model, 0.28, 0.06, -16)
+		-- La cola que baja por fuera: sin ella el tramo inclinado se
+		-- lee como un acento, no como un arco.
+		brow(model, 0.16, 0.06, -48, 0.44, -0.06)
+	end,
+	cejas_enojadas = function(model)
+		face(model)
+		brow(model, 0.34, 0.08, 24)
+	end,
+	cejas_unica = function(model)
+		face(model)
+		part(model, Vector3.new(0.84, 0.08, 0.06), CFrame.new(0, 0.3, -0.66), HAIR)
+	end,
+
+	lunar = function(model)
+		face(model)
+		part(model, Vector3.new(0.07, 0.07, 0.06), CFrame.new(0.4, -0.34, -0.62),
+			Color3.fromRGB(64, 40, 42))
+	end,
+	pecas = function(model)
+		face(model)
+		for _, side in { -1, 1 } do
+			for i = 0, 2 do
+				part(model, Vector3.new(0.05, 0.05, 0.06),
+					CFrame.new(side * (0.26 + i * 0.08), -0.2 + (i % 2) * 0.06, -0.63),
+					Color3.fromRGB(178, 116, 96))
+			end
+		end
+	end,
+	rubor = function(model)
+		face(model)
+		for _, side in { -1, 1 } do
+			part(model, Vector3.new(0.22, 0.13, 0.05), CFrame.new(side * 0.38, -0.24, -0.62),
+				Color3.fromRGB(240, 138, 152))
+		end
+	end,
+	cicatriz = function(model)
+		face(model)
+		part(model, Vector3.new(0.05, 0.42, 0.06),
+			CFrame.new(0.26, 0.18, -0.64) * CFrame.Angles(0, 0, math.rad(14)),
+			Color3.fromRGB(198, 128, 122))
+	end,
+	tirita = function(model)
+		face(model)
+		part(model, Vector3.new(0.36, 0.11, 0.06),
+			CFrame.new(-0.32, -0.2, -0.64) * CFrame.Angles(0, 0, math.rad(-22)),
+			Color3.fromRGB(238, 206, 168))
+		part(model, Vector3.new(0.14, 0.08, 0.05),
+			CFrame.new(-0.32, -0.2, -0.67) * CFrame.Angles(0, 0, math.rad(-22)),
+			Color3.fromRGB(250, 244, 236))
+	end,
+	bigote = function(model)
+		face(model)
+		for _, side in { -1, 1 } do
+			part(model, Vector3.new(0.22, 0.08, 0.07),
+				CFrame.new(side * 0.12, -0.34, -0.64) * CFrame.Angles(0, 0, math.rad(side * -12)),
+				HAIR)
+		end
 	end,
 
 	campera = function(model)

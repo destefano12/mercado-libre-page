@@ -307,6 +307,31 @@ Config.Economia = {
 		{ id = "campera", precio = 160, tipo = "estetica", categoria = "ropa",
 			requiere = { semanas = 2, promedio = 80 } },
 		{ id = "bufanda", precio = 55, tipo = "estetica", categoria = "ropa" },
+		--[[
+			La pagina de ACCESSORIES del trailer no son accesorios: son
+			RASGOS DE CARA — cejas de formas distintas, un lunar, pecas.
+			Van en dos categorias porque se comportan distinto: de cejas
+			se lleva un par (exclusiva), de marcas se llevan las que uno
+			quiera a la vez.
+
+			Ninguna cuesta mucho. Son lo primero que alguien toca al
+			abrir el carnet y dejarlas todas bloqueadas seria decirle
+			que vuelva en tres semanas.
+		--]]
+		{ id = "cejas_rectas", precio = 0, tipo = "estetica", categoria = "cejas" },
+		{ id = "cejas_finas", precio = 20, tipo = "estetica", categoria = "cejas" },
+		{ id = "cejas_gruesas", precio = 20, tipo = "estetica", categoria = "cejas" },
+		{ id = "cejas_arqueadas", precio = 35, tipo = "estetica", categoria = "cejas" },
+		{ id = "cejas_enojadas", precio = 35, tipo = "estetica", categoria = "cejas" },
+		{ id = "cejas_unica", precio = 50, tipo = "estetica", categoria = "cejas" },
+		{ id = "lunar", precio = 15, tipo = "estetica", categoria = "marcas" },
+		{ id = "pecas", precio = 25, tipo = "estetica", categoria = "marcas" },
+		{ id = "rubor", precio = 25, tipo = "estetica", categoria = "marcas" },
+		{ id = "cicatriz", precio = 45, tipo = "estetica", categoria = "marcas",
+			requiere = { semanas = 1 } },
+		{ id = "tirita", precio = 30, tipo = "estetica", categoria = "marcas" },
+		{ id = "bigote", precio = 60, tipo = "estetica", categoria = "marcas",
+			requiere = { promedio = 60 } },
 	},
 }
 
@@ -335,6 +360,12 @@ Config.Carnet = {
 		descripcion en los tres idiomas, y con `id` aca adentro pediria
 		un `item.trampa` que no tiene sentido que exista.
 	--]]
+	--[[
+		Las ocho, en el orden y con los colores exactos en que estan
+		apiladas en el canto del carnet del trailer, muestreadas de
+		arriba hacia abajo sobre `f030`. El orden de esta lista ES el
+		orden en que se dibujan.
+	--]]
 	Pestanas = {
 		{ categoria = "trampa", color = Color3.fromRGB(130, 78, 210), icono = "lapiz" },
 		{ categoria = "aparato", color = Color3.fromRGB(200, 105, 222), icono = "radio" },
@@ -342,9 +373,12 @@ Config.Carnet = {
 			exclusiva = true },
 		{ categoria = "gorro", color = Color3.fromRGB(208, 84, 94), icono = "gorra",
 			exclusiva = true },
-		{ categoria = "anteojos", color = Color3.fromRGB(78, 152, 192), icono = "anteojos",
+		{ categoria = "cejas", color = Color3.fromRGB(78, 152, 192), icono = "ojo",
 			exclusiva = true },
-		{ categoria = "ropa", color = Color3.fromRGB(118, 222, 220), icono = "campera" },
+		{ categoria = "anteojos", color = Color3.fromRGB(118, 222, 220), icono = "anteojos",
+			exclusiva = true },
+		{ categoria = "marcas", color = Color3.fromRGB(94, 232, 144), icono = "boca" },
+		{ categoria = "ropa", color = Color3.fromRGB(196, 214, 120), icono = "campera" },
 	},
 	-- Paleta del carnet en si, tambien muestreada del video.
 	Papel = Color3.fromRGB(243, 226, 196),
@@ -888,6 +922,37 @@ local function head(model: Model): BasePart
 	return skull
 end
 
+--[[
+	Ojos y boca del maniqui.
+
+	Las casillas de cejas y marcas son rasgos planos: sobre una esfera
+	lisa no se entiende ni cual es el derecho de la cabeza, y una ceja
+	flotando sobre nada no se lee como una ceja. Con dos ojos dibujados,
+	si.
+--]]
+local function face(model: Model)
+	head(model)
+	for _, side in { -1, 1 } do
+		part(model, Vector3.new(0.26, 0.36, 0.06), CFrame.new(side * 0.26, 0, -0.62),
+			Color3.fromRGB(252, 252, 250))
+		part(model, Vector3.new(0.13, 0.18, 0.05), CFrame.new(side * 0.26, -0.05, -0.65),
+			Color3.fromRGB(28, 26, 34))
+	end
+	part(model, Vector3.new(0.3, 0.06, 0.06), CFrame.new(0, -0.46, -0.62),
+		Color3.fromRGB(126, 62, 68))
+end
+
+--- Un par de cejas simetricas sobre los ojos de `face`.
+local function brow(model: Model, width: number, thick: number, angle: number,
+	offsetX: number?, offsetY: number?)
+	for _, side in { -1, 1 } do
+		part(model, Vector3.new(width, thick, 0.06),
+			CFrame.new(side * (offsetX or 0.26), 0.3 + (offsetY or 0), -0.64)
+				* CFrame.Angles(0, 0, math.rad(side * angle)),
+			HAIR)
+	end
+end
+
 -- Cada constructor recibe el modelo vacio y le cuelga las piezas.
 local BUILDERS: { [string]: (Model) -> () } = {
 	nota = function(model)
@@ -1110,6 +1175,91 @@ local BUILDERS: { [string]: (Model) -> () } = {
 		head(model)
 		local puff = part(model, Vector3.new(2, 1.9, 2), CFrame.new(0, 0.28, 0), HAIR)
 		rounded(puff, Enum.PartType.Ball)
+	end,
+
+	--[[
+		Cejas y marcas.
+
+		Se dibujan sobre la MISMA cabeza de maniqui que los peinados, y
+		girada un poco hacia el costado no se entenderian: son rasgos
+		planos sobre la cara. Por eso la camara del carnet las mira de
+		frente y el giro al senalar con el cursor es leve.
+
+		Los ojos van en todas: una ceja flotando sobre una esfera lisa
+		no se lee como una ceja.
+	--]]
+	cejas_rectas = function(model)
+		face(model)
+		brow(model, 0.34, 0.07, 0)
+	end,
+	cejas_finas = function(model)
+		face(model)
+		brow(model, 0.36, 0.04, 4)
+	end,
+	cejas_gruesas = function(model)
+		face(model)
+		brow(model, 0.4, 0.14, 3)
+	end,
+	cejas_arqueadas = function(model)
+		face(model)
+		brow(model, 0.28, 0.06, -16)
+		-- La cola que baja por fuera: sin ella el tramo inclinado se
+		-- lee como un acento, no como un arco.
+		brow(model, 0.16, 0.06, -48, 0.44, -0.06)
+	end,
+	cejas_enojadas = function(model)
+		face(model)
+		brow(model, 0.34, 0.08, 24)
+	end,
+	cejas_unica = function(model)
+		face(model)
+		part(model, Vector3.new(0.84, 0.08, 0.06), CFrame.new(0, 0.3, -0.66), HAIR)
+	end,
+
+	lunar = function(model)
+		face(model)
+		part(model, Vector3.new(0.07, 0.07, 0.06), CFrame.new(0.4, -0.34, -0.62),
+			Color3.fromRGB(64, 40, 42))
+	end,
+	pecas = function(model)
+		face(model)
+		for _, side in { -1, 1 } do
+			for i = 0, 2 do
+				part(model, Vector3.new(0.05, 0.05, 0.06),
+					CFrame.new(side * (0.26 + i * 0.08), -0.2 + (i % 2) * 0.06, -0.63),
+					Color3.fromRGB(178, 116, 96))
+			end
+		end
+	end,
+	rubor = function(model)
+		face(model)
+		for _, side in { -1, 1 } do
+			part(model, Vector3.new(0.22, 0.13, 0.05), CFrame.new(side * 0.38, -0.24, -0.62),
+				Color3.fromRGB(240, 138, 152))
+		end
+	end,
+	cicatriz = function(model)
+		face(model)
+		part(model, Vector3.new(0.05, 0.42, 0.06),
+			CFrame.new(0.26, 0.18, -0.64) * CFrame.Angles(0, 0, math.rad(14)),
+			Color3.fromRGB(198, 128, 122))
+	end,
+	tirita = function(model)
+		face(model)
+		part(model, Vector3.new(0.36, 0.11, 0.06),
+			CFrame.new(-0.32, -0.2, -0.64) * CFrame.Angles(0, 0, math.rad(-22)),
+			Color3.fromRGB(238, 206, 168))
+		part(model, Vector3.new(0.14, 0.08, 0.05),
+			CFrame.new(-0.32, -0.2, -0.67) * CFrame.Angles(0, 0, math.rad(-22)),
+			Color3.fromRGB(250, 244, 236))
+	end,
+	bigote = function(model)
+		face(model)
+		for _, side in { -1, 1 } do
+			part(model, Vector3.new(0.22, 0.08, 0.07),
+				CFrame.new(side * 0.12, -0.34, -0.64) * CFrame.Angles(0, 0, math.rad(side * -12)),
+				HAIR)
+		end
 	end,
 
 	campera = function(model)
@@ -1559,6 +1709,30 @@ local en: { [string]: string } = {
 	["item.desc_vincha"] = "Keeps the hair out of the exam",
 	["item.desc_antifaz"] = "Nobody will ever know it was you",
 	["item.desc_bufanda"] = "For the classroom with the broken window",
+	["item.cejas_rectas"] = "Straight brows",
+	["item.cejas_finas"] = "Thin brows",
+	["item.cejas_gruesas"] = "Bushy brows",
+	["item.cejas_arqueadas"] = "Arched brows",
+	["item.cejas_enojadas"] = "Angry brows",
+	["item.cejas_unica"] = "Unibrow",
+	["item.lunar"] = "Beauty mark",
+	["item.pecas"] = "Freckles",
+	["item.rubor"] = "Blush",
+	["item.cicatriz"] = "Scar",
+	["item.tirita"] = "Band-aid",
+	["item.bigote"] = "Moustache",
+	["item.desc_cejas_rectas"] = "Flat and honest. Comes free.",
+	["item.desc_cejas_finas"] = "Barely there",
+	["item.desc_cejas_gruesas"] = "You can be spotted from the back row",
+	["item.desc_cejas_arqueadas"] = "Permanently unconvinced",
+	["item.desc_cejas_enojadas"] = "You look like the teacher",
+	["item.desc_cejas_unica"] = "One brow. All the way across.",
+	["item.desc_lunar"] = "One dot on the cheek",
+	["item.desc_pecas"] = "Three per cheek",
+	["item.desc_rubor"] = "Like you just got caught",
+	["item.desc_cicatriz"] = "From a finals week you would rather forget",
+	["item.desc_tirita"] = "It is not covering anything",
+	["item.desc_bigote"] = "Nobody believes it is real",
 	["item.desc_nota"] = "Write an answer and throw it to a classmate",
 	["item.desc_avion"] = "Flies further and straighter than the ball",
 	["item.desc_bolita"] = "Throw it far away: the teacher goes to the noise",
@@ -1599,6 +1773,8 @@ local en: { [string]: string } = {
 	["carnet.tab_gorro"] = "Headwear",
 	["carnet.tab_anteojos"] = "Eyewear",
 	["carnet.tab_ropa"] = "Clothes",
+	["carnet.tab_cejas"] = "Brows",
+	["carnet.tab_marcas"] = "Marks",
 	-- El profesor
 	["teacher.greet"] = "Sit down. Now.",
 	["teacher.start_exam"] = "You have {s} seconds. Do not talk.",
@@ -1864,6 +2040,30 @@ local es: { [string]: string } = {
 	["item.desc_vincha"] = "Te saca el pelo de encima del examen",
 	["item.desc_antifaz"] = "Nadie va a saber nunca que fuiste vos",
 	["item.desc_bufanda"] = "Para el aula de la ventana rota",
+	["item.cejas_rectas"] = "Cejas rectas",
+	["item.cejas_finas"] = "Cejas finas",
+	["item.cejas_gruesas"] = "Cejas gruesas",
+	["item.cejas_arqueadas"] = "Cejas arqueadas",
+	["item.cejas_enojadas"] = "Cejas de enojado",
+	["item.cejas_unica"] = "Uniceja",
+	["item.lunar"] = "Lunar",
+	["item.pecas"] = "Pecas",
+	["item.rubor"] = "Rubor",
+	["item.cicatriz"] = "Cicatriz",
+	["item.tirita"] = "Curita",
+	["item.bigote"] = "Bigote",
+	["item.desc_cejas_rectas"] = "Rectas y honestas. Vienen gratis.",
+	["item.desc_cejas_finas"] = "Apenas estan",
+	["item.desc_cejas_gruesas"] = "Se te ve desde la ultima fila",
+	["item.desc_cejas_arqueadas"] = "Permanentemente poco convencido",
+	["item.desc_cejas_enojadas"] = "Pareces el profesor",
+	["item.desc_cejas_unica"] = "Una ceja. De punta a punta.",
+	["item.desc_lunar"] = "Un punto en la mejilla",
+	["item.desc_pecas"] = "Tres por mejilla",
+	["item.desc_rubor"] = "Como si te acabaran de pillar",
+	["item.desc_cicatriz"] = "De una semana final que preferis olvidar",
+	["item.desc_tirita"] = "No esta tapando nada",
+	["item.desc_bigote"] = "Nadie se cree que es de verdad",
 	["item.desc_nota"] = "Escribi una respuesta y lanzasela a un companero",
 	["item.desc_avion"] = "Vuela mas lejos y mas derecho que la bolita",
 	["item.desc_bolita"] = "Lanzala lejos: el profe va hacia el ruido",
@@ -1904,6 +2104,8 @@ local es: { [string]: string } = {
 	["carnet.tab_gorro"] = "Gorros",
 	["carnet.tab_anteojos"] = "Anteojos",
 	["carnet.tab_ropa"] = "Ropa",
+	["carnet.tab_cejas"] = "Cejas",
+	["carnet.tab_marcas"] = "Marcas",
 	-- El profesor
 	["teacher.greet"] = "Sientense. Ya.",
 	["teacher.start_exam"] = "Tienen {s} segundos. Nadie habla.",
@@ -2169,6 +2371,30 @@ local pt: { [string]: string } = {
 	["item.desc_vincha"] = "Tira o cabelo de cima da prova",
 	["item.desc_antifaz"] = "Ninguem vai saber que foi voce",
 	["item.desc_bufanda"] = "Para a sala da janela quebrada",
+	["item.cejas_rectas"] = "Sobrancelhas retas",
+	["item.cejas_finas"] = "Sobrancelhas finas",
+	["item.cejas_gruesas"] = "Sobrancelhas grossas",
+	["item.cejas_arqueadas"] = "Sobrancelhas arqueadas",
+	["item.cejas_enojadas"] = "Sobrancelhas bravas",
+	["item.cejas_unica"] = "Monocelha",
+	["item.lunar"] = "Pinta",
+	["item.pecas"] = "Sardas",
+	["item.rubor"] = "Bochechas coradas",
+	["item.cicatriz"] = "Cicatriz",
+	["item.tirita"] = "Curativo",
+	["item.bigote"] = "Bigode",
+	["item.desc_cejas_rectas"] = "Retas e honestas. Vem de graca.",
+	["item.desc_cejas_finas"] = "Mal estao ali",
+	["item.desc_cejas_gruesas"] = "Da para ver da ultima fila",
+	["item.desc_cejas_arqueadas"] = "Permanentemente pouco convencido",
+	["item.desc_cejas_enojadas"] = "Voce parece o professor",
+	["item.desc_cejas_unica"] = "Uma sobrancelha. De ponta a ponta.",
+	["item.desc_lunar"] = "Um ponto na bochecha",
+	["item.desc_pecas"] = "Tres por bochecha",
+	["item.desc_rubor"] = "Como se tivesse acabado de ser pego",
+	["item.desc_cicatriz"] = "De uma semana de provas que voce prefere esquecer",
+	["item.desc_tirita"] = "Nao esta cobrindo nada",
+	["item.desc_bigote"] = "Ninguem acredita que e de verdade",
 	["item.desc_nota"] = "Escreva uma resposta e jogue para um colega",
 	["item.desc_avion"] = "Voa mais longe e mais reto que a bolinha",
 	["item.desc_bolita"] = "Jogue longe: o professor vai ate o barulho",
@@ -2209,6 +2435,8 @@ local pt: { [string]: string } = {
 	["carnet.tab_gorro"] = "Chapeus",
 	["carnet.tab_anteojos"] = "Oculos",
 	["carnet.tab_ropa"] = "Roupa",
+	["carnet.tab_cejas"] = "Sobrancelhas",
+	["carnet.tab_marcas"] = "Marcas",
 	-- El profesor
 	["teacher.greet"] = "Sentem-se. Agora.",
 	["teacher.start_exam"] = "Voces tem {s} segundos. Ninguem fala.",
@@ -3670,6 +3898,24 @@ local ICONS: { [string]: (Frame, Color3, number) -> () } = {
 		end
 		bar(root, UDim2.fromScale(0.34, 0.16), UDim2.fromScale(0.5, 0.26), color, 0, layer + 1)
 	end,
+	boca = function(root, color, layer)
+		--[[
+			Labios: un ovalo lleno partido por una linea horizontal. Las
+			dos medias lunas por separado no se leen a 20 pixeles — se
+			ven como dos rayas —, y esto si.
+		--]]
+		UI.new("Frame", {
+			Size = UDim2.fromScale(0.94, 0.54),
+			Position = UDim2.fromScale(0.5, 0.5),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			ZIndex = layer,
+			Parent = root,
+		}, { UI.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }) })
+		bar(root, UDim2.fromScale(0.8, 0.08), UDim2.fromScale(0.5, 0.5),
+			Theme.Surface.Deep, 0, layer + 1)
+	end,
 	flecha = function(root, color, layer)
 		-- Triangulo apuntando a la derecha: el "pasar de pagina".
 		local clip = UI.new("Frame", {
@@ -4808,24 +5054,67 @@ local A = Rig.Alumno
 local FLAT = Enum.Material.SmoothPlastic
 
 --[[
-	Los peinados tapan el pelo de fabrica en vez de sumarse a el.
+	Las cosmeticas que reemplazan un rasgo de fabrica lo tapan primero.
 
-	`Rig.build` le pone a todo el mundo un casquete `Pelo` y un
-	`Flequillo`: es lo que hace que un alumno recien creado no sea un
-	pelado. Cuando el jugador elige un peinado del carnet hay que sacar
-	ese pelo base de en medio, o la silueta nueva sale montada sobre la
-	vieja y se ve como dos gorros apilados.
+	`Rig.build` y `Rig.face` le ponen a todo el mundo un casquete `Pelo`,
+	un `Flequillo` y un par de `Ceja`: es lo que hace que un alumno
+	recien creado no sea un pelado sin cara. Cuando el jugador elige un
+	peinado o unas cejas del carnet hay que sacar el rasgo base de en
+	medio, o la silueta nueva sale montada sobre la vieja — dos gorros
+	apilados, cuatro cejas.
 
-	Se esconde en vez de destruirse porque el pelo base no lleva el
-	atributo `Accesorio` — `stripAccessories` no lo toca —, asi que si
-	lo borraramos no habria forma de recuperarlo al desequipar el
-	peinado sin reaparecer al personaje.
+	Se esconden en vez de destruirse porque esas piezas no llevan el
+	atributo `Accesorio` — `stripAccessories` no las toca —, asi que si
+	las borraramos no habria forma de recuperarlas al desequipar sin
+	reaparecer al personaje. `dressStudent` las vuelve a mostrar al
+	principio de cada pasada.
 --]]
-local function hideBaseHair(character: Model)
+local function hideBase(character: Model, ...: string)
+	local names: { [string]: boolean } = {}
+	for _, name in { ... } do
+		names[name] = true
+	end
 	for _, child in character:GetChildren() do
-		if child:IsA("BasePart") and (child.Name == "Pelo" or child.Name == "Flequillo") then
+		if child:IsA("BasePart") and names[child.Name] then
 			child.Transparency = 1
 		end
+	end
+end
+
+local function hideBaseHair(character: Model)
+	hideBase(character, "Pelo", "Flequillo")
+end
+
+--[[
+	Los anclajes de la cara, derivados igual que en `Rig.face`.
+
+	Se recalculan aca en vez de exportarlos porque `Rig.face` los usa
+	para el profesor tambien, con otras proporciones; lo que comparten
+	es la formula, no los numeros.
+--]]
+local CARA = {
+	frente = -A.cabeza.Z * 0.5 - 0.02,
+	ojoX = A.cabeza.X * 0.19,
+	ojoY = A.cabeza.Y * 0.06,
+}
+CARA.cejaY = CARA.ojoY + A.cabeza.Y * 0.26
+
+--[[
+	Un par de cejas, que es lo unico que cambia entre los seis estilos.
+
+	Van del color del pelo y no de un marron fijo: en el trailer el
+	personaje de pelo violeta tiene las cejas violetas, y es lo que hace
+	que la cabeza se lea como una sola pieza en vez de como una peluca
+	apoyada encima.
+--]]
+local function brows(character: Model, skin: Rig.Skin, size: Vector3,
+	angle: number, lift: number)
+	hideBase(character, "Ceja")
+	for _, side in { -1, 1 } do
+		attach(character, "Head", "CejaEstetica", size,
+			CFrame.new(side * CARA.ojoX, CARA.cejaY + lift, CARA.frente)
+				* CFrame.Angles(0, 0, math.rad(side * angle)),
+			skin.pelo, FLAT)
 	end
 end
 
@@ -4964,6 +5253,112 @@ local ESTETICAS: { [string]: (Model, Rig.Skin) -> () } = {
 		end
 	end,
 
+	-- ── cejas ──────────────────────────────────────────────────────
+	--[[
+		La pagina de ACCESSORIES del trailer es, en su mayoria, cejas:
+		catorce casillas con formas distintas del mismo rasgo. Tiene
+		sentido — con la cabeza a esta escala y los ojos tan grandes, la
+		ceja es lo unico que le cambia la expresion a un personaje.
+
+		Los seis estilos son la misma pieza con otras medidas y otro
+		angulo, asi que van por `brows` y no repiten el `attach`.
+	--]]
+	cejas_rectas = function(character, skin)
+		brows(character, skin, Vector3.new(A.cabeza.X * 0.24, A.cabeza.Y * 0.06, 0.07), 0, 0)
+	end,
+	cejas_finas = function(character, skin)
+		brows(character, skin, Vector3.new(A.cabeza.X * 0.26, A.cabeza.Y * 0.03, 0.07), 4, 0)
+	end,
+	cejas_gruesas = function(character, skin)
+		brows(character, skin, Vector3.new(A.cabeza.X * 0.3, A.cabeza.Y * 0.11, 0.08), 3, 0)
+	end,
+	cejas_arqueadas = function(character, skin)
+		-- El arco se arma con dos piezas: el tramo largo inclinado
+		-- hacia afuera y una cola corta que baja. Una sola barra
+		-- rotada da un acento, no un arco.
+		brows(character, skin, Vector3.new(A.cabeza.X * 0.2, A.cabeza.Y * 0.05, 0.07), -16, 0)
+		for _, side in { -1, 1 } do
+			attach(character, "Head", "CejaEstetica",
+				Vector3.new(A.cabeza.X * 0.12, A.cabeza.Y * 0.05, 0.07),
+				CFrame.new(side * CARA.ojoX * 1.7, CARA.cejaY - A.cabeza.Y * 0.03, CARA.frente)
+					* CFrame.Angles(0, 0, math.rad(side * -48)),
+				skin.pelo, FLAT)
+		end
+	end,
+	cejas_enojadas = function(character, skin)
+		brows(character, skin, Vector3.new(A.cabeza.X * 0.26, A.cabeza.Y * 0.07, 0.07), 24, 0)
+	end,
+	cejas_unica = function(character, skin)
+		hideBase(character, "Ceja")
+		attach(character, "Head", "CejaEstetica",
+			Vector3.new(A.cabeza.X * 0.62, A.cabeza.Y * 0.08, 0.07),
+			CFrame.new(0, CARA.cejaY, CARA.frente), skin.pelo, FLAT)
+	end,
+
+	-- ── marcas de la cara ──────────────────────────────────────────
+	--[[
+		Estas NO son exclusivas: se pueden llevar pecas y lunar y
+		tirita a la vez, que es lo que uno espera de una cara. Por eso
+		la categoria `marcas` no lleva `exclusiva` en `Config.Carnet`.
+	--]]
+	lunar = function(character)
+		attach(character, "Head", "Lunar",
+			Vector3.new(A.cabeza.X * 0.05, A.cabeza.Y * 0.05, 0.06),
+			CFrame.new(A.cabeza.X * 0.3, -A.cabeza.Y * 0.16, CARA.frente),
+			Color3.fromRGB(64, 40, 42), FLAT)
+	end,
+	pecas = function(character)
+		-- Tres por mejilla, en diagonal. Simetricas exactas se ven
+		-- estampadas; el desfase de la fila del medio alcanza.
+		for _, side in { -1, 1 } do
+			for i = 0, 2 do
+				attach(character, "Head", "Peca",
+					Vector3.new(A.cabeza.X * 0.035, A.cabeza.Y * 0.035, 0.06),
+					CFrame.new(
+						side * (A.cabeza.X * 0.2 + i * A.cabeza.X * 0.055),
+						-A.cabeza.Y * 0.1 + (i % 2) * A.cabeza.Y * 0.04,
+						CARA.frente),
+					Color3.fromRGB(178, 116, 96), FLAT)
+			end
+		end
+	end,
+	rubor = function(character)
+		for _, side in { -1, 1 } do
+			attach(character, "Head", "Rubor",
+				Vector3.new(A.cabeza.X * 0.16, A.cabeza.Y * 0.09, 0.05),
+				CFrame.new(side * A.cabeza.X * 0.28, -A.cabeza.Y * 0.12, CARA.frente),
+				Color3.fromRGB(240, 138, 152), FLAT)
+		end
+	end,
+	cicatriz = function(character)
+		attach(character, "Head", "Cicatriz",
+			Vector3.new(A.cabeza.X * 0.035, A.cabeza.Y * 0.3, 0.06),
+			CFrame.new(A.cabeza.X * 0.19, CARA.cejaY - A.cabeza.Y * 0.06, CARA.frente)
+				* CFrame.Angles(0, 0, math.rad(14)),
+			Color3.fromRGB(198, 128, 122), FLAT)
+	end,
+	tirita = function(character)
+		attach(character, "Head", "Tirita",
+			Vector3.new(A.cabeza.X * 0.26, A.cabeza.Y * 0.08, 0.06),
+			CFrame.new(-A.cabeza.X * 0.24, -A.cabeza.Y * 0.1, CARA.frente)
+				* CFrame.Angles(0, 0, math.rad(-22)),
+			Color3.fromRGB(238, 206, 168), FLAT)
+		attach(character, "Head", "TiritaGasa",
+			Vector3.new(A.cabeza.X * 0.1, A.cabeza.Y * 0.06, 0.05),
+			CFrame.new(-A.cabeza.X * 0.24, -A.cabeza.Y * 0.1, CARA.frente - 0.02)
+				* CFrame.Angles(0, 0, math.rad(-22)),
+			Color3.fromRGB(250, 244, 236), FLAT)
+	end,
+	bigote = function(character, skin)
+		for _, side in { -1, 1 } do
+			attach(character, "Head", "Bigote",
+				Vector3.new(A.cabeza.X * 0.16, A.cabeza.Y * 0.06, 0.07),
+				CFrame.new(side * A.cabeza.X * 0.09, -A.cabeza.Y * 0.16, CARA.frente)
+					* CFrame.Angles(0, 0, math.rad(side * -12)),
+				skin.pelo, FLAT)
+		end
+	end,
+
 	-- ── ropa ───────────────────────────────────────────────────────
 	bufanda = function(character)
 		local anchor = character:FindFirstChild("UpperTorso") and "UpperTorso" or "Torso"
@@ -5066,14 +5461,21 @@ function CharacterService.dressStudent(player: Player, character: Model, estetic
 				lienzo se fue con la vieja.
 			--]]
 			head:SetAttribute("Pintable", true)
+			--[[
+				Los rasgos de fabrica se restauran ANTES de vestir. Si el
+				jugador se saco el peinado o las cejas del carnet, esto es
+				lo que lo deja de nuevo con pelo y con cara en vez de
+				pelado y sin cejas; si se los dejo puestos, la cosmetica
+				los vuelve a esconder dos lineas mas abajo.
+			--]]
 			for _, child in character:GetChildren() do
-				if child:IsA("BasePart")
-					and (child.Name == "Pelo" or child.Name == "Flequillo") then
-					child.Color = skin.pelo
-					-- Se vuelve a mostrar en cada pasada: si el jugador
-					-- se saco el peinado del carnet, esto es lo que lo
-					-- deja de nuevo con pelo en vez de pelado.
-					child.Transparency = 0
+				if child:IsA("BasePart") then
+					if child.Name == "Pelo" or child.Name == "Flequillo" then
+						child.Color = skin.pelo
+						child.Transparency = 0
+					elseif child.Name == "Ceja" then
+						child.Transparency = 0
+					end
 				end
 			end
 		end
@@ -15323,7 +15725,13 @@ local C = Config.Carnet
 
 local PAGE_H = 400
 local LEFT_W, RIGHT_W, SPINE_W = 290, 300, 10
-local TAB_W, TAB_H, TAB_GAP = 46, 46, 8
+--[[
+	Las lenguetas tienen que entrar las OCHO en el alto de la pagina.
+	Con las medidas del primer pase (46 de alto y 8 de separacion) la
+	pila medira 424 y la libreta 436: las dos ultimas se salian por
+	abajo del papel.
+--]]
+local TAB_W, TAB_H, TAB_GAP = 46, 40, 6
 local SLOT, SLOT_GAP = 52, 10
 local MARGIN = 18
 
@@ -16042,7 +16450,7 @@ local function buildTabs(parent: Instance)
 	-- Arrancan pegadas al canto derecho de la pagina; la elegida se
 	-- monta sobre ella.
 	local left = MARGIN + LEFT_W + SPINE_W + RIGHT_W
-	local top = MARGIN + 34
+	local top = MARGIN + 24
 
 	for index, tab in C.Pestanas do
 		--[[

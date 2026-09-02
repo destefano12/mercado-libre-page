@@ -2345,7 +2345,13 @@ local C = Config.Carnet
 
 local PAGE_H = 400
 local LEFT_W, RIGHT_W, SPINE_W = 290, 300, 10
-local TAB_W, TAB_H, TAB_GAP = 46, 46, 8
+--[[
+	Las lenguetas tienen que entrar las OCHO en el alto de la pagina.
+	Con las medidas del primer pase (46 de alto y 8 de separacion) la
+	pila medira 424 y la libreta 436: las dos ultimas se salian por
+	abajo del papel.
+--]]
+local TAB_W, TAB_H, TAB_GAP = 46, 40, 6
 local SLOT, SLOT_GAP = 52, 10
 local MARGIN = 18
 
@@ -3064,7 +3070,7 @@ local function buildTabs(parent: Instance)
 	-- Arrancan pegadas al canto derecho de la pagina; la elegida se
 	-- monta sobre ella.
 	local left = MARGIN + LEFT_W + SPINE_W + RIGHT_W
-	local top = MARGIN + 34
+	local top = MARGIN + 24
 
 	for index, tab in C.Pestanas do
 		--[[
