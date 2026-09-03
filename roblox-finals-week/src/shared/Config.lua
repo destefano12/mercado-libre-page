@@ -99,7 +99,17 @@ Config.Examen = {
 Config.Profesor = {
 	VelocidadPatrulla = 7,
 	VelocidadPersecucion = 19,
-	AlturaOjos = 1.6,
+	--[[
+		Altura de los ojos POR ENCIMA DE LA RAIZ, no del piso: de ahi
+		sale el rayo de vision y de ahi sale la goma que tira.
+
+		Con el profesor reproporcionado la cabeza le quedo a 2.65 de la
+		raiz (1.1 de medio torso + 0.7 de cuello + 0.85 de media
+		cabeza). Dejarlo en 1.6 significaba que miraba desde el pecho:
+		un pupitre que la cabeza pasa de sobra le tapaba la vista, y el
+		profesor no veia copiar a alguien que tenia delante.
+	--]]
+	AlturaOjos = 2.65,
 	AnguloVision = 62,
 	DistanciaVision = 34,
 	DistanciaCercania = 12,
@@ -479,15 +489,34 @@ Config.Goma = {
 	SSAO las esquinas del atrio se aplanan tanto que se pierde la
 	profundidad.
 --]]
+--[[
+	La luz.
+
+	Muestreando `f001`, `f009` y `f013`: el piso del pasillo iluminado
+	da (232,147,130) y la pared (210,173,163). Dos cosas salen de ahi.
+
+	La primera es que **no hay nada quemado**. El punto mas claro de un
+	plano interior anda por 240 en el rojo pero por 155 en el verde: es
+	un salmon saturado, no un blanco. Con `Brillo` en 2.1 y exposicion
+	positiva los colores se iban hacia el blanco y se perdia justamente
+	lo que hace reconocible al juego.
+
+	La segunda es que **el rango entre luz y sombra es angosto**. Casi
+	no hay zonas oscuras. Eso no se consigue subiendo el sol: se
+	consigue subiendo el ambiente, que es lo que convierte una sombra en
+	un tono pintado en vez de en falta de luz. Es el truco del sombreado
+	de dibujo, y ademas es la unica forma de bajar el brillo sin que la
+	escena se ponga sucia.
+--]]
 Config.Estilo = {
 	Tecnologia = "Future",          -- "Future" | "ShadowMap"
-	Brillo = 2.1,
+	Brillo = 1.45,                  -- el sol pega menos; el ambiente compensa
 	Hora = 13.6,                    -- mediodia largo, sol alto
 	Latitud = 18,                   -- sombras cortas: aplana la escena
-	Exposicion = 0.05,
+	Exposicion = -0.05,             -- un pelo por debajo: sostiene la saturacion
 	SuavidadSombras = 1,            -- solo Future; al maximo = sombras blandas
-	DifusaEntorno = 0.85,           -- ambiente alto para levantar las sombras
-	EspecularEntorno = 0.05,        -- casi nada: las superficies son mates
+	DifusaEntorno = 1,              -- ambiente al maximo: sombreado de dibujo
+	EspecularEntorno = 0.04,        -- casi nada: las superficies son mates
 	Nubes = { cobertura = 0.32, densidad = 0.22 },
 	Bloom = { intensidad = 0.12, tamano = 24, umbral = 2.1 },
 	RayosSol = { intensidad = 0, dispersion = 1 },
@@ -504,13 +533,19 @@ Config.Estilo = {
 		tension = { brillo = -0.02, contraste = 0.2, saturacion = 0.04,
 			tinte = Color3.fromRGB(255, 236, 232) },
 	},
+	--[[
+		La neblina baja: en los planos interiores del trailer el fondo de
+		la biblioteca se ve nitido a treinta metros. La densidad anterior
+		metia un velo gris que apagaba los lomos de colores del fondo,
+		que son justamente lo que llena esa sala.
+	--]]
 	Atmosfera = {
-		densidad = 0.18,
+		densidad = 0.1,
 		desplazamiento = 0.25,
-		color = Color3.fromRGB(232, 236, 240),
-		decaimiento = Color3.fromRGB(160, 176, 196),
+		color = Color3.fromRGB(238, 234, 228),
+		decaimiento = Color3.fromRGB(186, 178, 172),
 		brillo = 0,
-		neblina = 0.4,
+		neblina = 0.25,
 	},
 }
 

@@ -345,9 +345,43 @@ daba al vacío del skybox y el efecto se caía.
 ### El cuerpo
 
 Los personajes eran R6 estándar — un monigote de Roblox. Ahora hay un
-`src/shared/Rig.lua` con **una** tabla de proporciones caricaturescas
-(cabeza de 1.7 sobre un total de ~4.8 studs, o sea un tercio del personaje)
-que alimenta al jugador, al profesor y a los NPC.
+`src/shared/Rig.lua` con las tablas de proporciones que alimentan al
+jugador, al profesor y a los NPC.
+
+**Nada del cuerpo es cuadrado.** En el trailer no hay una sola arista dura
+en ninguna figura: el torso es un barril redondeado, los brazos y las
+piernas son tubos de puntas romas, las manos y los pies son bollos.
+`Rig.round` lo resuelve con un `SpecialMesh` esférico por pieza — cero
+partes de más, cero assets — y la caja de colisión sigue siendo el bloque,
+que es lo que uno quiere: una cápsula rodando por el suelo camina peor.
+
+El alumno y el profesor **no son la misma figura a distinta escala**:
+
+|            | alto | cabezas | brazo | pierna | cuello |
+|------------|------|---------|-------|--------|--------|
+| alumno     | 5,3  | 3,5     | 0,70  | 1,90   | —      |
+| profesor   | 8,6  | 5,1     | 0,42  | 4,00   | 0,70   |
+
+El profesor es una figura larguísima y flaquísima con **el cuello estirado
+hacia adelante** — va soldado a la cabeza y no al torso, así que cuando
+`CharacterService.animate` le rota el `Neck` al caminar, el cuello entero
+se estira en esa dirección. Es como se mueve en el video: no camina
+erguido, camina escaneando por delante del cuerpo.
+
+Una cosa que costó encontrar: la cabeza tenía **dos** medidas — su caja y
+una `escalaCabeza` que agrandaba la malla un 35% encima. Los ojos, las
+cejas, la boca, el pelo y las catorce cosméticas de cabeza se colocaban
+contra la caja, o sea contra el número chico, así que la cara entera
+quedaba metida *dentro* de la cabeza que se dibujaba. Y el "3,5 cabezas"
+que yo había medido contra el trailer tampoco era lo que salía en
+pantalla: renderizaba a 2,75. Ninguna de las dos cuentas estaba mal por
+separado; lo que estaba mal era que hubiera dos. Ahora hay una.
+
+Con la cabeza redondeada, además, la cara no puede plantarse a una `Z`
+fija: la superficie se va hacia atrás a medida que uno se aleja del
+centro. Una ceja pegada a la `Z` del centro flotaba 0,27 studs por delante
+del rostro, sobre una cabeza que mide 1,5 de alto. `Rig.faceZ` despeja el
+elipsoide y cada rasgo se apoya donde le toca.
 
 La piel de colores no humanos — violeta, rosa, rojo, celeste — es el rasgo
 más reconocible del juego, y sale del `UserId`: el mismo jugador se ve igual

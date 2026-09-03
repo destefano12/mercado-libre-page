@@ -242,9 +242,16 @@ function Atmosphere.apply()
 		oscuridad total, que es el look realista y duro. Subirlo mucho es
 		lo que aplana la imagen y la acerca al dibujo — una sombra que no
 		llega a negro se lee como un tono pintado, no como falta de luz.
+
+		Y va CALIDO, no gris. El primer intento subio el nivel pero dejo
+		el tinte violaceo (126,122,130), asi que las sombras salian frias
+		sobre pisos salmon: la mezcla se veia sucia. En el trailer la
+		sombra de un piso salmon es salmon mas oscuro, nada mas. Ahora
+		que `Brillo` bajo a 1.45 este par es el que sostiene la escena,
+		asi que sube ademas de entibiarse.
 	--]]
-	Lighting.Ambient = Color3.fromRGB(126, 122, 130)
-	Lighting.OutdoorAmbient = Color3.fromRGB(168, 174, 186)
+	Lighting.Ambient = Color3.fromRGB(152, 140, 134)
+	Lighting.OutdoorAmbient = Color3.fromRGB(190, 182, 176)
 	Lighting.FogEnd = 2400
 
 	pcall(function()

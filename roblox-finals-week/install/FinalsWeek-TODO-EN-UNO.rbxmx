@@ -181,7 +181,17 @@ Config.Examen = {
 Config.Profesor = {
 	VelocidadPatrulla = 7,
 	VelocidadPersecucion = 19,
-	AlturaOjos = 1.6,
+	--[[
+		Altura de los ojos POR ENCIMA DE LA RAIZ, no del piso: de ahi
+		sale el rayo de vision y de ahi sale la goma que tira.
+
+		Con el profesor reproporcionado la cabeza le quedo a 2.65 de la
+		raiz (1.1 de medio torso + 0.7 de cuello + 0.85 de media
+		cabeza). Dejarlo en 1.6 significaba que miraba desde el pecho:
+		un pupitre que la cabeza pasa de sobra le tapaba la vista, y el
+		profesor no veia copiar a alguien que tenia delante.
+	--]]
+	AlturaOjos = 2.65,
 	AnguloVision = 62,
 	DistanciaVision = 34,
 	DistanciaCercania = 12,
@@ -561,15 +571,34 @@ Config.Goma = {
 	SSAO las esquinas del atrio se aplanan tanto que se pierde la
 	profundidad.
 --]]
+--[[
+	La luz.
+
+	Muestreando `f001`, `f009` y `f013`: el piso del pasillo iluminado
+	da (232,147,130) y la pared (210,173,163). Dos cosas salen de ahi.
+
+	La primera es que **no hay nada quemado**. El punto mas claro de un
+	plano interior anda por 240 en el rojo pero por 155 en el verde: es
+	un salmon saturado, no un blanco. Con `Brillo` en 2.1 y exposicion
+	positiva los colores se iban hacia el blanco y se perdia justamente
+	lo que hace reconocible al juego.
+
+	La segunda es que **el rango entre luz y sombra es angosto**. Casi
+	no hay zonas oscuras. Eso no se consigue subiendo el sol: se
+	consigue subiendo el ambiente, que es lo que convierte una sombra en
+	un tono pintado en vez de en falta de luz. Es el truco del sombreado
+	de dibujo, y ademas es la unica forma de bajar el brillo sin que la
+	escena se ponga sucia.
+--]]
 Config.Estilo = {
 	Tecnologia = "Future",          -- "Future" | "ShadowMap"
-	Brillo = 2.1,
+	Brillo = 1.45,                  -- el sol pega menos; el ambiente compensa
 	Hora = 13.6,                    -- mediodia largo, sol alto
 	Latitud = 18,                   -- sombras cortas: aplana la escena
-	Exposicion = 0.05,
+	Exposicion = -0.05,             -- un pelo por debajo: sostiene la saturacion
 	SuavidadSombras = 1,            -- solo Future; al maximo = sombras blandas
-	DifusaEntorno = 0.85,           -- ambiente alto para levantar las sombras
-	EspecularEntorno = 0.05,        -- casi nada: las superficies son mates
+	DifusaEntorno = 1,              -- ambiente al maximo: sombreado de dibujo
+	EspecularEntorno = 0.04,        -- casi nada: las superficies son mates
 	Nubes = { cobertura = 0.32, densidad = 0.22 },
 	Bloom = { intensidad = 0.12, tamano = 24, umbral = 2.1 },
 	RayosSol = { intensidad = 0, dispersion = 1 },
@@ -586,13 +615,19 @@ Config.Estilo = {
 		tension = { brillo = -0.02, contraste = 0.2, saturacion = 0.04,
 			tinte = Color3.fromRGB(255, 236, 232) },
 	},
+	--[[
+		La neblina baja: en los planos interiores del trailer el fondo de
+		la biblioteca se ve nitido a treinta metros. La densidad anterior
+		metia un velo gris que apagaba los lomos de colores del fondo,
+		que son justamente lo que llena esa sala.
+	--]]
 	Atmosfera = {
-		densidad = 0.18,
+		densidad = 0.1,
 		desplazamiento = 0.25,
-		color = Color3.fromRGB(232, 236, 240),
-		decaimiento = Color3.fromRGB(160, 176, 196),
+		color = Color3.fromRGB(238, 234, 228),
+		decaimiento = Color3.fromRGB(186, 178, 172),
 		brillo = 0,
-		neblina = 0.4,
+		neblina = 0.25,
 	},
 }
 
@@ -1349,11 +1384,15 @@ return Previews
 local Rig = {}
 
 export type Proportions = {
+	-- La cabeza es UNA medida: lo que mide es lo que se ve. Ver abajo
+	-- por que esto merece un comentario.
 	cabeza: Vector3,
-	escalaCabeza: number,
 	torso: Vector3,
 	brazo: Vector3,
 	pierna: Vector3,
+	-- Largo del cuello, en studs. Solo el profesor lo tiene: el alumno
+	-- lleva la cabeza apoyada directamente sobre los hombros.
+	cuello: number?,
 }
 
 --[[
@@ -1369,23 +1408,82 @@ export type Proportions = {
 --]]
 Rig.Alumno = {
 	cabeza = Vector3.new(1.9, 1.5, 1.5),
-	escalaCabeza = 1.35,
 	torso = Vector3.new(1.8, 1.9, 0.95),
 	brazo = Vector3.new(0.7, 1.8, 0.7),
 	pierna = Vector3.new(0.8, 1.9, 0.8),
 } :: Proportions
 
---- El profesor es mas alto y menos cabezon: se lee como adulto sin
---- salirse del estilo.
+--[[
+	El profesor no es "un alumno mas alto": es otra criatura.
+
+	Yo lo tenia como un adulto proporcionado — 2.3 de torso, brazos y
+	piernas apenas mas largos que los del alumno. En `f013` del trailer
+	es una figura larguisima y flaquisima: cuello finisimo que le empuja
+	la cabeza hacia adelante, hombros angostos, brazos que le llegan
+	casi a las rodillas y piernas que son la mitad de su altura. Da
+	miedo por la silueta, antes de hacer nada.
+
+	Medido sobre ese fotograma, en fracciones de su altura total:
+	cabeza 0.22, cuello 0.07, torso 0.22, piernas 0.45. Sobre 8.6 studs
+	de alto, eso da los numeros de abajo — un tercio mas alto que el
+	alumno y con los miembros a poco mas de la mitad de grosor.
+--]]
 Rig.Profesor = {
-	cabeza = Vector3.new(1.8, 1.4, 1.4),
-	escalaCabeza = 1.25,
-	torso = Vector3.new(1.95, 2.3, 1),
-	brazo = Vector3.new(0.72, 2.2, 0.72),
-	pierna = Vector3.new(0.82, 2.3, 0.82),
+	cabeza = Vector3.new(2.1, 1.7, 1.7),
+	torso = Vector3.new(1.5, 2.2, 0.8),
+	brazo = Vector3.new(0.42, 3, 0.42),
+	pierna = Vector3.new(0.5, 4, 0.5),
+	cuello = 0.7,
 } :: Proportions
 
+--[[
+	Una nota sobre la cabeza, porque aca vivio un bug caro.
+
+	Habia DOS numeros para el tamano de la cabeza: `cabeza`, que era la
+	caja, y `escalaCabeza`, que agrandaba la malla un 35% encima. Los
+	ojos, las cejas, la boca, el pelo y las catorce cosmeticas de cabeza
+	se colocaban todas contra la caja — o sea contra el numero chico —,
+	asi que la cara entera quedaba metida DENTRO de la cabeza que se
+	dibujaba. Y el numero que yo habia medido contra el trailer, "3.5
+	cabezas de alto", tampoco era el que salia en pantalla: con la malla
+	agrandada el personaje renderizaba a 2.75.
+
+	Ninguna de las dos cuentas estaba mal por separado; lo que estaba mal
+	era que hubiera dos. Asi que ahora hay una: `cabeza` es lo que mide
+	la cabeza y es lo que se ve. Cualquier cosa que se apoye en ella se
+	coloca contra ese numero y no hay un segundo numero con el que
+	confundirlo.
+--]]
+
 -- ── piezas ─────────────────────────────────────────────────────────
+
+--[[
+	Redondear una pieza.
+
+	Este es el cambio que mas acerca los personajes a la referencia, y
+	es una sola linea por pieza. En el trailer **no hay una sola arista
+	dura en ningun cuerpo**: el torso es un barril redondeado, los
+	brazos y las piernas son tubos con las puntas romas, y las manos y
+	los pies son bollos. Con partes cuadradas el parecido se cae por
+	mas que las proporciones esten bien.
+
+	Un `SpecialMesh` de tipo Sphere no agrega partes: deforma la que ya
+	esta para llenar su caja como elipsoide. `Scale` multiplica sobre
+	esa caja, asi que un 1.06 en X/Z engorda el torso lo justo para que
+	llegue a los hombros — un elipsoide exacto se afina en los costados
+	y dejaba un hueco donde nacen los brazos.
+
+	La caja de colision NO cambia: sigue siendo el bloque. Para un
+	personaje eso es lo que uno quiere, porque una capsula rodando por
+	el piso camina peor que un bloque.
+--]]
+function Rig.round(part: BasePart, scale: Vector3?): SpecialMesh
+	local mesh = Instance.new("SpecialMesh")
+	mesh.MeshType = Enum.MeshType.Sphere
+	mesh.Scale = scale or Vector3.new(1, 1, 1)
+	mesh.Parent = part
+	return mesh
+end
 
 local function limb(model: Model, name: string, size: Vector3, color: Color3): BasePart
 	local part = Instance.new("Part")
@@ -1448,8 +1546,12 @@ local function wireJoints(prop: Proportions, root: BasePart, torso: BasePart,
 
 	motor(root, torso, "RootJoint", flip, flip)
 
+	-- El cuello separa la cabeza de los hombros. La articulacion sigue
+	-- llamandose `Neck` y sigue yendo de Torso a Head: la pieza visible
+	-- del cuello se suelda aparte, para que `animate` y las cosmeticas
+	-- de cabeza no tengan que saber nada de esto.
 	motor(torso, head, "Neck",
-		CFrame.new(0, halfTorsoY, 0) * flip,
+		CFrame.new(0, halfTorsoY + (prop.cuello or 0), 0) * flip,
 		CFrame.new(0, -prop.cabeza.Y / 2, 0) * flip)
 
 	-- Los brazos cuelgan del cuarto superior del torso; los C1 los
@@ -1497,10 +1599,7 @@ function Rig.build(name: string, prop: Proportions, skin: Skin): Model
 
 	local torso = limb(model, "Torso", prop.torso, skin.camisa)
 	local head = limb(model, "Head", prop.cabeza, skin.piel)
-	local mesh = Instance.new("SpecialMesh")
-	mesh.MeshType = Enum.MeshType.Head
-	mesh.Scale = Vector3.new(prop.escalaCabeza, prop.escalaCabeza, prop.escalaCabeza)
-	mesh.Parent = head
+	Rig.round(head)
 
 	-- Los brazos van del color de la piel: en la referencia las mangas
 	-- son cortas y lo que se ve del brazo es piel de color.
@@ -1520,7 +1619,8 @@ function Rig.build(name: string, prop: Proportions, skin: Skin): Model
 	local hipY = prop.pierna.Y + prop.torso.Y / 2
 	root.CFrame = CFrame.new(0, hipY, 0)
 	torso.CFrame = root.CFrame
-	head.CFrame = root.CFrame * CFrame.new(0, (prop.torso.Y + prop.cabeza.Y) / 2, 0)
+	head.CFrame = root.CFrame
+		* CFrame.new(0, (prop.torso.Y + prop.cabeza.Y) / 2 + (prop.cuello or 0), 0)
 	leftArm.CFrame = root.CFrame
 		* CFrame.new(-(prop.torso.X + prop.brazo.X) / 2, 0, 0)
 	rightArm.CFrame = root.CFrame
@@ -1532,20 +1632,65 @@ function Rig.build(name: string, prop: Proportions, skin: Skin): Model
 
 	wireJoints(prop, root, torso, head, leftArm, rightArm, leftLeg, rightLeg)
 
-	-- Zapatos y pelo: dos piezas que cambian mucho la silueta por lo
-	-- poco que cuestan.
-	for _, leg in { leftLeg, rightLeg } do
-		Rig.attach(leg, "Zapato",
-			Vector3.new(prop.pierna.X + 0.12, 0.4, prop.pierna.Z + 0.3),
-			CFrame.new(0, -prop.pierna.Y / 2 + 0.16, -0.1), skin.zapato)
+	--[[
+		Y ahora se redondea todo. El torso va un pelin mas ancho para
+		llegar a los hombros; los miembros van al ras de su caja, que
+		con esta relacion de lados da una capsula.
+	--]]
+	Rig.round(torso, Vector3.new(1.06, 1, 1.12))
+	for _, part in { leftArm, rightArm, leftLeg, rightLeg } do
+		Rig.round(part)
 	end
 
-	Rig.attach(head, "Pelo",
-		Vector3.new(prop.cabeza.X * 1.02, prop.cabeza.Y * 0.62, prop.cabeza.Z * 1.02),
-		CFrame.new(0, prop.cabeza.Y * 0.42, 0), skin.pelo)
-	Rig.attach(head, "Flequillo",
-		Vector3.new(prop.cabeza.X * 1.02, prop.cabeza.Y * 0.34, 0.3),
-		CFrame.new(0, prop.cabeza.Y * 0.2, -prop.cabeza.Z * 0.52), skin.pelo)
+	--[[
+		Manos y zapatos: bollos en la punta de cada miembro.
+
+		Aparte de estar en la referencia — los guantes amarillos se ven
+		en cada plano en primera persona —, tapan la unica debilidad del
+		elipsoide, que es que termina en punta. Con un bollo en el
+		extremo el brazo se lee como una capsula.
+	--]]
+	local GUANTE = Color3.fromRGB(240, 196, 78)
+	for _, arm in { leftArm, rightArm } do
+		local hand = Rig.attach(arm, "Mano",
+			Vector3.new(prop.brazo.X * 1.15, prop.brazo.X * 1.15, prop.brazo.X * 1.15),
+			CFrame.new(0, -prop.brazo.Y / 2 + prop.brazo.X * 0.4, 0), GUANTE)
+		Rig.round(hand)
+	end
+
+	for _, leg in { leftLeg, rightLeg } do
+		local shoe = Rig.attach(leg, "Zapato",
+			Vector3.new(prop.pierna.X + 0.12, 0.46, prop.pierna.Z + 0.4),
+			CFrame.new(0, -prop.pierna.Y / 2 + 0.18, -0.12), skin.zapato)
+		Rig.round(shoe)
+	end
+
+	--[[
+		El cuello, cuando lo hay.
+
+		Va soldado a la CABEZA y no al torso, que es lo que hace que se
+		incline con ella. Es todo el chiste del profesor: cuando camina,
+		`CharacterService.animate` le rota el `Neck` hacia adelante y el
+		cuello entero se estira en esa direccion, como en el trailer. Si
+		lo soldaramos al torso quedaria un palo vertical con la cabeza
+		flotando adelante.
+	--]]
+	if prop.cuello then
+		local neck = Rig.attach(head, "Cuello",
+			Vector3.new(prop.brazo.X * 1.1, prop.cuello + prop.cabeza.Y * 0.4,
+				prop.brazo.X * 1.1),
+			CFrame.new(0, -(prop.cabeza.Y + prop.cuello) / 2, 0), skin.piel)
+		Rig.round(neck)
+	end
+
+	-- El pelo de fabrica: un casquete y un flequillo, los dos redondos.
+	-- Tambien contra la cabeza visible, o quedaba de peluca interior.
+	Rig.round(Rig.attach(head, "Pelo",
+		Vector3.new(prop.cabeza.X * 1.04, prop.cabeza.Y * 0.7, prop.cabeza.Z * 1.04),
+		CFrame.new(0, prop.cabeza.Y * 0.34, 0), skin.pelo))
+	Rig.round(Rig.attach(head, "Flequillo",
+		Vector3.new(prop.cabeza.X * 1.0, prop.cabeza.Y * 0.4, 0.4),
+		CFrame.new(0, prop.cabeza.Y * 0.16, -prop.cabeza.Z * 0.48), skin.pelo))
 
 	local humanoid = Instance.new("Humanoid")
 	humanoid.RigType = Enum.HumanoidRigType.R6
@@ -1560,6 +1705,25 @@ end
 -- ── cara ───────────────────────────────────────────────────────────
 
 --[[
+	Donde termina la cara a la altura de un rasgo.
+
+	Con la cabeza cuadrada esto era una constante: todo se apoyaba en la
+	cara de adelante de la caja. Redondeada ya no sirve — la superficie
+	se va hacia atras a medida que uno se aleja del centro, asi que una
+	ceja colocada a la Z del centro le queda flotando dos decimas de
+	stud por delante del rostro, y una boca abajo, otro tanto.
+
+	Es la ecuacion del elipsoide despejada en Z. El `max` con 0.05 evita
+	la raiz de un negativo si alguien pide un rasgo por fuera del borde:
+	en vez de reventar, lo pega contra el costado.
+--]]
+function Rig.faceZ(prop: Proportions, x: number, y: number): number
+	local ax, ay, az = prop.cabeza.X / 2, prop.cabeza.Y / 2, prop.cabeza.Z / 2
+	local k = 1 - (x / ax) ^ 2 - (y / ay) ^ 2
+	return -az * math.sqrt(math.max(k, 0.05))
+end
+
+--[[
 	Ojos grandes y ovalados con esclerotica blanca y pupila oscura, mas
 	cejas. La version anterior dibujaba solo un cuadradito oscuro por
 	ojo: a esta escala de cabeza, el ojo es el rasgo que define al
@@ -1569,29 +1733,33 @@ end
 	profesor y la de un alumno.
 --]]
 function Rig.face(head: BasePart, prop: Proportions, angry: boolean)
-	local front = -prop.cabeza.Z * 0.5 - 0.02
 	local eyeX = prop.cabeza.X * 0.19
 	local eyeY = prop.cabeza.Y * 0.06
+	local browY = eyeY + prop.cabeza.Y * 0.26
+	local mouthY = -prop.cabeza.Y * 0.24
 
 	for _, side in { -1, 1 } do
-		Rig.attach(head, "Ojo",
+		-- Ojo y pupila van redondos: en la referencia son ovalos, y un
+		-- rectangulo blanco sobre una cabeza esferica se ve pegado.
+		Rig.round(Rig.attach(head, "Ojo",
 			Vector3.new(prop.cabeza.X * 0.2, prop.cabeza.Y * 0.34, 0.08),
-			CFrame.new(side * eyeX, eyeY, front),
-			Color3.fromRGB(252, 252, 250))
-		Rig.attach(head, "Pupila",
+			CFrame.new(side * eyeX, eyeY, Rig.faceZ(prop, eyeX, eyeY) - 0.02),
+			Color3.fromRGB(252, 252, 250)))
+		Rig.round(Rig.attach(head, "Pupila",
 			Vector3.new(prop.cabeza.X * 0.1, prop.cabeza.Y * 0.16, 0.06),
-			CFrame.new(side * eyeX, eyeY - prop.cabeza.Y * 0.03, front - 0.03),
-			Color3.fromRGB(28, 26, 34))
+			CFrame.new(side * eyeX, eyeY - prop.cabeza.Y * 0.03,
+				Rig.faceZ(prop, eyeX, eyeY) - 0.05),
+			Color3.fromRGB(28, 26, 34)))
 		Rig.attach(head, "Ceja",
 			Vector3.new(prop.cabeza.X * 0.24, prop.cabeza.Y * 0.06, 0.07),
-			CFrame.new(side * eyeX, eyeY + prop.cabeza.Y * 0.26, front)
+			CFrame.new(side * eyeX, browY, Rig.faceZ(prop, eyeX, browY) - 0.02)
 				* CFrame.Angles(0, 0, math.rad(side * (angry and 20 or 4))),
 			Color3.fromRGB(48, 38, 44))
 	end
 
 	Rig.attach(head, "Boca",
 		Vector3.new(prop.cabeza.X * 0.24, prop.cabeza.Y * 0.05, 0.07),
-		CFrame.new(0, -prop.cabeza.Y * 0.24, front),
+		CFrame.new(0, mouthY, Rig.faceZ(prop, 0, mouthY) - 0.02),
 		Color3.fromRGB(126, 62, 68))
 end
 
@@ -4657,9 +4825,16 @@ function Atmosphere.apply()
 		oscuridad total, que es el look realista y duro. Subirlo mucho es
 		lo que aplana la imagen y la acerca al dibujo — una sombra que no
 		llega a negro se lee como un tono pintado, no como falta de luz.
+
+		Y va CALIDO, no gris. El primer intento subio el nivel pero dejo
+		el tinte violaceo (126,122,130), asi que las sombras salian frias
+		sobre pisos salmon: la mezcla se veia sucia. En el trailer la
+		sombra de un piso salmon es salmon mas oscuro, nada mas. Ahora
+		que `Brillo` bajo a 1.45 este par es el que sostiene la escena,
+		asi que sube ademas de entibiarse.
 	--]]
-	Lighting.Ambient = Color3.fromRGB(126, 122, 130)
-	Lighting.OutdoorAmbient = Color3.fromRGB(168, 174, 186)
+	Lighting.Ambient = Color3.fromRGB(152, 140, 134)
+	Lighting.OutdoorAmbient = Color3.fromRGB(190, 182, 176)
 	Lighting.FogEnd = 2400
 
 	pcall(function()
@@ -5013,6 +5188,21 @@ local function paint(character: Model, names: { string }, color: Color3)
 	end
 end
 
+--[[
+	Las piezas que van redondas.
+
+	Se decide por NOMBRE y no con un parametro mas en cada llamada
+	porque son cuarenta llamadas y el criterio es del objeto, no de
+	quien lo pide: un peinado es redondo siempre. La corbata, el
+	antifaz, las cejas y la curita quedan planas a proposito — son
+	telas y trazos pegados a la cara, y redondeadas se abultan.
+--]]
+local REDONDOS: { [string]: boolean } = {
+	Peinado = true, Cinta = true, Gorra = true, Boina = true, Rabito = true,
+	Vincha = true, Mono = true, Mochila = true, Correa = true, Bufanda = true,
+	Punta = true, Lunar = true, Peca = true, Rubor = true, Ojal = true,
+}
+
 --- Un accesorio simple soldado a una parte del personaje.
 local function attach(character: Model, anchorName: string, name: string,
 	size: Vector3, offset: CFrame, color: Color3, material: Enum.Material): BasePart?
@@ -5022,6 +5212,9 @@ local function attach(character: Model, anchorName: string, name: string,
 	end
 	local part = Instance.new("Part")
 	part.Name = name
+	if REDONDOS[name] then
+		Rig.round(part)
+	end
 	part.Size = size
 	part.Color = color
 	part.Material = material
@@ -5052,6 +5245,7 @@ end
 --]]
 local A = Rig.Alumno
 local FLAT = Enum.Material.SmoothPlastic
+
 
 --[[
 	Las cosmeticas que reemplazan un rasgo de fabrica lo tapan primero.
@@ -5093,11 +5287,23 @@ end
 	es la formula, no los numeros.
 --]]
 local CARA = {
-	frente = -A.cabeza.Z * 0.5 - 0.02,
 	ojoX = A.cabeza.X * 0.19,
 	ojoY = A.cabeza.Y * 0.06,
 }
 CARA.cejaY = CARA.ojoY + A.cabeza.Y * 0.26
+
+--[[
+	La Z de un rasgo sobre la cara.
+
+	Con la cabeza redondeada esto dejo de ser una constante: la
+	superficie se va hacia atras a medida que uno se aleja del centro,
+	asi que un lunar en la mejilla pegado a la Z del centro le queda
+	flotando delante del cachete. `Rig.faceZ` resuelve el elipsoide; el
+	`-0.02` lo despega lo justo para que no pelee con la cabeza.
+--]]
+local function cara(x: number, y: number): number
+	return Rig.faceZ(A, x, y) - 0.02
+end
 
 --[[
 	Un par de cejas, que es lo unico que cambia entre los seis estilos.
@@ -5112,7 +5318,8 @@ local function brows(character: Model, skin: Rig.Skin, size: Vector3,
 	hideBase(character, "Ceja")
 	for _, side in { -1, 1 } do
 		attach(character, "Head", "CejaEstetica", size,
-			CFrame.new(side * CARA.ojoX, CARA.cejaY + lift, CARA.frente)
+			CFrame.new(side * CARA.ojoX, CARA.cejaY + lift,
+				cara(CARA.ojoX, CARA.cejaY + lift))
 				* CFrame.Angles(0, 0, math.rad(side * angle)),
 			skin.pelo, FLAT)
 	end
@@ -5280,7 +5487,8 @@ local ESTETICAS: { [string]: (Model, Rig.Skin) -> () } = {
 		for _, side in { -1, 1 } do
 			attach(character, "Head", "CejaEstetica",
 				Vector3.new(A.cabeza.X * 0.12, A.cabeza.Y * 0.05, 0.07),
-				CFrame.new(side * CARA.ojoX * 1.7, CARA.cejaY - A.cabeza.Y * 0.03, CARA.frente)
+				CFrame.new(side * CARA.ojoX * 1.7, CARA.cejaY - A.cabeza.Y * 0.03,
+					cara(CARA.ojoX * 1.7, CARA.cejaY - A.cabeza.Y * 0.03))
 					* CFrame.Angles(0, 0, math.rad(side * -48)),
 				skin.pelo, FLAT)
 		end
@@ -5292,7 +5500,7 @@ local ESTETICAS: { [string]: (Model, Rig.Skin) -> () } = {
 		hideBase(character, "Ceja")
 		attach(character, "Head", "CejaEstetica",
 			Vector3.new(A.cabeza.X * 0.62, A.cabeza.Y * 0.08, 0.07),
-			CFrame.new(0, CARA.cejaY, CARA.frente), skin.pelo, FLAT)
+			CFrame.new(0, CARA.cejaY, cara(0, CARA.cejaY)), skin.pelo, FLAT)
 	end,
 
 	-- ── marcas de la cara ──────────────────────────────────────────
@@ -5304,7 +5512,8 @@ local ESTETICAS: { [string]: (Model, Rig.Skin) -> () } = {
 	lunar = function(character)
 		attach(character, "Head", "Lunar",
 			Vector3.new(A.cabeza.X * 0.05, A.cabeza.Y * 0.05, 0.06),
-			CFrame.new(A.cabeza.X * 0.3, -A.cabeza.Y * 0.16, CARA.frente),
+			CFrame.new(A.cabeza.X * 0.3, -A.cabeza.Y * 0.16,
+				cara(A.cabeza.X * 0.3, -A.cabeza.Y * 0.16)),
 			Color3.fromRGB(64, 40, 42), FLAT)
 	end,
 	pecas = function(character)
@@ -5317,7 +5526,8 @@ local ESTETICAS: { [string]: (Model, Rig.Skin) -> () } = {
 					CFrame.new(
 						side * (A.cabeza.X * 0.2 + i * A.cabeza.X * 0.055),
 						-A.cabeza.Y * 0.1 + (i % 2) * A.cabeza.Y * 0.04,
-						CARA.frente),
+						cara(A.cabeza.X * 0.2 + i * A.cabeza.X * 0.055,
+							-A.cabeza.Y * 0.1 + (i % 2) * A.cabeza.Y * 0.04)),
 					Color3.fromRGB(178, 116, 96), FLAT)
 			end
 		end
@@ -5326,26 +5536,30 @@ local ESTETICAS: { [string]: (Model, Rig.Skin) -> () } = {
 		for _, side in { -1, 1 } do
 			attach(character, "Head", "Rubor",
 				Vector3.new(A.cabeza.X * 0.16, A.cabeza.Y * 0.09, 0.05),
-				CFrame.new(side * A.cabeza.X * 0.28, -A.cabeza.Y * 0.12, CARA.frente),
+				CFrame.new(side * A.cabeza.X * 0.28, -A.cabeza.Y * 0.12,
+					cara(A.cabeza.X * 0.28, -A.cabeza.Y * 0.12)),
 				Color3.fromRGB(240, 138, 152), FLAT)
 		end
 	end,
 	cicatriz = function(character)
 		attach(character, "Head", "Cicatriz",
 			Vector3.new(A.cabeza.X * 0.035, A.cabeza.Y * 0.3, 0.06),
-			CFrame.new(A.cabeza.X * 0.19, CARA.cejaY - A.cabeza.Y * 0.06, CARA.frente)
+			CFrame.new(A.cabeza.X * 0.19, CARA.cejaY - A.cabeza.Y * 0.06,
+				cara(A.cabeza.X * 0.19, CARA.cejaY - A.cabeza.Y * 0.06))
 				* CFrame.Angles(0, 0, math.rad(14)),
 			Color3.fromRGB(198, 128, 122), FLAT)
 	end,
 	tirita = function(character)
 		attach(character, "Head", "Tirita",
 			Vector3.new(A.cabeza.X * 0.26, A.cabeza.Y * 0.08, 0.06),
-			CFrame.new(-A.cabeza.X * 0.24, -A.cabeza.Y * 0.1, CARA.frente)
+			CFrame.new(-A.cabeza.X * 0.24, -A.cabeza.Y * 0.1,
+				cara(A.cabeza.X * 0.24, -A.cabeza.Y * 0.1))
 				* CFrame.Angles(0, 0, math.rad(-22)),
 			Color3.fromRGB(238, 206, 168), FLAT)
 		attach(character, "Head", "TiritaGasa",
 			Vector3.new(A.cabeza.X * 0.1, A.cabeza.Y * 0.06, 0.05),
-			CFrame.new(-A.cabeza.X * 0.24, -A.cabeza.Y * 0.1, CARA.frente - 0.02)
+			CFrame.new(-A.cabeza.X * 0.24, -A.cabeza.Y * 0.1,
+				cara(A.cabeza.X * 0.24, -A.cabeza.Y * 0.1) - 0.02)
 				* CFrame.Angles(0, 0, math.rad(-22)),
 			Color3.fromRGB(250, 244, 236), FLAT)
 	end,
@@ -5353,7 +5567,8 @@ local ESTETICAS: { [string]: (Model, Rig.Skin) -> () } = {
 		for _, side in { -1, 1 } do
 			attach(character, "Head", "Bigote",
 				Vector3.new(A.cabeza.X * 0.16, A.cabeza.Y * 0.06, 0.07),
-				CFrame.new(side * A.cabeza.X * 0.09, -A.cabeza.Y * 0.16, CARA.frente)
+				CFrame.new(side * A.cabeza.X * 0.09, -A.cabeza.Y * 0.16,
+					cara(A.cabeza.X * 0.09, -A.cabeza.Y * 0.16))
 					* CFrame.Angles(0, 0, math.rad(side * -12)),
 				skin.pelo, FLAT)
 		end
@@ -5573,9 +5788,9 @@ function CharacterService.attachCone(character: Model)
 		jugador media pantalla, que es justamente el castigo.
 	--]]
 	local layers = 7
-	local narrow = Rig.Alumno.cabeza.X * 0.75
-	local widest = Rig.Alumno.cabeza.X * 2.6
-	local step = Rig.Alumno.cabeza.Y * 0.26
+	local narrow = A.cabeza.X * 0.75
+	local widest = A.cabeza.X * 2.6
+	local step = A.cabeza.Y * 0.26
 
 	for i = 0, layers - 1 do
 		local alpha = i / (layers - 1)
@@ -5592,7 +5807,7 @@ function CharacterService.attachCone(character: Model)
 		-- Arranca por debajo de la cabeza, a la altura del cuello, y se
 		-- va abriendo hacia arriba.
 		disc.CFrame = head.CFrame
-			* CFrame.new(0, -Rig.Alumno.cabeza.Y * 0.45 + i * step, 0)
+			* CFrame.new(0, -A.cabeza.Y * 0.45 + i * step, 0)
 			* CFrame.Angles(0, 0, math.rad(90))
 		disc.Parent = cone
 
@@ -5747,6 +5962,10 @@ function CharacterService.animate(model: Model): RBXScriptConnection?
 		base[name] = joint.C0
 	end
 
+	-- Solo el profesor tiene pieza de cuello; los alumnos y los
+	-- empollones llevan la cabeza sobre los hombros y no craneean.
+	local hasNeck = model:FindFirstChild("Cuello") ~= nil
+
 	local phase = 0
 	return RunService.Heartbeat:Connect(function(dt)
 		if not model.Parent then
@@ -5769,10 +5988,26 @@ function CharacterService.animate(model: Model): RBXScriptConnection?
 			joints["Left Hip"].C0 = base["Left Hip"] * CFrame.Angles(swing * 0.9, 0, 0)
 		end
 		if joints["Neck"] then
-			-- Mira despacio de un lado al otro cuando esta quieto: da
-			-- la sensacion de que esta vigilando.
+			--[[
+				El cuello.
+
+				Quieto: mira despacio de un lado al otro, como vigilando.
+
+				Caminando, y solo si el rig TIENE cuello — o sea el
+				profesor —, la cabeza se va hacia adelante. Es lo mas
+				reconocible de como se mueve en el trailer: no camina
+				erguido, camina con el cuello estirado por delante del
+				cuerpo, escaneando. Va con el andar, no de golpe, asi
+				que el estiramiento sigue a la velocidad y le suma un
+				cabeceo chico en fase con los pasos.
+			--]]
 			local idle = speed < 1 and math.sin(phase * 0.35) * 0.35 or 0
-			joints["Neck"].C0 = base["Neck"] * CFrame.Angles(0, 0, idle)
+			local crane = 0
+			if hasNeck then
+				local reach = math.clamp(speed / 14, 0, 1)
+				crane = reach * 0.6 + math.sin(phase * 2) * reach * 0.07
+			end
+			joints["Neck"].C0 = base["Neck"] * CFrame.Angles(crane, 0, idle)
 		end
 	end)
 end
@@ -8411,9 +8646,15 @@ end
 
 -- ── piso y techo ───────────────────────────────────────────────────
 
---- Damero de baldosas. Una de cada doce sale gastada y una de cada
---- treinta lleva una mancha: alcanza para que el suelo no se lea
---- como una superficie plana infinita.
+--[[
+	Damero de baldosas. Queda un solo cuarto con este piso: la sala de
+	castigo. Todo el resto del colegio es de tablones, porque en el
+	trailer no hay una sola baldosa — el laboratorio era la ultima
+	excepcion que quedaba y no tenia por que serlo.
+
+	Aca se justifica al reves: la sala de castigo es el unico sitio que
+	NO se parece al colegio, y el piso frio es parte de eso.
+--]]
 local function tiledFloor(parent: Instance, center: Vector3, width: number, length: number)
 	local side = E.BaldosaLado
 	local cols = math.max(1, math.floor(width / side))
@@ -8439,16 +8680,57 @@ local function tiledFloor(parent: Instance, center: Vector3, width: number, leng
 end
 
 --- Piso de tablones para el aula: listones largos en dos tonos de miel.
+--[[
+	El piso de tablones.
+
+	Esto eran tablas enteras de pared a pared, alternando dos colores:
+	un piso a rayas, no un piso de madera. Ampliando el piso del pasillo
+	en `f009` se ve lo que hace la diferencia, y no es una textura — las
+	superficies de la referencia son mates y lisas, sin una veta ni un
+	poro. Lo que hay es geometria:
+
+	  * tablas de LARGOS DISTINTOS, cortadas al azar;
+	  * las juntas TRABADAS, o sea que las de una fila no coinciden con
+	    las de la de al lado;
+	  * cada tabla con su propio tono, apenas corrido del vecino.
+
+	Nada de eso necesita un asset. Y el `Random` va sembrado con una
+	constante, asi que el piso sale igual en todos los servidores: dos
+	jugadores describiendo la misma mancha del suelo se entienden.
+--]]
 local function plankFloor(parent: Instance, center: Vector3, width: number, length: number)
 	local plank = E.TablonAncho
 	local cols = math.max(1, math.floor(width / plank))
 	local originX = center.X - (cols * plank) / 2 + plank / 2
+	local rng = Random.new(19940612)
 
 	for i = 0, cols - 1 do
-		local board = block(parent, "Tablon", Vector3.new(plank - 0.08, 1, length),
-			CFrame.new(originX + i * plank, center.Y - 0.5, center.Z),
-			i % 2 == 0 and C.Tablon or C.TablonAlterno, M.Madera)
-		board.CastShadow = false
+		-- Cada columna arranca con un recorte distinto: es lo que traba
+		-- las juntas. Sin esto todas las tablas cortan a la misma
+		-- altura y se ve una cuadricula.
+		local z = center.Z - length / 2 + rng:NextNumber(0.15, 0.85) * plank * 3
+
+		-- El recorte inicial de la columna, para no dejar el borde crudo.
+		local head = z - (center.Z - length / 2)
+		if head > 0.5 then
+			local board = block(parent, "Tablon",
+				Vector3.new(plank - 0.08, 1, head - 0.06),
+				CFrame.new(originX + i * plank, center.Y - 0.5,
+					center.Z - length / 2 + head / 2),
+				C.Tablon:Lerp(C.TablonAlterno, rng:NextNumber()), M.Madera)
+			board.CastShadow = false
+		end
+
+		while z < center.Z + length / 2 - 0.5 do
+			local run = math.min(rng:NextNumber(plank * 2.5, plank * 6),
+				center.Z + length / 2 - z)
+			local board = block(parent, "Tablon",
+				Vector3.new(plank - 0.08, 1, run - 0.06),
+				CFrame.new(originX + i * plank, center.Y - 0.5, z + run / 2),
+				C.Tablon:Lerp(C.TablonAlterno, rng:NextNumber()), M.Madera)
+			board.CastShadow = false
+			z += run
+		end
 	end
 end
 
@@ -8713,7 +8995,16 @@ local function buildHallway(root: Model): (Model, { Model }, BasePart, BasePart,
 		ves ahora es la losa, a 22, y las luminarias cuelgan de ahi en
 		vez de estar empotradas.
 	--]]
-	tiledFloor(hall, Vector3.new(0, 0, 0), E.PasilloAncho, E.PasilloLargo)
+	--[[
+		El atrio tambien va de tablones.
+
+		Yo lo tenia de damero, y el damero me lo invente: en `f009` el
+		piso del pasillo son las MISMAS tablas salmon que el aula y la
+		biblioteca. En todo el colegio del trailer no hay una sola
+		baldosa. Y sale igual de caro — 23 columnas de tabla contra 37
+		por 11 baldosas es practicamente el mismo numero de piezas.
+	--]]
+	plankFloor(hall, Vector3.new(0, 0, 0), E.PasilloAncho, E.PasilloLargo)
 	block(hall, "Losa", Vector3.new(E.PasilloAncho + 2, 1, E.PasilloLargo),
 		CFrame.new(0, top, 0), C.Losa, M.MuroAlto)
 
@@ -8948,7 +9239,16 @@ local function buildClassroom(root: Instance, index: number): Classroom
 			CFrame.new(cx + dx, (sill + headHeight) / 2, windowZ), C.MarcoVentana, M.MetalLiso)
 	end
 
-	local doorWidth, doorHeight = 6, 8.5
+	--[[
+		Las puertas subieron de 8.5 a 10.5.
+
+		Con el profesor reproporcionado — 8.6 studs de alto contra los
+		5.3 del alumno — la cabeza le pegaba en el dintel al cruzar a un
+		aula, y patrulla cruzando puertas todo el examen. Ademas en
+		`f009` las puertas rojas del pasillo miden como dos alumnos y
+		medio, o sea unos 13: 8.5 eran bajas incluso sin el profesor.
+	--]]
+	local doorWidth, doorHeight = 6, 10.5
 	local wallX = cx + dir.X * halfW
 	local sidePiece = (E.AulaLargo - doorWidth) / 2
 	for _, dz in { -1, 1 } do
@@ -9515,7 +9815,7 @@ end
 --]]
 local function buildLab(root: Instance)
 	local model, cx, cz, height = buildAnnex(root, "Laboratorio", "LABORATORIO",
-		1, 18, C.MuroAula, false)
+		1, 18, C.MuroAula, true)
 
 	-- Mesadas con su equipo.
 	for _, dz in { -7, 0, 7 } do
@@ -18663,6 +18963,12 @@ local function newArm(name: string, side: number, color: Color3): BasePart
 	-- Sin esto Roblox lo oculta como oculta tu propio cuerpo en primera
 	-- persona, y todo el modulo no serviria de nada.
 	arm.LocalTransparencyModifier = 0
+	--[[
+		Redondo, como el resto del cuerpo. Y aca importa mas que en
+		ningun otro lado: es la unica parte del personaje que el jugador
+		mira todo el rato, y era la ultima que quedaba cuadrada.
+	--]]
+	Rig.round(arm)
 	return arm
 end
 

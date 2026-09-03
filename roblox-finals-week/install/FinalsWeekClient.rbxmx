@@ -5283,6 +5283,12 @@ local function newArm(name: string, side: number, color: Color3): BasePart
 	-- Sin esto Roblox lo oculta como oculta tu propio cuerpo en primera
 	-- persona, y todo el modulo no serviria de nada.
 	arm.LocalTransparencyModifier = 0
+	--[[
+		Redondo, como el resto del cuerpo. Y aca importa mas que en
+		ningun otro lado: es la unica parte del personaje que el jugador
+		mira todo el rato, y era la ultima que quedaba cuadrada.
+	--]]
+	Rig.round(arm)
 	return arm
 end
 

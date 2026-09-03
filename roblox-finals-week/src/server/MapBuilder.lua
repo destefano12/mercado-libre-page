@@ -134,9 +134,15 @@ end
 
 -- ── piso y techo ───────────────────────────────────────────────────
 
---- Damero de baldosas. Una de cada doce sale gastada y una de cada
---- treinta lleva una mancha: alcanza para que el suelo no se lea
---- como una superficie plana infinita.
+--[[
+	Damero de baldosas. Queda un solo cuarto con este piso: la sala de
+	castigo. Todo el resto del colegio es de tablones, porque en el
+	trailer no hay una sola baldosa — el laboratorio era la ultima
+	excepcion que quedaba y no tenia por que serlo.
+
+	Aca se justifica al reves: la sala de castigo es el unico sitio que
+	NO se parece al colegio, y el piso frio es parte de eso.
+--]]
 local function tiledFloor(parent: Instance, center: Vector3, width: number, length: number)
 	local side = E.BaldosaLado
 	local cols = math.max(1, math.floor(width / side))
@@ -162,16 +168,57 @@ local function tiledFloor(parent: Instance, center: Vector3, width: number, leng
 end
 
 --- Piso de tablones para el aula: listones largos en dos tonos de miel.
+--[[
+	El piso de tablones.
+
+	Esto eran tablas enteras de pared a pared, alternando dos colores:
+	un piso a rayas, no un piso de madera. Ampliando el piso del pasillo
+	en `f009` se ve lo que hace la diferencia, y no es una textura — las
+	superficies de la referencia son mates y lisas, sin una veta ni un
+	poro. Lo que hay es geometria:
+
+	  * tablas de LARGOS DISTINTOS, cortadas al azar;
+	  * las juntas TRABADAS, o sea que las de una fila no coinciden con
+	    las de la de al lado;
+	  * cada tabla con su propio tono, apenas corrido del vecino.
+
+	Nada de eso necesita un asset. Y el `Random` va sembrado con una
+	constante, asi que el piso sale igual en todos los servidores: dos
+	jugadores describiendo la misma mancha del suelo se entienden.
+--]]
 local function plankFloor(parent: Instance, center: Vector3, width: number, length: number)
 	local plank = E.TablonAncho
 	local cols = math.max(1, math.floor(width / plank))
 	local originX = center.X - (cols * plank) / 2 + plank / 2
+	local rng = Random.new(19940612)
 
 	for i = 0, cols - 1 do
-		local board = block(parent, "Tablon", Vector3.new(plank - 0.08, 1, length),
-			CFrame.new(originX + i * plank, center.Y - 0.5, center.Z),
-			i % 2 == 0 and C.Tablon or C.TablonAlterno, M.Madera)
-		board.CastShadow = false
+		-- Cada columna arranca con un recorte distinto: es lo que traba
+		-- las juntas. Sin esto todas las tablas cortan a la misma
+		-- altura y se ve una cuadricula.
+		local z = center.Z - length / 2 + rng:NextNumber(0.15, 0.85) * plank * 3
+
+		-- El recorte inicial de la columna, para no dejar el borde crudo.
+		local head = z - (center.Z - length / 2)
+		if head > 0.5 then
+			local board = block(parent, "Tablon",
+				Vector3.new(plank - 0.08, 1, head - 0.06),
+				CFrame.new(originX + i * plank, center.Y - 0.5,
+					center.Z - length / 2 + head / 2),
+				C.Tablon:Lerp(C.TablonAlterno, rng:NextNumber()), M.Madera)
+			board.CastShadow = false
+		end
+
+		while z < center.Z + length / 2 - 0.5 do
+			local run = math.min(rng:NextNumber(plank * 2.5, plank * 6),
+				center.Z + length / 2 - z)
+			local board = block(parent, "Tablon",
+				Vector3.new(plank - 0.08, 1, run - 0.06),
+				CFrame.new(originX + i * plank, center.Y - 0.5, z + run / 2),
+				C.Tablon:Lerp(C.TablonAlterno, rng:NextNumber()), M.Madera)
+			board.CastShadow = false
+			z += run
+		end
 	end
 end
 
@@ -436,7 +483,16 @@ local function buildHallway(root: Model): (Model, { Model }, BasePart, BasePart,
 		ves ahora es la losa, a 22, y las luminarias cuelgan de ahi en
 		vez de estar empotradas.
 	--]]
-	tiledFloor(hall, Vector3.new(0, 0, 0), E.PasilloAncho, E.PasilloLargo)
+	--[[
+		El atrio tambien va de tablones.
+
+		Yo lo tenia de damero, y el damero me lo invente: en `f009` el
+		piso del pasillo son las MISMAS tablas salmon que el aula y la
+		biblioteca. En todo el colegio del trailer no hay una sola
+		baldosa. Y sale igual de caro — 23 columnas de tabla contra 37
+		por 11 baldosas es practicamente el mismo numero de piezas.
+	--]]
+	plankFloor(hall, Vector3.new(0, 0, 0), E.PasilloAncho, E.PasilloLargo)
 	block(hall, "Losa", Vector3.new(E.PasilloAncho + 2, 1, E.PasilloLargo),
 		CFrame.new(0, top, 0), C.Losa, M.MuroAlto)
 
@@ -671,7 +727,16 @@ local function buildClassroom(root: Instance, index: number): Classroom
 			CFrame.new(cx + dx, (sill + headHeight) / 2, windowZ), C.MarcoVentana, M.MetalLiso)
 	end
 
-	local doorWidth, doorHeight = 6, 8.5
+	--[[
+		Las puertas subieron de 8.5 a 10.5.
+
+		Con el profesor reproporcionado — 8.6 studs de alto contra los
+		5.3 del alumno — la cabeza le pegaba en el dintel al cruzar a un
+		aula, y patrulla cruzando puertas todo el examen. Ademas en
+		`f009` las puertas rojas del pasillo miden como dos alumnos y
+		medio, o sea unos 13: 8.5 eran bajas incluso sin el profesor.
+	--]]
+	local doorWidth, doorHeight = 6, 10.5
 	local wallX = cx + dir.X * halfW
 	local sidePiece = (E.AulaLargo - doorWidth) / 2
 	for _, dz in { -1, 1 } do
@@ -1238,7 +1303,7 @@ end
 --]]
 local function buildLab(root: Instance)
 	local model, cx, cz, height = buildAnnex(root, "Laboratorio", "LABORATORIO",
-		1, 18, C.MuroAula, false)
+		1, 18, C.MuroAula, true)
 
 	-- Mesadas con su equipo.
 	for _, dz in { -7, 0, 7 } do

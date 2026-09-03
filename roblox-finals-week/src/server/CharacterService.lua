@@ -77,6 +77,21 @@ local function paint(character: Model, names: { string }, color: Color3)
 	end
 end
 
+--[[
+	Las piezas que van redondas.
+
+	Se decide por NOMBRE y no con un parametro mas en cada llamada
+	porque son cuarenta llamadas y el criterio es del objeto, no de
+	quien lo pide: un peinado es redondo siempre. La corbata, el
+	antifaz, las cejas y la curita quedan planas a proposito — son
+	telas y trazos pegados a la cara, y redondeadas se abultan.
+--]]
+local REDONDOS: { [string]: boolean } = {
+	Peinado = true, Cinta = true, Gorra = true, Boina = true, Rabito = true,
+	Vincha = true, Mono = true, Mochila = true, Correa = true, Bufanda = true,
+	Punta = true, Lunar = true, Peca = true, Rubor = true, Ojal = true,
+}
+
 --- Un accesorio simple soldado a una parte del personaje.
 local function attach(character: Model, anchorName: string, name: string,
 	size: Vector3, offset: CFrame, color: Color3, material: Enum.Material): BasePart?
@@ -86,6 +101,9 @@ local function attach(character: Model, anchorName: string, name: string,
 	end
 	local part = Instance.new("Part")
 	part.Name = name
+	if REDONDOS[name] then
+		Rig.round(part)
+	end
 	part.Size = size
 	part.Color = color
 	part.Material = material
@@ -116,6 +134,7 @@ end
 --]]
 local A = Rig.Alumno
 local FLAT = Enum.Material.SmoothPlastic
+
 
 --[[
 	Las cosmeticas que reemplazan un rasgo de fabrica lo tapan primero.
@@ -157,11 +176,23 @@ end
 	es la formula, no los numeros.
 --]]
 local CARA = {
-	frente = -A.cabeza.Z * 0.5 - 0.02,
 	ojoX = A.cabeza.X * 0.19,
 	ojoY = A.cabeza.Y * 0.06,
 }
 CARA.cejaY = CARA.ojoY + A.cabeza.Y * 0.26
+
+--[[
+	La Z de un rasgo sobre la cara.
+
+	Con la cabeza redondeada esto dejo de ser una constante: la
+	superficie se va hacia atras a medida que uno se aleja del centro,
+	asi que un lunar en la mejilla pegado a la Z del centro le queda
+	flotando delante del cachete. `Rig.faceZ` resuelve el elipsoide; el
+	`-0.02` lo despega lo justo para que no pelee con la cabeza.
+--]]
+local function cara(x: number, y: number): number
+	return Rig.faceZ(A, x, y) - 0.02
+end
 
 --[[
 	Un par de cejas, que es lo unico que cambia entre los seis estilos.
@@ -176,7 +207,8 @@ local function brows(character: Model, skin: Rig.Skin, size: Vector3,
 	hideBase(character, "Ceja")
 	for _, side in { -1, 1 } do
 		attach(character, "Head", "CejaEstetica", size,
-			CFrame.new(side * CARA.ojoX, CARA.cejaY + lift, CARA.frente)
+			CFrame.new(side * CARA.ojoX, CARA.cejaY + lift,
+				cara(CARA.ojoX, CARA.cejaY + lift))
 				* CFrame.Angles(0, 0, math.rad(side * angle)),
 			skin.pelo, FLAT)
 	end
@@ -344,7 +376,8 @@ local ESTETICAS: { [string]: (Model, Rig.Skin) -> () } = {
 		for _, side in { -1, 1 } do
 			attach(character, "Head", "CejaEstetica",
 				Vector3.new(A.cabeza.X * 0.12, A.cabeza.Y * 0.05, 0.07),
-				CFrame.new(side * CARA.ojoX * 1.7, CARA.cejaY - A.cabeza.Y * 0.03, CARA.frente)
+				CFrame.new(side * CARA.ojoX * 1.7, CARA.cejaY - A.cabeza.Y * 0.03,
+					cara(CARA.ojoX * 1.7, CARA.cejaY - A.cabeza.Y * 0.03))
 					* CFrame.Angles(0, 0, math.rad(side * -48)),
 				skin.pelo, FLAT)
 		end
@@ -356,7 +389,7 @@ local ESTETICAS: { [string]: (Model, Rig.Skin) -> () } = {
 		hideBase(character, "Ceja")
 		attach(character, "Head", "CejaEstetica",
 			Vector3.new(A.cabeza.X * 0.62, A.cabeza.Y * 0.08, 0.07),
-			CFrame.new(0, CARA.cejaY, CARA.frente), skin.pelo, FLAT)
+			CFrame.new(0, CARA.cejaY, cara(0, CARA.cejaY)), skin.pelo, FLAT)
 	end,
 
 	-- ── marcas de la cara ──────────────────────────────────────────
@@ -368,7 +401,8 @@ local ESTETICAS: { [string]: (Model, Rig.Skin) -> () } = {
 	lunar = function(character)
 		attach(character, "Head", "Lunar",
 			Vector3.new(A.cabeza.X * 0.05, A.cabeza.Y * 0.05, 0.06),
-			CFrame.new(A.cabeza.X * 0.3, -A.cabeza.Y * 0.16, CARA.frente),
+			CFrame.new(A.cabeza.X * 0.3, -A.cabeza.Y * 0.16,
+				cara(A.cabeza.X * 0.3, -A.cabeza.Y * 0.16)),
 			Color3.fromRGB(64, 40, 42), FLAT)
 	end,
 	pecas = function(character)
@@ -381,7 +415,8 @@ local ESTETICAS: { [string]: (Model, Rig.Skin) -> () } = {
 					CFrame.new(
 						side * (A.cabeza.X * 0.2 + i * A.cabeza.X * 0.055),
 						-A.cabeza.Y * 0.1 + (i % 2) * A.cabeza.Y * 0.04,
-						CARA.frente),
+						cara(A.cabeza.X * 0.2 + i * A.cabeza.X * 0.055,
+							-A.cabeza.Y * 0.1 + (i % 2) * A.cabeza.Y * 0.04)),
 					Color3.fromRGB(178, 116, 96), FLAT)
 			end
 		end
@@ -390,26 +425,30 @@ local ESTETICAS: { [string]: (Model, Rig.Skin) -> () } = {
 		for _, side in { -1, 1 } do
 			attach(character, "Head", "Rubor",
 				Vector3.new(A.cabeza.X * 0.16, A.cabeza.Y * 0.09, 0.05),
-				CFrame.new(side * A.cabeza.X * 0.28, -A.cabeza.Y * 0.12, CARA.frente),
+				CFrame.new(side * A.cabeza.X * 0.28, -A.cabeza.Y * 0.12,
+					cara(A.cabeza.X * 0.28, -A.cabeza.Y * 0.12)),
 				Color3.fromRGB(240, 138, 152), FLAT)
 		end
 	end,
 	cicatriz = function(character)
 		attach(character, "Head", "Cicatriz",
 			Vector3.new(A.cabeza.X * 0.035, A.cabeza.Y * 0.3, 0.06),
-			CFrame.new(A.cabeza.X * 0.19, CARA.cejaY - A.cabeza.Y * 0.06, CARA.frente)
+			CFrame.new(A.cabeza.X * 0.19, CARA.cejaY - A.cabeza.Y * 0.06,
+				cara(A.cabeza.X * 0.19, CARA.cejaY - A.cabeza.Y * 0.06))
 				* CFrame.Angles(0, 0, math.rad(14)),
 			Color3.fromRGB(198, 128, 122), FLAT)
 	end,
 	tirita = function(character)
 		attach(character, "Head", "Tirita",
 			Vector3.new(A.cabeza.X * 0.26, A.cabeza.Y * 0.08, 0.06),
-			CFrame.new(-A.cabeza.X * 0.24, -A.cabeza.Y * 0.1, CARA.frente)
+			CFrame.new(-A.cabeza.X * 0.24, -A.cabeza.Y * 0.1,
+				cara(A.cabeza.X * 0.24, -A.cabeza.Y * 0.1))
 				* CFrame.Angles(0, 0, math.rad(-22)),
 			Color3.fromRGB(238, 206, 168), FLAT)
 		attach(character, "Head", "TiritaGasa",
 			Vector3.new(A.cabeza.X * 0.1, A.cabeza.Y * 0.06, 0.05),
-			CFrame.new(-A.cabeza.X * 0.24, -A.cabeza.Y * 0.1, CARA.frente - 0.02)
+			CFrame.new(-A.cabeza.X * 0.24, -A.cabeza.Y * 0.1,
+				cara(A.cabeza.X * 0.24, -A.cabeza.Y * 0.1) - 0.02)
 				* CFrame.Angles(0, 0, math.rad(-22)),
 			Color3.fromRGB(250, 244, 236), FLAT)
 	end,
@@ -417,7 +456,8 @@ local ESTETICAS: { [string]: (Model, Rig.Skin) -> () } = {
 		for _, side in { -1, 1 } do
 			attach(character, "Head", "Bigote",
 				Vector3.new(A.cabeza.X * 0.16, A.cabeza.Y * 0.06, 0.07),
-				CFrame.new(side * A.cabeza.X * 0.09, -A.cabeza.Y * 0.16, CARA.frente)
+				CFrame.new(side * A.cabeza.X * 0.09, -A.cabeza.Y * 0.16,
+					cara(A.cabeza.X * 0.09, -A.cabeza.Y * 0.16))
 					* CFrame.Angles(0, 0, math.rad(side * -12)),
 				skin.pelo, FLAT)
 		end
@@ -637,9 +677,9 @@ function CharacterService.attachCone(character: Model)
 		jugador media pantalla, que es justamente el castigo.
 	--]]
 	local layers = 7
-	local narrow = Rig.Alumno.cabeza.X * 0.75
-	local widest = Rig.Alumno.cabeza.X * 2.6
-	local step = Rig.Alumno.cabeza.Y * 0.26
+	local narrow = A.cabeza.X * 0.75
+	local widest = A.cabeza.X * 2.6
+	local step = A.cabeza.Y * 0.26
 
 	for i = 0, layers - 1 do
 		local alpha = i / (layers - 1)
@@ -656,7 +696,7 @@ function CharacterService.attachCone(character: Model)
 		-- Arranca por debajo de la cabeza, a la altura del cuello, y se
 		-- va abriendo hacia arriba.
 		disc.CFrame = head.CFrame
-			* CFrame.new(0, -Rig.Alumno.cabeza.Y * 0.45 + i * step, 0)
+			* CFrame.new(0, -A.cabeza.Y * 0.45 + i * step, 0)
 			* CFrame.Angles(0, 0, math.rad(90))
 		disc.Parent = cone
 
@@ -811,6 +851,10 @@ function CharacterService.animate(model: Model): RBXScriptConnection?
 		base[name] = joint.C0
 	end
 
+	-- Solo el profesor tiene pieza de cuello; los alumnos y los
+	-- empollones llevan la cabeza sobre los hombros y no craneean.
+	local hasNeck = model:FindFirstChild("Cuello") ~= nil
+
 	local phase = 0
 	return RunService.Heartbeat:Connect(function(dt)
 		if not model.Parent then
@@ -833,10 +877,26 @@ function CharacterService.animate(model: Model): RBXScriptConnection?
 			joints["Left Hip"].C0 = base["Left Hip"] * CFrame.Angles(swing * 0.9, 0, 0)
 		end
 		if joints["Neck"] then
-			-- Mira despacio de un lado al otro cuando esta quieto: da
-			-- la sensacion de que esta vigilando.
+			--[[
+				El cuello.
+
+				Quieto: mira despacio de un lado al otro, como vigilando.
+
+				Caminando, y solo si el rig TIENE cuello — o sea el
+				profesor —, la cabeza se va hacia adelante. Es lo mas
+				reconocible de como se mueve en el trailer: no camina
+				erguido, camina con el cuello estirado por delante del
+				cuerpo, escaneando. Va con el andar, no de golpe, asi
+				que el estiramiento sigue a la velocidad y le suma un
+				cabeceo chico en fase con los pasos.
+			--]]
 			local idle = speed < 1 and math.sin(phase * 0.35) * 0.35 or 0
-			joints["Neck"].C0 = base["Neck"] * CFrame.Angles(0, 0, idle)
+			local crane = 0
+			if hasNeck then
+				local reach = math.clamp(speed / 14, 0, 1)
+				crane = reach * 0.6 + math.sin(phase * 2) * reach * 0.07
+			end
+			joints["Neck"].C0 = base["Neck"] * CFrame.Angles(crane, 0, idle)
 		end
 	end)
 end
