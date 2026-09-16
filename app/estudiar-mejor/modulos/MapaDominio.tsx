@@ -30,14 +30,14 @@ export function MapaDominio() {
     <div className="space-y-6">
       <Tarjeta>
         <TituloSeccion
-          icono="🚦"
+          icono="mapa"
           titulo="Mapa de dominio"
           bajada="Un semáforo por tema, armado con lo que hiciste: preguntas del tutor, explicaciones y simulacros. No es una nota."
         />
 
         <div className="mb-5 flex flex-wrap gap-2">
           {ORDEN.map((nivel) => (
-            <Pildora key={nivel} tono={nivel === "rojo" ? "rose" : nivel === "amarillo" ? "amber" : nivel === "verde" ? "emerald" : "slate"}>
+            <Pildora key={nivel} tono={nivel === "rojo" ? "alerta" : nivel === "amarillo" ? "atencion" : nivel === "verde" ? "logro" : "neutro"}>
               <span className={`h-2 w-2 rounded-full ${COLORES_DOMINIO[nivel].punto}`} />
               {COLORES_DOMINIO[nivel].etiqueta}: {conteo[nivel]}
             </Pildora>
@@ -46,7 +46,7 @@ export function MapaDominio() {
 
         {temas.length === 0 ? (
           <div className="space-y-4">
-            <Vacio icono="🗺️" titulo="El mapa está vacío" texto="Cargá tus temas y el semáforo se va pintando solo a medida que estudiás." />
+            <Vacio icono="mapa" titulo="El mapa está vacío" texto="Cargá tus temas y el semáforo se va pintando solo a medida que estudiás." />
             <FormularioTema />
           </div>
         ) : (
@@ -61,13 +61,13 @@ export function MapaDominio() {
               return (
                 <article
                   key={tema.id}
-                  className={`em-aparecer rounded-3xl border p-4 transition-transform duration-200 hover:-translate-y-1 ${colores.borde} ${colores.fondo}`}
+                  className={`em-aparecer rounded-lg border p-4 transition-transform duration-200 hover:-translate-y-1 ${colores.borde} ${colores.fondo}`}
                   style={{ animationDelay: `${indice * 60}ms` }}
                 >
                   <div className="mb-2 flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <h3 className="truncate text-base font-extrabold text-slate-900">{tema.nombre}</h3>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{tema.materia}</p>
+                      <h3 className="truncate text-base font-semibold text-tinta">{tema.nombre}</h3>
+                      <p className="em-rotulo">{tema.materia}</p>
                     </div>
                     <span className={`mt-1 h-3.5 w-3.5 shrink-0 rounded-full ${colores.punto} ${nivel === "rojo" ? "em-latido" : ""}`} />
                   </div>
@@ -77,26 +77,26 @@ export function MapaDominio() {
                   <div className="mt-3">
                     <Barra
                       valor={porcentaje ?? 0}
-                      tono={nivel === "verde" ? "emerald" : nivel === "amarillo" ? "amber" : nivel === "rojo" ? "rose" : "slate"}
+                      tono={nivel === "verde" ? "logro" : nivel === "amarillo" ? "atencion" : nivel === "rojo" ? "alerta" : "neutro"}
                     />
                   </div>
 
-                  <dl className="mt-3 space-y-1 text-xs text-slate-500">
+                  <dl className="mt-3 space-y-1 text-xs text-media">
                     <div className="flex justify-between">
                       <dt>Evidencias registradas</dt>
-                      <dd className="font-bold text-slate-700">{evidencia?.intentos ?? 0}</dd>
+                      <dd className="font-bold text-tinta">{evidencia?.intentos ?? 0}</dd>
                     </div>
                     <div className="flex justify-between">
                       <dt>Errores abiertos</dt>
-                      <dd className={`font-bold ${erroresAbiertos > 0 ? "text-rose-600" : "text-slate-700"}`}>{erroresAbiertos}</dd>
+                      <dd className={`font-bold ${erroresAbiertos > 0 ? "text-alerta" : "text-tinta"}`}>{erroresAbiertos}</dd>
                     </div>
                     <div className="flex justify-between">
                       <dt>Última actualización</dt>
-                      <dd className="font-bold text-slate-700">{evidencia ? cuandoEs(evidencia.actualizado) : "—"}</dd>
+                      <dd className="font-bold text-tinta">{evidencia ? cuandoEs(evidencia.actualizado) : "—"}</dd>
                     </div>
                   </dl>
 
-                  <p className="mt-3 text-xs italic text-slate-500">
+                  <p className="mt-3 text-xs italic text-media">
                     {nivel === "verde"
                       ? "Sostenelo con un repaso corto cada tanto."
                       : nivel === "amarillo"

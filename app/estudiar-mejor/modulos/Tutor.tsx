@@ -2,20 +2,20 @@
 
 import { useMemo, useRef, useState } from "react";
 import { FormularioTema } from "../components/FormularioTema";
-import { Area, AvisoPrincipio, Barra, Boton, Campo, Pildora, Selector, Tarjeta, TituloSeccion, Vacio } from "../components/ui";
+import { Area, AvisoPrincipio, Barra, Boton, Campo, Pildora, Selector, Tarjeta, TituloSeccion, Vacio , type Tono } from "../components/ui";
 import { cuandoEs } from "../lib/fechas";
 import { useEstudiar } from "../lib/store";
 import { contarPalabras } from "../lib/texto";
 import { armarCola, preguntaDeError } from "../lib/tutor";
 import type { TarjetaTutor, TipoTarjeta } from "../lib/tipos";
 
-const ETIQUETA_TIPO: Record<TipoTarjeta, { nombre: string; tono: "indigo" | "violet" | "amber" | "emerald" | "rose" | "slate" }> = {
-  definicion: { nombre: "Definición", tono: "indigo" },
-  causa: { nombre: "Causa y efecto", tono: "rose" },
-  proceso: { nombre: "Proceso", tono: "violet" },
-  dato: { nombre: "Dato", tono: "amber" },
-  enumeracion: { nombre: "Enumeración", tono: "emerald" },
-  transferencia: { nombre: "Transferencia", tono: "slate" },
+const ETIQUETA_TIPO: Record<TipoTarjeta, { nombre: string; tono: Tono }> = {
+  definicion: { nombre: "Definición", tono: "acento" },
+  causa: { nombre: "Causa y efecto", tono: "alerta" },
+  proceso: { nombre: "Proceso", tono: "acento" },
+  dato: { nombre: "Dato", tono: "atencion" },
+  enumeracion: { nombre: "Enumeración", tono: "logro" },
+  transferencia: { nombre: "Transferencia", tono: "neutro" },
 };
 
 function TarjetaPregunta({ tarjeta, onCerrar }: { tarjeta: TarjetaTutor; onCerrar: (falló: boolean) => void }) {
@@ -34,15 +34,16 @@ function TarjetaPregunta({ tarjeta, onCerrar }: { tarjeta: TarjetaTutor; onCerra
   };
 
   return (
-    <div className="em-pop rounded-3xl border border-indigo-100 bg-gradient-to-br from-indigo-50/80 to-white p-5 sm:p-6">
+    <div className="em-surgir rounded-lg border border-acento-linea bg-papel p-5 sm:p-6">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Pildora tono={etiqueta.tono}>{etiqueta.nombre}</Pildora>
-        <Pildora tono="slate">
-          {tarjeta.repaso.aciertos} ✓ · {tarjeta.repaso.fallos} ✗
+        <Pildora tono="neutro">
+          <span className="em-cifra">{tarjeta.repaso.aciertos}</span> bien ·{" "}
+          <span className="em-cifra">{tarjeta.repaso.fallos}</span> mal
         </Pildora>
       </div>
 
-      <p className="text-lg font-extrabold leading-snug text-slate-900 sm:text-xl">{tarjeta.enunciado}</p>
+      <p className="text-lg font-semibold leading-snug text-tinta sm:text-xl">{tarjeta.enunciado}</p>
 
       <Area
         etiqueta="Tu respuesta (escribila antes de mirar pistas)"
@@ -54,8 +55,8 @@ function TarjetaPregunta({ tarjeta, onCerrar }: { tarjeta: TarjetaTutor; onCerra
 
       <div className="mt-4 space-y-2">
         {tarjeta.pistas.slice(0, pistasVisibles).map((pista, indice) => (
-          <p key={pista} className="em-aparecer rounded-2xl bg-white px-4 py-3 text-sm text-slate-700 shadow-sm">
-            <span className="mr-1 font-bold text-indigo-600">Pista {indice + 1}:</span>
+          <p key={pista} className="em-aparecer rounded-md bg-superficie px-4 py-3 text-sm text-tinta shadow-sm">
+            <span className="mr-1 font-bold text-acento">Pista {indice + 1}:</span>
             {pista}
           </p>
         ))}
@@ -65,26 +66,26 @@ function TarjetaPregunta({ tarjeta, onCerrar }: { tarjeta: TarjetaTutor; onCerra
             {pistasVisibles === 0 ? "Necesito una pista" : "Otra pista más"} ({tarjeta.pistas.length - pistasVisibles} quedan)
           </Boton>
         ) : (
-          <p className="text-xs font-semibold text-slate-400">
+          <p className="text-xs font-semibold text-tenue">
             Ya no hay más pistas. Las que faltan las tenés que poner vos volviendo al material.
           </p>
         )}
       </div>
 
-      <div className="mt-5 border-t border-slate-200 pt-4">
-        <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">¿Cómo te fue?</p>
+      <div className="mt-5 border-t border-linea pt-4">
+        <p className="em-rotulo mb-2">¿Cómo te fue?</p>
         <div className="flex flex-wrap gap-2">
           <Boton variante="peligro" onClick={() => responder("no-pude")}>
-            😖 No pude
+            No pude
           </Boton>
           <Boton variante="secundario" onClick={() => responder("dude")}>
-            🤔 Dudé
+            Dudé
           </Boton>
           <Boton variante="exito" onClick={() => responder("lo-tenia")}>
-            😎 Lo tenía
+            Lo tenía
           </Boton>
         </div>
-        <p className="mt-2 text-xs text-slate-400">
+        <p className="mt-2 text-xs text-tenue">
           Contestá honestamente: de esto depende cuándo te vuelvo a preguntar.
         </p>
       </div>
@@ -158,14 +159,14 @@ export function Tutor() {
     <div className="space-y-6">
       <Tarjeta>
         <TituloSeccion
-          icono="🧠"
+          icono="tutor"
           titulo="Tutor socrático"
           bajada="Subí tu material y lo convierto en preguntas. Las respuestas las ponés vos: yo doy pistas que te acercan, nunca la solución."
         />
 
         {estado.temas.length === 0 ? (
           <div className="space-y-4">
-            <Vacio icono="📚" titulo="Primero necesito un tema" texto="Creá el tema al que pertenece el material que vas a cargar." />
+            <Vacio icono="archivo" titulo="Primero necesito un tema" texto="Creá el tema al que pertenece el material que vas a cargar." />
             <FormularioTema onCreado={setTemaMaterial} />
           </div>
         ) : (
@@ -202,8 +203,8 @@ export function Tutor() {
               <Boton onClick={cargar} disabled={contarPalabras(texto) < 40}>
                 Generar preguntas
               </Boton>
-              <Boton variante="secundario" onClick={() => inputArchivo.current?.click()}>
-                📎 Subir archivo de texto
+              <Boton variante="secundario" icono="archivo" onClick={() => inputArchivo.current?.click()}>
+                Subir archivo de texto
               </Boton>
               <input
                 ref={inputArchivo}
@@ -217,7 +218,7 @@ export function Tutor() {
               />
             </div>
 
-            {aviso ? <p className="rounded-2xl bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-800">{aviso}</p> : null}
+            {aviso ? <p className="rounded-md bg-acento-tenue px-4 py-3 text-sm font-semibold text-acento-fuerte">{aviso}</p> : null}
           </div>
         )}
 
@@ -227,10 +228,10 @@ export function Tutor() {
               const tema = estado.temas.find((candidato) => candidato.id === material.temaId);
               const preguntas = estado.tarjetas.filter((tarjeta) => tarjeta.materialId === material.id).length;
               return (
-                <li key={material.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 px-4 py-3">
+                <li key={material.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-linea px-4 py-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-bold text-slate-800">{material.titulo}</p>
-                    <p className="text-xs text-slate-500">
+                    <p className="truncate text-sm font-bold text-tinta">{material.titulo}</p>
+                    <p className="text-xs text-media">
                       {tema?.nombre ?? "Sin tema"} · {contarPalabras(material.texto)} palabras · {preguntas} preguntas
                     </p>
                   </div>
@@ -248,7 +249,7 @@ export function Tutor() {
 
       <Tarjeta retraso={80}>
         <TituloSeccion
-          icono="🔁"
+          icono="repetir"
           titulo="Repaso de hoy"
           bajada="Repaso espaciado: lo que te sale bien vuelve más lejos en el tiempo, lo que falla vuelve enseguida."
           accion={
@@ -264,12 +265,12 @@ export function Tutor() {
         />
 
         {erroresAbiertos.length > 0 ? (
-          <div className="mb-5 rounded-3xl border border-amber-200 bg-amber-50/70 p-4">
-            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">Reinyección de errores</p>
-            <ul className="space-y-2">
+          <div className="mb-5 rounded-lg border border-atencion-linea bg-atencion-tenue p-4">
+            <p className="em-rotulo mb-2 text-atencion">Reinyección de errores</p>
+            <ul className="em-lista space-y-2">
               {erroresAbiertos.map((error) => (
-                <li key={error.id} className="text-sm font-semibold text-amber-900">
-                  • {preguntaDeError(error)}
+                <li key={error.id} className="text-sm leading-relaxed text-atencion">
+                  {preguntaDeError(error)}
                 </li>
               ))}
             </ul>
@@ -277,10 +278,10 @@ export function Tutor() {
         ) : null}
 
         {estado.tarjetas.length === 0 ? (
-          <Vacio icono="🃏" titulo="No hay preguntas todavía" texto="Cargá material arriba y en segundos tenés tu primera tanda." />
+          <Vacio icono="tutor" titulo="No hay preguntas todavía" texto="Cargá material arriba y en segundos tenés tu primera tanda." />
         ) : pendientes.length === 0 ? (
           <Vacio
-            icono="🎉"
+            icono="check"
             titulo="Terminaste el repaso de hoy"
             texto={
               cola.proximas.length > 0
@@ -290,7 +291,7 @@ export function Tutor() {
           />
         ) : (
           <div className="space-y-4">
-            <div className="flex items-center justify-between text-sm font-semibold text-slate-500">
+            <div className="flex items-center justify-between text-sm font-semibold text-media">
               <span>Quedan {pendientes.length} preguntas</span>
               <span>{cola.proximas.length} agendadas para más adelante</span>
             </div>

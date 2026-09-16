@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Area, AvisoPrincipio, Barra, Boton, Dato, Pildora, Selector, Tarjeta, TituloSeccion, Vacio } from "../components/ui";
+import { Area, AvisoPrincipio, Barra, Boton, Dato, Deslizador, Pildora, Selector, Tarjeta, TituloSeccion, Vacio } from "../components/ui";
 import { relojMmSs } from "../lib/fechas";
 import { agruparPorFoco, corregirItem, generarItems, type CorreccionPorFoco } from "../lib/simulacro";
 import { useEstudiar } from "../lib/store";
+import { Icono } from "../components/iconos";
 import { contarPalabras } from "../lib/texto";
 import type { ItemSimulacro, RespuestaItem } from "../lib/tipos";
 
@@ -112,16 +113,16 @@ export function Simulador() {
 
     return (
       <div className="space-y-4">
-        <div className="sticky top-2 z-20 rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-lg backdrop-blur">
+        <div className="sticky top-2 z-20 rounded-lg border border-linea bg-superficie/95 p-4 shadow-lg backdrop-blur">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Simulacro de {tema?.nombre}</p>
-              <p className={`text-3xl font-black tabular-nums ${apurado ? "em-latido text-rose-600" : "text-slate-900"}`}>
+              <p className="em-rotulo">Simulacro de {tema?.nombre}</p>
+              <p className={`text-3xl font-semibold tabular-nums ${apurado ? "em-latido text-alerta" : "text-tinta"}`}>
                 {relojMmSs(segundos)}
               </p>
             </div>
             <div className="text-right">
-              <p className="text-sm font-bold text-slate-600">
+              <p className="text-sm font-bold text-media">
                 {respondidas}/{items.length} respondidas
               </p>
               <Boton variante="exito" className="mt-1" onClick={entregar}>
@@ -130,20 +131,20 @@ export function Simulador() {
             </div>
           </div>
           <div className="mt-3">
-            <Barra valor={progresoTiempo} tono={apurado ? "rose" : "indigo"} />
+            <Barra valor={progresoTiempo} tono={apurado ? "alerta" : "acento"} />
           </div>
         </div>
 
         {items.map((item, indice) => (
           <Tarjeta key={item.id} animada={false}>
             <div className="mb-3 flex flex-wrap items-center gap-2">
-              <span className="grid h-7 w-7 place-items-center rounded-full bg-slate-900 text-xs font-black text-white">
+              <span className="grid h-7 w-7 place-items-center rounded-full bg-tinta text-xs font-semibold text-white">
                 {indice + 1}
               </span>
-              <Pildora tono="indigo">{NOMBRE_TIPO[item.tipo]}</Pildora>
+              <Pildora tono="acento">{NOMBRE_TIPO[item.tipo]}</Pildora>
             </div>
 
-            <p className="text-base font-bold leading-snug text-slate-900">{item.enunciado}</p>
+            <p className="text-base font-bold leading-snug text-tinta">{item.enunciado}</p>
 
             {item.opciones ? (
               <div className="mt-3 space-y-2">
@@ -152,8 +153,8 @@ export function Simulador() {
                   return (
                     <label
                       key={opcion.id}
-                      className={`flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
-                        elegida ? "border-indigo-400 bg-indigo-50 font-bold text-indigo-900" : "border-slate-200 hover:bg-slate-50"
+                      className={`flex cursor-pointer items-start gap-3 rounded-md border px-4 py-3 text-sm transition ${
+                        elegida ? "border-acento bg-acento-tenue font-bold text-acento-fuerte" : "border-linea hover:bg-papel"
                       }`}
                     >
                       <input
@@ -161,7 +162,7 @@ export function Simulador() {
                         name={item.id}
                         checked={elegida}
                         onChange={() => setRespuestas((previo) => ({ ...previo, [item.id]: opcion.id }))}
-                        className="mt-0.5 h-4 w-4 accent-indigo-600"
+                        className="mt-0.5 h-4 w-4 accent-[#0e5a8a]"
                       />
                       <span>{opcion.texto}</span>
                     </label>
@@ -173,7 +174,7 @@ export function Simulador() {
                 value={respuestas[item.id] ?? ""}
                 onChange={(evento) => setRespuestas((previo) => ({ ...previo, [item.id]: evento.target.value }))}
                 placeholder="Escribí el término que falta"
-                className="mt-3 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition focus:border-indigo-400 focus:bg-white"
+                className="mt-3 w-full rounded-md border border-linea bg-papel px-4 py-2.5 text-sm outline-none transition focus:border-acento focus:bg-superficie"
               />
             ) : (
               <div className="mt-3 space-y-3">
@@ -185,13 +186,13 @@ export function Simulador() {
                   ayuda={`${contarPalabras(respuestas[item.id] ?? "")} palabras`}
                 />
                 <div>
-                  <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">Antes de entregar, chequeá:</p>
+                  <p className="mb-1.5 em-rotulo">Antes de entregar, chequeá:</p>
                   <div className="space-y-1.5">
                     {(item.criterios ?? []).map((criterio) => {
                       const marcados = criterios[item.id] ?? [];
                       const activo = marcados.includes(criterio);
                       return (
-                        <label key={criterio} className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+                        <label key={criterio} className="flex cursor-pointer items-center gap-2 text-sm text-media">
                           <input
                             type="checkbox"
                             checked={activo}
@@ -201,7 +202,7 @@ export function Simulador() {
                                 [item.id]: activo ? marcados.filter((valor) => valor !== criterio) : [...marcados, criterio],
                               }))
                             }
-                            className="h-4 w-4 accent-indigo-600"
+                            className="h-4 w-4 accent-[#0e5a8a]"
                           />
                           {criterio}
                         </label>
@@ -227,19 +228,19 @@ export function Simulador() {
     return (
       <div className="space-y-6">
         <Tarjeta>
-          <TituloSeccion icono="🧪" titulo="Corrección explicada" bajada="Tema por tema, qué salió bien, qué no y por qué. Esto corrige tu práctica: no resuelve tu tarea." />
+          <TituloSeccion icono="simulador" titulo="Corrección explicada" bajada="Tema por tema, qué salió bien, qué no y por qué. Esto corrige tu práctica: no resuelve tu tarea." />
 
           <div className="grid gap-3 sm:grid-cols-3">
-            <Dato valor={`${correctas}/${items.length}`} etiqueta="Respuestas correctas" icono="✅" />
-            <Dato valor={`${porcentaje}%`} etiqueta="Desempeño en la práctica" icono="📊" />
-            <Dato valor={relojMmSs(duracion * 60 - segundos)} etiqueta="Tiempo usado" icono="⏱️" />
+            <Dato valor={`${correctas}/${items.length}`} etiqueta="Respuestas correctas" />
+            <Dato valor={`${porcentaje}%`} etiqueta="Desempeño en la práctica" />
+            <Dato valor={relojMmSs(duracion * 60 - segundos)} etiqueta="Tiempo usado" />
           </div>
 
           <div className="mt-4">
-            <Barra valor={porcentaje} tono={porcentaje >= 80 ? "emerald" : porcentaje >= 50 ? "amber" : "rose"} alto="h-3" />
+            <Barra valor={porcentaje} tono={porcentaje >= 80 ? "logro" : porcentaje >= 50 ? "atencion" : "alerta"} alto="h-3" />
           </div>
 
-          <p className="mt-4 rounded-2xl bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-900">
+          <p className="mt-4 rounded-md bg-acento-tenue px-4 py-3 text-sm font-semibold text-acento-fuerte">
             {porcentaje >= 80
               ? "Muy bien. Ahora la prueba de fuego: explicá los temas que fallaste sin mirar nada."
               : porcentaje >= 50
@@ -257,26 +258,33 @@ export function Simulador() {
           return (
             <Tarjeta key={grupo.foco} retraso={indice * 60}>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-lg font-extrabold capitalize text-slate-900">{grupo.foco}</h3>
-                <Pildora tono={logrado >= 80 ? "emerald" : logrado >= 50 ? "amber" : "rose"}>
+                <h3 className="text-lg font-semibold capitalize text-tinta">{grupo.foco}</h3>
+                <Pildora tono={logrado >= 80 ? "logro" : logrado >= 50 ? "atencion" : "alerta"}>
                   {grupo.correctas}/{grupo.total} correctas
                 </Pildora>
               </div>
-              <Barra valor={logrado} tono={logrado >= 80 ? "emerald" : logrado >= 50 ? "amber" : "rose"} />
+              <Barra valor={logrado} tono={logrado >= 80 ? "logro" : logrado >= 50 ? "atencion" : "alerta"} />
 
               <ul className="mt-4 space-y-3">
                 {grupo.detalles.map((detalle) => (
                   <li
                     key={detalle.item.id}
-                    className={`rounded-2xl border p-4 ${detalle.respuesta.correcta ? "border-emerald-200 bg-emerald-50/50" : "border-rose-200 bg-rose-50/40"}`}
+                    className={`rounded-md border p-4 ${detalle.respuesta.correcta ? "border-logro-linea bg-logro-tenue" : "border-alerta-linea bg-alerta-tenue"}`}
                   >
                     <div className="mb-1.5 flex flex-wrap items-center gap-2">
-                      <span aria-hidden>{detalle.respuesta.correcta ? "✅" : "❌"}</span>
-                      <Pildora tono="slate">{NOMBRE_TIPO[detalle.item.tipo]}</Pildora>
+                      <Icono
+                        nombre={detalle.respuesta.correcta ? "check" : "cerrar"}
+                        tamaño={16}
+                        className={detalle.respuesta.correcta ? "text-logro" : "text-alerta"}
+                      />
+                      <Pildora tono="neutro">{NOMBRE_TIPO[detalle.item.tipo]}</Pildora>
                     </div>
-                    <p className="text-sm font-bold text-slate-900">{detalle.item.enunciado}</p>
-                    <p className="mt-2 text-sm text-slate-700">{detalle.explicacion}</p>
-                    <p className="mt-2 text-sm font-semibold text-indigo-800">💡 {detalle.sugerencia}</p>
+                    <p className="text-sm font-bold text-tinta">{detalle.item.enunciado}</p>
+                    <p className="mt-2 text-sm text-tinta">{detalle.explicacion}</p>
+                    <p className="mt-2 flex items-start gap-2 text-sm leading-relaxed text-acento-fuerte">
+                      <Icono nombre="idea" tamaño={15} className="mt-0.5" />
+                      <span>{detalle.sugerencia}</span>
+                    </p>
                   </li>
                 ))}
               </ul>
@@ -285,7 +293,7 @@ export function Simulador() {
         })}
 
         <Tarjeta>
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-media">
             Los temas que fallaste ya se cargaron en tu <strong>registro de errores</strong> y actualizaron tu{" "}
             <strong>mapa de dominio</strong>. Van a volver a aparecer en tus repasos hasta que dejen de fallar.
           </p>
@@ -297,14 +305,14 @@ export function Simulador() {
   return (
     <Tarjeta>
       <TituloSeccion
-        icono="⏱️"
+        icono="simulador"
         titulo="Simulador de evaluación"
         bajada="Armo una prueba parecida a la que te tomaría un docente, con tu material y con tiempo cronometrado. Al final, corrección explicada."
       />
 
       {estado.temas.length === 0 || estado.materiales.length === 0 ? (
         <Vacio
-          icono="📄"
+          icono="archivo"
           titulo="Necesito material tuyo"
           texto="Cargá un apunte en el tutor socrático y desde ahí te armo la prueba: las preguntas salen de tu material, no de internet."
         />
@@ -318,48 +326,56 @@ export function Simulador() {
             ))}
           </Selector>
 
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-media">
             {materiales.length > 0
               ? `${materiales.length} material${materiales.length === 1 ? "" : "es"} cargado${materiales.length === 1 ? "" : "s"} para este tema.`
               : "Este tema no tiene material cargado todavía."}
           </p>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Cantidad de consignas: {cantidad}</span>
-              <input type="range" min={4} max={16} value={cantidad} onChange={(evento) => setCantidad(Number(evento.target.value))} className="w-full accent-indigo-600" />
-            </label>
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Duración: {duracion} min</span>
-              <input type="range" min={5} max={90} step={5} value={duracion} onChange={(evento) => setDuracion(Number(evento.target.value))} className="w-full accent-indigo-600" />
-            </label>
+            <Deslizador
+              etiqueta="Cantidad de consignas"
+              valor={cantidad}
+              min={4}
+              max={16}
+              onChange={(evento) => setCantidad(Number(evento.target.value))}
+            />
+            <Deslizador
+              etiqueta="Duración"
+              unidad="min"
+              valor={duracion}
+              min={5}
+              max={90}
+              step={5}
+              onChange={(evento) => setDuracion(Number(evento.target.value))}
+            />
           </div>
 
-          {aviso ? <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">{aviso}</p> : null}
+          {aviso ? <p className="rounded-md bg-atencion-tenue px-4 py-3 text-sm font-semibold text-atencion">{aviso}</p> : null}
 
           <Boton onClick={arrancar}>Empezar la prueba</Boton>
 
-          <ul className="space-y-1.5 text-sm text-slate-500">
-            <li>• Vas a tener multiple choice, verdadero o falso, completar y desarrollo.</li>
-            <li>• Cuando se acaba el tiempo, se entrega sola: así aprendés a administrarlo.</li>
-            <li>• Las consignas priorizan los temas donde ya venías fallando.</li>
+          <ul className="em-lista space-y-1.5 text-sm leading-relaxed text-media">
+            <li>Vas a tener multiple choice, verdadero o falso, completar y desarrollo.</li>
+            <li>Cuando se acaba el tiempo, se entrega sola: así aprendés a administrarlo.</li>
+            <li>Las consignas priorizan los temas donde ya venías fallando.</li>
           </ul>
         </div>
       )}
 
       {estado.simulacros.length > 0 ? (
-        <div className="mt-6 border-t border-slate-200 pt-5">
-          <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">Tus simulacros anteriores</h3>
+        <div className="mt-6 border-t border-linea pt-5">
+          <h3 className="em-rotulo mb-3">Tus simulacros anteriores</h3>
           <ul className="space-y-2">
             {estado.simulacros.slice(0, 5).map((simulacro) => {
               const temaDelSimulacro = estado.temas.find((candidato) => candidato.id === simulacro.temaId);
               const logrado = Math.round((simulacro.correctas / Math.max(1, simulacro.total)) * 100);
               return (
-                <li key={simulacro.id} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 px-4 py-3">
-                  <span className="text-sm font-bold text-slate-700">
+                <li key={simulacro.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-linea px-4 py-3">
+                  <span className="text-sm font-bold text-tinta">
                     {temaDelSimulacro?.nombre ?? "Tema borrado"} · {new Date(simulacro.creadoEn).toLocaleDateString("es-AR")}
                   </span>
-                  <Pildora tono={logrado >= 80 ? "emerald" : logrado >= 50 ? "amber" : "rose"}>
+                  <Pildora tono={logrado >= 80 ? "logro" : logrado >= 50 ? "atencion" : "alerta"}>
                     {simulacro.correctas}/{simulacro.total} · {relojMmSs(simulacro.usadoSeg)}
                   </Pildora>
                 </li>

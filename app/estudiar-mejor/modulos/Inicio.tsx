@@ -8,12 +8,13 @@ import { progresoPlan } from "../lib/plan";
 import { useEstudiar } from "../lib/store";
 import { armarCola, preguntaDeError } from "../lib/tutor";
 import type { SeccionId } from "../components/navegacion";
+import { Icono, type NombreIcono } from "../components/iconos";
 
-const ATAJOS: { seccion: SeccionId; icono: string; nombre: string; texto: string }[] = [
-  { seccion: "tutor", icono: "🧠", nombre: "Preguntame", texto: "Repasá con preguntas de tu material" },
-  { seccion: "explicame", icono: "🗣️", nombre: "Explicámelo vos", texto: "Contámelo y te marco los huecos" },
-  { seccion: "simulador", icono: "⏱️", nombre: "Simulacro", texto: "Prueba cronometrada y corregida" },
-  { seccion: "pomodoro", icono: "🍅", nombre: "Pomodoro", texto: "Un bloque de enfoque de verdad" },
+const ATAJOS: { seccion: SeccionId; icono: NombreIcono; nombre: string; texto: string }[] = [
+  { seccion: "tutor", icono: "tutor", nombre: "Preguntame", texto: "Repasá con preguntas de tu material" },
+  { seccion: "explicame", icono: "explicame", nombre: "Explicámelo vos", texto: "Contámelo y te marco los huecos" },
+  { seccion: "simulador", icono: "simulador", nombre: "Simulacro", texto: "Prueba cronometrada y corregida" },
+  { seccion: "pomodoro", icono: "pomodoro", nombre: "Pomodoro", texto: "Un bloque de enfoque de verdad" },
 ];
 
 export function Inicio({ irA }: { irA: (seccion: SeccionId) => void }) {
@@ -42,7 +43,7 @@ export function Inicio({ irA }: { irA: (seccion: SeccionId) => void }) {
   if (!estado.nombre) {
     return (
       <Tarjeta>
-        <TituloSeccion icono="👋" titulo="Hola, ¿cómo te llamás?" bajada="Con esto alcanza: no hay cuentas, ni mails, ni contraseñas. Todo queda en este navegador." />
+        <TituloSeccion icono="hoy" titulo="Hola, ¿cómo te llamás?" bajada="Con esto alcanza: no hay cuentas, ni mails, ni contraseñas. Todo queda en este navegador." />
         <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
           <Campo
             etiqueta="Tu nombre"
@@ -57,7 +58,7 @@ export function Inicio({ irA }: { irA: (seccion: SeccionId) => void }) {
             Empezar
           </Boton>
         </div>
-        <div className="mt-6 rounded-2xl bg-violet-50 p-4 text-sm leading-relaxed text-violet-900">
+        <div className="mt-6 rounded-md bg-acento-tenue p-4 text-sm leading-relaxed text-acento-fuerte">
           <strong>Antes de entrar, el trato:</strong> esta plataforma no resuelve tareas, no redacta trabajos y no responde
           ejercicios. Organiza, pregunta y te muestra dónde se corta tu razonamiento. Si buscás que alguien lo haga por vos,
           este no es el lugar. Si buscás entenderlo, sí.
@@ -73,12 +74,12 @@ export function Inicio({ irA }: { irA: (seccion: SeccionId) => void }) {
 
   return (
     <div className="space-y-6">
-      <Tarjeta className="bg-gradient-to-br from-indigo-600 to-violet-600 text-white">
-        <p className="text-sm font-bold text-indigo-200">
+      <Tarjeta className="bg-tinta text-white">
+        <p className="text-sm font-bold text-white/70">
           {new Date().getHours() < 13 ? "Buen día" : new Date().getHours() < 20 ? "Buenas tardes" : "Buenas noches"}
         </p>
-        <h2 className="text-3xl font-black tracking-tight sm:text-4xl">{estado.nombre}</h2>
-        <p className="mt-2 max-w-xl text-sm text-indigo-100">
+        <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">{estado.nombre}</h2>
+        <p className="mt-2 max-w-xl text-sm text-white/80">
           {cola.pendientes.length > 0
             ? `Tenés ${cola.pendientes.length} preguntas esperándote y ${sesionesHoy.filter((entrada) => !entrada.sesion.hecho).length} sesiones para hoy.`
             : sesionesHoy.some((entrada) => !entrada.sesion.hecho)
@@ -86,46 +87,49 @@ export function Inicio({ irA }: { irA: (seccion: SeccionId) => void }) {
               : "No hay repasos pendientes. Buen momento para cargar material nuevo o descansar sin culpa."}
         </p>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
-          <div className="rounded-2xl bg-white/15 px-4 py-3 backdrop-blur">
-            <p className="text-2xl font-black">{constancia.rachaActual} 🔥</p>
-            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-100">Días seguidos</p>
+        <div className="mt-5 grid grid-cols-3 gap-2 sm:gap-3">
+          <div className="rounded-md border border-white/15 px-3 py-2.5 sm:px-4 sm:py-3">
+            <p className="em-cifra flex items-center gap-1.5 whitespace-nowrap text-lg font-semibold sm:text-2xl">
+              {constancia.rachaActual}
+              <Icono nombre="racha" tamaño={18} className="text-white/60" />
+            </p>
+            <p className="em-rotulo mt-0.5 text-white/70">Días seguidos</p>
           </div>
-          <div className="rounded-2xl bg-white/15 px-4 py-3 backdrop-blur">
-            <p className="text-2xl font-black">{minutosLegibles(minutosHoy)}</p>
-            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-100">Estudiado hoy</p>
+          <div className="rounded-md border border-white/15 px-3 py-2.5 sm:px-4 sm:py-3">
+            <p className="em-cifra whitespace-nowrap text-lg font-semibold sm:text-2xl">{minutosLegibles(minutosHoy)}</p>
+            <p className="em-rotulo mt-0.5 text-white/70">Estudiado hoy</p>
           </div>
-          <div className="rounded-2xl bg-white/15 px-4 py-3 backdrop-blur">
-            <p className="text-2xl font-black">{cola.pendientes.length}</p>
-            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-100">Preguntas para hoy</p>
+          <div className="rounded-md border border-white/15 px-3 py-2.5 sm:px-4 sm:py-3">
+            <p className="em-cifra whitespace-nowrap text-lg font-semibold sm:text-2xl">{cola.pendientes.length}</p>
+            <p className="em-rotulo mt-0.5 text-white/70">Preguntas para hoy</p>
           </div>
         </div>
       </Tarjeta>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {ATAJOS.map((atajo, indice) => (
           <button
             key={atajo.seccion}
             type="button"
             onClick={() => irA(atajo.seccion)}
             style={{ animationDelay: `${indice * 60}ms` }}
-            className="em-aparecer group rounded-3xl border border-slate-200 bg-white p-5 text-left transition-all duration-200 hover:-translate-y-1 hover:border-indigo-300 hover:shadow-lg"
+            className="em-aparecer group rounded-lg border border-linea bg-superficie p-4 text-left transition-colors duration-150 hover:border-acento"
           >
-            <span aria-hidden className="text-3xl transition-transform duration-200 group-hover:scale-110">
-              {atajo.icono}
+            <span className="grid h-9 w-9 place-items-center rounded-md bg-acento-tenue text-acento">
+              <Icono nombre={atajo.icono} tamaño={18} />
             </span>
-            <p className="mt-2 text-base font-extrabold text-slate-900">{atajo.nombre}</p>
-            <p className="text-sm text-slate-500">{atajo.texto}</p>
+            <p className="mt-2.5 font-semibold text-tinta">{atajo.nombre}</p>
+            <p className="mt-0.5 text-sm leading-snug text-media">{atajo.texto}</p>
           </button>
         ))}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid items-start gap-6 lg:grid-cols-2">
         <Tarjeta retraso={60}>
-          <TituloSeccion icono="📌" titulo="Tu día" />
+          <TituloSeccion icono="hoy" titulo="Tu día" />
           {sesionesHoy.length === 0 ? (
             <Vacio
-              icono="🗓️"
+              icono="planificador"
               titulo="No hay sesiones para hoy"
               texto="Armá un plan con fecha límite y te reparto el tema en sesiones diarias."
               accion={<Boton onClick={() => irA("planificador")}>Ir al planificador</Boton>}
@@ -135,19 +139,19 @@ export function Inicio({ irA }: { irA: (seccion: SeccionId) => void }) {
               {sesionesHoy.map(({ plan, sesion }) => (
                 <li
                   key={sesion.id}
-                  className={`flex items-start gap-3 rounded-2xl border px-4 py-3 ${sesion.hecho ? "border-emerald-200 bg-emerald-50/60" : "border-indigo-200 bg-indigo-50/50"}`}
+                  className={`flex items-start gap-3 rounded-md border px-4 py-3 ${sesion.hecho ? "border-logro-linea bg-logro-tenue" : "border-acento-linea bg-acento-tenue"}`}
                 >
                   <input
                     type="checkbox"
                     checked={sesion.hecho}
                     onChange={() => acciones.alternarSesion(plan.id, sesion.id)}
-                    className="mt-1 h-5 w-5 accent-emerald-600"
+                    className="mt-1 h-5 w-5 accent-[#1c7a54]"
                   />
                   <div className="min-w-0">
-                    <p className={`text-sm font-bold ${sesion.hecho ? "text-emerald-800 line-through" : "text-slate-800"}`}>
+                    <p className={`text-sm font-bold ${sesion.hecho ? "text-logro line-through" : "text-tinta"}`}>
                       {sesion.objetivo}
                     </p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-media">
                       {plan.titulo} · {sesion.minutos} min · avance del plan {progresoPlan(plan)}%
                     </p>
                   </div>
@@ -158,10 +162,10 @@ export function Inicio({ irA }: { irA: (seccion: SeccionId) => void }) {
         </Tarjeta>
 
         <Tarjeta retraso={120}>
-          <TituloSeccion icono="⏭️" titulo="Lo que se viene" />
+          <TituloSeccion icono="flecha" titulo="Lo que se viene" />
           {proximos.length === 0 ? (
             <Vacio
-              icono="🌤️"
+              icono="agenda"
               titulo="Sin entregas ni exámenes cargados"
               texto="Cargalos y te aviso cuánto falta, sin sorpresas."
               accion={<Boton onClick={() => irA("agenda")}>Abrir agenda</Boton>}
@@ -171,9 +175,9 @@ export function Inicio({ irA }: { irA: (seccion: SeccionId) => void }) {
               {proximos.map((evento) => {
                 const dias = diferenciaEnDias(hoy, evento.fecha);
                 return (
-                  <li key={evento.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 px-4 py-3">
-                    <span className="text-sm font-bold text-slate-800">{evento.titulo}</span>
-                    <Pildora tono={dias <= 2 ? "rose" : dias <= 7 ? "amber" : "slate"}>{cuandoEs(evento.fecha)}</Pildora>
+                  <li key={evento.id} className="flex items-center justify-between gap-3 rounded-md border border-linea px-4 py-3">
+                    <span className="text-sm font-bold text-tinta">{evento.titulo}</span>
+                    <Pildora tono={dias <= 2 ? "alerta" : dias <= 7 ? "atencion" : "neutro"}>{cuandoEs(evento.fecha)}</Pildora>
                   </li>
                 );
               })}
@@ -185,7 +189,7 @@ export function Inicio({ irA }: { irA: (seccion: SeccionId) => void }) {
       {semaforo.length > 0 ? (
         <Tarjeta retraso={160}>
           <TituloSeccion
-            icono="🚦"
+            icono="mapa"
             titulo="Tus temas de un vistazo"
             accion={
               <Boton variante="secundario" onClick={() => irA("mapa")}>
@@ -195,16 +199,16 @@ export function Inicio({ irA }: { irA: (seccion: SeccionId) => void }) {
           />
           <ul className="space-y-2">
             {semaforo.map(({ tema, nivel }) => (
-              <li key={tema.id} className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3">
+              <li key={tema.id} className="flex items-center gap-3 rounded-md border border-linea px-4 py-3">
                 <span className={`h-3 w-3 shrink-0 rounded-full ${COLORES_DOMINIO[nivel].punto}`} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-slate-800">{tema.nombre}</p>
-                  <p className="text-xs text-slate-500">{COLORES_DOMINIO[nivel].etiqueta}</p>
+                  <p className="truncate text-sm font-bold text-tinta">{tema.nombre}</p>
+                  <p className="text-xs text-media">{COLORES_DOMINIO[nivel].etiqueta}</p>
                 </div>
                 <div className="w-24 shrink-0">
                   <Barra
                     valor={estado.dominio[tema.id] ? (estado.dominio[tema.id].aciertos / Math.max(1, estado.dominio[tema.id].intentos)) * 100 : 0}
-                    tono={nivel === "verde" ? "emerald" : nivel === "amarillo" ? "amber" : nivel === "rojo" ? "rose" : "slate"}
+                    tono={nivel === "verde" ? "logro" : nivel === "amarillo" ? "atencion" : nivel === "rojo" ? "alerta" : "neutro"}
                     alto="h-2"
                   />
                 </div>
@@ -216,9 +220,9 @@ export function Inicio({ irA }: { irA: (seccion: SeccionId) => void }) {
 
       {errorMasRepetido ? (
         <Tarjeta retraso={200}>
-          <TituloSeccion icono="🔁" titulo="Tu error más repetido" bajada="Vuelve a aparecer hasta que deje de fallar. No es insistencia: es el método." />
-          <p className="text-base font-extrabold text-slate-900">{errorMasRepetido.titulo}</p>
-          <p className="mt-2 rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+          <TituloSeccion icono="repetir" titulo="Tu error más repetido" bajada="Vuelve a aparecer hasta que deje de fallar. No es insistencia: es el método." />
+          <p className="text-base font-semibold text-tinta">{errorMasRepetido.titulo}</p>
+          <p className="mt-2 rounded-md bg-atencion-tenue px-4 py-3 text-sm font-semibold text-atencion">
             {preguntaDeError(errorMasRepetido)}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">

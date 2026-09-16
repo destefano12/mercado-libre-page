@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Agenda } from "../modulos/Agenda";
 import { Errores } from "../modulos/Errores";
 import { Explicame } from "../modulos/Explicame";
@@ -16,19 +16,69 @@ import { Tutor } from "../modulos/Tutor";
 import { ProveedorEstudiar, useEstudiar } from "../lib/store";
 import { calcularConstancia } from "../lib/metricas";
 import { armarCola } from "../lib/tutor";
-import { DockGuardia } from "./DockGuardia";
-import { SECCIONES, type SeccionId } from "./navegacion";
+import { Icono } from "./iconos";
+import { PanelGuardia } from "./PanelGuardia";
+import { GRUPOS, buscarSeccion, type SeccionId } from "./navegacion";
 import { Boton } from "./ui";
+
+function Marca({ compacta = false }: { compacta?: boolean }) {
+  return (
+    <span className="flex items-center gap-2.5">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-tinta text-white">
+        <Icono nombre="manifiesto" tamaño={17} />
+      </span>
+      <span className="min-w-0">
+        <span className="block font-serif text-[15px] font-semibold leading-tight text-tinta">Estudiar Mejor</span>
+        {!compacta ? (
+          <span className="block text-[11px] leading-tight text-tenue">No hace tu tarea. Te hace pensarla.</span>
+        ) : null}
+      </span>
+    </span>
+  );
+}
+
+function ListaNavegacion({
+  seccion,
+  onElegir,
+}: {
+  seccion: SeccionId;
+  onElegir: (id: SeccionId) => void;
+}) {
+  return (
+    <nav aria-label="Módulos" className="space-y-6">
+      {GRUPOS.map((grupo) => (
+        <div key={grupo.titulo}>
+          <p className="em-rotulo mb-2 px-3">{grupo.titulo}</p>
+          <ul className="space-y-0.5">
+            {grupo.secciones.map((candidata) => {
+              const activo = candidata.id === seccion;
+              return (
+                <li key={candidata.id}>
+                  <button
+                    type="button"
+                    onClick={() => onElegir(candidata.id)}
+                    aria-current={activo ? "page" : undefined}
+                    className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                      activo ? "bg-acento-tenue text-acento-fuerte" : "text-media hover:bg-papel hover:text-tinta"
+                    }`}
+                  >
+                    <Icono nombre={candidata.icono} tamaño={18} className={activo ? "text-acento" : "text-tenue"} />
+                    <span className="truncate">{candidata.nombre}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </nav>
+  );
+}
 
 function Cargando() {
   return (
-    <div className="grid min-h-[60vh] place-items-center">
-      <div className="text-center">
-        <span aria-hidden className="em-flotar block text-5xl">
-          📚
-        </span>
-        <p className="mt-3 text-sm font-bold text-slate-500">Abriendo tu escritorio…</p>
-      </div>
+    <div className="em-app grid min-h-screen place-items-center bg-papel font-sans">
+      <p className="em-rotulo em-latido">Abriendo tu escritorio…</p>
     </div>
   );
 }
@@ -36,17 +86,32 @@ function Cargando() {
 function Contenido() {
   const { estado, hidratado, acciones } = useEstudiar();
   const [seccion, setSeccion] = useState<SeccionId>("inicio");
+  const [menuAbierto, setMenuAbierto] = useState(false);
+  const [ayudaAbierta, setAyudaAbierta] = useState(false);
   const [copiaVisible, setCopiaVisible] = useState(false);
   const [avisoCopia, setAvisoCopia] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const bloqueado = menuAbierto || ayudaAbierta;
+    document.body.style.overflow = bloqueado ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [menuAbierto, ayudaAbierta]);
 
   if (!hidratado) return <Cargando />;
 
   const constancia = calcularConstancia(estado.logs);
   const pendientes = armarCola(estado.tarjetas, estado.errores, "todos").pendientes.length;
-  const activa = SECCIONES.find((candidata) => candidata.id === seccion) ?? SECCIONES[0];
+  const activa = buscarSeccion(seccion);
 
-  // Copiar en vez de descargar: un archivo generado por la página no se puede
-  // guardar en todos los contextos donde corre esta app.
+  const ir = (id: SeccionId) => {
+    setSeccion(id);
+    setMenuAbierto(false);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "instant" });
+  };
+
   const copiarDatos = async () => {
     try {
       await navigator.clipboard.writeText(JSON.stringify(estado, null, 2));
@@ -65,112 +130,157 @@ function Contenido() {
   };
 
   return (
-    <div className="em-app min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50 font-sans text-slate-800">
-      <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 backdrop-blur">
-        <div className="mx-auto w-full max-w-6xl px-4 py-3 sm:px-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <button type="button" onClick={() => setSeccion("inicio")} className="flex items-center gap-2.5 text-left">
-              <span aria-hidden className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-xl">
-                📚
-              </span>
-              <span>
-                <span className="block text-base font-black leading-tight tracking-tight text-slate-900">Estudiar Mejor</span>
-                <span className="hidden text-[11px] font-bold uppercase tracking-wide text-indigo-500 min-[420px]:block">
-                  No hace tu tarea. Te hace pensarla.
-                </span>
-              </span>
+    <div className="em-app min-h-screen bg-papel font-sans text-tinta">
+      <div className="mx-auto flex w-full max-w-[1400px]">
+        {/* Barra lateral: sólo en pantallas anchas. */}
+        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-linea bg-superficie lg:flex">
+          <div className="border-b border-linea px-4 py-4">
+            <button type="button" onClick={() => ir("inicio")} className="text-left">
+              <Marca />
             </button>
+          </div>
 
-            <div className="flex items-center gap-2">
-              {estado.nombre ? (
-                <span className="hidden rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 sm:inline">
-                  🔥 {constancia.rachaActual} · 🧠 {pendientes} para hoy
+          <div className="em-scroll-suave flex-1 overflow-y-auto px-3 py-5">
+            <ListaNavegacion seccion={seccion} onElegir={ir} />
+          </div>
+
+          <div className="border-t border-linea p-3">
+            {estado.nombre ? (
+              <div className="mb-3 flex items-center gap-2.5 rounded-md bg-papel px-3 py-2.5">
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-tinta font-semibold text-white">
+                  {estado.nombre.slice(0, 1).toUpperCase()}
                 </span>
-              ) : null}
-              <Boton variante="secundario" onClick={() => setSeccion("manifiesto")}>
-                🛡️ Manifiesto
-              </Boton>
-            </div>
-          </div>
-
-          <nav aria-label="Módulos" className="em-scroll-suave -mx-1 mt-3 flex gap-1.5 overflow-x-auto pb-1">
-            {SECCIONES.map((candidata) => {
-              const activo = candidata.id === seccion;
-              return (
-                <button
-                  key={candidata.id}
-                  type="button"
-                  onClick={() => setSeccion(candidata.id)}
-                  aria-current={activo ? "page" : undefined}
-                  className={`shrink-0 whitespace-nowrap rounded-full px-3.5 py-2 text-sm font-bold transition-all duration-200 active:scale-95 ${
-                    activo
-                      ? "bg-slate-900 text-white shadow-[0_8px_18px_-10px_rgba(15,23,42,0.9)]"
-                      : "bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700"
-                  }`}
-                >
-                  <span aria-hidden className="mr-1">
-                    {candidata.icono}
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold text-tinta">{estado.nombre}</span>
+                  <span className="flex items-center gap-1 text-xs text-media">
+                    <Icono nombre="racha" tamaño={13} className="text-atencion" />
+                    <span className="em-cifra">{constancia.rachaActual}</span> días · {pendientes} preguntas
                   </span>
-                  {candidata.nombre}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-      </header>
-
-      <main className="mx-auto w-full max-w-6xl px-4 py-6 pb-28 sm:px-6">
-        <p className="mb-4 text-sm font-semibold text-slate-400">{activa.descripcion}</p>
-
-        <div key={seccion} className="em-aparecer">
-          {seccion === "inicio" ? <Inicio irA={setSeccion} /> : null}
-          {seccion === "manifiesto" ? <Manifiesto /> : null}
-          {seccion === "planificador" ? <Planificador /> : null}
-          {seccion === "tutor" ? <Tutor /> : null}
-          {seccion === "explicame" ? <Explicame /> : null}
-          {seccion === "mapa" ? <MapaDominio /> : null}
-          {seccion === "errores" ? <Errores /> : null}
-          {seccion === "grupos" ? <Grupos /> : null}
-          {seccion === "agenda" ? <Agenda /> : null}
-          {seccion === "pomodoro" ? <Pomodoro /> : null}
-          {seccion === "simulador" ? <Simulador /> : null}
-          {seccion === "adultos" ? <PanelAdultos /> : null}
-        </div>
-
-        <footer className="mt-10 rounded-3xl border border-slate-200 bg-white p-5 text-sm text-slate-500">
-          <p className="font-bold text-slate-700">Tus datos viven en este navegador</p>
-          <p className="mt-1">
-            No hay servidores, ni cuentas, ni sincronización: todo se guarda en el almacenamiento local de este dispositivo. Si
-            borrás los datos del navegador, se borra tu progreso.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Boton variante="secundario" onClick={() => void copiarDatos()}>
-              📋 Copiar mis datos
-            </Boton>
-            {estado.temas.length === 0 ? (
-              <Boton variante="secundario" onClick={acciones.cargarEjemplo}>
-                🧪 Cargar datos de ejemplo
-              </Boton>
+                </span>
+              </div>
             ) : null}
-            <Boton variante="peligro" onClick={borrar}>
-              Borrar todo
+            <Boton variante="secundario" icono="ayuda" className="w-full" onClick={() => setAyudaAbierta(true)}>
+              Pedime ayuda
             </Boton>
           </div>
+        </aside>
 
-          {avisoCopia ? <p className="mt-3 font-semibold text-indigo-700">{avisoCopia}</p> : null}
-          {copiaVisible ? (
-            <textarea
-              id="respaldo-datos"
-              readOnly
-              value={JSON.stringify(estado, null, 2)}
-              onFocus={(evento) => evento.currentTarget.select()}
-              className="mt-2 h-40 w-full rounded-2xl border border-slate-200 bg-slate-50 p-3 font-mono text-xs"
-            />
-          ) : null}
-        </footer>
-      </main>
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* Barra superior: navegación del celular. */}
+          <header className="sticky top-0 z-30 border-b border-linea bg-superficie/95 backdrop-blur lg:hidden">
+            <div className="flex items-center justify-between gap-3 px-4 py-3">
+              <button type="button" onClick={() => ir("inicio")} className="min-w-0 text-left">
+                <Marca compacta />
+              </button>
+              <div className="flex shrink-0 items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setAyudaAbierta(true)}
+                  aria-label="Pedime ayuda"
+                  className="rounded-md p-2 text-media transition-colors hover:bg-papel hover:text-tinta"
+                >
+                  <Icono nombre="ayuda" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMenuAbierto(true)}
+                  aria-label="Abrir el menú"
+                  aria-expanded={menuAbierto}
+                  className="rounded-md p-2 text-media transition-colors hover:bg-papel hover:text-tinta"
+                >
+                  <Icono nombre="menu" />
+                </button>
+              </div>
+            </div>
+          </header>
 
-      <DockGuardia />
+          <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+            <div className="mx-auto w-full max-w-5xl">
+              <div className="mb-6 flex flex-wrap items-end justify-between gap-3 border-b border-linea pb-4">
+                <div>
+                  <p className="em-rotulo">{activa.descripcion}</p>
+                  <h1 className="mt-1 text-2xl text-tinta sm:text-3xl">{activa.nombre}</h1>
+                </div>
+                {estado.nombre ? (
+                  <p className="flex items-center gap-1.5 text-sm text-media lg:hidden">
+                    <Icono nombre="racha" tamaño={15} className="text-atencion" />
+                    <span className="em-cifra font-semibold text-tinta">{constancia.rachaActual}</span> días seguidos
+                  </p>
+                ) : null}
+              </div>
+
+              <div key={seccion} className="em-aparecer">
+                {seccion === "inicio" ? <Inicio irA={ir} /> : null}
+                {seccion === "manifiesto" ? <Manifiesto /> : null}
+                {seccion === "planificador" ? <Planificador /> : null}
+                {seccion === "tutor" ? <Tutor /> : null}
+                {seccion === "explicame" ? <Explicame /> : null}
+                {seccion === "mapa" ? <MapaDominio /> : null}
+                {seccion === "errores" ? <Errores /> : null}
+                {seccion === "grupos" ? <Grupos /> : null}
+                {seccion === "agenda" ? <Agenda /> : null}
+                {seccion === "pomodoro" ? <Pomodoro /> : null}
+                {seccion === "simulador" ? <Simulador /> : null}
+                {seccion === "adultos" ? <PanelAdultos /> : null}
+              </div>
+
+              <footer className="mt-10 border-t border-linea pt-5 text-sm text-media">
+                <p className="font-semibold text-tinta">Tus datos viven en este navegador</p>
+                <p className="mt-1 max-w-prose leading-relaxed">
+                  No hay servidores, ni cuentas, ni sincronización: todo se guarda en el almacenamiento local de este
+                  dispositivo. Si borrás los datos del navegador, se borra tu progreso.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Boton variante="secundario" icono="copiar" onClick={() => void copiarDatos()}>
+                    Copiar mis datos
+                  </Boton>
+                  {estado.temas.length === 0 ? (
+                    <Boton variante="secundario" icono="archivo" onClick={acciones.cargarEjemplo}>
+                      Cargar datos de ejemplo
+                    </Boton>
+                  ) : null}
+                  <Boton variante="peligro" icono="papelera" onClick={borrar}>
+                    Borrar todo
+                  </Boton>
+                </div>
+
+                {avisoCopia ? <p className="mt-3 font-medium text-acento">{avisoCopia}</p> : null}
+                {copiaVisible ? (
+                  <textarea
+                    id="respaldo-datos"
+                    readOnly
+                    value={JSON.stringify(estado, null, 2)}
+                    onFocus={(evento) => evento.currentTarget.select()}
+                    className="mt-2 h-40 w-full rounded-md border border-linea bg-superficie p-3 font-mono text-xs"
+                  />
+                ) : null}
+              </footer>
+            </div>
+          </main>
+        </div>
+      </div>
+
+      {/* Menú del celular, a pantalla completa. */}
+      {menuAbierto ? (
+        <div className="fixed inset-0 z-50 flex flex-col bg-superficie lg:hidden">
+          <div className="flex items-center justify-between border-b border-linea px-4 py-3">
+            <Marca compacta />
+            <button
+              type="button"
+              onClick={() => setMenuAbierto(false)}
+              aria-label="Cerrar el menú"
+              className="rounded-md p-2 text-media transition-colors hover:bg-papel hover:text-tinta"
+            >
+              <Icono nombre="cerrar" />
+            </button>
+          </div>
+          <div className="em-scroll-suave flex-1 overflow-y-auto px-3 py-5">
+            <ListaNavegacion seccion={seccion} onElegir={ir} />
+          </div>
+        </div>
+      ) : null}
+
+      <PanelGuardia abierto={ayudaAbierta} onCerrar={() => setAyudaAbierta(false)} />
     </div>
   );
 }

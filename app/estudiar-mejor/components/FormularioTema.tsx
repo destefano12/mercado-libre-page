@@ -19,7 +19,7 @@ export function FormularioTema({ onCreado }: { onCreado?: (temaId: string) => vo
   };
 
   return (
-    <div className="grid gap-3 rounded-2xl border border-dashed border-indigo-200 bg-indigo-50/40 p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+    <div className="grid gap-3 rounded-md border border-dashed border-acento-linea bg-acento-tenue p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
       <Campo
         etiqueta="Tema nuevo"
         placeholder="Ej: Fotosíntesis"

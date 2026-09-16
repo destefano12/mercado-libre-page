@@ -1,30 +1,31 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AvisoPrincipio, Boton, Dato, Selector, Tarjeta, TituloSeccion } from "../components/ui";
+import { AvisoPrincipio, Boton, Dato, Deslizador, Selector, Tarjeta, TituloSeccion } from "../components/ui";
+import { Icono, type NombreIcono } from "../components/iconos";
 import { hoyClave, minutosLegibles, relojMmSs } from "../lib/fechas";
 import { useEstudiar } from "../lib/store";
 
 type Fase = "enfoque" | "corto" | "largo";
 
-const TEXTOS: Record<Fase, { nombre: string; icono: string; consejo: string; color: string }> = {
+const TEXTOS: Record<Fase, { nombre: string; icono: NombreIcono; consejo: string; color: string }> = {
   enfoque: {
     nombre: "Enfoque",
-    icono: "🎯",
+    icono: "pomodoro" as const,
     consejo: "Celular boca abajo y fuera de la mesa. Si aparece una idea que no es del tema, anotala y seguí.",
-    color: "text-indigo-600",
+    color: "text-acento",
   },
   corto: {
     nombre: "Descanso corto",
-    icono: "🌿",
+    icono: "check" as const,
     consejo: "Parate, tomá agua, mirá lejos. No abras redes: el cerebro no descansa scrolleando.",
-    color: "text-emerald-600",
+    color: "text-logro",
   },
   largo: {
     nombre: "Descanso largo",
-    icono: "🛋️",
+    icono: "reloj" as const,
     consejo: "Este descanso es en serio: caminá un poco o comé algo antes de volver.",
-    color: "text-amber-600",
+    color: "text-atencion",
   },
 };
 
@@ -104,7 +105,7 @@ export function Pomodoro() {
     <div className="space-y-6">
       <Tarjeta>
         <TituloSeccion
-          icono="🍅"
+          icono="pomodoro"
           titulo="Pomodoro"
           bajada="Bloques de enfoque con descansos de verdad. Cada bloque terminado suma a tu constancia."
         />
@@ -118,7 +119,7 @@ export function Pomodoro() {
                 cy="104"
                 r={radio}
                 fill="none"
-                stroke={fase === "enfoque" ? "#4f46e5" : fase === "corto" ? "#10b981" : "#f59e0b"}
+                stroke={fase === "enfoque" ? "#0e5a8a" : fase === "corto" ? "#1c7a54" : "#a4690a"}
                 strokeWidth="14"
                 strokeLinecap="round"
                 strokeDasharray={circunferencia}
@@ -127,27 +128,23 @@ export function Pomodoro() {
               />
             </svg>
             <div className="absolute grid place-items-center text-center">
-              <span aria-hidden className={`text-2xl ${corriendo ? "em-latido" : ""}`}>
-                {info.icono}
-              </span>
-              <span className="text-4xl font-black tabular-nums tracking-tight text-slate-900">{relojMmSs(restante)}</span>
-              <span className={`text-xs font-bold uppercase tracking-wide ${info.color}`}>{info.nombre}</span>
+              <Icono nombre={info.icono} tamaño={18} className={`${info.color} ${corriendo ? "em-latido" : ""}`} />
+              <span className="em-cifra mt-1 text-4xl font-semibold text-tinta">{relojMmSs(restante)}</span>
+              <span className={`em-rotulo mt-0.5 ${info.color}`}>{info.nombre}</span>
             </div>
-            {corriendo ? (
-              <span aria-hidden className="em-onda pointer-events-none absolute h-44 w-44 rounded-full border-2 border-indigo-300" />
-            ) : null}
+
           </div>
 
           <div className="w-full max-w-xs space-y-3">
             <div className="flex flex-wrap gap-2">
               <Boton variante={corriendo ? "secundario" : "primario"} onClick={() => setCorriendo((previo) => !previo)}>
-                {corriendo ? "⏸ Pausar" : restante === total ? "▶ Empezar" : "▶ Seguir"}
+                {corriendo ? "Pausar" : restante === total ? "Empezar" : "Seguir"}
               </Boton>
-              <Boton variante="fantasma" onClick={() => cambiarFase(fase)}>
-                ↺ Reiniciar
+              <Boton variante="fantasma" icono="repetir" onClick={() => cambiarFase(fase)}>
+                Reiniciar
               </Boton>
-              <Boton variante="fantasma" onClick={completar}>
-                ⏭ Saltar
+              <Boton variante="fantasma" icono="flecha" onClick={completar}>
+                Saltar
               </Boton>
             </div>
 
@@ -158,8 +155,8 @@ export function Pomodoro() {
                   type="button"
                   onClick={() => cambiarFase(cual)}
                   aria-pressed={fase === cual}
-                  className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
-                    fase === cual ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    fase === cual ? "border-tinta bg-tinta text-white" : "border-linea text-media hover:border-acento hover:text-acento"
                   }`}
                 >
                   {TEXTOS[cual].nombre}
@@ -178,16 +175,16 @@ export function Pomodoro() {
           </div>
         </div>
 
-        <p className="mt-6 rounded-2xl bg-slate-50 px-4 py-3 text-center text-sm font-semibold text-slate-600">{info.consejo}</p>
+        <p className="mt-6 rounded-md bg-papel px-4 py-3 text-center text-sm font-semibold text-media">{info.consejo}</p>
       </Tarjeta>
 
       <Tarjeta retraso={70}>
-        <TituloSeccion icono="⚙️" titulo="Tus tiempos" bajada="Ajustalos a cómo te concentrás vos, no a lo que dice el manual." />
+        <TituloSeccion icono="pomodoro" titulo="Tus tiempos" bajada="Ajustalos a cómo te concentrás vos, no a lo que dice el manual." />
 
         <div className="mb-5 grid gap-3 sm:grid-cols-3">
-          <Dato valor={`${ciclosDeHoy}`} etiqueta="Bloques de hoy" icono="🍅" />
-          <Dato valor={minutosLegibles(ciclosDeHoy * pomodoro.enfoque)} etiqueta="Enfoque de hoy" icono="⏱️" />
-          <Dato valor={`${4 - (ciclosDeHoy % 4)}`} etiqueta="Bloques hasta el descanso largo" icono="🛋️" />
+          <Dato valor={`${ciclosDeHoy}`} etiqueta="Bloques de hoy" />
+          <Dato valor={minutosLegibles(ciclosDeHoy * pomodoro.enfoque)} etiqueta="Enfoque de hoy" />
+          <Dato valor={`${4 - (ciclosDeHoy % 4)}`} etiqueta="Bloques hasta el descanso largo" />
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3">
@@ -198,17 +195,15 @@ export function Pomodoro() {
               ["descansoLargo", "Descanso largo", 10, 40],
             ] as const
           ).map(([clave, nombre, minimo, maximo]) => (
-            <label key={clave} className="block">
-              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">
-                {nombre}: {pomodoro[clave]} min
-              </span>
-              <input
-                type="range"
-                min={minimo}
-                max={maximo}
-                step={1}
-                value={pomodoro[clave]}
-                onChange={(evento) => {
+            <Deslizador
+              key={clave}
+              etiqueta={nombre}
+              unidad="min"
+              valor={pomodoro[clave]}
+              min={minimo}
+              max={maximo}
+              step={1}
+              onChange={(evento) => {
                   const valor = Number(evento.target.value);
                   acciones.configurarPomodoro({
                     enfoque: pomodoro.enfoque,
@@ -218,10 +213,8 @@ export function Pomodoro() {
                   });
                   const faseDeLaClave = clave === "enfoque" ? "enfoque" : clave === "descansoCorto" ? "corto" : "largo";
                   if (!corriendo && fase === faseDeLaClave) setRestante(valor * 60);
-                }}
-                className="w-full accent-indigo-600"
-              />
-            </label>
+              }}
+            />
           ))}
         </div>
 

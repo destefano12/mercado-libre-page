@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { AvisoPrincipio, Barra, Boton, Campo, Pildora, Tarjeta, TituloSeccion, Vacio } from "../components/ui";
+import { Icono } from "../components/iconos";
 import { cuandoEs, fechaLarga, hoyClave, sumarDias } from "../lib/fechas";
 import { useEstudiar } from "../lib/store";
 import type { Integrante } from "../lib/tipos";
@@ -51,7 +52,7 @@ export function Grupos() {
     <div className="space-y-6">
       <Tarjeta>
         <TituloSeccion
-          icono="👥"
+          icono="grupos"
           titulo="Trabajos grupales"
           bajada="Repartí responsabilidades y mirá el avance de cada integrante. Todo se guarda en tu navegador: es tu tablero, no un grupo en la nube."
         />
@@ -77,7 +78,7 @@ export function Grupos() {
       </Tarjeta>
 
       {estado.grupos.length === 0 ? (
-        <Vacio icono="🤝" titulo="Todavía no hay trabajos grupales" texto="Cargá uno y vas a ver quién va cómo, sin tener que preguntar por el grupo de chat." />
+        <Vacio icono="grupos" titulo="Todavía no hay trabajos grupales" texto="Cargá uno y vas a ver quién va cómo, sin tener que preguntar por el grupo de chat." />
       ) : (
         estado.grupos.map((grupo, indice) => {
           const totalTareas = grupo.integrantes.reduce((total, integrante) => total + integrante.tareas.length, 0);
@@ -91,8 +92,8 @@ export function Grupos() {
             <Tarjeta key={grupo.id} retraso={indice * 70}>
               <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-lg font-extrabold text-slate-900">{grupo.nombre}</h3>
-                  <p className="text-sm text-slate-500">
+                  <h3 className="text-lg font-semibold text-tinta">{grupo.nombre}</h3>
+                  <p className="text-sm text-media">
                     {grupo.materia} · entrega {fechaLarga(grupo.entrega)} ({cuandoEs(grupo.entrega)})
                   </p>
                 </div>
@@ -102,38 +103,42 @@ export function Grupos() {
               </div>
 
               <div className="mb-5">
-                <div className="mb-1.5 flex items-center justify-between text-sm font-bold text-slate-600">
+                <div className="mb-1.5 flex items-center justify-between text-sm font-bold text-media">
                   <span>Avance del grupo</span>
                   <span>{avanceGlobal}%</span>
                 </div>
-                <Barra valor={avanceGlobal} tono={avanceGlobal >= 70 ? "emerald" : avanceGlobal >= 35 ? "indigo" : "amber"} alto="h-3" />
+                <Barra valor={avanceGlobal} tono={avanceGlobal >= 70 ? "logro" : avanceGlobal >= 35 ? "acento" : "atencion"} alto="h-3" />
               </div>
 
               <div className="grid gap-3 lg:grid-cols-2">
                 {grupo.integrantes.map((integrante) => {
                   const avance = avanceDe(integrante);
                   return (
-                    <article key={integrante.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <article key={integrante.id} className="rounded-md border border-linea bg-superficie p-4">
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <span className="grid h-9 w-9 place-items-center rounded-full bg-indigo-100 text-sm font-black text-indigo-700">
+                          <span className="grid h-9 w-9 place-items-center rounded-full bg-acento-tenue text-sm font-semibold text-acento-fuerte">
                             {integrante.nombre.slice(0, 2).toUpperCase()}
                           </span>
                           <div>
-                            <p className="text-sm font-extrabold text-slate-900">
-                              {integrante.nombre} {integrante.esYo ? <Pildora tono="violet">vos</Pildora> : null}
+                            <p className="text-sm font-semibold text-tinta">
+                              {integrante.nombre} {integrante.esYo ? <Pildora tono="acento">vos</Pildora> : null}
                             </p>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{integrante.rol}</p>
+                            <p className="em-rotulo">{integrante.rol}</p>
                           </div>
                         </div>
-                        <Boton variante="fantasma" onClick={() => acciones.eliminarIntegrante(grupo.id, integrante.id)}>
-                          ✕
+                        <Boton
+                          variante="fantasma"
+                          aria-label={`Quitar a ${integrante.nombre}`}
+                          onClick={() => acciones.eliminarIntegrante(grupo.id, integrante.id)}
+                        >
+                          <Icono nombre="cerrar" tamaño={15} />
                         </Boton>
                       </div>
 
                       <div className="mb-3 flex items-center gap-3">
-                        <Barra valor={avance} tono={avance >= 70 ? "emerald" : avance >= 35 ? "indigo" : "rose"} />
-                        <span className="w-12 shrink-0 text-right text-sm font-black text-slate-700">{avance}%</span>
+                        <Barra valor={avance} tono={avance >= 70 ? "logro" : avance >= 35 ? "acento" : "alerta"} />
+                        <span className="w-12 shrink-0 text-right text-sm font-semibold text-tinta">{avance}%</span>
                       </div>
 
                       <ul className="space-y-1.5">
@@ -144,24 +149,24 @@ export function Grupos() {
                                 type="checkbox"
                                 checked={tarea.hecho}
                                 onChange={() => acciones.alternarTarea(grupo.id, integrante.id, tarea.id)}
-                                className="h-4 w-4 accent-emerald-600"
+                                className="h-4 w-4 accent-[#1c7a54]"
                               />
-                              <span className={`text-sm ${tarea.hecho ? "text-slate-400 line-through" : "text-slate-700"}`}>
+                              <span className={`text-sm ${tarea.hecho ? "text-tenue line-through" : "text-tinta"}`}>
                                 {tarea.titulo}
                               </span>
                             </label>
                             <button
                               type="button"
                               onClick={() => acciones.eliminarTarea(grupo.id, integrante.id, tarea.id)}
-                              className="text-xs text-slate-300 transition-colors hover:text-rose-500"
+                              className="text-tenue transition-colors hover:text-alerta"
                               aria-label={`Borrar tarea ${tarea.titulo}`}
                             >
-                              ✕
+                              <Icono nombre="cerrar" tamaño={14} />
                             </button>
                           </li>
                         ))}
                         {integrante.tareas.length === 0 ? (
-                          <li className="text-xs italic text-slate-400">Sin responsabilidades asignadas todavía.</li>
+                          <li className="text-xs italic text-tenue">Sin responsabilidades asignadas todavía.</li>
                         ) : null}
                       </ul>
 
@@ -177,7 +182,7 @@ export function Grupos() {
                             setNuevaTarea((previo) => ({ ...previo, [integrante.id]: "" }));
                           }}
                           placeholder="Sumar responsabilidad…"
-                          className="flex-1 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm outline-none transition focus:border-indigo-400 focus:bg-white"
+                          className="flex-1 rounded-full border border-linea bg-papel px-3 py-1.5 text-sm outline-none transition focus:border-acento focus:bg-superficie"
                         />
                         <Boton
                           variante="secundario"
@@ -201,7 +206,7 @@ export function Grupos() {
                   value={nuevoIntegrante[grupo.id] ?? ""}
                   onChange={(evento) => setNuevoIntegrante((previo) => ({ ...previo, [grupo.id]: evento.target.value }))}
                   placeholder="Sumar integrante…"
-                  className="flex-1 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none transition focus:border-indigo-400 focus:bg-white"
+                  className="flex-1 rounded-full border border-linea bg-papel px-4 py-2 text-sm outline-none transition focus:border-acento focus:bg-superficie"
                 />
                 <Boton
                   variante="secundario"
@@ -217,7 +222,7 @@ export function Grupos() {
               </div>
 
               {avanceGlobal < 40 && grupo.entrega <= sumarDias(hoyClave(), 5) ? (
-                <p className="mt-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">
+                <p className="mt-4 rounded-md bg-alerta-tenue px-4 py-3 text-sm font-semibold text-alerta">
                   Falta poco para la entrega y el avance está bajo. ¿Qué parte se puede dividir en dos para que no dependa de una sola persona?
                 </p>
               ) : null}

@@ -1,15 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Boton, Campo, Dato, Pildora, Selector, Tarjeta, TituloSeccion, Vacio } from "../components/ui";
+import { Boton, Campo, Dato, Pildora, Selector, Tarjeta, TituloSeccion, Vacio, type Tono } from "../components/ui";
+import { Icono, type NombreIcono } from "../components/iconos";
 import { cuandoEs, diaCorto, diferenciaEnDias, fechaCorta, fechaLarga, hoyClave, sumarDias } from "../lib/fechas";
 import { useEstudiar } from "../lib/store";
 import type { EventoAgenda } from "../lib/tipos";
 
-const TIPOS: { valor: EventoAgenda["tipo"]; nombre: string; icono: string; tono: "rose" | "amber" | "indigo" }[] = [
-  { valor: "entrega", nombre: "Entrega", icono: "📦", tono: "amber" },
-  { valor: "examen", nombre: "Examen", icono: "📝", tono: "rose" },
-  { valor: "sesion", nombre: "Sesión de estudio", icono: "📖", tono: "indigo" },
+const TIPOS: { valor: EventoAgenda["tipo"]; nombre: string; icono: NombreIcono; tono: Tono }[] = [
+  { valor: "entrega", nombre: "Entrega", icono: "agenda", tono: "atencion" },
+  { valor: "examen", nombre: "Examen", icono: "simulador", tono: "alerta" },
+  { valor: "sesion", nombre: "Sesión de estudio", icono: "archivo", tono: "acento" },
 ];
 
 export function Agenda() {
@@ -53,15 +54,14 @@ export function Agenda() {
   return (
     <div className="space-y-6">
       <Tarjeta>
-        <TituloSeccion icono="📅" titulo="Agenda" bajada="Entregas, exámenes y sesiones en un solo lugar. Las sesiones de tus planes aparecen solas." />
+        <TituloSeccion icono="agenda" titulo="Agenda" bajada="Entregas, exámenes y sesiones en un solo lugar. Las sesiones de tus planes aparecen solas." />
 
         <div className="mb-5 grid gap-3 sm:grid-cols-3">
-          <Dato valor={`${estaSemana.length}`} etiqueta="En los próximos 7 días" icono="⏰" />
-          <Dato valor={`${proximos.filter((evento) => evento.tipo === "entrega").length}`} etiqueta="Entregas pendientes" icono="📦" />
+          <Dato valor={`${estaSemana.length}`} etiqueta="En los próximos 7 días" />
+          <Dato valor={`${proximos.filter((evento) => evento.tipo === "entrega").length}`} etiqueta="Entregas pendientes" />
           <Dato
             valor={proximoExamen ? cuandoEs(proximoExamen.fecha) : "—"}
             etiqueta="Próximo examen"
-            icono="📝"
           />
         </div>
 
@@ -69,7 +69,7 @@ export function Agenda() {
           <Selector etiqueta="Tipo" value={tipo} onChange={(evento) => setTipo(evento.target.value as EventoAgenda["tipo"])}>
             {TIPOS.map((opcion) => (
               <option key={opcion.valor} value={opcion.valor}>
-                {opcion.icono} {opcion.nombre}
+                {opcion.nombre}
               </option>
             ))}
           </Selector>
@@ -99,10 +99,10 @@ export function Agenda() {
       </Tarjeta>
 
       <Tarjeta retraso={70}>
-        <TituloSeccion icono="⏭️" titulo="Lo que viene" />
+        <TituloSeccion icono="flecha" titulo="Lo que viene" />
 
         {proximos.length === 0 ? (
-          <Vacio icono="🌤️" titulo="No tenés nada agendado" texto="Cargá tu próxima prueba o entrega y te aviso cuánto falta." />
+          <Vacio icono="agenda" titulo="No tenés nada agendado" texto="Cargá tu próxima prueba o entrega y te aviso cuánto falta." />
         ) : (
           <ol className="space-y-2">
             {proximos.map((evento, indice) => {
@@ -113,24 +113,25 @@ export function Agenda() {
               return (
                 <li
                   key={evento.id}
-                  className={`em-aparecer flex flex-wrap items-center gap-3 rounded-2xl border px-4 py-3 ${
-                    urgente ? "border-rose-200 bg-rose-50/60" : "border-slate-200 bg-white"
+                  className={`em-aparecer flex flex-wrap items-center gap-3 rounded-md border px-4 py-3 ${
+                    urgente ? "border-alerta-linea bg-alerta-tenue" : "border-linea bg-superficie"
                   }`}
                   style={{ animationDelay: `${indice * 45}ms` }}
                 >
-                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-slate-900 text-white">
-                    <span className="text-[10px] font-bold uppercase leading-none">{diaCorto(evento.fecha)}</span>
-                    <span className="text-sm font-black leading-tight">{fechaCorta(evento.fecha)}</span>
+                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-md bg-tinta text-white">
+                    <span className="em-rotulo leading-none">{diaCorto(evento.fecha)}</span>
+                    <span className="text-sm font-semibold leading-tight">{fechaCorta(evento.fecha)}</span>
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-extrabold text-slate-900">{evento.titulo}</p>
+                    <p className="text-sm font-semibold text-tinta">{evento.titulo}</p>
                     <div className="mt-1 flex flex-wrap gap-1.5">
-                      <Pildora tono={info?.tono ?? "slate"}>
-                        {info?.icono} {info?.nombre}
+                      <Pildora tono={info?.tono ?? "neutro"}>
+                        {info ? <Icono nombre={info.icono} tamaño={12} /> : null}
+                        {info?.nombre}
                       </Pildora>
-                      <Pildora tono={urgente ? "rose" : "slate"}>{cuandoEs(evento.fecha)}</Pildora>
-                      {evento.delPlan ? <Pildora tono="violet">de tu plan</Pildora> : null}
+                      <Pildora tono={urgente ? "alerta" : "neutro"}>{cuandoEs(evento.fecha)}</Pildora>
+                      {evento.delPlan ? <Pildora tono="acento">de tu plan</Pildora> : null}
                     </div>
                   </div>
 
@@ -139,8 +140,8 @@ export function Agenda() {
                       <Boton variante="exito" onClick={() => acciones.alternarEvento(evento.id)}>
                         Hecho
                       </Boton>
-                      <Boton variante="fantasma" onClick={() => acciones.eliminarEvento(evento.id)}>
-                        ✕
+                      <Boton variante="fantasma" onClick={() => acciones.eliminarEvento(evento.id)} aria-label="Borrar evento">
+                        <Icono nombre="papelera" tamaño={16} />
                       </Boton>
                     </div>
                   ) : null}
@@ -152,12 +153,12 @@ export function Agenda() {
 
         {pasados.length > 0 ? (
           <details className="mt-5">
-            <summary className="cursor-pointer text-sm font-bold text-slate-500 hover:text-slate-700">
+            <summary className="cursor-pointer text-sm font-bold text-media hover:text-tinta">
               Ver {pasados.length} evento{pasados.length === 1 ? "" : "s"} pasado{pasados.length === 1 ? "" : "s"}
             </summary>
             <ul className="mt-3 space-y-1.5">
               {pasados.map((evento) => (
-                <li key={evento.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-500">
+                <li key={evento.id} className="flex items-center justify-between gap-3 rounded-xl bg-papel px-3 py-2 text-sm text-media">
                   <span className={evento.hecho ? "line-through" : ""}>
                     {fechaLarga(evento.fecha)} · {evento.titulo}
                   </span>
@@ -165,10 +166,10 @@ export function Agenda() {
                     <button
                       type="button"
                       onClick={() => acciones.eliminarEvento(evento.id)}
-                      className="text-xs text-slate-300 transition-colors hover:text-rose-500"
+                      className="text-tenue transition-colors hover:text-alerta"
                       aria-label={`Borrar ${evento.titulo}`}
                     >
-                      ✕
+                      <Icono nombre="papelera" tamaño={15} />
                     </button>
                   ) : null}
                 </li>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Area, AvisoPrincipio, Boton, Campo, Dato, Pildora, Selector, Tarjeta, TituloSeccion, Vacio } from "../components/ui";
+import { Icono } from "../components/iconos";
 import { cuandoEs } from "../lib/fechas";
 import { useEstudiar } from "../lib/store";
 import { preguntaDeError } from "../lib/tutor";
@@ -43,19 +44,19 @@ export function Errores() {
     <div className="space-y-6">
       <Tarjeta>
         <TituloSeccion
-          icono="🧾"
+          icono="errores"
           titulo="Registro de errores frecuentes"
           bajada="Cada error que anotás vuelve a aparecer en tus repasos hasta que deje de ser un error. Esa es toda la magia."
         />
 
         <div className="mb-5 grid gap-3 sm:grid-cols-3">
-          <Dato valor={`${abiertos.length}`} etiqueta="Errores abiertos" icono="🔴" />
-          <Dato valor={`${reincidentes.length}`} etiqueta="Se repiten 2+ veces" icono="🔁" />
-          <Dato valor={`${estado.errores.filter((error) => error.resuelto).length}`} etiqueta="Ya resueltos" icono="🟢" />
+          <Dato valor={`${abiertos.length}`} etiqueta="Errores abiertos" />
+          <Dato valor={`${reincidentes.length}`} etiqueta="Se repiten 2+ veces" />
+          <Dato valor={`${estado.errores.filter((error) => error.resuelto).length}`} etiqueta="Ya resueltos" />
         </div>
 
         {estado.temas.length === 0 ? (
-          <Vacio icono="📚" titulo="Necesitás al menos un tema" texto="Los errores se anotan asociados a un tema para poder reinyectarlos." />
+          <Vacio icono="archivo" titulo="Necesitás al menos un tema" texto="Los errores se anotan asociados a un tema para poder reinyectarlos." />
         ) : (
           <div className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
@@ -93,7 +94,7 @@ export function Errores() {
               <Boton onClick={guardar} disabled={!titulo.trim()}>
                 Anotar error
               </Boton>
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-tenue">
                 {CAUSAS.find((opcion) => opcion.valor === causa)?.consejo}
               </span>
             </div>
@@ -105,7 +106,7 @@ export function Errores() {
 
       <Tarjeta retraso={70}>
         <TituloSeccion
-          icono="📌"
+          icono="hoy"
           titulo="Tus errores"
           accion={
             <Boton variante="secundario" onClick={() => setVerResueltos((previo) => !previo)}>
@@ -115,7 +116,7 @@ export function Errores() {
         />
 
         {visibles.length === 0 ? (
-          <Vacio icono="✨" titulo="No hay errores registrados" texto="Van a ir apareciendo solos cuando falles en el tutor o en un simulacro." />
+          <Vacio icono="check" titulo="No hay errores registrados" texto="Van a ir apareciendo solos cuando falles en el tutor o en un simulacro." />
         ) : (
           <ul className="space-y-3">
             {visibles.map((error, indice) => {
@@ -125,37 +126,38 @@ export function Errores() {
               return (
                 <li
                   key={error.id}
-                  className={`em-aparecer rounded-2xl border p-4 ${error.resuelto ? "border-emerald-200 bg-emerald-50/50" : "border-slate-200 bg-white"}`}
+                  className={`em-aparecer rounded-md border p-4 ${error.resuelto ? "border-logro-linea bg-logro-tenue" : "border-linea bg-superficie"}`}
                   style={{ animationDelay: `${indice * 50}ms` }}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className={`text-sm font-extrabold ${error.resuelto ? "text-emerald-800 line-through" : "text-slate-900"}`}>
+                      <p className={`text-sm font-semibold ${error.resuelto ? "text-logro line-through" : "text-tinta"}`}>
                         {error.titulo}
                       </p>
-                      {error.detalle ? <p className="mt-1 text-sm text-slate-500">{error.detalle}</p> : null}
+                      {error.detalle ? <p className="mt-1 text-sm text-media">{error.detalle}</p> : null}
                     </div>
                     <div className="flex shrink-0 gap-2">
                       <Boton variante={error.resuelto ? "fantasma" : "exito"} onClick={() => acciones.alternarError(error.id)}>
                         {error.resuelto ? "Reabrir" : "Ya lo tengo"}
                       </Boton>
-                      <Boton variante="fantasma" onClick={() => acciones.eliminarError(error.id)}>
-                        ✕
+                      <Boton variante="fantasma" onClick={() => acciones.eliminarError(error.id)} aria-label="Borrar error">
+                        <Icono nombre="papelera" tamaño={16} />
                       </Boton>
                     </div>
                   </div>
 
                   <div className="mt-2 flex flex-wrap gap-2">
-                    <Pildora tono="indigo">{temaDelError?.nombre ?? "Sin tema"}</Pildora>
-                    <Pildora tono="amber">{causaInfo?.nombre ?? error.causa}</Pildora>
-                    <Pildora tono={error.veces >= 3 ? "rose" : "slate"}>×{error.veces}</Pildora>
-                    <Pildora tono="slate">visto {cuandoEs(error.ultimaVez)}</Pildora>
-                    <Pildora tono="violet">desde {error.origen}</Pildora>
+                    <Pildora tono="acento">{temaDelError?.nombre ?? "Sin tema"}</Pildora>
+                    <Pildora tono="atencion">{causaInfo?.nombre ?? error.causa}</Pildora>
+                    <Pildora tono={error.veces >= 3 ? "alerta" : "neutro"}>×{error.veces}</Pildora>
+                    <Pildora tono="neutro">visto {cuandoEs(error.ultimaVez)}</Pildora>
+                    <Pildora tono="acento">desde {error.origen}</Pildora>
                   </div>
 
                   {!error.resuelto ? (
-                    <p className="mt-3 rounded-2xl bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-800">
-                      🔁 {preguntaDeError(error)}
+                    <p className="mt-3 flex items-start gap-2 rounded-md border border-acento-linea bg-acento-tenue px-4 py-2.5 text-sm leading-relaxed text-acento-fuerte">
+                      <Icono nombre="repetir" tamaño={15} className="mt-0.5" />
+                      <span>{preguntaDeError(error)}</span>
                     </p>
                   ) : null}
                 </li>
