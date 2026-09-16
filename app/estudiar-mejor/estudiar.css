@@ -1,0 +1,200 @@
+/*
+ * Tailwind sin preflight: el bundle de CSS es único para todo el sitio y el
+ * reset global de Tailwind pisaría los estilos del marketplace que vive en "/".
+ * En su lugar se importan tema y utilidades, y el reset se aplica acotado a
+ * `.em-app`, que envuelve a toda esta aplicación.
+ */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@source "./";
+
+@theme {
+  --font-sans: "Nunito", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --color-tinta: #16123a;
+  --color-lavanda: #f4f2ff;
+}
+
+@layer base {
+  /* Reset acotado: lo mínimo de preflight que necesitan las utilidades. */
+  .em-app,
+  .em-app *,
+  .em-app *::before,
+  .em-app *::after {
+    box-sizing: border-box;
+    border-width: 0;
+    border-style: solid;
+    border-color: var(--color-slate-200, currentColor);
+  }
+
+  /* La hoja global del sitio fija 14px y un gris de marketplace: acá mandamos nosotros. */
+  .em-app {
+    font-size: 16px;
+    line-height: 1.55;
+    letter-spacing: -0.01em;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .em-app h1,
+  .em-app h2,
+  .em-app h3,
+  .em-app h4,
+  .em-app p,
+  .em-app ul,
+  .em-app ol,
+  .em-app dl,
+  .em-app dd,
+  .em-app figure,
+  .em-app blockquote {
+    margin: 0;
+  }
+
+  .em-app ul,
+  .em-app ol {
+    padding: 0;
+    list-style: none;
+  }
+
+  .em-app button,
+  .em-app input,
+  .em-app select,
+  .em-app textarea {
+    font: inherit;
+    color: inherit;
+    letter-spacing: inherit;
+    margin: 0;
+    background: transparent;
+  }
+
+  .em-app button {
+    cursor: pointer;
+    padding: 0;
+    background-color: transparent;
+    background-image: none;
+  }
+
+  .em-app textarea {
+    resize: vertical;
+  }
+
+  .em-app svg,
+  .em-app img {
+    display: block;
+    vertical-align: middle;
+  }
+
+  .em-app img {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .em-app summary {
+    display: list-item;
+  }
+
+  .em-app ::placeholder {
+    opacity: 1;
+    color: color-mix(in oklab, currentColor 45%, transparent);
+  }
+}
+
+@keyframes em-aparecer {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes em-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  60% {
+    transform: scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes em-latido {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 0.85;
+  }
+}
+
+@keyframes em-onda {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+
+@keyframes em-flotar {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes em-brillo {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .em-aparecer {
+    animation: em-aparecer 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .em-pop {
+    animation: em-pop 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .em-latido {
+    animation: em-latido 2.4s ease-in-out infinite;
+  }
+
+  .em-onda {
+    animation: em-onda 2s ease-out infinite;
+  }
+
+  .em-flotar {
+    animation: em-flotar 5s ease-in-out infinite;
+  }
+
+  .em-brillo {
+    background-size: 200% 100%;
+    animation: em-brillo 2.4s linear infinite;
+  }
+}
+
+.em-barra > span {
+  transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.em-scroll-suave {
+  scrollbar-width: thin;
+  scrollbar-color: #c7d2fe transparent;
+}

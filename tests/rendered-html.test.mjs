@@ -555,3 +555,102 @@ test("uses the ERLC map for shipment tracking zones", async () => {
   assert.match(stylesheet, /var\(--route-left, 0%\) bottom \/ var\(--route-width, 0%\)/);
   assert.match(authModal, /número de casa/);
 });
+
+async function renderEstudiarMejor() {
+  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
+  workerUrl.searchParams.set("test", `estudiar-${process.pid}-${Date.now()}`);
+  const { default: worker } = await import(workerUrl.href);
+
+  return worker.fetch(
+    new Request("http://localhost/estudiar-mejor", {
+      headers: { accept: "text/html" },
+    }),
+    {
+      ASSETS: {
+        fetch: async () => new Response("Not found", { status: 404 }),
+      },
+    },
+    {
+      waitUntil() {},
+      passThroughOnException() {},
+    },
+  );
+}
+
+test("server-renders the Estudiar Mejor platform shell", async () => {
+  const response = await renderEstudiarMejor();
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
+
+  const html = await response.text();
+  assert.match(html, /<title>Estudiar Mejor \| Acompañamiento para estudiantes de secundaria<\/title>/i);
+  assert.match(html, /Estudiar Mejor/);
+});
+
+test("keeps the Estudiar Mejor modules and the never-solve principle", async () => {
+  const app = await readFile(
+    new URL("../app/estudiar-mejor/components/EstudiarMejorApp.tsx", import.meta.url),
+    "utf8",
+  );
+  const navegacion = await readFile(
+    new URL("../app/estudiar-mejor/components/navegacion.ts", import.meta.url),
+    "utf8",
+  );
+  const manifiesto = await readFile(
+    new URL("../app/estudiar-mejor/modulos/Manifiesto.tsx", import.meta.url),
+    "utf8",
+  );
+  const guardia = await readFile(
+    new URL("../app/estudiar-mejor/lib/guardia.ts", import.meta.url),
+    "utf8",
+  );
+  const panelAdultos = await readFile(
+    new URL("../app/estudiar-mejor/modulos/PanelAdultos.tsx", import.meta.url),
+    "utf8",
+  );
+
+  for (const modulo of [
+    "planificador",
+    "tutor",
+    "explicame",
+    "mapa",
+    "errores",
+    "grupos",
+    "agenda",
+    "pomodoro",
+    "simulador",
+    "adultos",
+  ]) {
+    assert.match(navegacion, new RegExp(`id: "${modulo}"`));
+    assert.match(app, new RegExp(`seccion === "${modulo}"`));
+  }
+
+  assert.match(manifiesto, /Nunca resuelvo tus tareas/);
+  assert.match(manifiesto, /Nunca redacto tus trabajos/);
+  assert.match(manifiesto, /devuelvo preguntas/);
+  assert.match(guardia, /resolver-ejercicio/);
+  assert.match(guardia, /escribir-texto/);
+  assert.match(guardia, /responderComoGuia/);
+  assert.match(panelAdultos, /no muestra notas ni calificaciones/);
+});
+
+test("keeps Estudiar Mejor data in the browser and away from the marketplace styles", async () => {
+  const store = await readFile(
+    new URL("../app/estudiar-mejor/lib/store.tsx", import.meta.url),
+    "utf8",
+  );
+  const hoja = await readFile(
+    new URL("../app/estudiar-mejor/estudiar.css", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(store, /window\.localStorage\.setItem\(CLAVE_ALMACENAMIENTO/);
+  assert.match(store, /window\.localStorage\.getItem\(CLAVE_ALMACENAMIENTO\)/);
+  assert.doesNotMatch(store, /fetch\(/);
+
+  // El bundle de CSS es único para todo el sitio: el preflight de Tailwind
+  // pisaría los estilos del marketplace, así que el reset va acotado a .em-app.
+  assert.doesNotMatch(hoja, /@import "tailwindcss";/);
+  assert.match(hoja, /@import "tailwindcss\/utilities\.css" layer\(utilities\);/);
+  assert.match(hoja, /\.em-app \*::before/);
+});
