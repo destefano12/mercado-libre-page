@@ -36,6 +36,8 @@ function Cargando() {
 function Contenido() {
   const { estado, hidratado, acciones } = useEstudiar();
   const [seccion, setSeccion] = useState<SeccionId>("inicio");
+  const [copiaVisible, setCopiaVisible] = useState(false);
+  const [avisoCopia, setAvisoCopia] = useState<string | null>(null);
 
   if (!hidratado) return <Cargando />;
 
@@ -43,15 +45,17 @@ function Contenido() {
   const pendientes = armarCola(estado.tarjetas, estado.errores, "todos").pendientes.length;
   const activa = SECCIONES.find((candidata) => candidata.id === seccion) ?? SECCIONES[0];
 
-  const descargarCopia = () => {
-    if (typeof window === "undefined") return;
-    const blob = new Blob([JSON.stringify(estado, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const enlace = document.createElement("a");
-    enlace.href = url;
-    enlace.download = "estudiar-mejor-copia.json";
-    enlace.click();
-    URL.revokeObjectURL(url);
+  // Copiar en vez de descargar: un archivo generado por la página no se puede
+  // guardar en todos los contextos donde corre esta app.
+  const copiarDatos = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(estado, null, 2));
+      setCopiaVisible(false);
+      setAvisoCopia("Copiado. Pegalo en un archivo de texto para tener tu respaldo.");
+    } catch {
+      setCopiaVisible(true);
+      setAvisoCopia("Tu navegador no me deja copiar solo: seleccioná el texto de abajo y copialo a mano.");
+    }
   };
 
   const borrar = () => {
@@ -140,8 +144,8 @@ function Contenido() {
             borrás los datos del navegador, se borra tu progreso.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <Boton variante="secundario" onClick={descargarCopia}>
-              ⬇️ Descargar una copia
+            <Boton variante="secundario" onClick={() => void copiarDatos()}>
+              📋 Copiar mis datos
             </Boton>
             {estado.temas.length === 0 ? (
               <Boton variante="secundario" onClick={acciones.cargarEjemplo}>
@@ -152,6 +156,17 @@ function Contenido() {
               Borrar todo
             </Boton>
           </div>
+
+          {avisoCopia ? <p className="mt-3 font-semibold text-indigo-700">{avisoCopia}</p> : null}
+          {copiaVisible ? (
+            <textarea
+              id="respaldo-datos"
+              readOnly
+              value={JSON.stringify(estado, null, 2)}
+              onFocus={(evento) => evento.currentTarget.select()}
+              className="mt-2 h-40 w-full rounded-2xl border border-slate-200 bg-slate-50 p-3 font-mono text-xs"
+            />
+          ) : null}
         </footer>
       </main>
 
