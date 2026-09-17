@@ -6,6 +6,7 @@ import { Area, AvisoPrincipio, Barra, Boton, Campo, Pildora, Selector, Tarjeta, 
 import { cuandoEs } from "../lib/fechas";
 import { useEstudiar } from "../lib/store";
 import { contarPalabras } from "../lib/texto";
+import { ErrorPdf, extraerTextoDePdf } from "../lib/pdf";
 import { armarCola, preguntaDeError } from "../lib/tutor";
 import type { TarjetaTutor, TipoTarjeta } from "../lib/tipos";
 
@@ -100,6 +101,7 @@ export function Tutor() {
   const [titulo, setTitulo] = useState("");
   const [texto, setTexto] = useState("");
   const [aviso, setAviso] = useState<string | null>(null);
+  const [leyendo, setLeyendo] = useState<string | null>(null);
   const [vistas, setVistas] = useState<string[]>([]);
   const inputArchivo = useRef<HTMLInputElement>(null);
 
@@ -112,14 +114,40 @@ export function Tutor() {
 
   const subirArchivo = async (archivo: File | undefined) => {
     if (!archivo) return;
-    if (!/\.(txt|md|csv|text)$/i.test(archivo.name)) {
-      setAviso("Por ahora leo archivos de texto (.txt, .md). Si tenés un PDF, copiá y pegá el contenido acá abajo.");
+    const esPdf = /\.pdf$/i.test(archivo.name) || archivo.type === "application/pdf";
+    const esTexto = /\.(txt|md|csv|text)$/i.test(archivo.name);
+
+    if (!esPdf && !esTexto) {
+      setAviso("Puedo leer PDF y archivos de texto (.txt, .md). Con otro formato, copiá el contenido y pegalo acá abajo.");
       return;
     }
-    const contenido = await archivo.text();
-    setTexto(contenido);
-    if (!titulo.trim()) setTitulo(archivo.name.replace(/\.[^.]+$/, ""));
+
     setAviso(null);
+
+    try {
+      let contenido: string;
+
+      if (esPdf) {
+        setLeyendo("Abriendo el PDF…");
+        contenido = await extraerTextoDePdf(archivo, ({ pagina, total }) =>
+          setLeyendo(`Leyendo el PDF: página ${pagina} de ${total}…`),
+        );
+      } else {
+        contenido = await archivo.text();
+      }
+
+      setTexto(contenido);
+      if (!titulo.trim()) setTitulo(archivo.name.replace(/\.[^.]+$/, ""));
+      if (esPdf) setAviso("Listo, saqué el texto del PDF. Revisalo por las dudas y después generá las preguntas.");
+    } catch (error) {
+      setAviso(
+        error instanceof ErrorPdf
+          ? error.message
+          : "No pude leer ese archivo. Probá copiando el texto y pegándolo acá abajo.",
+      );
+    } finally {
+      setLeyendo(null);
+    }
   };
 
   const cargar = () => {
@@ -193,7 +221,7 @@ export function Tutor() {
 
             <Area
               etiqueta="Pegá acá tu apunte, resumen o capítulo"
-              placeholder="Copiá el texto tal cual lo tenés. Cuanto más explicativo, mejores preguntas salen."
+              placeholder="Copiá el texto tal cual lo tenés, o subí el PDF con el botón de abajo."
               value={texto}
               onChange={(evento) => setTexto(evento.target.value)}
               ayuda={`${contarPalabras(texto)} palabras cargadas`}
@@ -203,13 +231,18 @@ export function Tutor() {
               <Boton onClick={cargar} disabled={contarPalabras(texto) < 40}>
                 Generar preguntas
               </Boton>
-              <Boton variante="secundario" icono="archivo" onClick={() => inputArchivo.current?.click()}>
-                Subir archivo de texto
+              <Boton
+                variante="secundario"
+                icono="archivo"
+                disabled={leyendo !== null}
+                onClick={() => inputArchivo.current?.click()}
+              >
+                {leyendo ?? "Subir un PDF o un archivo de texto"}
               </Boton>
               <input
                 ref={inputArchivo}
                 type="file"
-                accept=".txt,.md,.csv,text/plain"
+                accept=".pdf,application/pdf,.txt,.md,.csv,text/plain"
                 className="hidden"
                 onChange={(evento) => {
                   void subirArchivo(evento.target.files?.[0]);

@@ -734,6 +734,35 @@ test("answers topic requests from a curated bank, calibrated by school year", as
   assert.doesNotMatch(panel, /plano\.includes\(materia\)/);
 });
 
+test("reads PDF notes in the browser without uploading them", async () => {
+  const lector = await readFile(
+    new URL("../app/estudiar-mejor/lib/pdf.ts", import.meta.url),
+    "utf8",
+  );
+  const cargador = await readFile(
+    new URL("../app/estudiar-mejor/lib/cargarPdfjs.ts", import.meta.url),
+    "utf8",
+  );
+  const tutor = await readFile(
+    new URL("../app/estudiar-mejor/modulos/Tutor.tsx", import.meta.url),
+    "utf8",
+  );
+  const worker = await stat(new URL("../public/pdf.worker.min.mjs", import.meta.url));
+
+  assert.ok(worker.size > 500_000);
+  assert.match(cargador, /pdfjs-dist\/legacy\/build\/pdf\.min\.mjs/);
+  assert.match(lector, /export async function extraerTextoDePdf/);
+  assert.match(lector, /__EM_PDF_WORKER__/);
+
+  // Un PDF escaneado no tiene texto: hay que decirlo en lugar de fallar en silencio.
+  assert.match(lector, /son im\u00e1genes escaneadas/);
+  assert.match(lector, /contrase\u00f1a/);
+
+  assert.match(tutor, /extraerTextoDePdf/);
+  assert.match(tutor, /accept="\.pdf,application\/pdf,\.txt,\.md,\.csv,text\/plain"/);
+  assert.match(tutor, /Leyendo el PDF/);
+});
+
 test("offers fixed study durations with a drift-free timer", async () => {
   const pomodoro = await readFile(
     new URL("../app/estudiar-mejor/modulos/Pomodoro.tsx", import.meta.url),
