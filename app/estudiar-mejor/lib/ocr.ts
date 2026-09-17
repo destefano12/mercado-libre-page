@@ -45,8 +45,8 @@ function obtenerTrabajador(onEstado?: (mensaje: string) => void): Promise<Trabaj
       // publicar las tres variantes del motor, sólo la que vamos a usar.
       corePath: ruta("__EM_OCR_CORE__", "/ocr/tesseract-core-simd-lstm.wasm.js"),
       langPath: ruta("__EM_OCR_LANG__", "/ocr"),
-      // El diccionario va sin comprimir: varios servidores estáticos no
-      // entregan archivos .gz tal cual y el motor se queda esperándolo.
+      // El diccionario va sin comprimir y con extensión .wasm; el porqué está
+      // explicado en build/preparar-ocr.mjs, que arma esos archivos.
       gzip: false,
       cacheMethod: "none",
       logger: (registro: { status?: string; progress?: number }) => {

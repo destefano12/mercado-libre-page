@@ -766,13 +766,18 @@ test("keeps notes as attachments and scans photos of printed text", async () => 
   const ocr = await readFile(new URL("../app/estudiar-mejor/lib/ocr.ts", import.meta.url), "utf8");
   const tutor = await readFile(new URL("../app/estudiar-mejor/modulos/Tutor.tsx", import.meta.url), "utf8");
   const nucleo = await stat(new URL("../public/ocr/tesseract-core-simd-lstm.wasm.js", import.meta.url));
-  const idioma = await stat(new URL("../public/ocr/spa.traineddata", import.meta.url));
+  const idioma = await stat(new URL("../public/ocr/spa.traineddata.wasm", import.meta.url));
 
   assert.ok(nucleo.size > 1_000_000);
   assert.ok(idioma.size > 1_000_000);
 
   // El diccionario va sin comprimir: varios servidores no entregan .gz tal cual.
   assert.match(ocr, /gzip: false/);
+
+  // El diccionario se publica con extensi\u00f3n servible y el worker se ajusta.
+  const preparar = await readFile(new URL("../build/preparar-ocr.mjs", import.meta.url), "utf8");
+  assert.match(preparar, /spa\.traineddata\.wasm/);
+  assert.match(preparar, /El worker de tesseract\.js cambi\u00f3/);
   assert.match(ocr, /export async function escanearImagen/);
   assert.match(ocr, /__EM_OCR_CORE__/);
   // La letra manuscrita no se lee: hay que avisarlo antes, no despu\u00e9s.
