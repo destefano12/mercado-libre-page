@@ -1,27 +1,72 @@
 "use client";
 
 import { useState } from "react";
+import { armarConsignas, temaDelPedido, type ConsignasArmadas } from "../lib/consignas";
 import { ETIQUETAS_INTENCION, responderComoGuia, type RespuestaGuardia } from "../lib/guardia";
+import { useEstudiar } from "../lib/store";
+import { normalizar } from "../lib/texto";
 import { Icono } from "./iconos";
-import { Boton, Pildora } from "./ui";
+import { Boton, Nota, Pildora } from "./ui";
 
 const EJEMPLOS = [
+  "Hacéme preguntas de Biología sobre la fotosíntesis",
   "Resolveme el ejercicio 4",
-  "Escribime la conclusión del trabajo práctico",
   "No entiendo el ciclo de Calvin",
 ];
 
 export function PanelGuardia({ abierto, onCerrar }: { abierto: boolean; onCerrar: () => void }) {
+  const { estado } = useEstudiar();
   const [texto, setTexto] = useState("");
   const [respuesta, setRespuesta] = useState<RespuestaGuardia | null>(null);
+  const [consignas, setConsignas] = useState<ConsignasArmadas | null>(null);
 
   if (!abierto) return null;
+
+  /** Busca el tema entre los cargados: por nombre, por materia o al revés. */
+  const buscarTema = (pedido: string) => {
+    const plano = normalizar(pedido);
+    return estado.temas.find((tema) => {
+      const nombre = normalizar(tema.nombre);
+      const materia = normalizar(tema.materia);
+      return plano.includes(nombre) || (materia.length > 3 && plano.includes(materia)) || nombre.includes(plano);
+    });
+  };
 
   const preguntar = (pedido: string) => {
     const limpio = pedido.trim();
     if (!limpio) return;
     setTexto(limpio);
-    setRespuesta(responderComoGuia(limpio));
+
+    const resultado = responderComoGuia(limpio);
+    setRespuesta(resultado);
+
+    if (resultado.intencion !== "pedir-preguntas") {
+      setConsignas(null);
+      return;
+    }
+
+    const tema = buscarTema(limpio);
+    const nombre = tema?.nombre ?? temaDelPedido(limpio);
+
+    if (!nombre) {
+      setConsignas(null);
+      return;
+    }
+
+    const material = tema
+      ? estado.materiales
+          .filter((archivo) => archivo.temaId === tema.id)
+          .map((archivo) => archivo.texto)
+          .join("\n")
+      : "";
+
+    setConsignas(armarConsignas(nombre, material));
+  };
+
+  const limpiar = () => {
+    setRespuesta(null);
+    setConsignas(null);
+    setTexto("");
   };
 
   return (
@@ -50,7 +95,27 @@ export function PanelGuardia({ abierto, onCerrar }: { abierto: boolean; onCerrar
         </header>
 
         <div className="em-scroll-suave flex-1 overflow-y-auto px-5 py-5">
-          {respuesta ? (
+          {consignas ? (
+            <div className="em-aparecer space-y-4">
+              <Pildora tono="acento">{ETIQUETAS_INTENCION["pedir-preguntas"]}</Pildora>
+              <h3 className="text-base text-tinta">Consignas de {consignas.tema}</h3>
+              <Nota tono={consignas.origen === "material" ? "acento" : "atencion"}>{consignas.nota}</Nota>
+              <ol className="space-y-2">
+                {consignas.consignas.map((consigna, indice) => (
+                  <li
+                    key={consigna}
+                    className="flex gap-3 border-l-2 border-acento-linea py-1 pl-3 text-sm leading-relaxed text-tinta"
+                  >
+                    <span className="em-cifra em-rotulo mt-0.5 text-acento">{indice + 1}</span>
+                    <span>{consigna}</span>
+                  </li>
+                ))}
+              </ol>
+              <p className="border-t border-linea pt-3 text-sm italic leading-relaxed text-media">
+                Resolvelas en la carpeta. Las respuestas las escribís vos: para eso están.
+              </p>
+            </div>
+          ) : respuesta ? (
             <div className="em-aparecer space-y-4">
               <Pildora tono={respuesta.bloqueado ? "alerta" : "acento"}>{ETIQUETAS_INTENCION[respuesta.intencion]}</Pildora>
               <h3 className="text-base text-tinta">{respuesta.titulo}</h3>
@@ -66,7 +131,10 @@ export function PanelGuardia({ abierto, onCerrar }: { abierto: boolean; onCerrar
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-sm text-media">Escribí lo que realmente estás pensando. Por ejemplo:</p>
+              <p className="text-sm leading-relaxed text-media">
+                Pedime consignas de un tema y te armo una tanda para resolver en la carpeta. O contame qué te traba, y
+                lo desarmamos con preguntas. Por ejemplo:
+              </p>
               <ul className="space-y-2">
                 {EJEMPLOS.map((ejemplo) => (
                   <li key={ejemplo}>
@@ -106,13 +174,7 @@ export function PanelGuardia({ abierto, onCerrar }: { abierto: boolean; onCerrar
               Preguntar
             </Boton>
             {respuesta ? (
-              <Boton
-                variante="fantasma"
-                onClick={() => {
-                  setRespuesta(null);
-                  setTexto("");
-                }}
-              >
+              <Boton variante="fantasma" onClick={limpiar}>
                 Limpiar
               </Boton>
             ) : null}

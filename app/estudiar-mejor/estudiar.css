@@ -3,10 +3,16 @@
  * reset global de Tailwind pisaría los estilos del marketplace que vive en "/".
  * En su lugar se importan tema y utilidades, y el reset se aplica acotado a
  * `.em-app`, que envuelve a toda esta aplicación.
+ *
+ * Las utilidades van FUERA de toda capa a propósito. La hoja del marketplace
+ * declara `button, input, select, textarea { color: inherit }` sin capa, y una
+ * regla sin capa le gana a cualquier `@layer`: dentro de una capa, `text-white`
+ * perdía contra ese `inherit` y los botones quedaban con el texto invisible.
+ * Sin capa, las utilidades ganan por especificidad (clase sobre elemento).
  */
-@layer theme, base, components, utilities;
+@layer theme, base, components;
 @import "tailwindcss/theme.css" layer(theme);
-@import "tailwindcss/utilities.css" layer(utilities);
+@import "tailwindcss/utilities.css";
 @source "./";
 
 @theme {

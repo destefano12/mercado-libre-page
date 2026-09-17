@@ -1,12 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AvisoPrincipio, Boton, Dato, Deslizador, Selector, Tarjeta, TituloSeccion } from "../components/ui";
 import { Icono, type NombreIcono } from "../components/iconos";
 import { hoyClave, minutosLegibles, relojMmSs } from "../lib/fechas";
 import { useEstudiar } from "../lib/store";
 
 type Fase = "enfoque" | "corto" | "largo";
+
+/** Duraciones de un toque, de un repaso corto a una sesión larga. */
+const DURACIONES = [5, 10, 15, 25, 40, 60];
 
 const TEXTOS: Record<Fase, { nombre: string; icono: NombreIcono; consejo: string; color: string }> = {
   enfoque: {
@@ -58,6 +61,10 @@ export function Pomodoro() {
   const [restante, setRestante] = useState(pomodoro.enfoque * 60);
   const [corriendo, setCorriendo] = useState(false);
   const [temaId, setTemaId] = useState("");
+  const [aviso, setAviso] = useState<string | null>(null);
+  // Instante en que termina la cuenta. Se calcula contra el reloj del sistema
+  // para que el tiempo siga corriendo aunque la pestaña quede en segundo plano.
+  const finRef = useRef<number | null>(null);
   const ciclosDeHoy = pomodoro.fechaCiclos === hoyClave() ? pomodoro.ciclosHoy : 0;
 
   const duracionDe = useCallback(
@@ -68,6 +75,7 @@ export function Pomodoro() {
 
   const cambiarFase = useCallback(
     (nueva: Fase) => {
+      finRef.current = null;
       setFase(nueva);
       setRestante(duracionDe(nueva));
       setCorriendo(false);
@@ -75,25 +83,64 @@ export function Pomodoro() {
     [duracionDe],
   );
 
+  /** Elegir una duración fija ajusta el bloque de enfoque y arranca el reloj. */
+  const empezarSesion = useCallback(
+    (minutos: number) => {
+      acciones.configurarPomodoro({
+        enfoque: minutos,
+        descansoCorto: pomodoro.descansoCorto,
+        descansoLargo: pomodoro.descansoLargo,
+      });
+      setAviso(null);
+      setFase("enfoque");
+      setRestante(minutos * 60);
+      finRef.current = Date.now() + minutos * 60 * 1000;
+      setCorriendo(true);
+    },
+    [acciones, pomodoro.descansoCorto, pomodoro.descansoLargo],
+  );
+
+  const alternarReloj = useCallback(() => {
+    setCorriendo((previo) => {
+      if (previo) {
+        finRef.current = null;
+        return false;
+      }
+      finRef.current = Date.now() + restante * 1000;
+      return true;
+    });
+  }, [restante]);
+
   const completar = useCallback(() => {
     sonarCampana();
+    finRef.current = null;
+
     if (fase === "enfoque") {
+      const siguiente: Fase = (ciclosDeHoy + 1) % 4 === 0 ? "largo" : "corto";
+      const minutosDescanso = siguiente === "largo" ? pomodoro.descansoLargo : pomodoro.descansoCorto;
       acciones.sumarCicloPomodoro();
       acciones.registrarLog({ minutos: pomodoro.enfoque, tipo: "pomodoro", temaId: temaId || undefined });
-      cambiarFase((ciclosDeHoy + 1) % 4 === 0 ? "largo" : "corto");
+      setAviso(
+        `Se cumplieron tus ${pomodoro.enfoque} minutos de estudio. Te toca un descanso de ${minutosDescanso} minutos: levantate de la silla.`,
+      );
+      cambiarFase(siguiente);
     } else {
+      setAviso("Terminó el descanso. Cuando quieras, arrancá otro bloque de estudio.");
       cambiarFase("enfoque");
     }
-  }, [acciones, cambiarFase, ciclosDeHoy, fase, pomodoro.enfoque, temaId]);
+  }, [acciones, cambiarFase, ciclosDeHoy, fase, pomodoro.descansoCorto, pomodoro.descansoLargo, pomodoro.enfoque, temaId]);
 
   useEffect(() => {
-    if (!corriendo || restante <= 0) return undefined;
-    const temporizador = window.setTimeout(() => {
-      if (restante <= 1) completar();
-      else setRestante(restante - 1);
-    }, 1000);
-    return () => window.clearTimeout(temporizador);
-  }, [corriendo, restante, completar]);
+    if (!corriendo) return undefined;
+    const intervalo = window.setInterval(() => {
+      const fin = finRef.current;
+      if (fin === null) return;
+      const quedan = Math.max(0, Math.round((fin - Date.now()) / 1000));
+      setRestante(quedan);
+      if (quedan === 0) completar();
+    }, 500);
+    return () => window.clearInterval(intervalo);
+  }, [corriendo, completar]);
 
   const total = duracionDe(fase);
   const progreso = total === 0 ? 0 : 1 - restante / total;
@@ -109,6 +156,41 @@ export function Pomodoro() {
           titulo="Pomodoro"
           bajada="Bloques de enfoque con descansos de verdad. Cada bloque terminado suma a tu constancia."
         />
+
+        <div className="mb-6">
+          <p className="em-rotulo mb-2">¿Cuánto vas a estudiar?</p>
+          <div className="flex flex-wrap gap-2">
+            {DURACIONES.map((minutos) => (
+              <button
+                key={minutos}
+                type="button"
+                onClick={() => empezarSesion(minutos)}
+                className={`rounded-md border px-3.5 py-2 text-sm font-semibold transition-colors ${
+                  fase === "enfoque" && pomodoro.enfoque === minutos
+                    ? "border-acento bg-acento-tenue text-acento"
+                    : "border-linea-fuerte text-media hover:border-acento hover:text-acento"
+                }`}
+              >
+                {minutos} min
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-tenue">
+            Elegís el tiempo y el reloj arranca solo. Cuando se cumple, suena un aviso aunque tengas la pantalla en otra cosa.
+          </p>
+        </div>
+
+        {aviso ? (
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-md border border-logro-linea bg-logro-tenue px-4 py-3">
+            <p className="flex items-start gap-2 text-sm font-semibold leading-relaxed text-logro">
+              <Icono nombre="check" tamaño={16} className="mt-0.5" />
+              <span>{aviso}</span>
+            </p>
+            <Boton variante="fantasma" onClick={() => setAviso(null)}>
+              Entendido
+            </Boton>
+          </div>
+        ) : null}
 
         <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:justify-center">
           <div className="relative grid place-items-center">
@@ -137,7 +219,7 @@ export function Pomodoro() {
 
           <div className="w-full max-w-xs space-y-3">
             <div className="flex flex-wrap gap-2">
-              <Boton variante={corriendo ? "secundario" : "primario"} onClick={() => setCorriendo((previo) => !previo)}>
+              <Boton variante={corriendo ? "secundario" : "primario"} onClick={alternarReloj}>
                 {corriendo ? "Pausar" : restante === total ? "Empezar" : "Seguir"}
               </Boton>
               <Boton variante="fantasma" icono="repetir" onClick={() => cambiarFase(fase)}>

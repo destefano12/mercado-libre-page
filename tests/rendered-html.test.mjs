@@ -651,6 +651,48 @@ test("keeps Estudiar Mejor data in the browser and away from the marketplace sty
   // El bundle de CSS es único para todo el sitio: el preflight de Tailwind
   // pisaría los estilos del marketplace, así que el reset va acotado a .em-app.
   assert.doesNotMatch(hoja, /@import "tailwindcss";/);
-  assert.match(hoja, /@import "tailwindcss\/utilities\.css" layer\(utilities\);/);
   assert.match(hoja, /\.em-app \*::before/);
+
+  // Las utilidades van sin capa: el marketplace declara `color: inherit` sobre
+  // los botones fuera de toda capa y le ganaría a cualquier `@layer`.
+  assert.match(hoja, /@import "tailwindcss\/utilities\.css";/);
+  assert.doesNotMatch(hoja, /@import "tailwindcss\/utilities\.css" layer\(utilities\);/);
+});
+
+test("generates practice questions on request and keeps refusing to solve", async () => {
+  const consignas = await readFile(
+    new URL("../app/estudiar-mejor/lib/consignas.ts", import.meta.url),
+    "utf8",
+  );
+  const guardia = await readFile(
+    new URL("../app/estudiar-mejor/lib/guardia.ts", import.meta.url),
+    "utf8",
+  );
+  const panel = await readFile(
+    new URL("../app/estudiar-mejor/components/PanelGuardia.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(guardia, /"pedir-preguntas"/);
+  assert.match(guardia, /pregunt\[a\u00e1\]me/);
+  assert.match(consignas, /export function armarConsignas/);
+  assert.match(consignas, /export function temaDelPedido/);
+  assert.match(panel, /armarConsignas/);
+
+  // Pedir consignas no es un pedido bloqueado, pero resolver sigue estándolo.
+  assert.match(guardia, /bloqueado: bloqueado && intencion !== "pedir-preguntas"/);
+  assert.match(guardia, /"resolver-ejercicio"/);
+});
+
+test("offers fixed study durations with a drift-free timer", async () => {
+  const pomodoro = await readFile(
+    new URL("../app/estudiar-mejor/modulos/Pomodoro.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(pomodoro, /const DURACIONES = \[5, 10, 15, 25, 40, 60\]/);
+  assert.match(pomodoro, /empezarSesion/);
+  // El reloj se ancla a un instante final para no atrasarse en segundo plano.
+  assert.match(pomodoro, /finRef\.current = Date\.now\(\) \+/);
+  assert.match(pomodoro, /setAviso\(/);
 });

@@ -7,6 +7,7 @@ import { normalizar } from "./texto";
  */
 
 export type IntencionPedido =
+  | "pedir-preguntas"
   | "resolver-ejercicio"
   | "escribir-texto"
   | "resumir"
@@ -23,6 +24,16 @@ export interface RespuestaGuardia {
 }
 
 const PATRONES: { intencion: IntencionPedido; patrones: RegExp[] }[] = [
+  {
+    // Va primero: pedir preguntas es exactamente lo que la plataforma sí hace.
+    intencion: "pedir-preguntas",
+    patrones: [
+      /\bpregunt[aá]me\b/i,
+      /\b(hac[eé]me|arm[aá]me|dame|gener[aá]me|gener[aá]|tir[aá]me|pon[eé]me|quiero)\b[^.]{0,40}\b(preguntas|consignas|cuestionario)\b/i,
+      /\b(preguntas|consignas|cuestionario)\s+(de|sobre|para)\b/i,
+      /\btom[aá]me\s+(preguntas|un cuestionario)\b/i,
+    ],
+  },
   {
     intencion: "resolver-ejercicio",
     patrones: [
@@ -61,6 +72,13 @@ const PATRONES: { intencion: IntencionPedido; patrones: RegExp[] }[] = [
 ];
 
 const BANCOS: Record<Exclude<IntencionPedido, "consulta-legitima">, { titulo: string; preguntas: string[] }> = {
+  "pedir-preguntas": {
+    titulo: "Consignas para resolver en tu carpeta",
+    preguntas: [
+      "¿De qué tema querés que te pregunte? Escribilo y te armo la tanda.",
+      "¿Ya tenés el apunte de ese tema cargado en el tutor? Con material propio las preguntas salen mucho mejores.",
+    ],
+  },
   "resolver-ejercicio": {
     titulo: "No te lo resuelvo, pero lo desarmamos juntos",
     preguntas: [
@@ -154,16 +172,20 @@ export function responderComoGuia(texto: string, semilla = Date.now()): Respuest
 
   return {
     intencion,
-    bloqueado,
+    bloqueado: bloqueado && intencion !== "pedir-preguntas",
     titulo: banco.titulo,
     preguntas: elegir(banco.preguntas, 4, semilla + texto.length),
-    cierre: bloqueado
-      ? "Esto no es un no porque sí: si te doy la respuesta, el día del examen no la vas a tener."
-      : "Contestá estas preguntas en tu carpeta y volvé. Ahí vemos qué quedó flojo.",
+    cierre:
+      intencion === "pedir-preguntas"
+        ? "Resolvelas en la carpeta. Las respuestas las escribís vos: para eso están."
+        : bloqueado
+          ? "Esto no es un no porque sí: si te doy la respuesta, el día del examen no la vas a tener."
+          : "Contestá estas preguntas en tu carpeta y volvé. Ahí vemos qué quedó flojo.",
   };
 }
 
 export const ETIQUETAS_INTENCION: Record<IntencionPedido, string> = {
+  "pedir-preguntas": "Pedido de consignas",
   "resolver-ejercicio": "Pedido de resolución",
   "escribir-texto": "Pedido de redacción",
   resumir: "Pedido de resumen",
