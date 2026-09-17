@@ -6,9 +6,35 @@ import { Area, AvisoPrincipio, Barra, Boton, Campo, Pildora, Selector, Tarjeta, 
 import { cuandoEs } from "../lib/fechas";
 import { useEstudiar } from "../lib/store";
 import { contarPalabras } from "../lib/texto";
+import { Icono, type NombreIcono } from "../components/iconos";
+import { ErrorOcr, escanearImagen } from "../lib/ocr";
 import { ErrorPdf, extraerTextoDePdf } from "../lib/pdf";
 import { armarCola, preguntaDeError } from "../lib/tutor";
 import type { TarjetaTutor, TipoTarjeta } from "../lib/tipos";
+
+type ClaseAdjunto = "pdf" | "imagen" | "texto";
+
+interface Adjunto {
+  id: string;
+  nombre: string;
+  clase: ClaseAdjunto;
+  estado: "leyendo" | "listo" | "error";
+  detalle: string;
+  texto: string;
+}
+
+function clasificarArchivo(archivo: File): ClaseAdjunto | null {
+  if (/\.pdf$/i.test(archivo.name) || archivo.type === "application/pdf") return "pdf";
+  if (archivo.type.startsWith("image/") || /\.(jpe?g|png|webp|bmp|heic)$/i.test(archivo.name)) return "imagen";
+  if (/\.(txt|md|csv|text)$/i.test(archivo.name) || archivo.type.startsWith("text/")) return "texto";
+  return null;
+}
+
+const ICONO_ADJUNTO: Record<ClaseAdjunto, NombreIcono> = {
+  pdf: "archivo",
+  imagen: "foto",
+  texto: "errores",
+};
 
 const ETIQUETA_TIPO: Record<TipoTarjeta, { nombre: string; tono: Tono }> = {
   definicion: { nombre: "Definición", tono: "acento" },
@@ -101,7 +127,7 @@ export function Tutor() {
   const [titulo, setTitulo] = useState("");
   const [texto, setTexto] = useState("");
   const [aviso, setAviso] = useState<string | null>(null);
-  const [leyendo, setLeyendo] = useState<string | null>(null);
+  const [adjuntos, setAdjuntos] = useState<Adjunto[]>([]);
   const [vistas, setVistas] = useState<string[]>([]);
   const inputArchivo = useRef<HTMLInputElement>(null);
 
@@ -112,52 +138,88 @@ export function Tutor() {
   const actual = pendientes.find((tarjeta) => !vistas.includes(tarjeta.id)) ?? pendientes[0];
   const erroresAbiertos = estado.errores.filter((error) => !error.resuelto).slice(0, 2);
 
-  const subirArchivo = async (archivo: File | undefined) => {
-    if (!archivo) return;
-    const esPdf = /\.pdf$/i.test(archivo.name) || archivo.type === "application/pdf";
-    const esTexto = /\.(txt|md|csv|text)$/i.test(archivo.name);
+  const actualizarAdjunto = (id: string, cambios: Partial<Adjunto>) =>
+    setAdjuntos((previo) => previo.map((adjunto) => (adjunto.id === id ? { ...adjunto, ...cambios } : adjunto)));
 
-    if (!esPdf && !esTexto) {
-      setAviso("Puedo leer PDF y archivos de texto (.txt, .md). Con otro formato, copiá el contenido y pegalo acá abajo.");
-      return;
-    }
-
+  /**
+   * Los archivos quedan adjuntos como archivos. La app los abre por su cuenta
+   * —el PDF lo lee, la foto la escanea— y el texto que saca queda guardado
+   * detrás del adjunto, listo para armar las preguntas.
+   */
+  const adjuntarArchivos = async (archivos: File[]) => {
+    if (archivos.length === 0) return;
     setAviso(null);
 
-    try {
-      let contenido: string;
+    for (const archivo of archivos) {
+      const clase = clasificarArchivo(archivo);
 
-      if (esPdf) {
-        setLeyendo("Abriendo el PDF…");
-        contenido = await extraerTextoDePdf(archivo, ({ pagina, total }) =>
-          setLeyendo(`Leyendo el PDF: página ${pagina} de ${total}…`),
-        );
-      } else {
-        contenido = await archivo.text();
+      if (!clase) {
+        setAviso(`No puedo abrir “${archivo.name}”. Acepto PDF, fotos y archivos de texto.`);
+        continue;
       }
 
-      setTexto(contenido);
-      if (!titulo.trim()) setTitulo(archivo.name.replace(/\.[^.]+$/, ""));
-      if (esPdf) setAviso("Listo, saqué el texto del PDF. Revisalo por las dudas y después generá las preguntas.");
-    } catch (error) {
-      setAviso(
-        error instanceof ErrorPdf
-          ? error.message
-          : "No pude leer ese archivo. Probá copiando el texto y pegándolo acá abajo.",
-      );
-    } finally {
-      setLeyendo(null);
+      const id = `${archivo.name}-${archivo.size}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      setAdjuntos((previo) => [
+        ...previo,
+        { id, nombre: archivo.name, clase, estado: "leyendo", detalle: "Abriendo…", texto: "" },
+      ]);
+
+      try {
+        let contenido: string;
+
+        if (clase === "pdf") {
+          actualizarAdjunto(id, { detalle: "Abriendo el PDF…" });
+          contenido = await extraerTextoDePdf(archivo, ({ pagina, total }) =>
+            actualizarAdjunto(id, { detalle: `Leyendo página ${pagina} de ${total}…` }),
+          );
+        } else if (clase === "imagen") {
+          actualizarAdjunto(id, { detalle: "Preparando el escáner…" });
+          contenido = await escanearImagen(archivo, (mensaje) => actualizarAdjunto(id, { detalle: mensaje }));
+        } else {
+          contenido = await archivo.text();
+        }
+
+        actualizarAdjunto(id, {
+          estado: "listo",
+          texto: contenido,
+          detalle: `${contarPalabras(contenido)} palabras leídas`,
+        });
+
+        if (!titulo.trim()) setTitulo(archivo.name.replace(/\.[^.]+$/, ""));
+      } catch (error) {
+        actualizarAdjunto(id, {
+          estado: "error",
+          detalle:
+            error instanceof ErrorPdf || error instanceof ErrorOcr
+              ? error.message
+              : "No pude abrir este archivo.",
+        });
+      }
     }
   };
 
+  const quitarAdjunto = (id: string) => setAdjuntos((previo) => previo.filter((adjunto) => adjunto.id !== id));
+
+  const textoDeAdjuntos = adjuntos
+    .filter((adjunto) => adjunto.estado === "listo")
+    .map((adjunto) => adjunto.texto)
+    .join("\n\n");
+  const textoCompleto = [textoDeAdjuntos, texto].filter((parte) => parte.trim()).join("\n\n");
+  const procesando = adjuntos.some((adjunto) => adjunto.estado === "leyendo");
+
   const cargar = () => {
-    if (!temaMaterialElegido || contarPalabras(texto) < 40) {
+    if (!temaMaterialElegido || contarPalabras(textoCompleto) < 40) {
       setAviso("Necesito al menos 40 palabras de material para poder armarte preguntas que valgan la pena.");
       return;
     }
-    const { preguntas } = acciones.agregarMaterial(temaMaterialElegido.id, titulo.trim() || "Material sin título", texto.trim());
+    const { preguntas } = acciones.agregarMaterial(
+      temaMaterialElegido.id,
+      titulo.trim() || "Material sin título",
+      textoCompleto.trim(),
+    );
     setTexto("");
     setTitulo("");
+    setAdjuntos([]);
     setAviso(
       preguntas > 0
         ? `Listo: saqué ${preguntas} preguntas de tu material. No te voy a dar las respuestas, sólo las preguntas.`
@@ -219,36 +281,96 @@ export function Tutor() {
               />
             </div>
 
-            <Area
-              etiqueta="Pegá acá tu apunte, resumen o capítulo"
-              placeholder="Copiá el texto tal cual lo tenés, o subí el PDF con el botón de abajo."
-              value={texto}
-              onChange={(evento) => setTexto(evento.target.value)}
-              ayuda={`${contarPalabras(texto)} palabras cargadas`}
-            />
-
-            <div className="flex flex-wrap items-center gap-3">
-              <Boton onClick={cargar} disabled={contarPalabras(texto) < 40}>
-                Generar preguntas
-              </Boton>
-              <Boton
-                variante="secundario"
-                icono="archivo"
-                disabled={leyendo !== null}
-                onClick={() => inputArchivo.current?.click()}
-              >
-                {leyendo ?? "Subir un PDF o un archivo de texto"}
-              </Boton>
+            <div>
+              <p className="em-rotulo mb-2">Tu material</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Boton
+                  variante="secundario"
+                  icono="archivo"
+                  disabled={procesando}
+                  onClick={() => inputArchivo.current?.click()}
+                >
+                  Adjuntar PDF, fotos o texto
+                </Boton>
+                <span className="text-xs text-tenue">
+                  Podés adjuntar varios de una vez. El archivo no sale de tu dispositivo.
+                </span>
+              </div>
               <input
                 ref={inputArchivo}
                 type="file"
-                accept=".pdf,application/pdf,.txt,.md,.csv,text/plain"
+                multiple
+                accept=".pdf,application/pdf,image/*,.txt,.md,.csv,text/plain"
                 className="hidden"
                 onChange={(evento) => {
-                  void subirArchivo(evento.target.files?.[0]);
+                  void adjuntarArchivos(Array.from(evento.target.files ?? []));
                   evento.target.value = "";
                 }}
               />
+
+              {adjuntos.length > 0 ? (
+                <ul className="mt-3 space-y-2">
+                  {adjuntos.map((adjunto) => (
+                    <li
+                      key={adjunto.id}
+                      className={`flex items-center gap-3 rounded-md border px-3.5 py-2.5 ${
+                        adjunto.estado === "error"
+                          ? "border-alerta-linea bg-alerta-tenue"
+                          : adjunto.estado === "listo"
+                            ? "border-logro-linea bg-logro-tenue"
+                            : "border-linea bg-papel"
+                      }`}
+                    >
+                      <Icono
+                        nombre={ICONO_ADJUNTO[adjunto.clase]}
+                        tamaño={18}
+                        className={
+                          adjunto.estado === "error"
+                            ? "text-alerta"
+                            : adjunto.estado === "listo"
+                              ? "text-logro"
+                              : "em-latido text-acento"
+                        }
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-tinta">{adjunto.nombre}</span>
+                        <span
+                          className={`block text-xs ${adjunto.estado === "error" ? "text-alerta" : "text-media"}`}
+                        >
+                          {adjunto.detalle}
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => quitarAdjunto(adjunto.id)}
+                        aria-label={`Quitar ${adjunto.nombre}`}
+                        className="text-tenue transition-colors hover:text-alerta"
+                      >
+                        <Icono nombre="cerrar" tamaño={15} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+
+              <p className="mt-2 text-xs leading-relaxed text-tenue">
+                Las fotos tienen que ser de <strong className="font-semibold">texto impreso</strong> —una página de
+                libro o una fotocopia—, bien derechas y con buena luz. La letra manuscrita no se lee.
+              </p>
+            </div>
+
+            <Area
+              etiqueta="O pegá el texto acá"
+              placeholder="Si preferís, copiá y pegá el apunte tal cual lo tenés."
+              value={texto}
+              onChange={(evento) => setTexto(evento.target.value)}
+              ayuda={`${contarPalabras(textoCompleto)} palabras en total`}
+            />
+
+            <div className="flex flex-wrap items-center gap-3">
+              <Boton onClick={cargar} disabled={procesando || contarPalabras(textoCompleto) < 40}>
+                Generar preguntas
+              </Boton>
             </div>
 
             {aviso ? <p className="rounded-md bg-acento-tenue px-4 py-3 text-sm font-semibold text-acento-fuerte">{aviso}</p> : null}

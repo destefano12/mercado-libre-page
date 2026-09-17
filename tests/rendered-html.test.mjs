@@ -759,8 +759,32 @@ test("reads PDF notes in the browser without uploading them", async () => {
   assert.match(lector, /contrase\u00f1a/);
 
   assert.match(tutor, /extraerTextoDePdf/);
-  assert.match(tutor, /accept="\.pdf,application\/pdf,\.txt,\.md,\.csv,text\/plain"/);
-  assert.match(tutor, /Leyendo el PDF/);
+  assert.match(tutor, /Leyendo p\u00e1gina \$\{pagina\} de \$\{total\}/);
+});
+
+test("keeps notes as attachments and scans photos of printed text", async () => {
+  const ocr = await readFile(new URL("../app/estudiar-mejor/lib/ocr.ts", import.meta.url), "utf8");
+  const tutor = await readFile(new URL("../app/estudiar-mejor/modulos/Tutor.tsx", import.meta.url), "utf8");
+  const nucleo = await stat(new URL("../public/ocr/tesseract-core-simd-lstm.wasm.js", import.meta.url));
+  const idioma = await stat(new URL("../public/ocr/spa.traineddata", import.meta.url));
+
+  assert.ok(nucleo.size > 1_000_000);
+  assert.ok(idioma.size > 1_000_000);
+
+  // El diccionario va sin comprimir: varios servidores no entregan .gz tal cual.
+  assert.match(ocr, /gzip: false/);
+  assert.match(ocr, /export async function escanearImagen/);
+  assert.match(ocr, /__EM_OCR_CORE__/);
+  // La letra manuscrita no se lee: hay que avisarlo antes, no despu\u00e9s.
+  assert.match(ocr, /escrita a mano/);
+  assert.match(tutor, /manuscrita no se lee/);
+
+  // Los archivos quedan adjuntos; el texto extra\u00eddo vive detr\u00e1s del adjunto.
+  assert.match(tutor, /interface Adjunto/);
+  assert.match(tutor, /Adjuntar PDF, fotos o texto/);
+  assert.match(tutor, /accept="\.pdf,application\/pdf,image\/\*,\.txt,\.md,\.csv,text\/plain"/);
+  assert.match(tutor, /multiple/);
+  assert.match(tutor, /textoDeAdjuntos/);
 });
 
 test("offers fixed study durations with a drift-free timer", async () => {

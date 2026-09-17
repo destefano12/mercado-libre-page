@@ -29,7 +29,8 @@ export type NombreIcono =
   | "reloj"
   | "archivo"
   | "papelera"
-  | "copiar";
+  | "copiar"
+  | "foto";
 
 const TRAZOS: Record<NombreIcono, string> = {
   hoy: "M3 10.5 12 3l9 7.5M5.5 9.5V20h13V9.5M10 20v-5.5h4V20",
@@ -56,6 +57,7 @@ const TRAZOS: Record<NombreIcono, string> = {
   reloj: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-13.5V12l3.5 2",
   archivo: "M14 3.5H8A1.5 1.5 0 0 0 6.5 5v14A1.5 1.5 0 0 0 8 20.5h8a1.5 1.5 0 0 0 1.5-1.5V7L14 3.5Zm-.5 0V7h4",
   papelera: "M5.5 7h13M10 7V5.5A1.5 1.5 0 0 1 11.5 4h1A1.5 1.5 0 0 1 14 5.5V7m3 0v12a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 7 19V7m3 3.5v7m4-7v7",
+  foto: "M4.5 7.5h3l1.2-2h6.6l1.2 2h3v11h-15v-11Zm7.5 8.2a2.9 2.9 0 1 0 0-5.8 2.9 2.9 0 0 0 0 5.8Z",
   copiar: "M9 9V5.5A1.5 1.5 0 0 1 10.5 4h8A1.5 1.5 0 0 1 20 5.5v8a1.5 1.5 0 0 1-1.5 1.5H15M5.5 9h8A1.5 1.5 0 0 1 15 10.5v8A1.5 1.5 0 0 1 13.5 20h-8A1.5 1.5 0 0 1 4 18.5v-8A1.5 1.5 0 0 1 5.5 9Z",
 };
 
