@@ -19,7 +19,8 @@ import { armarCola } from "../lib/tutor";
 import { Icono } from "./iconos";
 import { PanelGuardia } from "./PanelGuardia";
 import { GRUPOS, buscarSeccion, type SeccionId } from "./navegacion";
-import { Boton } from "./ui";
+import { Boton, Selector } from "./ui";
+import { nombreDelAnio } from "../lib/banco";
 
 function Marca({ compacta = false }: { compacta?: boolean }) {
   return (
@@ -152,8 +153,8 @@ function Contenido() {
                 </span>
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-semibold text-tinta">{estado.nombre}</span>
-                  <span className="flex items-center gap-1 text-xs text-media">
-                    <Icono nombre="racha" tamaño={13} className="text-atencion" />
+                  <span className="block truncate text-xs text-media">
+                    {estado.anio > 0 ? `${nombreDelAnio(estado.anio)} · ` : ""}
                     <span className="em-cifra">{constancia.rachaActual}</span> días · {pendientes} preguntas
                   </span>
                 </span>
@@ -230,6 +231,24 @@ function Contenido() {
                   No hay servidores, ni cuentas, ni sincronización: todo se guarda en el almacenamiento local de este
                   dispositivo. Si borrás los datos del navegador, se borra tu progreso.
                 </p>
+                <div className="mt-4 flex flex-wrap items-end gap-3">
+                  <Selector
+                    etiqueta="Año que cursás"
+                    value={estado.anio || 1}
+                    onChange={(evento) => acciones.guardarAnio(Number(evento.target.value))}
+                    className="w-44"
+                  >
+                    {[1, 2, 3, 4, 5, 6].map((numero) => (
+                      <option key={numero} value={numero}>
+                        {nombreDelAnio(numero)}
+                      </option>
+                    ))}
+                  </Selector>
+                  <p className="max-w-sm text-xs leading-relaxed text-tenue">
+                    Calibra la dificultad de las consignas que te devuelvo cuando me pedís preguntas de un tema.
+                  </p>
+                </div>
+
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Boton variante="secundario" icono="copiar" onClick={() => void copiarDatos()}>
                     Copiar mis datos

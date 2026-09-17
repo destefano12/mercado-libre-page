@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Barra, Boton, Campo, Dato, Pildora, Tarjeta, TituloSeccion, Vacio } from "../components/ui";
+import { Barra, Boton, Campo, Dato, Pildora, Selector, Tarjeta, TituloSeccion, Vacio } from "../components/ui";
+import { nombreDelAnio } from "../lib/banco";
 import { cuandoEs, diferenciaEnDias, hoyClave, minutosLegibles } from "../lib/fechas";
 import { COLORES_DOMINIO, calcularConstancia, nivelDominio } from "../lib/metricas";
 import { progresoPlan } from "../lib/plan";
@@ -20,6 +21,7 @@ const ATAJOS: { seccion: SeccionId; icono: NombreIcono; nombre: string; texto: s
 export function Inicio({ irA }: { irA: (seccion: SeccionId) => void }) {
   const { estado, acciones } = useEstudiar();
   const [nombre, setNombre] = useState(estado.nombre);
+  const [anio, setAnio] = useState(estado.anio || 1);
 
   const hoy = hoyClave();
   const constancia = calcularConstancia(estado.logs);
@@ -40,31 +42,52 @@ export function Inicio({ irA }: { irA: (seccion: SeccionId) => void }) {
 
   const semaforo = estado.temas.map((tema) => ({ tema, nivel: nivelDominio(estado.dominio[tema.id]) }));
 
+  const comenzar = () => {
+    if (!nombre.trim()) return;
+    acciones.guardarNombre(nombre.trim());
+    acciones.guardarAnio(anio);
+  };
+
   if (!estado.nombre) {
     return (
       <Tarjeta>
-        <TituloSeccion icono="hoy" titulo="Hola, ¿cómo te llamás?" bajada="Con esto alcanza: no hay cuentas, ni mails, ni contraseñas. Todo queda en este navegador." />
-        <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
+        <TituloSeccion
+          icono="hoy"
+          titulo="Hola, ¿cómo te llamás?"
+          bajada="Con esto alcanza: no hay cuentas, ni mails, ni contraseñas. Todo queda en este navegador."
+        />
+        <div className="grid gap-4 sm:grid-cols-2">
           <Campo
             etiqueta="Tu nombre"
             placeholder="Ej: Sofi"
             value={nombre}
             onChange={(evento) => setNombre(evento.target.value)}
             onKeyDown={(evento) => {
-              if (evento.key === "Enter" && nombre.trim()) acciones.guardarNombre(nombre.trim());
+              if (evento.key === "Enter" && nombre.trim()) comenzar();
             }}
           />
-          <Boton className="h-11" disabled={!nombre.trim()} onClick={() => acciones.guardarNombre(nombre.trim())}>
-            Empezar
-          </Boton>
+          <Selector etiqueta="¿Qué año cursás?" value={anio} onChange={(evento) => setAnio(Number(evento.target.value))}>
+            {[1, 2, 3, 4, 5, 6].map((numero) => (
+              <option key={numero} value={numero}>
+                {nombreDelAnio(numero)}
+              </option>
+            ))}
+          </Selector>
         </div>
+        <p className="mt-2 text-xs text-tenue">
+          El año me sirve para calibrar las preguntas: en los primeros años apunto a reconocer y describir, y en los
+          últimos a analizar y fundamentar.
+        </p>
+        <Boton className="mt-4" disabled={!nombre.trim()} onClick={comenzar}>
+          Empezar
+        </Boton>
         <div className="mt-6 rounded-md bg-acento-tenue p-4 text-sm leading-relaxed text-acento-fuerte">
           <strong>Antes de entrar, el trato:</strong> esta plataforma no resuelve tareas, no redacta trabajos y no responde
           ejercicios. Organiza, pregunta y te muestra dónde se corta tu razonamiento. Si buscás que alguien lo haga por vos,
           este no es el lugar. Si buscás entenderlo, sí.
         </div>
         <div className="mt-4">
-          <Boton variante="secundario" onClick={acciones.cargarEjemplo}>
+          <Boton variante="secundario" icono="archivo" onClick={acciones.cargarEjemplo}>
             Ver la app con datos de ejemplo
           </Boton>
         </div>

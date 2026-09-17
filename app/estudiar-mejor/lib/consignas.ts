@@ -1,3 +1,4 @@
+import { buscarEnBanco, elegirPorNivel, nombreDelAnio } from "./banco";
 import { analizarMaterial, mayuscula, normalizar, recortar, terminosClave } from "./texto";
 
 /**
@@ -9,7 +10,8 @@ import { analizarMaterial, mayuscula, normalizar, recortar, terminosClave } from
 
 export interface ConsignasArmadas {
   tema: string;
-  origen: "material" | "esquema";
+  materia?: string;
+  origen: "material" | "banco" | "esquema";
   consignas: string[];
   nota: string;
 }
@@ -90,28 +92,53 @@ function desdeMaterial(tema: string, texto: string, cantidad: number): string[] 
   return consignas.slice(0, cantidad);
 }
 
-export function armarConsignas(
-  tema: string,
-  textoMaterial: string,
-  cantidad = 8,
-): ConsignasArmadas {
-  const nombre = tema.trim() || "el tema";
-  const hayMaterial = textoMaterial.trim().length > 200;
+export interface EntradaConsignas {
+  /** Lo que escribió el alumno, tal cual: sirve para buscar el tema en el banco. */
+  pedido: string;
+  tema: string;
+  textoMaterial: string;
+  anio: number;
+  cantidad?: number;
+}
 
-  if (hayMaterial) {
+/**
+ * Tres fuentes, en orden de preferencia:
+ * 1. El material que cargó el alumno, que siempre le gana a cualquier otra cosa.
+ * 2. El banco de temas frecuentes de secundaria, con consignas puntuales.
+ * 3. El esquema general, que sirve para cualquier tema aunque no lo conozcamos.
+ * En los tres casos el nivel se ajusta al año que cursa.
+ */
+export function armarConsignas(entrada: EntradaConsignas): ConsignasArmadas {
+  const { pedido, textoMaterial, anio } = entrada;
+  const cantidad = entrada.cantidad ?? 8;
+  const nombre = entrada.tema.trim() || "el tema";
+  const curso = nombreDelAnio(anio);
+
+  if (textoMaterial.trim().length > 200) {
     return {
       tema: nombre,
       origen: "material",
-      consignas: desdeMaterial(nombre, textoMaterial, cantidad),
-      nota: `Estas consignas salieron del material que cargaste de ${nombre}. Resolvelas en la carpeta y después verificá contra el apunte.`,
+      consignas: elegirPorNivel(desdeMaterial(nombre, textoMaterial, cantidad * 2), anio, cantidad),
+      nota: `Salieron del material que cargaste de ${nombre}, con el nivel de ${curso}. Resolvelas en la carpeta y después verificá contra el apunte.`,
+    };
+  }
+
+  const delBanco = buscarEnBanco(pedido) ?? buscarEnBanco(nombre);
+  if (delBanco) {
+    return {
+      tema: delBanco.nombre,
+      materia: delBanco.materia,
+      origen: "banco",
+      consignas: elegirPorNivel(delBanco.preguntas, anio, cantidad),
+      nota: `Consignas de ${delBanco.materia} sobre ${delBanco.nombre}, con el nivel de ${curso}. Si cargás tu apunte en el tutor, las próximas salen de tu propia carpeta.`,
     };
   }
 
   return {
     tema: nombre,
     origen: "esquema",
-    consignas: ESQUEMA.slice(0, cantidad).map((plantilla) => plantilla(nombre)),
-    nota: `Todavía no tenés material cargado de ${nombre}, así que estas consignas son el esquema que sirve para cualquier tema. Si cargás el apunte en el tutor, las próximas salen de tu propio material.`,
+    consignas: elegirPorNivel(ESQUEMA.map((plantilla) => plantilla(nombre)), anio, cantidad),
+    nota: `No tengo este tema cargado ni encontré material tuyo, así que estas consignas son el esquema general, adaptado a ${curso}. Cargá el apunte en el tutor y te armo preguntas sobre tu propio texto.`,
   };
 }
 

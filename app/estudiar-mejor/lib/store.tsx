@@ -54,6 +54,7 @@ function leerAlmacenado(): EstadoEstudiar | null {
 
 export interface AccionesEstudiar {
   guardarNombre: (nombre: string) => void;
+  guardarAnio: (anio: number) => void;
   aceptarManifiesto: () => void;
   agregarTema: (nombre: string, materia: string) => Tema;
   eliminarTema: (id: string) => void;
@@ -164,6 +165,7 @@ export function ProveedorEstudiar({ children }: { children: ReactNode }) {
 
     return {
       guardarNombre: (nombre) => setEstado((previo) => ({ ...previo, nombre })),
+      guardarAnio: (anio) => setEstado((previo) => ({ ...previo, anio })),
       aceptarManifiesto: () => setEstado((previo) => ({ ...previo, manifiestoAceptado: true })),
 
       agregarTema: (nombre, materia) => {

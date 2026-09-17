@@ -5,6 +5,7 @@ export function estadoInicialVacio(): EstadoEstudiar {
   return {
     version: 1,
     nombre: "",
+    anio: 0,
     temas: [],
     materiales: [],
     planes: [],

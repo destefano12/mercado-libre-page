@@ -684,6 +684,56 @@ test("generates practice questions on request and keeps refusing to solve", asyn
   assert.match(guardia, /"resolver-ejercicio"/);
 });
 
+test("answers topic requests from a curated bank, calibrated by school year", async () => {
+  const banco = await readFile(
+    new URL("../app/estudiar-mejor/lib/banco.ts", import.meta.url),
+    "utf8",
+  );
+  const consignas = await readFile(
+    new URL("../app/estudiar-mejor/lib/consignas.ts", import.meta.url),
+    "utf8",
+  );
+  const panel = await readFile(
+    new URL("../app/estudiar-mejor/components/PanelGuardia.tsx", import.meta.url),
+    "utf8",
+  );
+  const tipos = await readFile(
+    new URL("../app/estudiar-mejor/lib/tipos.ts", import.meta.url),
+    "utf8",
+  );
+
+  // El banco cubre materias de secundaria con consignas propias del tema.
+  for (const tema of [
+    "Grecia antigua",
+    "Revoluci\u00f3n Francesa",
+    "Fotos\u00edntesis",
+    "Leyes de Newton",
+    "Tabla peri\u00f3dica",
+    "Funciones cuadr\u00e1ticas",
+    "Derechos humanos",
+  ]) {
+    assert.match(banco, new RegExp(`nombre: "${tema}"`));
+  }
+  assert.match(banco, /Guerras M\u00e9dicas/);
+  assert.match(banco, /export function buscarEnBanco/);
+  assert.match(banco, /export function elegirPorNivel/);
+  assert.match(banco, /export function nivelDePregunta/);
+
+  // Tres fuentes en orden: material propio, banco, esquema general.
+  assert.match(consignas, /origen: "material"/);
+  assert.match(consignas, /origen: "banco"/);
+  assert.match(consignas, /origen: "esquema"/);
+  assert.match(consignas, /anio/);
+
+  // El a\u00f1o que cursa vive en el estado y se usa para calibrar.
+  assert.match(tipos, /anio: number/);
+  assert.match(panel, /anio: estado\.anio/);
+
+  // El tema se busca por su nombre, nunca por la materia sola.
+  assert.match(panel, /nunca por la materia/);
+  assert.doesNotMatch(panel, /plano\.includes\(materia\)/);
+});
+
 test("offers fixed study durations with a drift-free timer", async () => {
   const pomodoro = await readFile(
     new URL("../app/estudiar-mejor/modulos/Pomodoro.tsx", import.meta.url),

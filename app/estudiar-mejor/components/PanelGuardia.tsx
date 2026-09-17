@@ -22,14 +22,33 @@ export function PanelGuardia({ abierto, onCerrar }: { abierto: boolean; onCerrar
 
   if (!abierto) return null;
 
-  /** Busca el tema entre los cargados: por nombre, por materia o al revés. */
+  /**
+   * Busca el tema entre los que el alumno tiene cargados, siempre por el nombre
+   * del tema y nunca por la materia: pedir "preguntas de Historia sobre Grecia"
+   * no debe traer el material de otro tema de Historia. Con nombres de varias
+   * palabras se exige que estén todas, así "Revolución Francesa" no cae en
+   * "Revolución Industrial".
+   */
   const buscarTema = (pedido: string) => {
-    const plano = normalizar(pedido);
-    return estado.temas.find((tema) => {
+    const plano = ` ${normalizar(pedido)} `;
+    let elegido: (typeof estado.temas)[number] | undefined;
+    let largo = 0;
+
+    estado.temas.forEach((tema) => {
       const nombre = normalizar(tema.nombre);
-      const materia = normalizar(tema.materia);
-      return plano.includes(nombre) || (materia.length > 3 && plano.includes(materia)) || nombre.includes(plano);
+      if (nombre.length < 4) return;
+
+      const palabras = nombre.split(" ").filter((palabra) => palabra.length >= 4);
+      const coincide =
+        plano.includes(nombre) || (palabras.length > 0 && palabras.every((palabra) => plano.includes(palabra)));
+
+      if (coincide && nombre.length > largo) {
+        largo = nombre.length;
+        elegido = tema;
+      }
     });
+
+    return elegido;
   };
 
   const preguntar = (pedido: string) => {
@@ -60,7 +79,7 @@ export function PanelGuardia({ abierto, onCerrar }: { abierto: boolean; onCerrar
           .join("\n")
       : "";
 
-    setConsignas(armarConsignas(nombre, material));
+    setConsignas(armarConsignas({ pedido: limpio, tema: nombre, textoMaterial: material, anio: estado.anio }));
   };
 
   const limpiar = () => {
@@ -98,7 +117,10 @@ export function PanelGuardia({ abierto, onCerrar }: { abierto: boolean; onCerrar
           {consignas ? (
             <div className="em-aparecer space-y-4">
               <Pildora tono="acento">{ETIQUETAS_INTENCION["pedir-preguntas"]}</Pildora>
-              <h3 className="text-base text-tinta">Consignas de {consignas.tema}</h3>
+              <h3 className="text-base text-tinta">
+                {consignas.materia ? `${consignas.materia}: ` : "Consignas de "}
+                {consignas.tema}
+              </h3>
               <Nota tono={consignas.origen === "material" ? "acento" : "atencion"}>{consignas.nota}</Nota>
               <ol className="space-y-2">
                 {consignas.consignas.map((consigna, indice) => (

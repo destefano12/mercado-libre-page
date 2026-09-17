@@ -46,6 +46,7 @@ export function estadoDeEjemplo(): EstadoEstudiar {
   return {
     ...base,
     nombre: "Sofi",
+    anio: 3,
     manifiestoAceptado: true,
     temas: [biologia, historia, matematica],
     materiales,

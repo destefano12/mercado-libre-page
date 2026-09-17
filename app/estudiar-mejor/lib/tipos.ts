@@ -201,6 +201,8 @@ export interface EvidenciaDominio {
 export interface EstadoEstudiar {
   version: number;
   nombre: string;
+  /** Año de la secundaria que cursa: 0 si todavía no lo dijo. */
+  anio: number;
   temas: Tema[];
   materiales: Material[];
   planes: Plan[];
