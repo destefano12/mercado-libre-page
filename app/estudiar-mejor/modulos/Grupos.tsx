@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { AvisoPrincipio, Barra, Boton, Campo, Pildora, Tarjeta, TituloSeccion, Vacio } from "../components/ui";
 import { ChatGrupo } from "../components/ChatGrupo";
+import { conectarChat } from "../lib/chat";
 import { Icono } from "../components/iconos";
 import { cuandoEs, fechaLarga, hoyClave, sumarDias } from "../lib/fechas";
 import { nombreDesdeCorreo, separarCorreo } from "../lib/correo";
+import { enlaceDeCorreo, enlaceDeInvitacion, textoDeInvitacion, type DatosInvitacion } from "../lib/invitacion";
 import { useEstudiar } from "../lib/store";
 import type { Integrante } from "../lib/tipos";
 
@@ -32,6 +34,8 @@ export function Grupos() {
   const [nuevaTarea, setNuevaTarea] = useState<Record<string, string>>({});
   const [nuevoIntegrante, setNuevoIntegrante] = useState<Record<string, string>>({});
   const [codigoParaEntrar, setCodigoParaEntrar] = useState("");
+  const [entrando, setEntrando] = useState(false);
+  const [avisoDeCodigo, setAvisoDeCodigo] = useState<{ tono: "alerta" | "logro"; texto: string } | null>(null);
 
   const crear = () => {
     const lista = integrantes
@@ -60,6 +64,56 @@ export function Grupos() {
     setNombre("");
     setMateria("");
     setIntegrantes("");
+  };
+
+  /**
+   * Un código suelto no alcanza para entrar: se busca el grupo en el servidor
+   * y, si no existe, no se crea nada. Un grupo inventado no le sirve a nadie.
+   */
+  const entrarConCodigo = async () => {
+    const codigo = codigoParaEntrar.trim().toUpperCase();
+    if (codigo.length < 4) return;
+
+    if (estado.grupos.some((grupo) => grupo.codigo === codigo)) {
+      setAvisoDeCodigo({ tono: "logro", texto: "Ya estabas en ese grupo: miralo más abajo." });
+      setCodigoParaEntrar("");
+      return;
+    }
+
+    setEntrando(true);
+    setAvisoDeCodigo(null);
+
+    const chat = await conectarChat();
+    if (!chat?.buscarGrupo) {
+      setEntrando(false);
+      setAvisoDeCodigo({
+        tono: "alerta",
+        texto: "No hay conexión con el servidor, así que no puedo comprobar el código. Probá de nuevo en un momento.",
+      });
+      return;
+    }
+
+    const ficha = await chat.buscarGrupo(codigo);
+    setEntrando(false);
+
+    if (!ficha) {
+      setAvisoDeCodigo({
+        tono: "alerta",
+        texto: `No existe ningún grupo con el código ${codigo}. Pedile a quien lo armó que te lo pase de nuevo o que te invite por mail.`,
+      });
+      return;
+    }
+
+    const mio = estado.email.trim().toLowerCase();
+    acciones.adoptarGrupoPublicado({
+      ...ficha,
+      correos: mio ? [...ficha.correos, mio] : ficha.correos,
+      integrantes: mio && !ficha.correos.includes(mio)
+        ? [...ficha.integrantes, { nombre: estado.nombre || "Vos", email: mio, rol: "Integrante" }]
+        : ficha.integrantes,
+    });
+    setAvisoDeCodigo({ tono: "logro", texto: `Entraste a "${ficha.nombre}".` });
+    setCodigoParaEntrar("");
   };
 
   return (
@@ -94,21 +148,24 @@ export function Grupos() {
               etiqueta="¿Te pasaron un código?"
               placeholder="Ej: BIO4KM"
               value={codigoParaEntrar}
-              onChange={(evento) => setCodigoParaEntrar(evento.target.value.toUpperCase())}
+              onChange={(evento) => {
+                setCodigoParaEntrar(evento.target.value.toUpperCase());
+                setAvisoDeCodigo(null);
+              }}
               className="w-44"
             />
-            <Boton
-              variante="secundario"
-              disabled={codigoParaEntrar.trim().length < 4}
-              onClick={() => {
-                acciones.sumarseAGrupo(codigoParaEntrar, `Grupo ${codigoParaEntrar.trim().toUpperCase()}`);
-                setCodigoParaEntrar("");
-              }}
-            >
-              Entrar al grupo
+            <Boton variante="secundario" disabled={codigoParaEntrar.trim().length < 4 || entrando} onClick={() => void entrarConCodigo()}>
+              {entrando ? "Buscando…" : "Entrar al grupo"}
             </Boton>
           </div>
-          <p className="mt-2 text-xs text-tenue">Entrás al grupo de un compañero y comparten el chat.</p>
+          <p className="mt-2 text-xs text-tenue">
+            El código tiene que ser el de un grupo que ya existe: se busca en el servidor antes de sumarte.
+          </p>
+          {avisoDeCodigo ? (
+            <p className={`mt-2 text-sm font-medium ${avisoDeCodigo.tono === "alerta" ? "text-alerta" : "text-logro"}`}>
+              {avisoDeCodigo.texto}
+            </p>
+          ) : null}
         </div>
 
         <AvisoPrincipio texto="Reparto las tareas, no las hago. Cada parte del trabajo la escribe la persona que la tiene asignada." />
@@ -270,6 +327,20 @@ export function Grupos() {
                 </Boton>
               </div>
 
+              <InvitarAlGrupo
+                datos={{
+                  codigo: grupo.codigo,
+                  nombreDelGrupo: grupo.nombre,
+                  materia: grupo.materia,
+                  entrega: fechaLarga(grupo.entrega),
+                  deParteDe: estado.nombre,
+                  correos: grupo.integrantes
+                    .filter((integrante) => !integrante.esYo)
+                    .map((integrante) => integrante.email)
+                    .filter(Boolean),
+                }}
+              />
+
               <ChatGrupo codigo={grupo.codigo} nombreDelGrupo={grupo.nombre} />
 
               {avanceGlobal < 40 && grupo.entrega <= sumarDias(hoyClave(), 5) ? (
@@ -281,6 +352,64 @@ export function Grupos() {
           );
         })
       )}
+    </div>
+  );
+}
+
+/**
+ * El mail sale del correo de quien armó el grupo, desde su propio programa de
+ * correo: al compañero le llega de una dirección que conoce y el enlace lo
+ * deja directamente en la pantalla para unirse.
+ */
+function InvitarAlGrupo({ datos }: { datos: DatosInvitacion }) {
+  const [aviso, setAviso] = useState("");
+
+  const copiar = async (texto: string, dicho: string) => {
+    try {
+      await navigator.clipboard.writeText(texto);
+      setAviso(dicho);
+    } catch {
+      setAviso("No pude copiar. Marcá el texto a mano.");
+    }
+  };
+
+  return (
+    <div className="mt-5 border-t border-linea pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="em-rotulo">Invitar a tus compañeros</p>
+        <p className="text-xs text-tenue">
+          Código: <span className="em-cifra font-semibold text-tinta">{datos.codigo}</span>
+        </p>
+      </div>
+
+      <p className="mt-1.5 max-w-prose text-sm leading-relaxed text-media">
+        Se abre tu correo con el mensaje escrito. Lo mandás vos, así les llega de tu dirección y saben que sos vos.
+      </p>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Boton
+          variante={datos.correos.length > 0 ? "primario" : "secundario"}
+          icono="archivo"
+          disabled={datos.correos.length === 0}
+          onClick={() => {
+            window.location.href = enlaceDeCorreo(datos);
+            setAviso("Se abre tu correo con la invitación lista para enviar.");
+          }}
+        >
+          Invitar por mail ({datos.correos.length})
+        </Boton>
+        <Boton variante="secundario" icono="copiar" onClick={() => void copiar(enlaceDeInvitacion(datos.codigo), "Enlace copiado.")}>
+          Copiar el enlace
+        </Boton>
+        <Boton variante="fantasma" icono="copiar" onClick={() => void copiar(textoDeInvitacion(datos), "Mensaje copiado, listo para WhatsApp.")}>
+          Copiar el mensaje
+        </Boton>
+      </div>
+
+      {datos.correos.length === 0 ? (
+        <p className="mt-2 text-xs text-tenue">Cargá el correo de tus compañeros y el botón del mail se enciende.</p>
+      ) : null}
+      {aviso ? <p className="mt-2 text-xs font-medium text-acento">{aviso}</p> : null}
     </div>
   );
 }

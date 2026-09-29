@@ -18,6 +18,7 @@ import { calcularConstancia } from "../lib/metricas";
 import { armarCola } from "../lib/tutor";
 import { Icono } from "./iconos";
 import { PanelGuardia } from "./PanelGuardia";
+import { Invitacion } from "./Invitacion";
 import { SincronizarGrupos } from "./SincronizarGrupos";
 import { GRUPOS, buscarSeccion, type SeccionId } from "./navegacion";
 import { Boton, Campo, Selector } from "./ui";
@@ -320,6 +321,7 @@ export function EstudiarMejorApp() {
     <ProveedorEstudiar>
       <SincronizarGrupos />
       <Contenido />
+      <Invitacion />
     </ProveedorEstudiar>
   );
 }

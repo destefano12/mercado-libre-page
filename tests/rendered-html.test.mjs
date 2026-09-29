@@ -852,13 +852,13 @@ test("chats with the group over a server, never over the browser alone", async (
   assert.match(chat, /onSnapshot/);
 
   // Sin servidor la aplicación sigue entera, sólo que sin chat.
-  assert.match(panel, /El chat necesita conexión con un servidor/);
+  assert.match(panel, /abierta sin conexión con su servidor/);
   // Quien sólo puede mirar lee los mensajes, pero no escribe.
   assert.match(panel, /chat\.puedeEscribir \?/);
 
   // El grupo se comparte con un código corto, sin ceros ni oes que se confundan.
   assert.match(almacen, /function codigoDeGrupo/);
-  assert.match(almacen, /sumarseAGrupo/);
+  assert.match(almacen, /adoptarGrupoPublicado/);
   assert.doesNotMatch(almacen, /ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/);
   assert.match(grupos, /ChatGrupo codigo=\{grupo\.codigo\}/);
   assert.match(grupos, /¿Te pasaron un código\?/);
@@ -887,4 +887,50 @@ test("hands over material to work on, never the resolution", async () => {
   assert.match(panel, /detectarEjercitacion\(limpio, estado\.anio\)/);
   assert.match(panel, /Material para trabajar/);
   assert.match(panel, /Cómo te das cuenta solo de si está bien/);
+});
+
+test("runs group work on its own server, and refuses codes that do not exist", async () => {
+  const servidor = await readFile(new URL("../app/lib/server/estudiar.ts", import.meta.url), "utf8");
+  const grupos = await readFile(new URL("../app/api/estudiar/grupos/route.ts", import.meta.url), "utf8");
+  const mensajes = await readFile(new URL("../app/api/estudiar/mensajes/route.ts", import.meta.url), "utf8");
+  const chat = await readFile(new URL("../app/estudiar-mejor/lib/chat.ts", import.meta.url), "utf8");
+  const modulo = await readFile(new URL("../app/estudiar-mejor/modulos/Grupos.tsx", import.meta.url), "utf8");
+  const invitacion = await readFile(new URL("../app/estudiar-mejor/components/Invitacion.tsx", import.meta.url), "utf8");
+  const almacen = await readFile(new URL("../app/estudiar-mejor/lib/store.tsx", import.meta.url), "utf8");
+
+  // La base es la del propio proyecto: nada que contratar ni claves que pegar.
+  assert.match(servidor, /CREATE TABLE IF NOT EXISTS estudiar_grupos/);
+  assert.match(servidor, /CREATE TABLE IF NOT EXISTS estudiar_mensajes/);
+  assert.match(servidor, /access-control-allow-origin/);
+  assert.match(grupos, /export async function (GET|POST)/);
+  assert.match(mensajes, /export async function (GET|POST)/);
+
+  // Lo que entra del navegador se valida antes de tocar la base.
+  assert.match(servidor, /\^\[A-Z0-9\]\{4,12\}\$/);
+  assert.match(servidor, /export function correoValido/);
+
+  // El servidor propio se prueba primero; lo demás queda de respaldo.
+  assert.match(chat, /tipo: "propio"/);
+  assert.match(chat, /api\/estudiar/);
+  assert.match(chat, /conectarPropio\(\)\) \?\? conectarSupabase\(\)/);
+  assert.match(chat, /buscarGrupo\?:/);
+
+  // Un código inventado no crea ningún grupo: primero se busca en el servidor.
+  assert.doesNotMatch(almacen, /sumarseAGrupo/);
+  assert.match(modulo, /const ficha = await chat\.buscarGrupo\(codigo\)/);
+  assert.match(modulo, /No existe ningún grupo con el código/);
+  assert.match(invitacion, /if \(!ficha\) return;/);
+  assert.match(invitacion, /No existe ningún grupo con el código/);
+});
+
+test("invites classmates from the owner's own mailbox", async () => {
+  const invitar = await readFile(new URL("../app/estudiar-mejor/lib/invitacion.ts", import.meta.url), "utf8");
+  const modulo = await readFile(new URL("../app/estudiar-mejor/modulos/Grupos.tsx", import.meta.url), "utf8");
+
+  assert.match(invitar, /export function enlaceDeCorreo/);
+  assert.match(invitar, /`mailto:/);
+  assert.match(invitar, /export function codigoInvitado/);
+  assert.match(invitar, /export function olvidarInvitacion/);
+  assert.match(modulo, /Invitar por mail/);
+  assert.match(modulo, /Copiar el enlace/);
 });

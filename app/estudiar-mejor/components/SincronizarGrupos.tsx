@@ -61,7 +61,7 @@ export function SincronizarGrupos() {
     const mio = normalizarCorreo(estado.email);
     if (!chat || !mio) return undefined;
 
-    return chat.escucharGrupos((fichas) => {
+    return chat.escucharGrupos(mio, (fichas) => {
       for (const ficha of fichas) {
         if (ficha.correos?.some((correo) => normalizarCorreo(correo) === mio)) {
           acciones.adoptarGrupoPublicado(ficha);

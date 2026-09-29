@@ -35,12 +35,14 @@ export interface GrupoPublicado {
 }
 
 export interface Chat {
-  tipo: "artifact" | "supabase";
+  tipo: "propio" | "artifact" | "supabase";
   puedeEscribir: boolean;
   enviar: (sala: string, autor: string, texto: string) => Promise<void>;
   escuchar: (sala: string, alRecibir: (mensajes: MensajeChat[]) => void) => () => void;
   publicarGrupo: (grupo: GrupoPublicado) => Promise<void>;
-  escucharGrupos: (alRecibir: (grupos: GrupoPublicado[]) => void) => () => void;
+  escucharGrupos: (correo: string, alRecibir: (grupos: GrupoPublicado[]) => void) => () => void;
+  /** Busca una ficha por su código: es lo que ve quien abre una invitación. */
+  buscarGrupo?: (codigo: string) => Promise<GrupoPublicado | null>;
 }
 
 /** De cada código queda la ficha más nueva, venga de quien venga. */
@@ -58,6 +60,105 @@ const TOPE_POR_SALA = 200;
 
 function ordenar(mensajes: MensajeChat[]): MensajeChat[] {
   return [...mensajes].sort((a, b) => a.cuando.localeCompare(b.cuando)).slice(-TOPE_POR_SALA);
+}
+
+// ---------------------------------------------------------- servidor propio
+
+/**
+ * El servidor de la propia aplicación. No hay nada que contratar ni ninguna
+ * clave que pegar: donde se publica el proyecto completo, la base viaja con
+ * él. La copia estática lo alcanza poniendo la dirección en
+ * `window.__EM_SERVIDOR__`.
+ */
+function raizDelServidor(): string | null {
+  const declarada = (globalThis as { __EM_SERVIDOR__?: string }).__EM_SERVIDOR__;
+  if (declarada) return declarada.replace(/\/$/, "");
+  if (typeof window === "undefined") return null;
+  // Desde un archivo abierto a mano (file://) no hay servidor al que pedirle.
+  return window.location.protocol.startsWith("http") ? window.location.origin : null;
+}
+
+async function conectarPropio(): Promise<Chat | null> {
+  const raiz = raizDelServidor();
+  if (!raiz) return null;
+
+  const api = `${raiz}/api/estudiar`;
+
+  // Un pedido de prueba: si no hay servidor detrás, se sigue de largo.
+  try {
+    const prueba = await fetch(`${api}/grupos?codigo=PRUEBA`, { headers: { accept: "application/json" } });
+    if (!prueba.ok) return null;
+    await prueba.json();
+  } catch {
+    return null;
+  }
+
+  const enviar = async (sala: string, autor: string, texto: string) => {
+    const respuesta = await fetch(`${api}/mensajes`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sala, autor, texto }),
+    });
+    if (!respuesta.ok) throw new Error(`No se pudo enviar el mensaje (${respuesta.status}).`);
+  };
+
+  const sondear = <T>(consulta: string, sacar: (datos: T) => void, cada: number) => {
+    let vivo = true;
+    const traer = async () => {
+      try {
+        const respuesta = await fetch(consulta, { headers: { accept: "application/json" } });
+        if (!respuesta.ok || !vivo) return;
+        sacar((await respuesta.json()) as T);
+      } catch {
+        // Un pedido que falla no rompe nada: se reintenta en el próximo.
+      }
+    };
+    void traer();
+    const reloj = window.setInterval(() => void traer(), cada);
+    return () => {
+      vivo = false;
+      window.clearInterval(reloj);
+    };
+  };
+
+  return {
+    tipo: "propio",
+    puedeEscribir: true,
+    enviar,
+    escuchar: (sala, alRecibir) =>
+      sondear<{ mensajes: MensajeChat[] }>(
+        `${api}/mensajes?sala=${encodeURIComponent(sala)}`,
+        (datos) => alRecibir(ordenar(datos.mensajes ?? [])),
+        3000,
+      ),
+    publicarGrupo: async (grupo) => {
+      const respuesta = await fetch(`${api}/grupos`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ grupo }),
+      });
+      if (!respuesta.ok) throw new Error(`No se pudo publicar el grupo (${respuesta.status}).`);
+    },
+    escucharGrupos: (correo, alRecibir) => {
+      if (!correo) return () => {};
+      return sondear<{ grupos: GrupoPublicado[] }>(
+        `${api}/grupos?correo=${encodeURIComponent(correo)}`,
+        (datos) => alRecibir(masNuevos(datos.grupos ?? [])),
+        8000,
+      );
+    },
+    buscarGrupo: async (codigo) => {
+      try {
+        const respuesta = await fetch(`${api}/grupos?codigo=${encodeURIComponent(codigo)}`, {
+          headers: { accept: "application/json" },
+        });
+        if (!respuesta.ok) return null;
+        return ((await respuesta.json()) as { grupo: GrupoPublicado | null }).grupo;
+      } catch {
+        return null;
+      }
+    },
+  };
 }
 
 // --------------------------------------------------------------- plataforma
@@ -143,7 +244,7 @@ async function conectarPlataforma(): Promise<Chat | null> {
     await mio.set({ porCodigo: { ...porCodigo, [grupo.codigo]: grupo } });
   };
 
-  const escucharGrupos = (alRecibir: (grupos: GrupoPublicado[]) => void) =>
+  const escucharGrupos = (_correo: string, alRecibir: (grupos: GrupoPublicado[]) => void) =>
     fichero.onSnapshot(
       (snap) => {
         const fichas = snap.docs.flatMap((documento) =>
@@ -224,7 +325,7 @@ function conectarSupabase(): Chat | null {
     if (!respuesta.ok) throw new Error(`No se pudo publicar el grupo (${respuesta.status}).`);
   };
 
-  const escucharGrupos = (alRecibir: (grupos: GrupoPublicado[]) => void) => {
+  const escucharGrupos = (_correo: string, alRecibir: (grupos: GrupoPublicado[]) => void) => {
     let vivo = true;
 
     const traer = async () => {
@@ -253,6 +354,7 @@ let conexion: Promise<Chat | null> | null = null;
 
 export function conectarChat(): Promise<Chat | null> {
   if (conexion) return conexion;
-  conexion = (async () => conectarSupabase() ?? (await conectarPlataforma()))();
+  conexion = (async () =>
+    (await conectarPropio()) ?? conectarSupabase() ?? (await conectarPlataforma()))();
   return conexion;
 }

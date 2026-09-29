@@ -90,7 +90,6 @@ export interface AccionesEstudiar {
     integrantes: { nombre: string; email?: string; rol: string }[],
   ) => void;
   eliminarGrupo: (id: string) => void;
-  sumarseAGrupo: (codigo: string, nombre: string) => void;
   /** Trae un grupo que armó otra persona y en el que figura tu correo. */
   adoptarGrupoPublicado: (grupo: GrupoPublicado) => void;
   agregarIntegrante: (grupoId: string, nombre: string, email: string, rol: string) => void;
@@ -455,37 +454,6 @@ export function ProveedorEstudiar({ children }: { children: ReactNode }) {
 
       eliminarGrupo: (id) =>
         setEstado((previo) => ({ ...previo, grupos: previo.grupos.filter((grupo) => grupo.id !== id) })),
-
-      /** Entrar a un grupo que armó otra persona, con el código que compartió. */
-      sumarseAGrupo: (codigo, nombre) =>
-        setEstado((previo) => {
-          const limpio = codigo.trim().toUpperCase();
-          if (!limpio || previo.grupos.some((grupo) => grupo.codigo === limpio)) return previo;
-          return {
-            ...previo,
-            grupos: [
-              {
-                id: crearId("grupo"),
-                nombre: nombre.trim() || `Grupo ${limpio}`,
-                materia: "General",
-                entrega: hoyClave(),
-                creadoEn: new Date().toISOString(),
-                codigo: limpio,
-                integrantes: [
-                  {
-                    id: crearId("integrante"),
-                    nombre: previo.nombre || "Vos",
-                    email: previo.email,
-                    rol: "Integrante",
-                    esYo: true,
-                    tareas: [],
-                  },
-                ],
-              },
-              ...previo.grupos,
-            ],
-          };
-        }),
 
       agregarIntegrante: (grupoId, nombre, email, rol) =>
         mapearGrupo(grupoId, (grupo) => {

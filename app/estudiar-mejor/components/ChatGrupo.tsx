@@ -62,9 +62,9 @@ export function ChatGrupo({ codigo, nombreDelGrupo }: { codigo: string; nombreDe
   if (!chat) {
     return (
       <div className="mt-4">
-        <Nota tono="neutro">
-          El chat necesita conexión con un servidor y esta copia de la aplicación no la tiene. Todo lo demás del grupo
-          —el reparto de tareas y el avance— funciona igual, guardado en este dispositivo.
+        <Nota tono="atencion">
+          Esta copia de la aplicación está abierta sin conexión con su servidor, así que el chat no funciona acá. Todo
+          lo demás del grupo —el reparto de tareas y el avance— anda igual, guardado en este dispositivo.
         </Nota>
       </div>
     );
@@ -72,12 +72,7 @@ export function ChatGrupo({ codigo, nombreDelGrupo }: { codigo: string; nombreDe
 
   return (
     <div className="mt-5 border-t border-linea pt-4">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <p className="em-rotulo">Chat del grupo</p>
-        <p className="text-xs text-tenue">
-          Código para que entren tus compañeros: <span className="em-cifra font-semibold text-tinta">{codigo}</span>
-        </p>
-      </div>
+      <p className="em-rotulo mb-3">Chat del grupo</p>
 
       <div
         ref={fondo}

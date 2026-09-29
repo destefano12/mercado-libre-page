@@ -56,7 +56,7 @@ export function Inicio({ irA }: { irA: (seccion: SeccionId) => void }) {
         <TituloSeccion
           icono="hoy"
           titulo="Hola, ¿cómo te llamás?"
-          bajada="Con esto alcanza: no hay cuentas, ni mails, ni contraseñas. Todo queda en este navegador."
+          bajada="Con esto alcanza: no hay contraseñas ni registro. Tu estudio queda en este navegador; el correo sólo sirve para los trabajos grupales."
         />
         <div className="grid gap-4 sm:grid-cols-2">
           <Campo
@@ -77,13 +77,13 @@ export function Inicio({ irA }: { irA: (seccion: SeccionId) => void }) {
           </Selector>
         </div>
         <Campo
-          etiqueta="Tu correo (opcional)"
+          etiqueta="Tu correo"
           type="email"
           placeholder="nombre@mail.com"
           value={email}
           onChange={(evento) => setEmail(evento.target.value)}
           className="mt-4"
-          ayuda="Sirve para que te identifiquen cuando te suman a un trabajo grupal. Queda en este dispositivo."
+          ayuda="Es la llave de los trabajos grupales: cuando un compañero te suma con este correo, el trabajo te aparece solo."
         />
         <p className="mt-3 text-xs leading-relaxed text-tenue">
           El año me sirve para calibrar las preguntas: en los primeros años apunto a reconocer y describir, y en los
