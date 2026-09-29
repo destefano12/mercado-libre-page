@@ -863,3 +863,28 @@ test("chats with the group over a server, never over the browser alone", async (
   assert.match(grupos, /ChatGrupo codigo=\{grupo\.codigo\}/);
   assert.match(grupos, /¿Te pasaron un código\?/);
 });
+
+test("hands over material to work on, never the resolution", async () => {
+  const ejercicios = await readFile(new URL("../app/estudiar-mejor/lib/ejercicios.ts", import.meta.url), "utf8");
+  const panel = await readFile(new URL("../app/estudiar-mejor/components/PanelGuardia.tsx", import.meta.url), "utf8");
+
+  // Pedir oraciones devuelve oraciones, no preguntas sobre la sintaxis.
+  for (const familia of ["sintaxis", "morfologia", "tildes", "verbos", "matematica", "ingles", "quimica", "fisica"]) {
+    assert.match(ejercicios, new RegExp(`tipo: "${familia}"`));
+  }
+  assert.match(ejercicios, /export function detectarEjercitacion/);
+  assert.match(ejercicios, /comoVerificar/);
+
+  // Da igual cómo se escriba el pedido: se normaliza antes de mirarlo.
+  assert.match(ejercicios, /const plano = normalizar\(pedido\)/);
+  // "Hacé el ejercicio 4" sigue siendo pedir que resuelva, y no pasa.
+  assert.match(ejercicios, /const PIDE_RESOLUCION/);
+
+  // La química gana sobre la matemática: una ecuación química también es "ecuación".
+  assert.ok(ejercicios.indexOf('tipo: "quimica", marcas') < ejercicios.indexOf('tipo: "matematica", marcas'));
+
+  // El panel prueba primero si lo que se pide es material.
+  assert.match(panel, /detectarEjercitacion\(limpio, estado\.anio\)/);
+  assert.match(panel, /Material para trabajar/);
+  assert.match(panel, /Cómo te das cuenta solo de si está bien/);
+});

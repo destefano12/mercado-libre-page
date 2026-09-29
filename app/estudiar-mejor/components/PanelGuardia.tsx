@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { armarConsignas, temaDelPedido, type ConsignasArmadas } from "../lib/consignas";
+import { detectarEjercitacion, type Ejercitacion } from "../lib/ejercicios";
 import { ETIQUETAS_INTENCION, responderComoGuia, type RespuestaGuardia } from "../lib/guardia";
 import { useEstudiar } from "../lib/store";
 import { mayuscula, normalizar } from "../lib/texto";
@@ -9,9 +10,10 @@ import { Icono } from "./iconos";
 import { Boton, Nota, Pildora } from "./ui";
 
 const EJEMPLOS = [
+  "Hacéme oraciones para analizar en sintaxis",
+  "Dame ecuaciones para practicar",
   "Hacéme preguntas de Biología sobre la fotosíntesis",
   "Resolveme el ejercicio 4",
-  "No entiendo el ciclo de Calvin",
 ];
 
 export function PanelGuardia({ abierto, onCerrar }: { abierto: boolean; onCerrar: () => void }) {
@@ -19,6 +21,7 @@ export function PanelGuardia({ abierto, onCerrar }: { abierto: boolean; onCerrar
   const [texto, setTexto] = useState("");
   const [respuesta, setRespuesta] = useState<RespuestaGuardia | null>(null);
   const [consignas, setConsignas] = useState<ConsignasArmadas | null>(null);
+  const [ejercitacion, setEjercitacion] = useState<Ejercitacion | null>(null);
 
   if (!abierto) return null;
 
@@ -56,6 +59,20 @@ export function PanelGuardia({ abierto, onCerrar }: { abierto: boolean; onCerrar
     if (!limpio) return;
     setTexto(limpio);
 
+    /**
+     * Primero: ¿pide material para trabajar? "Hacéme oraciones para analizar
+     * en sintaxis" necesita oraciones, no preguntas sobre la sintaxis. El
+     * material se entrega sin resolver, que es justamente lo que se pide.
+     */
+    const trabajo = detectarEjercitacion(limpio, estado.anio);
+    if (trabajo) {
+      setEjercitacion(trabajo);
+      setRespuesta(null);
+      setConsignas(null);
+      return;
+    }
+    setEjercitacion(null);
+
     const resultado = responderComoGuia(limpio);
     setRespuesta(resultado);
 
@@ -85,6 +102,7 @@ export function PanelGuardia({ abierto, onCerrar }: { abierto: boolean; onCerrar
   const limpiar = () => {
     setRespuesta(null);
     setConsignas(null);
+    setEjercitacion(null);
     setTexto("");
   };
 
@@ -101,7 +119,7 @@ export function PanelGuardia({ abierto, onCerrar }: { abierto: boolean; onCerrar
         <header className="flex items-start justify-between gap-3 border-b border-linea px-5 py-4">
           <div>
             <h2 className="text-lg text-tinta">Pedime ayuda</h2>
-            <p className="mt-0.5 text-sm text-media">Te voy a devolver preguntas, no respuestas.</p>
+            <p className="mt-0.5 text-sm text-media">Te doy preguntas y ejercicios. Las respuestas las escribís vos.</p>
           </div>
           <button
             type="button"
@@ -114,7 +132,36 @@ export function PanelGuardia({ abierto, onCerrar }: { abierto: boolean; onCerrar
         </header>
 
         <div className="em-scroll-suave flex-1 overflow-y-auto px-5 py-5">
-          {consignas ? (
+          {ejercitacion ? (
+            <div className="em-aparecer space-y-4">
+              <Pildora tono="acento">Material para trabajar</Pildora>
+              <h3 className="text-base text-tinta">{ejercitacion.titulo}</h3>
+              <Nota tono="acento">{ejercitacion.consigna}</Nota>
+              <ol className="space-y-2">
+                {ejercitacion.material.map((renglon, indice) => (
+                  <li
+                    key={`${indice}-${renglon}`}
+                    className="flex gap-3 border-l-2 border-acento-linea py-1 pl-3 text-sm leading-relaxed text-tinta"
+                  >
+                    <span className="em-cifra em-rotulo mt-0.5 text-acento">{indice + 1}</span>
+                    <span className={ejercitacion.tipo === "matematica" ? "em-cifra" : undefined}>{renglon}</span>
+                  </li>
+                ))}
+              </ol>
+              <div className="rounded-md border border-linea bg-papel p-4">
+                <p className="em-rotulo mb-2">Cómo te das cuenta solo de si está bien</p>
+                <ul className="space-y-1.5">
+                  {ejercitacion.comoVerificar.map((pista) => (
+                    <li key={pista} className="flex gap-2 text-sm leading-relaxed text-media">
+                      <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-acento" />
+                      <span>{pista}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <p className="border-t border-linea pt-3 text-sm italic leading-relaxed text-media">{ejercitacion.nota}</p>
+            </div>
+          ) : consignas ? (
             <div className="em-aparecer space-y-4">
               <Pildora tono="acento">{ETIQUETAS_INTENCION["pedir-preguntas"]}</Pildora>
               <h3 className="text-base text-tinta">
@@ -154,8 +201,8 @@ export function PanelGuardia({ abierto, onCerrar }: { abierto: boolean; onCerrar
           ) : (
             <div className="space-y-3">
               <p className="text-sm leading-relaxed text-media">
-                Pedime consignas de un tema y te armo una tanda para resolver en la carpeta. O contame qué te traba, y
-                lo desarmamos con preguntas. Por ejemplo:
+                Pedime ejercicios y te armo el material para trabajar: oraciones, palabras, cuentas. Pedime preguntas
+                de un tema y te armo la tanda. O contame qué te traba, y lo desarmamos. Por ejemplo:
               </p>
               <ul className="space-y-2">
                 {EJEMPLOS.map((ejemplo) => (
@@ -195,7 +242,7 @@ export function PanelGuardia({ abierto, onCerrar }: { abierto: boolean; onCerrar
             <Boton className="flex-1" onClick={() => preguntar(texto)} disabled={!texto.trim()}>
               Preguntar
             </Boton>
-            {respuesta ? (
+            {respuesta || ejercitacion ? (
               <Boton variante="fantasma" onClick={limpiar}>
                 Limpiar
               </Boton>
