@@ -1,5 +1,6 @@
 import { buscarEnBanco, elegirPorNivel, nombreDelAnio } from "./banco";
-import { analizarMaterial, mayuscula, normalizar, recortar, terminosClave } from "./texto";
+import { consignasDeMateria } from "./esquemas";
+import { analizarMaterial, normalizar, recortar, terminosClave } from "./texto";
 
 /**
  * Arma tandas de consignas para resolver en la carpeta cuando el alumno las
@@ -11,7 +12,7 @@ import { analizarMaterial, mayuscula, normalizar, recortar, terminosClave } from
 export interface ConsignasArmadas {
   tema: string;
   materia?: string;
-  origen: "material" | "banco" | "esquema";
+  origen: "material" | "banco" | "materia";
   consignas: string[];
   nota: string;
 }
@@ -134,22 +135,35 @@ export function armarConsignas(entrada: EntradaConsignas): ConsignasArmadas {
     };
   }
 
+  // Cualquier tema tiene consignas: se arman con la forma de pensar de su
+  // materia y recorren el tema entero, del origen a las consecuencias.
+  const porMateria = consignasDeMateria(pedido, nombre);
   return {
     tema: nombre,
-    origen: "esquema",
-    consignas: elegirPorNivel(ESQUEMA.map((plantilla) => plantilla(nombre)), anio, cantidad),
-    nota: `No tengo este tema cargado ni encontré material tuyo, así que estas consignas son el esquema general, adaptado a ${curso}. Cargá el apunte en el tutor y te armo preguntas sobre tu propio texto.`,
+    materia: porMateria.materia ?? undefined,
+    origen: "materia",
+    consignas: elegirPorNivel([...porMateria.consignas, ...ESQUEMA.map((plantilla) => plantilla(nombre))], anio, cantidad),
+    nota: porMateria.materia
+      ? `Consignas de ${porMateria.materia} sobre ${nombre}, con el nivel de ${curso}. Recorren el tema entero; si cargás tu apunte en el tutor, las próximas salen de tu carpeta.`
+      : `Consignas sobre ${nombre}, con el nivel de ${curso}. Decime también la materia y te las afino; si cargás tu apunte en el tutor, salen de tu propia carpeta.`,
   };
 }
 
-/** Saca el tema de un pedido del tipo "hacéme preguntas de Biología sobre la fotosíntesis". */
+/**
+ * Saca el tema de un pedido del tipo "hacéme preguntas de Biología sobre la
+ * fotosíntesis". Devuelve el tema sin el artículo y sin mayúscula forzada,
+ * porque después se inserta dentro de una oración: "¿Qué es las guerras
+ * púnicas?" se lee mal, "¿Qué es guerras púnicas?" tampoco, y lo correcto es
+ * conservar el artículo sólo donde la consigna lo pide.
+ */
 export function temaDelPedido(texto: string): string {
   const limpio = texto.trim().replace(/[¿?¡!.]+/g, " ").replace(/\s+/g, " ");
   const sobre = limpio.match(/\bsobre\s+(.+)$/i);
-  if (sobre) return recortar(mayuscula(sobre[1].trim()), 60);
+  const de = sobre ? null : limpio.match(/\b(?:de|del|acerca de)\s+(.+)$/i);
+  const crudo = (sobre?.[1] ?? de?.[1] ?? "").trim();
+  if (!crudo) return "";
 
-  const de = limpio.match(/\b(?:de|del|acerca de)\s+(.+)$/i);
-  if (de) return recortar(mayuscula(de[1].trim()), 60);
-
-  return "";
+  // El artículo se conserva —"la guerra de Malvinas" se lee mejor que "guerra
+  // de Malvinas"— pero en minúscula, porque el tema va dentro de una oración.
+  return recortar(crudo.replace(/^(El|La|Los|Las|Un|Una|Unos|Unas)\b/, (palabra) => palabra.toLowerCase()), 60);
 }

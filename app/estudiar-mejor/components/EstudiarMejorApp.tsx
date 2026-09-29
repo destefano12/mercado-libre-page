@@ -19,7 +19,7 @@ import { armarCola } from "../lib/tutor";
 import { Icono } from "./iconos";
 import { PanelGuardia } from "./PanelGuardia";
 import { GRUPOS, buscarSeccion, type SeccionId } from "./navegacion";
-import { Boton, Selector } from "./ui";
+import { Boton, Campo, Selector } from "./ui";
 import { nombreDelAnio } from "../lib/banco";
 
 function Marca({ compacta = false }: { compacta?: boolean }) {
@@ -244,8 +244,16 @@ function Contenido() {
                       </option>
                     ))}
                   </Selector>
+                  <Campo
+                    etiqueta="Tu correo"
+                    type="email"
+                    placeholder="nombre@mail.com"
+                    value={estado.email}
+                    onChange={(evento) => acciones.guardarEmail(evento.target.value)}
+                    className="w-64"
+                  />
                   <p className="max-w-sm text-xs leading-relaxed text-tenue">
-                    Calibra la dificultad de las consignas que te devuelvo cuando me pedís preguntas de un tema.
+                    El año calibra la dificultad de las consignas. El correo sirve para los trabajos grupales.
                   </p>
                 </div>
 

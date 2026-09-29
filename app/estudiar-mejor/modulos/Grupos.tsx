@@ -30,6 +30,15 @@ export function Grupos() {
   const [nuevaTarea, setNuevaTarea] = useState<Record<string, string>>({});
   const [nuevoIntegrante, setNuevoIntegrante] = useState<Record<string, string>>({});
 
+  /** Acepta "Tomás" o "Tomás <tomas@mail.com>" o "Tomás tomas@mail.com". */
+  const separarCorreo = (entrada: string) => {
+    const correo = entrada.match(/[\w.+-]+@[\w-]+\.[\w.-]+/);
+    return {
+      nombre: entrada.replace(correo?.[0] ?? "", "").replace(/[<>]/g, "").trim() || entrada.trim(),
+      email: correo?.[0] ?? "",
+    };
+  };
+
   const crear = () => {
     const lista = integrantes
       .split(/[,\n]/)
@@ -41,7 +50,10 @@ export function Grupos() {
       nombre.trim(),
       materia.trim() || "General",
       entrega,
-      lista.map((integrante, indice) => ({ nombre: integrante, rol: ROLES_SUGERIDOS[indice % ROLES_SUGERIDOS.length] })),
+      lista.map((integrante, indice) => ({
+        ...separarCorreo(integrante),
+        rol: ROLES_SUGERIDOS[indice % ROLES_SUGERIDOS.length],
+      })),
     );
     setNombre("");
     setMateria("");
@@ -63,10 +75,10 @@ export function Grupos() {
           <Campo etiqueta="Fecha de entrega" type="date" min={hoyClave()} value={entrega} onChange={(evento) => setEntrega(evento.target.value)} ayuda={`Es ${cuandoEs(entrega)}`} />
           <Campo
             etiqueta="Integrantes (separados por coma)"
-            placeholder="Vos, Tomás, Juana"
+            placeholder="Vos, Tomás tomas@mail.com, Juana juana@mail.com"
             value={integrantes}
             onChange={(evento) => setIntegrantes(evento.target.value)}
-            ayuda="El primero de la lista sos vos. Los roles se asignan solos y los podés cambiar después."
+            ayuda="Podés sumar el correo de cada uno al lado del nombre. El primero de la lista sos vos."
           />
         </div>
 
@@ -125,6 +137,9 @@ export function Grupos() {
                               {integrante.nombre} {integrante.esYo ? <Pildora tono="acento">vos</Pildora> : null}
                             </p>
                             <p className="em-rotulo">{integrante.rol}</p>
+                            {integrante.email ? (
+                              <p className="truncate text-xs text-tenue">{integrante.email}</p>
+                            ) : null}
                           </div>
                         </div>
                         <Boton
@@ -205,7 +220,7 @@ export function Grupos() {
                 <input
                   value={nuevoIntegrante[grupo.id] ?? ""}
                   onChange={(evento) => setNuevoIntegrante((previo) => ({ ...previo, [grupo.id]: evento.target.value }))}
-                  placeholder="Sumar integrante…"
+                  placeholder="Sumar integrante (nombre y correo)…"
                   className="flex-1 rounded-full border border-linea bg-papel px-4 py-2 text-sm outline-none transition focus:border-acento focus:bg-superficie"
                 />
                 <Boton
@@ -213,7 +228,13 @@ export function Grupos() {
                   onClick={() => {
                     const valor = (nuevoIntegrante[grupo.id] ?? "").trim();
                     if (!valor) return;
-                    acciones.agregarIntegrante(grupo.id, valor, ROLES_SUGERIDOS[grupo.integrantes.length % ROLES_SUGERIDOS.length]);
+                    const datos = separarCorreo(valor);
+                    acciones.agregarIntegrante(
+                      grupo.id,
+                      datos.nombre,
+                      datos.email,
+                      ROLES_SUGERIDOS[grupo.integrantes.length % ROLES_SUGERIDOS.length],
+                    );
                     setNuevoIntegrante((previo) => ({ ...previo, [grupo.id]: "" }));
                   }}
                 >

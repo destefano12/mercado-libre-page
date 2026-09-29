@@ -4,7 +4,7 @@ import { useState } from "react";
 import { armarConsignas, temaDelPedido, type ConsignasArmadas } from "../lib/consignas";
 import { ETIQUETAS_INTENCION, responderComoGuia, type RespuestaGuardia } from "../lib/guardia";
 import { useEstudiar } from "../lib/store";
-import { normalizar } from "../lib/texto";
+import { mayuscula, normalizar } from "../lib/texto";
 import { Icono } from "./iconos";
 import { Boton, Nota, Pildora } from "./ui";
 
@@ -119,7 +119,7 @@ export function PanelGuardia({ abierto, onCerrar }: { abierto: boolean; onCerrar
               <Pildora tono="acento">{ETIQUETAS_INTENCION["pedir-preguntas"]}</Pildora>
               <h3 className="text-base text-tinta">
                 {consignas.materia ? `${consignas.materia}: ` : "Consignas de "}
-                {consignas.tema}
+                {mayuscula(consignas.tema)}
               </h3>
               <Nota tono={consignas.origen === "material" ? "acento" : "atencion"}>{consignas.nota}</Nota>
               <ol className="space-y-2">

@@ -46,6 +46,7 @@ export function estadoDeEjemplo(): EstadoEstudiar {
   return {
     ...base,
     nombre: "Sofi",
+    email: "sofi@ejemplo.com",
     anio: 3,
     manifiestoAceptado: true,
     temas: [biologia, historia, matematica],
@@ -105,6 +106,7 @@ export function estadoDeEjemplo(): EstadoEstudiar {
           {
             id: crearId("integrante"),
             nombre: "Sofi",
+            email: "sofi@ejemplo.com",
             rol: "Coordinación",
             esYo: true,
             tareas: [
@@ -115,6 +117,7 @@ export function estadoDeEjemplo(): EstadoEstudiar {
           {
             id: crearId("integrante"),
             nombre: "Tomás",
+            email: "tomas@ejemplo.com",
             rol: "Investigación",
             esYo: false,
             tareas: [
@@ -125,6 +128,7 @@ export function estadoDeEjemplo(): EstadoEstudiar {
           {
             id: crearId("integrante"),
             nombre: "Juana",
+            email: "juana@ejemplo.com",
             rol: "Armado",
             esYo: false,
             tareas: [{ id: crearId("tarea"), titulo: "Conseguir materiales de la maqueta", hecho: false }],

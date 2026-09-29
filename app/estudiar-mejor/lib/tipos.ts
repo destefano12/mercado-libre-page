@@ -106,6 +106,7 @@ export interface TareaGrupo {
 export interface Integrante {
   id: string;
   nombre: string;
+  email: string;
   rol: string;
   esYo: boolean;
   tareas: TareaGrupo[];
@@ -201,6 +202,8 @@ export interface EvidenciaDominio {
 export interface EstadoEstudiar {
   version: number;
   nombre: string;
+  /** Correo, para identificarte cuando te suman a un trabajo grupal. */
+  email: string;
   /** Año de la secundaria que cursa: 0 si todavía no lo dijo. */
   anio: number;
   temas: Tema[];

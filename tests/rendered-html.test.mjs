@@ -722,7 +722,7 @@ test("answers topic requests from a curated bank, calibrated by school year", as
   // Tres fuentes en orden: material propio, banco, esquema general.
   assert.match(consignas, /origen: "material"/);
   assert.match(consignas, /origen: "banco"/);
-  assert.match(consignas, /origen: "esquema"/);
+  assert.match(consignas, /origen: "materia"/);
   assert.match(consignas, /anio/);
 
   // El a\u00f1o que cursa vive en el estado y se usa para calibrar.
@@ -790,6 +790,35 @@ test("keeps notes as attachments and scans photos of printed text", async () => 
   assert.match(tutor, /accept="\.pdf,application\/pdf,image\/\*,\.txt,\.md,\.csv,text\/plain"/);
   assert.match(tutor, /multiple/);
   assert.match(tutor, /textoDeAdjuntos/);
+});
+
+test("always has questions for a topic, whatever the subject", async () => {
+  const esquemas = await readFile(new URL("../app/estudiar-mejor/lib/esquemas.ts", import.meta.url), "utf8");
+  const consignas = await readFile(new URL("../app/estudiar-mejor/lib/consignas.ts", import.meta.url), "utf8");
+
+  for (const materia of [
+    "Historia",
+    "Geograf\u00eda",
+    "Biolog\u00eda",
+    "Qu\u00edmica",
+    "F\u00edsica",
+    "Matem\u00e1tica",
+    "Lengua",
+    "Literatura",
+    "Ingl\u00e9s",
+    "Educaci\u00f3n F\u00edsica",
+  ]) {
+    assert.match(esquemas, new RegExp(`nombre: "${materia}"`));
+  }
+  assert.match(esquemas, /export function detectarMateria/);
+  assert.match(esquemas, /export function consignasDeMateria/);
+
+  // Nunca se responde que el tema o la materia no est\u00e1n cargados.
+  assert.doesNotMatch(consignas, /no lo tengo cargado|no est\u00e1 cargada|No tengo este tema/);
+  assert.match(consignas, /origen: "materia"/);
+
+  // El tema conserva su art\u00edculo para que la consigna se lea bien.
+  assert.match(consignas, /El art\u00edculo se conserva/);
 });
 
 test("offers fixed study durations with a drift-free timer", async () => {

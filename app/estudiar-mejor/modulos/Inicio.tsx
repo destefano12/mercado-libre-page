@@ -22,6 +22,7 @@ export function Inicio({ irA }: { irA: (seccion: SeccionId) => void }) {
   const { estado, acciones } = useEstudiar();
   const [nombre, setNombre] = useState(estado.nombre);
   const [anio, setAnio] = useState(estado.anio || 1);
+  const [email, setEmail] = useState(estado.email);
 
   const hoy = hoyClave();
   const constancia = calcularConstancia(estado.logs);
@@ -46,6 +47,7 @@ export function Inicio({ irA }: { irA: (seccion: SeccionId) => void }) {
     if (!nombre.trim()) return;
     acciones.guardarNombre(nombre.trim());
     acciones.guardarAnio(anio);
+    acciones.guardarEmail(email.trim());
   };
 
   if (!estado.nombre) {
@@ -74,7 +76,16 @@ export function Inicio({ irA }: { irA: (seccion: SeccionId) => void }) {
             ))}
           </Selector>
         </div>
-        <p className="mt-2 text-xs text-tenue">
+        <Campo
+          etiqueta="Tu correo (opcional)"
+          type="email"
+          placeholder="nombre@mail.com"
+          value={email}
+          onChange={(evento) => setEmail(evento.target.value)}
+          className="mt-4"
+          ayuda="Sirve para que te identifiquen cuando te suman a un trabajo grupal. Queda en este dispositivo."
+        />
+        <p className="mt-3 text-xs leading-relaxed text-tenue">
           El año me sirve para calibrar las preguntas: en los primeros años apunto a reconocer y describir, y en los
           últimos a analizar y fundamentar.
         </p>

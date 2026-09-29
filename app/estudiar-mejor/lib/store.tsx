@@ -55,6 +55,7 @@ function leerAlmacenado(): EstadoEstudiar | null {
 export interface AccionesEstudiar {
   guardarNombre: (nombre: string) => void;
   guardarAnio: (anio: number) => void;
+  guardarEmail: (email: string) => void;
   aceptarManifiesto: () => void;
   agregarTema: (nombre: string, materia: string) => Tema;
   eliminarTema: (id: string) => void;
@@ -74,9 +75,14 @@ export interface AccionesEstudiar {
   alternarError: (id: string) => void;
   eliminarError: (id: string) => void;
   guardarExplicacion: (explicacion: Omit<Explicacion, "id" | "creadaEn">) => void;
-  crearGrupo: (nombre: string, materia: string, entrega: string, integrantes: { nombre: string; rol: string }[]) => void;
+  crearGrupo: (
+    nombre: string,
+    materia: string,
+    entrega: string,
+    integrantes: { nombre: string; email?: string; rol: string }[],
+  ) => void;
   eliminarGrupo: (id: string) => void;
-  agregarIntegrante: (grupoId: string, nombre: string, rol: string) => void;
+  agregarIntegrante: (grupoId: string, nombre: string, email: string, rol: string) => void;
   eliminarIntegrante: (grupoId: string, integranteId: string) => void;
   agregarTarea: (grupoId: string, integranteId: string, titulo: string) => void;
   alternarTarea: (grupoId: string, integranteId: string, tareaId: string) => void;
@@ -166,6 +172,7 @@ export function ProveedorEstudiar({ children }: { children: ReactNode }) {
     return {
       guardarNombre: (nombre) => setEstado((previo) => ({ ...previo, nombre })),
       guardarAnio: (anio) => setEstado((previo) => ({ ...previo, anio })),
+      guardarEmail: (email) => setEstado((previo) => ({ ...previo, email })),
       aceptarManifiesto: () => setEstado((previo) => ({ ...previo, manifiestoAceptado: true })),
 
       agregarTema: (nombre, materia) => {
@@ -334,6 +341,7 @@ export function ProveedorEstudiar({ children }: { children: ReactNode }) {
               integrantes: integrantes.map((integrante, indice) => ({
                 id: crearId("integrante"),
                 nombre: integrante.nombre,
+                email: integrante.email ?? "",
                 rol: integrante.rol,
                 esYo: indice === 0,
                 tareas: [],
@@ -346,10 +354,13 @@ export function ProveedorEstudiar({ children }: { children: ReactNode }) {
       eliminarGrupo: (id) =>
         setEstado((previo) => ({ ...previo, grupos: previo.grupos.filter((grupo) => grupo.id !== id) })),
 
-      agregarIntegrante: (grupoId, nombre, rol) =>
+      agregarIntegrante: (grupoId, nombre, email, rol) =>
         mapearGrupo(grupoId, (grupo) => ({
           ...grupo,
-          integrantes: [...grupo.integrantes, { id: crearId("integrante"), nombre, rol, esYo: false, tareas: [] }],
+          integrantes: [
+            ...grupo.integrantes,
+            { id: crearId("integrante"), nombre, email, rol, esYo: false, tareas: [] },
+          ],
         })),
 
       eliminarIntegrante: (grupoId, integranteId) =>
