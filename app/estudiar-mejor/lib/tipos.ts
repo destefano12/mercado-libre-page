@@ -118,6 +118,10 @@ export interface Grupo {
   materia: string;
   entrega: string;
   creadoEn: string;
+  /** Código que comparten los integrantes: identifica la sala de chat. */
+  codigo: string;
+  /** Verdadero cuando el grupo lo armó otra persona y te sumó por tu correo. */
+  compartido?: boolean;
   integrantes: Integrante[];
 }
 

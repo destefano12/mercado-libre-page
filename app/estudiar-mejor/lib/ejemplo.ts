@@ -102,6 +102,7 @@ export function estadoDeEjemplo(): EstadoEstudiar {
         materia: "Biología",
         entrega: sumarDias(hoy, 14),
         creadoEn: new Date().toISOString(),
+        codigo: "BIO4KM",
         integrantes: [
           {
             id: crearId("integrante"),

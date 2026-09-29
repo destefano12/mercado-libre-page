@@ -15,6 +15,8 @@ import { crearId } from "./id";
 import { generarPlan, type EntradaPlan } from "./plan";
 import { generarTarjetas, calificarTarjeta, type Calificacion } from "./tutor";
 import { estadoDeEjemplo } from "./ejemplo";
+import { nombreDesdeCorreo, normalizarCorreo } from "./correo";
+import type { GrupoPublicado } from "./chat";
 import { estadoInicialVacio } from "./vacio";
 import type {
   CausaError,
@@ -31,6 +33,12 @@ import type {
 } from "./tipos";
 
 const CLAVE_ALMACENAMIENTO = "estudiar-mejor:v1";
+
+/** Código corto y fácil de dictar en voz alta: sin cero ni letra O. */
+function codigoDeGrupo(): string {
+  const letras = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  return Array.from({ length: 6 }, () => letras[Math.floor(Math.random() * letras.length)]).join("");
+}
 
 export const estadoInicial = estadoInicialVacio;
 
@@ -82,6 +90,9 @@ export interface AccionesEstudiar {
     integrantes: { nombre: string; email?: string; rol: string }[],
   ) => void;
   eliminarGrupo: (id: string) => void;
+  sumarseAGrupo: (codigo: string, nombre: string) => void;
+  /** Trae un grupo que armó otra persona y en el que figura tu correo. */
+  adoptarGrupoPublicado: (grupo: GrupoPublicado) => void;
   agregarIntegrante: (grupoId: string, nombre: string, email: string, rol: string) => void;
   eliminarIntegrante: (grupoId: string, integranteId: string) => void;
   agregarTarea: (grupoId: string, integranteId: string, titulo: string) => void;
@@ -170,9 +181,36 @@ export function ProveedorEstudiar({ children }: { children: ReactNode }) {
       }));
 
     return {
-      guardarNombre: (nombre) => setEstado((previo) => ({ ...previo, nombre })),
+      guardarNombre: (nombre) =>
+        setEstado((previo) => ({
+          ...previo,
+          nombre,
+          // Tu nombre reemplaza al que se había deducido de tu correo.
+          grupos: previo.grupos.map((grupo) => ({
+            ...grupo,
+            integrantes: grupo.integrantes.map((integrante) =>
+              integrante.esYo ? { ...integrante, nombre: nombre || integrante.nombre } : integrante,
+            ),
+          })),
+        })),
       guardarAnio: (anio) => setEstado((previo) => ({ ...previo, anio })),
-      guardarEmail: (email) => setEstado((previo) => ({ ...previo, email })),
+      guardarEmail: (email) =>
+        setEstado((previo) => {
+          const mio = normalizarCorreo(email);
+          return {
+            ...previo,
+            email,
+            // Donde alguien te había cargado sólo por el correo, ahora figura tu nombre.
+            grupos: previo.grupos.map((grupo) => ({
+              ...grupo,
+              integrantes: grupo.integrantes.map((integrante) =>
+                mio && normalizarCorreo(integrante.email) === mio
+                  ? { ...integrante, esYo: true, nombre: previo.nombre || integrante.nombre }
+                  : integrante,
+              ),
+            })),
+          };
+        }),
       aceptarManifiesto: () => setEstado((previo) => ({ ...previo, manifiestoAceptado: true })),
 
       agregarTema: (nombre, materia) => {
@@ -338,30 +376,138 @@ export function ProveedorEstudiar({ children }: { children: ReactNode }) {
               materia,
               entrega,
               creadoEn: new Date().toISOString(),
-              integrantes: integrantes.map((integrante, indice) => ({
-                id: crearId("integrante"),
-                nombre: integrante.nombre,
-                email: integrante.email ?? "",
-                rol: integrante.rol,
-                esYo: indice === 0,
-                tareas: [],
-              })),
+              codigo: codigoDeGrupo(),
+              integrantes: integrantes.map((integrante, indice) => {
+                const email = normalizarCorreo(integrante.email ?? "");
+                return {
+                  id: crearId("integrante"),
+                  // Con el correo alcanza: el nombre se deduce hasta que la persona entra.
+                  nombre: integrante.nombre?.trim() || (email ? nombreDesdeCorreo(email) : "Sin nombre"),
+                  email,
+                  rol: integrante.rol,
+                  esYo: indice === 0,
+                  tareas: [],
+                };
+              }),
             },
             ...previo.grupos,
           ],
         })),
 
+      /**
+       * Llega la ficha de un grupo ajeno: si es nuevo, entra entero; si ya
+       * estaba, se suman los integrantes que faltaban sin tocar las tareas
+       * que cada uno ya venía marcando en este dispositivo.
+       */
+      adoptarGrupoPublicado: (ficha) =>
+        setEstado((previo) => {
+          const mio = normalizarCorreo(previo.email);
+          const existente = previo.grupos.find((grupo) => grupo.codigo === ficha.codigo);
+
+          const nuevoIntegrante = (integrante: GrupoPublicado["integrantes"][number]): Integrante => {
+            const email = normalizarCorreo(integrante.email);
+            const esYo = Boolean(mio) && email === mio;
+            return {
+              id: crearId("integrante"),
+              nombre: esYo && previo.nombre ? previo.nombre : integrante.nombre || nombreDesdeCorreo(email),
+              email,
+              rol: integrante.rol,
+              esYo,
+              tareas: [],
+            };
+          };
+
+          if (!existente) {
+            return {
+              ...previo,
+              grupos: [
+                {
+                  id: crearId("grupo"),
+                  nombre: ficha.nombre,
+                  materia: ficha.materia,
+                  entrega: ficha.entrega,
+                  creadoEn: new Date().toISOString(),
+                  codigo: ficha.codigo,
+                  compartido: true,
+                  integrantes: ficha.integrantes.map(nuevoIntegrante),
+                },
+                ...previo.grupos,
+              ],
+            };
+          }
+
+          const conocidos = new Set(existente.integrantes.map((integrante) => normalizarCorreo(integrante.email)).filter(Boolean));
+          const faltantes = ficha.integrantes.filter((integrante) => {
+            const email = normalizarCorreo(integrante.email);
+            return email && !conocidos.has(email);
+          });
+          if (faltantes.length === 0) return previo;
+
+          return {
+            ...previo,
+            grupos: previo.grupos.map((grupo) =>
+              grupo.codigo === ficha.codigo
+                ? { ...grupo, integrantes: [...grupo.integrantes, ...faltantes.map(nuevoIntegrante)] }
+                : grupo,
+            ),
+          };
+        }),
+
       eliminarGrupo: (id) =>
         setEstado((previo) => ({ ...previo, grupos: previo.grupos.filter((grupo) => grupo.id !== id) })),
 
+      /** Entrar a un grupo que armó otra persona, con el código que compartió. */
+      sumarseAGrupo: (codigo, nombre) =>
+        setEstado((previo) => {
+          const limpio = codigo.trim().toUpperCase();
+          if (!limpio || previo.grupos.some((grupo) => grupo.codigo === limpio)) return previo;
+          return {
+            ...previo,
+            grupos: [
+              {
+                id: crearId("grupo"),
+                nombre: nombre.trim() || `Grupo ${limpio}`,
+                materia: "General",
+                entrega: hoyClave(),
+                creadoEn: new Date().toISOString(),
+                codigo: limpio,
+                integrantes: [
+                  {
+                    id: crearId("integrante"),
+                    nombre: previo.nombre || "Vos",
+                    email: previo.email,
+                    rol: "Integrante",
+                    esYo: true,
+                    tareas: [],
+                  },
+                ],
+              },
+              ...previo.grupos,
+            ],
+          };
+        }),
+
       agregarIntegrante: (grupoId, nombre, email, rol) =>
-        mapearGrupo(grupoId, (grupo) => ({
-          ...grupo,
-          integrantes: [
-            ...grupo.integrantes,
-            { id: crearId("integrante"), nombre, email, rol, esYo: false, tareas: [] },
-          ],
-        })),
+        mapearGrupo(grupoId, (grupo) => {
+          const correo = normalizarCorreo(email);
+          if (correo && grupo.integrantes.some((integrante) => normalizarCorreo(integrante.email) === correo)) {
+            return grupo;
+          }
+          return {
+            ...grupo,
+            integrantes: [
+              ...grupo.integrantes,
+              {
+                id: crearId("integrante"),
+                nombre: nombre.trim() || (correo ? nombreDesdeCorreo(correo) : "Sin nombre"),
+                email: correo,
+                rol,
+                esYo: false,
+                tareas: [],
+              },
+            ],
+          };
+        }),
 
       eliminarIntegrante: (grupoId, integranteId) =>
         mapearGrupo(grupoId, (grupo) => ({

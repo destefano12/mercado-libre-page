@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { AvisoPrincipio, Barra, Boton, Campo, Pildora, Tarjeta, TituloSeccion, Vacio } from "../components/ui";
+import { ChatGrupo } from "../components/ChatGrupo";
 import { Icono } from "../components/iconos";
 import { cuandoEs, fechaLarga, hoyClave, sumarDias } from "../lib/fechas";
+import { nombreDesdeCorreo, separarCorreo } from "../lib/correo";
 import { useEstudiar } from "../lib/store";
 import type { Integrante } from "../lib/tipos";
 
@@ -29,29 +31,29 @@ export function Grupos() {
   const [integrantes, setIntegrantes] = useState("");
   const [nuevaTarea, setNuevaTarea] = useState<Record<string, string>>({});
   const [nuevoIntegrante, setNuevoIntegrante] = useState<Record<string, string>>({});
-
-  /** Acepta "Tomás" o "Tomás <tomas@mail.com>" o "Tomás tomas@mail.com". */
-  const separarCorreo = (entrada: string) => {
-    const correo = entrada.match(/[\w.+-]+@[\w-]+\.[\w.-]+/);
-    return {
-      nombre: entrada.replace(correo?.[0] ?? "", "").replace(/[<>]/g, "").trim() || entrada.trim(),
-      email: correo?.[0] ?? "",
-    };
-  };
+  const [codigoParaEntrar, setCodigoParaEntrar] = useState("");
 
   const crear = () => {
     const lista = integrantes
-      .split(/[,\n]/)
+      .split(/[,;\n]/)
       .map((parte) => parte.trim())
-      .filter(Boolean);
+      .filter(Boolean)
+      .map(separarCorreo);
     if (!nombre.trim() || lista.length === 0) return;
+
+    // Vos encabezás el grupo aunque no te hayas escrito en la lista.
+    const mio = estado.email.trim().toLowerCase();
+    const yaEstoy = mio && lista.some((integrante) => integrante.email === mio);
+    const todos = yaEstoy
+      ? lista
+      : [{ nombre: estado.nombre || (mio ? nombreDesdeCorreo(mio) : "Vos"), email: estado.email }, ...lista];
 
     acciones.crearGrupo(
       nombre.trim(),
       materia.trim() || "General",
       entrega,
-      lista.map((integrante, indice) => ({
-        ...separarCorreo(integrante),
+      todos.map((integrante, indice) => ({
+        ...integrante,
         rol: ROLES_SUGERIDOS[indice % ROLES_SUGERIDOS.length],
       })),
     );
@@ -66,7 +68,7 @@ export function Grupos() {
         <TituloSeccion
           icono="grupos"
           titulo="Trabajos grupales"
-          bajada="Repartí responsabilidades y mirá el avance de cada integrante. Todo se guarda en tu navegador: es tu tablero, no un grupo en la nube."
+          bajada="Cargá los correos de tus compañeros y repartí responsabilidades. A quien entre a la página con ese correo le va a aparecer el grupo ya armado."
         />
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -74,17 +76,40 @@ export function Grupos() {
           <Campo etiqueta="Materia" placeholder="Ej: Biología" value={materia} onChange={(evento) => setMateria(evento.target.value)} />
           <Campo etiqueta="Fecha de entrega" type="date" min={hoyClave()} value={entrega} onChange={(evento) => setEntrega(evento.target.value)} ayuda={`Es ${cuandoEs(entrega)}`} />
           <Campo
-            etiqueta="Integrantes (separados por coma)"
-            placeholder="Vos, Tomás tomas@mail.com, Juana juana@mail.com"
+            etiqueta="Correos de los integrantes"
+            placeholder="tomas@gmail.com, juana@gmail.com"
             value={integrantes}
             onChange={(evento) => setIntegrantes(evento.target.value)}
-            ayuda="Podés sumar el correo de cada uno al lado del nombre. El primero de la lista sos vos."
+            ayuda="Con el correo alcanza. Cuando entren a la página con ese correo, el grupo les aparece solo y el nombre se completa."
           />
         </div>
 
         <Boton className="mt-4" onClick={crear} disabled={!nombre.trim() || !integrantes.trim()}>
           Crear trabajo grupal
         </Boton>
+
+        <div className="mt-5 border-t border-linea pt-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <Campo
+              etiqueta="¿Te pasaron un código?"
+              placeholder="Ej: BIO4KM"
+              value={codigoParaEntrar}
+              onChange={(evento) => setCodigoParaEntrar(evento.target.value.toUpperCase())}
+              className="w-44"
+            />
+            <Boton
+              variante="secundario"
+              disabled={codigoParaEntrar.trim().length < 4}
+              onClick={() => {
+                acciones.sumarseAGrupo(codigoParaEntrar, `Grupo ${codigoParaEntrar.trim().toUpperCase()}`);
+                setCodigoParaEntrar("");
+              }}
+            >
+              Entrar al grupo
+            </Boton>
+          </div>
+          <p className="mt-2 text-xs text-tenue">Entrás al grupo de un compañero y comparten el chat.</p>
+        </div>
 
         <AvisoPrincipio texto="Reparto las tareas, no las hago. Cada parte del trabajo la escribe la persona que la tiene asignada." />
       </Tarjeta>
@@ -104,7 +129,10 @@ export function Grupos() {
             <Tarjeta key={grupo.id} retraso={indice * 70}>
               <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-lg font-semibold text-tinta">{grupo.nombre}</h3>
+                  <h3 className="flex flex-wrap items-center gap-2 text-lg font-semibold text-tinta">
+                    {grupo.nombre}
+                    {grupo.compartido ? <Pildora tono="acento">te sumaron</Pildora> : null}
+                  </h3>
                   <p className="text-sm text-media">
                     {grupo.materia} · entrega {fechaLarga(grupo.entrega)} ({cuandoEs(grupo.entrega)})
                   </p>
@@ -220,7 +248,7 @@ export function Grupos() {
                 <input
                   value={nuevoIntegrante[grupo.id] ?? ""}
                   onChange={(evento) => setNuevoIntegrante((previo) => ({ ...previo, [grupo.id]: evento.target.value }))}
-                  placeholder="Sumar integrante (nombre y correo)…"
+                  placeholder="Sumar integrante por correo…"
                   className="flex-1 rounded-full border border-linea bg-papel px-4 py-2 text-sm outline-none transition focus:border-acento focus:bg-superficie"
                 />
                 <Boton
@@ -241,6 +269,8 @@ export function Grupos() {
                   Agregar
                 </Boton>
               </div>
+
+              <ChatGrupo codigo={grupo.codigo} nombreDelGrupo={grupo.nombre} />
 
               {avanceGlobal < 40 && grupo.entrega <= sumarDias(hoyClave(), 5) ? (
                 <p className="mt-4 rounded-md bg-alerta-tenue px-4 py-3 text-sm font-semibold text-alerta">

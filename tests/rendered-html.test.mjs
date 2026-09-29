@@ -833,3 +833,33 @@ test("offers fixed study durations with a drift-free timer", async () => {
   assert.match(pomodoro, /finRef\.current = Date\.now\(\) \+/);
   assert.match(pomodoro, /setAviso\(/);
 });
+
+test("chats with the group over a server, never over the browser alone", async () => {
+  const chat = await readFile(new URL("../app/estudiar-mejor/lib/chat.ts", import.meta.url), "utf8");
+  const panel = await readFile(new URL("../app/estudiar-mejor/components/ChatGrupo.tsx", import.meta.url), "utf8");
+  const grupos = await readFile(new URL("../app/estudiar-mejor/modulos/Grupos.tsx", import.meta.url), "utf8");
+  const almacen = await readFile(new URL("../app/estudiar-mejor/lib/store.tsx", import.meta.url), "utf8");
+
+  // Dos conexiones posibles: la plataforma donde se publica y una base propia.
+  assert.match(chat, /tipo: "artifact"/);
+  assert.match(chat, /tipo: "supabase"/);
+  assert.match(chat, /claude\.use\("db"\)/);
+  assert.match(chat, /claude\.use\("user"\)/);
+  assert.match(chat, /__EM_SUPABASE__/);
+
+  // Cada persona escribe sólo su propio documento: así nadie se pisa.
+  assert.match(chat, /buzon\.doc\(yo\)/);
+  assert.match(chat, /onSnapshot/);
+
+  // Sin servidor la aplicación sigue entera, sólo que sin chat.
+  assert.match(panel, /El chat necesita conexión con un servidor/);
+  // Quien sólo puede mirar lee los mensajes, pero no escribe.
+  assert.match(panel, /chat\.puedeEscribir \?/);
+
+  // El grupo se comparte con un código corto, sin ceros ni oes que se confundan.
+  assert.match(almacen, /function codigoDeGrupo/);
+  assert.match(almacen, /sumarseAGrupo/);
+  assert.doesNotMatch(almacen, /ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/);
+  assert.match(grupos, /ChatGrupo codigo=\{grupo\.codigo\}/);
+  assert.match(grupos, /¿Te pasaron un código\?/);
+});

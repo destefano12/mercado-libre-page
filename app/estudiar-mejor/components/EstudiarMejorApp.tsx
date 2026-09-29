@@ -18,6 +18,7 @@ import { calcularConstancia } from "../lib/metricas";
 import { armarCola } from "../lib/tutor";
 import { Icono } from "./iconos";
 import { PanelGuardia } from "./PanelGuardia";
+import { SincronizarGrupos } from "./SincronizarGrupos";
 import { GRUPOS, buscarSeccion, type SeccionId } from "./navegacion";
 import { Boton, Campo, Selector } from "./ui";
 import { nombreDelAnio } from "../lib/banco";
@@ -226,10 +227,12 @@ function Contenido() {
               </div>
 
               <footer className="mt-10 border-t border-linea pt-5 text-sm text-media">
-                <p className="font-semibold text-tinta">Tus datos viven en este navegador</p>
+                <p className="font-semibold text-tinta">Tu estudio vive en este navegador</p>
                 <p className="mt-1 max-w-prose leading-relaxed">
-                  No hay servidores, ni cuentas, ni sincronización: todo se guarda en el almacenamiento local de este
-                  dispositivo. Si borrás los datos del navegador, se borra tu progreso.
+                  Tus temas, tus errores, tu plan y tu progreso se guardan en el almacenamiento local de este
+                  dispositivo: si borrás los datos del navegador, se borran. Lo único que sale de acá son los trabajos
+                  grupales: el nombre del grupo, los correos de los integrantes y lo que escriben en el chat, para que
+                  todos vean lo mismo.
                 </p>
                 <div className="mt-4 flex flex-wrap items-end gap-3">
                   <Selector
@@ -253,7 +256,7 @@ function Contenido() {
                     className="w-64"
                   />
                   <p className="max-w-sm text-xs leading-relaxed text-tenue">
-                    El año calibra la dificultad de las consignas. El correo sirve para los trabajos grupales.
+                    El año calibra la dificultad de las consignas. Con el correo te encontrás solo en los trabajos grupales donde te sumaron.
                   </p>
                 </div>
 
@@ -315,6 +318,7 @@ function Contenido() {
 export function EstudiarMejorApp() {
   return (
     <ProveedorEstudiar>
+      <SincronizarGrupos />
       <Contenido />
     </ProveedorEstudiar>
   );
