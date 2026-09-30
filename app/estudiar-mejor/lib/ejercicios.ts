@@ -29,6 +29,18 @@ function alAzar<T>(lista: readonly T[]): T {
   return lista[Math.floor(Math.random() * lista.length)];
 }
 
+/** Reparte sin repetir mientras haya de dónde: nadie quiere el mismo problema tres veces. */
+function variar(plantillas: readonly (() => string)[], cantidad: number): string[] {
+  const salida: string[] = [];
+  while (salida.length < cantidad) {
+    for (const plantilla of tomar(plantillas, plantillas.length)) {
+      if (salida.length >= cantidad) break;
+      salida.push(plantilla());
+    }
+  }
+  return salida;
+}
+
 function tomar<T>(lista: readonly T[], cantidad: number): T[] {
   const copia = [...lista];
   const elegidos: T[] = [];
@@ -219,12 +231,15 @@ function operacionesCombinadas(cantidad: number): string[] {
 }
 
 function porcentajes(cantidad: number): string[] {
-  return Array.from({ length: cantidad }, () =>
-    alAzar([
-      `Una campera cuesta $${entero(20, 90) * 1000}. Le hacen un ${entero(5, 40)}% de descuento. ¿Cuánto se paga?`,
-      `En un curso de ${entero(20, 35)} alumnos, el ${entero(20, 80)}% aprobó. ¿Cuántos aprobaron?`,
-      `Un producto de $${entero(5, 30) * 100} aumenta un ${entero(5, 35)}%. ¿Cuál es el precio nuevo?`,
-    ]),
+  return variar(
+    [
+      () => `Una campera cuesta $${entero(20, 90) * 1000}. Le hacen un ${entero(5, 40)}% de descuento. ¿Cuánto se paga?`,
+      () => `En un curso de ${entero(20, 35)} alumnos, el ${entero(20, 80)}% aprobó. ¿Cuántos aprobaron?`,
+      () => `Un producto de $${entero(5, 30) * 100} aumenta un ${entero(5, 35)}%. ¿Cuál es el precio nuevo?`,
+      () => `Una bicicleta salía $${entero(30, 90) * 1000} y ahora sale $${entero(95, 140) * 1000}. ¿Qué porcentaje aumentó?`,
+      () => `De ${entero(40, 120)} encuestados, ${entero(10, 39)} dijeron que sí. ¿Qué porcentaje representa?`,
+    ],
+    cantidad,
   );
 }
 
@@ -337,13 +352,15 @@ function ejercitacionQuimica(): Ejercitacion {
 // ----------------------------------------------------------------- física
 
 function ejercitacionFisica(): Ejercitacion {
-  const material = Array.from({ length: 5 }, () =>
-    alAzar([
-      `Un auto recorre ${entero(60, 300)} km en ${entero(1, 5)} h a velocidad constante. Calculá su velocidad en km/h y en m/s.`,
-      `Un cuerpo parte del reposo y acelera a ${entero(2, 9)} m/s² durante ${entero(3, 12)} s. Calculá la velocidad final y la distancia recorrida.`,
-      `Se deja caer una piedra desde ${entero(10, 80)} m de altura. Calculá cuánto tarda en llegar al suelo.`,
-      `Sobre un cuerpo de ${entero(2, 40)} kg actúa una fuerza de ${entero(10, 200)} N. Calculá la aceleración.`,
-    ]),
+  const material = variar(
+    [
+      () => `Un auto recorre ${entero(60, 300)} km en ${entero(1, 5)} h a velocidad constante. Calculá su velocidad en km/h y en m/s.`,
+      () => `Un cuerpo parte del reposo y acelera a ${entero(2, 9)} m/s² durante ${entero(3, 12)} s. Calculá la velocidad final y la distancia recorrida.`,
+      () => `Se deja caer una piedra desde ${entero(10, 80)} m de altura. Calculá cuánto tarda en llegar al suelo.`,
+      () => `Sobre un cuerpo de ${entero(2, 40)} kg actúa una fuerza de ${entero(10, 200)} N. Calculá la aceleración.`,
+      () => `Un tren que va a ${entero(60, 120)} km/h frena hasta detenerse en ${entero(10, 40)} s. Calculá la aceleración en m/s².`,
+    ],
+    5,
   );
   return {
     tipo: "fisica",
