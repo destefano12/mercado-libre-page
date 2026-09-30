@@ -20,6 +20,20 @@ function wrangler(argumentos, { silencioso = false } = {}) {
   });
 }
 
+/**
+ * Antes de rendirse, averigua si el entorno entrega la credencial de otra
+ * forma: algunos entornos no la dejan leer, pero la agregan solos a los
+ * pedidos que salen hacia la API. Saberlo cambia el consejo que damos.
+ */
+async function laApiNosConoce() {
+  try {
+    const respuesta = await fetch("https://api.cloudflare.com/client/v4/user/tokens/verify");
+    return respuesta.ok;
+  } catch {
+    return false;
+  }
+}
+
 if (process.env.CLOUDFLARE_API_TOKEN && !process.env.CLOUDFLARE_ACCOUNT_ID) {
   // Con el número de cuenta a mano, el token no necesita permiso para buscarlo.
   console.error(
@@ -51,6 +65,20 @@ if (!process.env.CLOUDFLARE_API_TOKEN) {
       "Nunca va escrito en un archivo del proyecto.",
     ].join("\n"),
   );
+
+  if (await laApiNosConoce()) {
+    console.error(
+      [
+        "",
+        "Ojo: la API de Cloudflare igual nos reconoce, así que la credencial está",
+        "guardada pero el entorno no la deja leer. Wrangler necesita leerla.",
+        "La salida más simple es guardar el mismo token también como variable de",
+        "entorno con el nombre CLOUDFLARE_API_TOKEN, publicar, y después borrar el",
+        "token desde el panel de Cloudflare.",
+      ].join("\n"),
+    );
+  }
+
   process.exit(1);
 }
 
