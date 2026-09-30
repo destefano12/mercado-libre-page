@@ -13,7 +13,8 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "ocr:preparar": "node build/preparar-ocr.mjs",
-    "publicar": "node build/publicar.mjs"
+    "publicar": "node build/publicar.mjs",
+    "postbuild": "node -e \"require('node:fs').rmSync('.wrangler/deploy/config.json',{force:true})\""
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",

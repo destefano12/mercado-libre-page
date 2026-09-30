@@ -11,7 +11,10 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 
 const NOMBRE_BASE = process.env.EM_D1 ?? "estudiar-mejor";
-const CONFIGURACION = "dist/server/wrangler.json";
+const CONFIGURACION = "wrangler.jsonc";
+// Copia con el identificador de la base ya puesto. Va en la raíz porque las
+// rutas de la configuración (dist/server, dist/client) se leen desde ahí.
+const CONFIGURACION_CON_BASE = "wrangler.deploy.json";
 
 function wrangler(argumentos, { silencioso = false } = {}) {
   return execFileSync("npx", ["wrangler", ...argumentos], {
@@ -107,13 +110,14 @@ console.log(`▸ Base lista: ${identificador}`);
 console.log("▸ Compilando…");
 execFileSync("npm", ["run", "build"], { stdio: "inherit" });
 
-const configuracion = JSON.parse(readFileSync(CONFIGURACION, "utf8"));
+const sinComentarios = readFileSync(CONFIGURACION, "utf8").replace(/^\s*\/\/.*$/gm, "");
+const configuracion = JSON.parse(sinComentarios);
 configuracion.d1_databases = [{ binding: "DB", database_name: NOMBRE_BASE, database_id: identificador }];
-writeFileSync(CONFIGURACION, JSON.stringify(configuracion, null, 2));
+writeFileSync(CONFIGURACION_CON_BASE, JSON.stringify(configuracion, null, 2));
 console.log("▸ Configuración apuntada a tu base.");
 
 // 3. Subir.
 console.log("▸ Publicando…");
-wrangler(["deploy", "--config", CONFIGURACION]);
+wrangler(["deploy", "--config", CONFIGURACION_CON_BASE]);
 console.log("\n✔ Listo. La dirección que imprimió Wrangler es la de la página.");
 console.log("  Las tablas de los grupos y del chat se crean solas la primera vez que alguien las usa.");

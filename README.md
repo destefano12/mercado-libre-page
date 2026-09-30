@@ -29,6 +29,30 @@ npm test         # compilar y ejecutar pruebas
 npm run lint     # revisar calidad del codigo
 ```
 
+## Publicar
+
+La aplicacion trae su propio servidor: los trabajos grupales y el chat viven en
+`/api/estudiar`, sobre una base D1 que se crea sola la primera vez que alguien
+la usa. Hay dos maneras de subirla, las dos gratuitas.
+
+**Un clic, desde el navegador.** Abrir el boton de abajo, entrar con la cuenta
+de Cloudflare y aceptar. Cloudflare clona el repositorio, crea la base de
+datos, compila y publica.
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/destefano12/mercado-libre-page/tree/claude/estudiar-mejor-platform-isbsco)
+
+**Desde la terminal.**
+
+```bash
+npm install
+npx wrangler login
+npm run publicar
+```
+
+`npm run publicar` busca la base `estudiar-mejor`, la crea si no esta, compila
+y sube el Worker. La direccion que imprime al terminar es la de la pagina;
+la aplicacion queda en `/estudiar-mejor`.
+
 ## Estudiar Mejor
 
 El repositorio incluye una segunda aplicacion independiente en `/estudiar-mejor`: una

@@ -1,0 +1,26 @@
+{
+  // Configuración para publicar en Cloudflare. La compilación (`npm run build`)
+  // deja el Worker en dist/server y los archivos estáticos en dist/client.
+  //
+  // La base D1 se declara sin identificador a propósito: al publicar con el
+  // botón "Deploy to Cloudflare", Cloudflare la crea sola y la conecta. Si
+  // publicás a mano, `npm run publicar` busca la base o la crea y completa el
+  // identificador antes de subir.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "estudiar-mejor",
+  "main": "dist/server/index.js",
+  "compatibility_date": "2026-05-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "no_bundle": true,
+  "rules": [{ "type": "ESModule", "globs": ["**/*.js", "**/*.mjs"] }],
+  "assets": {
+    "directory": "dist/client"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "estudiar-mejor"
+    }
+  ],
+  "observability": { "enabled": true }
+}

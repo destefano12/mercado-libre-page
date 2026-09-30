@@ -44,3 +44,4 @@ next-env.d.ts
 
 # typescript build cache
 *.tsbuildinfo
+wrangler.deploy.json
