@@ -25,9 +25,17 @@ if (!process.env.CLOUDFLARE_API_TOKEN) {
     [
       "Falta CLOUDFLARE_API_TOKEN.",
       "",
-      "Creá un token en el panel de Cloudflare (Mi perfil > API Tokens > Create Token)",
-      "con permisos de editar Workers y D1, y guardalo como variable de entorno.",
-      "No hace falta escribirlo en ningún archivo del proyecto.",
+      "Creá el token en https://dash.cloudflare.com/profile/api-tokens",
+      "  Crear token > Crear token personalizado, con estos permisos de cuenta:",
+      "    - Workers Scripts        : Editar",
+      "    - D1                     : Editar",
+      "    - Workers KV Storage     : Editar",
+      "    - Configuración de cuenta: Leer",
+      "  En \"Recursos de la cuenta\" incluí tu cuenta.",
+      "",
+      "Después guardalo como variable de entorno junto con CLOUDFLARE_ACCOUNT_ID",
+      "(el número largo que aparece en la dirección del panel de Cloudflare).",
+      "Nunca va escrito en un archivo del proyecto.",
     ].join("\n"),
   );
   process.exit(1);
