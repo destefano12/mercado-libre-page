@@ -1,12 +1,9 @@
-import type { Metadata } from "next";
-import { MarketplaceApp } from "./components/MarketplaceApp";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "Mercado Live | Home",
-  description:
-    "Replica web funcional de marketplace con categorias, recomendaciones, publicaciones, chat y envios simulados.",
-};
-
+/**
+ * La raiz del sitio lleva a Estudiar Mejor, que es la aplicacion publicada.
+ * El marketplace, proyecto original de este repositorio, queda en /mercado-live.
+ */
 export default function Home() {
-  return <MarketplaceApp />;
+  redirect("/estudiar-mejor");
 }

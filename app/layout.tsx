@@ -2,17 +2,16 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Mercado Live | Marketplace multiusuario",
+  title: "Estudiar Mejor",
   description:
-    "Marketplace interactivo inspirado en Mercado Libre con usuarios, publicaciones, chat, recomendaciones y GPS simulado.",
+    "Plataforma de acompanamiento para estudiantes de secundaria: organiza el estudio, devuelve preguntas y nunca resuelve la tarea.",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
   },
   openGraph: {
-    title: "Mercado Live",
-    description:
-      "Marketplace con personalizacion, publicaciones en vivo, chat y seguimiento de envios.",
+    title: "Estudiar Mejor",
+    description: "No hace tu tarea. Te hace pensarla.",
   },
 };
 

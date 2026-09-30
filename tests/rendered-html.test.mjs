@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { readFile, stat } from "node:fs/promises";
 import test from "node:test";
 
-async function render() {
+async function render(ruta = "/mercado-live") {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
   const { default: worker } = await import(workerUrl.href);
 
   return worker.fetch(
-    new Request("http://localhost/", {
+    new Request(`http://localhost${ruta}`, {
       headers: { accept: "text/html" },
     }),
     {
@@ -933,4 +933,18 @@ test("invites classmates from the owner's own mailbox", async () => {
   assert.match(invitar, /export function olvidarInvitacion/);
   assert.match(modulo, /Invitar por mail/);
   assert.match(modulo, /Copiar el enlace/);
+});
+
+test("opens on Estudiar Mejor, with the marketplace on its own path", async () => {
+  // La raiz es la aplicacion publicada; el marketplace, el proyecto original
+  // de este repositorio, sigue entero en su propia direccion.
+  const raiz = await render("/");
+  assert.equal(raiz.status, 307);
+  assert.match(raiz.headers.get("location") ?? "", /\/estudiar-mejor$/);
+
+  const mercado = await render("/mercado-live");
+  assert.equal(mercado.status, 200);
+
+  const layout = await readFile(new URL("../app/layout.tsx", import.meta.url), "utf8");
+  assert.match(layout, /title: "Estudiar Mejor"/);
 });
