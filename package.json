@@ -12,7 +12,8 @@
     "test": "npm run build && node --test tests/rendered-html.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
-    "ocr:preparar": "node build/preparar-ocr.mjs"
+    "ocr:preparar": "node build/preparar-ocr.mjs",
+    "publicar": "node build/publicar.mjs"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",
