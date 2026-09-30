@@ -6,6 +6,7 @@ export type SeccionId =
   | "planificador"
   | "tutor"
   | "explicame"
+  | "pasoapaso"
   | "mapa"
   | "errores"
   | "grupos"
@@ -42,6 +43,7 @@ export const GRUPOS: GrupoSecciones[] = [
       { id: "planificador", nombre: "Planificador", icono: "planificador", descripcion: "Plan diario hasta la fecha límite" },
       { id: "tutor", nombre: "Tutor socrático", icono: "tutor", descripcion: "Preguntas desde tu material" },
       { id: "explicame", nombre: "Explicámelo vos", icono: "explicame", descripcion: "Los huecos de tu razonamiento" },
+      { id: "pasoapaso", nombre: "Paso a paso", icono: "explicame", descripcion: "Desarmá la consigna que te traba" },
       { id: "simulador", nombre: "Simulacro", icono: "simulador", descripcion: "Prueba cronometrada y corregida" },
     ],
   },

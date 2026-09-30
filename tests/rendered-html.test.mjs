@@ -948,3 +948,37 @@ test("opens on Estudiar Mejor, with the marketplace on its own path", async () =
   const layout = await readFile(new URL("../app/layout.tsx", import.meta.url), "utf8");
   assert.match(layout, /title: "Estudiar Mejor"/);
 });
+
+test("takes a consigna apart without ever answering it", async () => {
+  const verbos = await readFile(new URL("../app/estudiar-mejor/lib/verbos.ts", import.meta.url), "utf8");
+  const paso = await readFile(new URL("../app/estudiar-mejor/lib/pasoApaso.ts", import.meta.url), "utf8");
+  const pantalla = await readFile(new URL("../app/estudiar-mejor/modulos/PasoAPaso.tsx", import.meta.url), "utf8");
+
+  // Lo que cada verbo de consigna exige, que es de donde se pierden las notas.
+  for (const verbo of ["Definir", "Explicar", "Justificar", "Comparar", "Analizar", "Calcular", "Interpretar"]) {
+    assert.match(verbos, new RegExp(`verbo: "${verbo}"`));
+  }
+  assert.match(verbos, /export function verboDeLaConsigna/);
+  assert.match(verbos, /seCompletaCuando/);
+  assert.match(verbos, /errorTipico/);
+
+  // Tres andamios distintos segun que clase de ejercicio sea.
+  for (const familia of ["calculo", "texto", "practico"]) {
+    assert.match(paso, new RegExp(`"${familia}"`));
+  }
+  assert.match(paso, /export function armarProtocolo/);
+  // Cada paso pide algo y explica como hacerlo, nunca que contestar.
+  assert.match(paso, /pide: string/);
+  assert.match(paso, /ayuda: string/);
+  // Y siempre cierra con como controlar el resultado uno mismo.
+  assert.match(paso, /verificacion: string\[\]/);
+
+  // Copiar la consigna o escribir "no se" devuelve una pregunta mas chica.
+  assert.match(paso, /export function revisarLoEscrito/);
+  assert.match(paso, /consigna copiada/);
+  assert.match(paso, /Qué parte sí entendés/);
+
+  // Los pasos se abren de a uno: no se saltea al final.
+  assert.match(pantalla, /disabled=\{!anterior\}/);
+  assert.match(pantalla, /ninguna respuesta puede venir de acá/);
+});

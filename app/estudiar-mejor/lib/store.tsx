@@ -83,6 +83,11 @@ export interface AccionesEstudiar {
   alternarError: (id: string) => void;
   eliminarError: (id: string) => void;
   guardarExplicacion: (explicacion: Omit<Explicacion, "id" | "creadaEn">) => void;
+  /** Desarmar un ejercicio paso a paso. Lo que se guarda lo escribió el alumno. */
+  desarmarEjercicio: (consigna: string, materia?: string) => string;
+  anotarPaso: (desarmadoId: string, pasoId: string, texto: string) => void;
+  marcarResuelto: (desarmadoId: string) => void;
+  eliminarDesarmado: (id: string) => void;
   crearGrupo: (
     nombre: string,
     materia: string,
@@ -364,6 +369,46 @@ export function ProveedorEstudiar({ children }: { children: ReactNode }) {
             ...previo.explicaciones,
           ].slice(0, 100),
         })),
+
+      desarmarEjercicio: (consigna, materia) => {
+        const id = crearId("desarmado");
+        setEstado((previo) => ({
+          ...previo,
+          desarmados: [
+            {
+              id,
+              consigna: consigna.trim(),
+              materia,
+              respuestas: {},
+              creadoEn: new Date().toISOString(),
+              resuelto: false,
+            },
+            ...previo.desarmados,
+          ].slice(0, 50),
+        }));
+        return id;
+      },
+
+      anotarPaso: (desarmadoId, pasoId, texto) =>
+        setEstado((previo) => ({
+          ...previo,
+          desarmados: previo.desarmados.map((desarmado) =>
+            desarmado.id === desarmadoId
+              ? { ...desarmado, respuestas: { ...desarmado.respuestas, [pasoId]: texto } }
+              : desarmado,
+          ),
+        })),
+
+      marcarResuelto: (desarmadoId) =>
+        setEstado((previo) => ({
+          ...previo,
+          desarmados: previo.desarmados.map((desarmado) =>
+            desarmado.id === desarmadoId ? { ...desarmado, resuelto: !desarmado.resuelto } : desarmado,
+          ),
+        })),
+
+      eliminarDesarmado: (id) =>
+        setEstado((previo) => ({ ...previo, desarmados: previo.desarmados.filter((d) => d.id !== id) })),
 
       crearGrupo: (nombre, materia, entrega, integrantes) =>
         setEstado((previo) => ({

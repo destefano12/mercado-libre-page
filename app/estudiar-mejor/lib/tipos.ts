@@ -125,6 +125,17 @@ export interface Grupo {
   integrantes: Integrante[];
 }
 
+/** Un ejercicio desarmado paso a paso: lo escribe el alumno, se guarda entero. */
+export interface Desarmado {
+  id: string;
+  consigna: string;
+  materia?: string;
+  /** Lo que escribió en cada paso, por id de paso. */
+  respuestas: Record<string, string>;
+  creadoEn: string;
+  resuelto: boolean;
+}
+
 export interface EventoAgenda {
   id: string;
   tipo: "entrega" | "examen" | "sesion";
@@ -219,6 +230,7 @@ export interface EstadoEstudiar {
   agenda: EventoAgenda[];
   logs: LogEstudio[];
   explicaciones: Explicacion[];
+  desarmados: Desarmado[];
   simulacros: Simulacro[];
   dominio: Record<string, EvidenciaDominio>;
   pomodoro: {
