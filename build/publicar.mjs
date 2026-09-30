@@ -20,6 +20,20 @@ function wrangler(argumentos, { silencioso = false } = {}) {
   });
 }
 
+if (process.env.CLOUDFLARE_API_TOKEN && !process.env.CLOUDFLARE_ACCOUNT_ID) {
+  // Con el número de cuenta a mano, el token no necesita permiso para buscarlo.
+  console.error(
+    [
+      "Falta CLOUDFLARE_ACCOUNT_ID.",
+      "",
+      "Es el número largo que aparece en la dirección del panel de Cloudflare:",
+      "  dash.cloudflare.com/<acá está>/home",
+      "Guardalo como variable de entorno junto al token.",
+    ].join("\n"),
+  );
+  process.exit(1);
+}
+
 if (!process.env.CLOUDFLARE_API_TOKEN) {
   console.error(
     [
@@ -30,7 +44,6 @@ if (!process.env.CLOUDFLARE_API_TOKEN) {
       "    - Workers Scripts        : Editar",
       "    - D1                     : Editar",
       "    - Workers KV Storage     : Editar",
-      "    - Configuración de cuenta: Leer",
       "  En \"Recursos de la cuenta\" incluí tu cuenta.",
       "",
       "Después guardalo como variable de entorno junto con CLOUDFLARE_ACCOUNT_ID",
