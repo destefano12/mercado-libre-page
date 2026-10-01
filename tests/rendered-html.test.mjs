@@ -1037,6 +1037,10 @@ test("answers what tomorrow needs from the timetable", async () => {
   assert.match(horario, /export function cosasSugeridas/);
   // Lo que se lleva se sugiere por materia y se puede cambiar.
   assert.match(horario, /Ropa deportiva/);
+  // "Educaci\u00f3n F\u00edsica" contiene "f\u00edsica": lo especifico tiene que ganar.
+  assert.ok(
+    horario.indexOf("educaci[o\u00f3]n f[i\u00ed]sica") < horario.indexOf("{ busca: /f[i\u00ed]sica|qu[i\u00ed]mica/i"),
+  );
   assert.match(horario, /Calculadora/);
   assert.match(pantalla, /cambiarCosas/);
   // Y cruza con la agenda para avisar lo que hay que entregar.

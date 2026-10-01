@@ -8,13 +8,19 @@ import type { ClaseHorario, EventoAgenda } from "./tipos";
 
 export const DIAS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"] as const;
 
-/** Lo que se lleva, sugerido por materia: se puede cambiar a mano. */
+/**
+ * Lo que se lleva, sugerido por materia: se puede cambiar a mano.
+ *
+ * El orden importa y es por lo específico primero: "Educación Física" contiene
+ * "física", y si gana la regla de Física te manda al colegio con la tabla
+ * periódica en vez de con las zapatillas.
+ */
 const COSAS_POR_MATERIA: { busca: RegExp; lleva: string[] }[] = [
+  { busca: /educaci[oó]n f[ií]sica|deporte|gimnasia/i, lleva: ["Ropa deportiva", "Botella de agua", "Toalla"] },
   { busca: /matem|algebra|geometr/i, lleva: ["Carpeta", "Calculadora", "Regla y compás"] },
   { busca: /f[ií]sica|qu[ií]mica/i, lleva: ["Carpeta", "Calculadora", "Tabla periódica"] },
   { busca: /lengua|literatura|pr[aá]cticas del lenguaje/i, lleva: ["Carpeta", "El libro de lectura"] },
   { busca: /ingl[eé]s|portugu[eé]s|franc[eé]s/i, lleva: ["Carpeta", "Diccionario o la app"] },
-  { busca: /educaci[oó]n f[ií]sica|deporte/i, lleva: ["Ropa deportiva", "Botella de agua", "Toalla"] },
   { busca: /arte|pl[aá]stica|dibujo/i, lleva: ["Block", "Lápices", "Goma"] },
   { busca: /m[uú]sica/i, lleva: ["Carpeta", "Flauta o el instrumento"] },
   { busca: /inform[aá]tica|tecnolog/i, lleva: ["Carpeta", "Pendrive o la notebook"] },
