@@ -18,6 +18,7 @@ import { ProveedorEstudiar, useEstudiar } from "../lib/store";
 import { calcularConstancia } from "../lib/metricas";
 import { armarCola } from "../lib/tutor";
 import { Icono } from "./iconos";
+import { LogoEnPlaca } from "./Logo";
 import { PanelGuardia } from "./PanelGuardia";
 import { Invitacion } from "./Invitacion";
 import { SincronizarGrupos } from "./SincronizarGrupos";
@@ -28,11 +29,11 @@ import { nombreDelAnio } from "../lib/banco";
 function Marca({ compacta = false }: { compacta?: boolean }) {
   return (
     <span className="flex items-center gap-2.5">
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-tinta text-white">
-        <Icono nombre="manifiesto" tamaño={17} />
-      </span>
+      <LogoEnPlaca lado={32} />
       <span className="min-w-0">
-        <span className="block font-serif text-[15px] font-semibold leading-tight text-tinta">Estudiar Mejor</span>
+        <span className="block font-serif text-[15px] font-semibold leading-tight text-tinta">
+          Estudiar <span className="text-marca">Mejor</span>
+        </span>
         {!compacta ? (
           <span className="block text-[11px] leading-tight text-tenue">No hace tu tarea. Te hace pensarla.</span>
         ) : null}

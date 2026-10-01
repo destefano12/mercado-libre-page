@@ -6,8 +6,8 @@ export const metadata: Metadata = {
   description:
     "Plataforma de acompanamiento para estudiantes de secundaria: organiza el estudio, devuelve preguntas y nunca resuelve la tarea.",
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
+    icon: "/estudiar-mejor.svg",
+    shortcut: "/estudiar-mejor.svg",
   },
   openGraph: {
     title: "Estudiar Mejor",

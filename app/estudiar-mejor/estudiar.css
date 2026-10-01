@@ -21,6 +21,9 @@
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 
   /* Tinta y papel */
+  --color-marca: #1e9e78;
+  --color-marca-clara: #5fd3ae;
+  --color-marca-fondo: #0e1b18;
   --color-tinta: #0f1f33;
   --color-media: #4a5a70;
   --color-tenue: #78859a;

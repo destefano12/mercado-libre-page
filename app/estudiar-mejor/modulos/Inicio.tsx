@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Logo } from "../components/Logo";
 import { Barra, Boton, Campo, Dato, Pildora, Selector, Tarjeta, TituloSeccion, Vacio } from "../components/ui";
 import { nombreDelAnio } from "../lib/banco";
 import { cuandoEs, diferenciaEnDias, hoyClave, minutosLegibles } from "../lib/fechas";
@@ -53,6 +54,16 @@ export function Inicio({ irA }: { irA: (seccion: SeccionId) => void }) {
   if (!estado.nombre) {
     return (
       <Tarjeta>
+        <div className="mb-6 flex flex-col items-center gap-3 border-b border-linea pb-6 text-center">
+          <span className="grid h-20 w-20 place-items-center rounded-2xl bg-marca-fondo">
+            <Logo tamaño={48} />
+          </span>
+          <p className="font-serif text-2xl font-semibold text-tinta">
+            Estudiar <span className="text-marca">Mejor</span>
+          </p>
+          <p className="text-sm text-media">No hace tu tarea. Te hace pensarla.</p>
+        </div>
+
         <TituloSeccion
           icono="hoy"
           titulo="Hola, ¿cómo te llamás?"

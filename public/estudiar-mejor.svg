@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" role="img" aria-label="Estudiar Mejor">
+  <rect width="100" height="100" rx="22" fill="#0E1B18"/>
+  <g transform="translate(50 50) scale(0.82)" fill="#5FD3AE">
+    <path transform="rotate(0)"   d="M0 -7 C 11 -16 17 -30 14 -44 C 2 -37 -4 -23 0 -7 Z"/>
+    <path transform="rotate(120)" d="M0 -7 C 11 -16 17 -30 14 -44 C 2 -37 -4 -23 0 -7 Z"/>
+    <path transform="rotate(240)" d="M0 -7 C 11 -16 17 -30 14 -44 C 2 -37 -4 -23 0 -7 Z"/>
+    <path transform="rotate(60)"  d="M0 -9 C 8 -16 12 -27 10 -37 C 1 -31 -3 -21 0 -9 Z" opacity="0.42"/>
+    <path transform="rotate(180)" d="M0 -9 C 8 -16 12 -27 10 -37 C 1 -31 -3 -21 0 -9 Z" opacity="0.42"/>
+    <path transform="rotate(300)" d="M0 -9 C 8 -16 12 -27 10 -37 C 1 -31 -3 -21 0 -9 Z" opacity="0.42"/>
+  </g>
+</svg>

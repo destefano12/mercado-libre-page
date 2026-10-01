@@ -3,6 +3,7 @@ import "./estudiar.css";
 
 export const metadata: Metadata = {
   title: "Estudiar Mejor | Acompañamiento para estudiantes de secundaria",
+  icons: { icon: "/estudiar-mejor.svg", shortcut: "/estudiar-mejor.svg" },
   description:
     "Plataforma que organiza, pregunta y hace razonar. Nunca resuelve tareas ni redacta trabajos: planificador, tutor socrático, mapa de dominio, registro de errores y simulacros, todo en tu navegador.",
 };
