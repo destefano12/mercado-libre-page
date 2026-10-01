@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import { Agenda } from "../modulos/Agenda";
 import { Errores } from "../modulos/Errores";
 import { Explicame } from "../modulos/Explicame";
+import { Horario } from "../modulos/Horario";
 import { PasoAPaso } from "../modulos/PasoAPaso";
+import { Prueba } from "../modulos/Prueba";
 import { Grupos } from "../modulos/Grupos";
 import { Inicio } from "../modulos/Inicio";
 import { Manifiesto } from "../modulos/Manifiesto";
@@ -221,6 +223,8 @@ function Contenido() {
                 {seccion === "tutor" ? <Tutor /> : null}
                 {seccion === "explicame" ? <Explicame /> : null}
                 {seccion === "pasoapaso" ? <PasoAPaso /> : null}
+                {seccion === "horario" ? <Horario /> : null}
+                {seccion === "prueba" ? <Prueba /> : null}
                 {seccion === "mapa" ? <MapaDominio /> : null}
                 {seccion === "errores" ? <Errores /> : null}
                 {seccion === "grupos" ? <Grupos /> : null}

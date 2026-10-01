@@ -18,6 +18,7 @@ export function estadoInicialVacio(): EstadoEstudiar {
     logs: [],
     explicaciones: [],
     desarmados: [],
+    horario: [],
     simulacros: [],
     dominio: {},
     pomodoro: {

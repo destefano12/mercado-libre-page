@@ -136,6 +136,16 @@ export interface Desarmado {
   resuelto: boolean;
 }
 
+/** Una materia en un día de la semana, con lo que hay que llevar a esa clase. */
+export interface ClaseHorario {
+  id: string;
+  /** 0 domingo … 6 sábado, como los cuenta el navegador. */
+  dia: number;
+  orden: number;
+  materia: string;
+  lleva: string[];
+}
+
 export interface EventoAgenda {
   id: string;
   tipo: "entrega" | "examen" | "sesion";
@@ -233,6 +243,7 @@ export interface EstadoEstudiar {
   logs: LogEstudio[];
   explicaciones: Explicacion[];
   desarmados: Desarmado[];
+  horario: ClaseHorario[];
   simulacros: Simulacro[];
   dominio: Record<string, EvidenciaDominio>;
   pomodoro: {

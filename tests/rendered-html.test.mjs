@@ -1000,3 +1000,46 @@ test("leaving a group is leaving it, not a delete the server undoes", async () =
   assert.match(modulo, /correos: ficha\.correos\.filter/);
   assert.match(modulo, /Salir del grupo/);
 });
+
+test("studies differently depending on how far the exam is", async () => {
+  const plan = await readFile(new URL("../app/estudiar-mejor/lib/expres.ts", import.meta.url), "utf8");
+  const pantalla = await readFile(new URL("../app/estudiar-mejor/modulos/Prueba.tsx", import.meta.url), "utf8");
+
+  // Cuatro horizontes, cada uno con su manera de leer.
+  for (const horizonte of ["rescate", "hoy", "dias", "semana"]) {
+    assert.match(plan, new RegExp(`${horizonte}:`));
+  }
+  assert.match(plan, /export function horizonteDe/);
+  assert.match(plan, /export function armarPlanDeEstudio/);
+
+  // Con minutos: no subrayar, ir al esqueleto. Con una semana: metodo por dia.
+  assert.match(plan, /No subrayes ni hagas resumen/);
+  assert.match(plan, /No vuelvas a leer entero por tercera vez/);
+  assert.match(plan, /Método de Feynman/);
+  assert.match(plan, /Simulacro cronometrado/);
+
+  // El plan sale del apunte cargado, no de generalidades.
+  assert.match(plan, /function conceptosDelMaterial/);
+  assert.match(plan, /analizarMaterial\(material\)/);
+  assert.match(pantalla, /estado\.materiales/);
+  assert.match(pantalla, /No tengo tu apunte/);
+
+  // Y ordena por lo que peor sabes, con los errores propios primero.
+  assert.match(plan, /tus errores de siempre/);
+  assert.match(plan, /ORDEN\[nivelDominio/);
+});
+
+test("answers what tomorrow needs from the timetable", async () => {
+  const horario = await readFile(new URL("../app/estudiar-mejor/lib/horario.ts", import.meta.url), "utf8");
+  const pantalla = await readFile(new URL("../app/estudiar-mejor/modulos/Horario.tsx", import.meta.url), "utf8");
+
+  assert.match(horario, /export function armarDia/);
+  assert.match(horario, /export function cosasSugeridas/);
+  // Lo que se lleva se sugiere por materia y se puede cambiar.
+  assert.match(horario, /Ropa deportiva/);
+  assert.match(horario, /Calculadora/);
+  assert.match(pantalla, /cambiarCosas/);
+  // Y cruza con la agenda para avisar lo que hay que entregar.
+  assert.match(horario, /agenda\.filter/);
+  assert.match(pantalla, /Para mañana/);
+});

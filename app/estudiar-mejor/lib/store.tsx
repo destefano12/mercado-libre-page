@@ -88,6 +88,10 @@ export interface AccionesEstudiar {
   anotarPaso: (desarmadoId: string, pasoId: string, texto: string) => void;
   marcarResuelto: (desarmadoId: string) => void;
   eliminarDesarmado: (id: string) => void;
+  /** El horario de clases: se carga una vez y después contesta solo. */
+  agregarClase: (dia: number, materia: string, lleva: string[]) => void;
+  cambiarCosas: (claseId: string, lleva: string[]) => void;
+  eliminarClase: (id: string) => void;
   crearGrupo: (
     nombre: string,
     materia: string,
@@ -413,6 +417,33 @@ export function ProveedorEstudiar({ children }: { children: ReactNode }) {
 
       eliminarDesarmado: (id) =>
         setEstado((previo) => ({ ...previo, desarmados: previo.desarmados.filter((d) => d.id !== id) })),
+
+      agregarClase: (dia, materia, lleva) =>
+        setEstado((previo) => {
+          const delDia = previo.horario.filter((clase) => clase.dia === dia);
+          return {
+            ...previo,
+            horario: [
+              ...previo.horario,
+              {
+                id: crearId("clase"),
+                dia,
+                orden: delDia.length,
+                materia: materia.trim(),
+                lleva,
+              },
+            ],
+          };
+        }),
+
+      cambiarCosas: (claseId, lleva) =>
+        setEstado((previo) => ({
+          ...previo,
+          horario: previo.horario.map((clase) => (clase.id === claseId ? { ...clase, lleva } : clase)),
+        })),
+
+      eliminarClase: (id) =>
+        setEstado((previo) => ({ ...previo, horario: previo.horario.filter((clase) => clase.id !== id) })),
 
       crearGrupo: (nombre, materia, entrega, integrantes) =>
         setEstado((previo) => ({

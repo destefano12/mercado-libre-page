@@ -12,6 +12,8 @@ export type SeccionId =
   | "grupos"
   | "agenda"
   | "pomodoro"
+  | "horario"
+  | "prueba"
   | "simulador"
   | "adultos";
 
@@ -33,6 +35,7 @@ export const GRUPOS: GrupoSecciones[] = [
     titulo: "Tu día",
     secciones: [
       { id: "inicio", nombre: "Hoy", icono: "hoy", descripcion: "Tu día de un vistazo" },
+      { id: "horario", nombre: "Mi horario", icono: "agenda", descripcion: "Qué tenés mañana y qué llevar" },
       { id: "agenda", nombre: "Agenda", icono: "agenda", descripcion: "Entregas, exámenes y sesiones" },
       { id: "pomodoro", nombre: "Pomodoro", icono: "pomodoro", descripcion: "Enfoque con descansos" },
     ],
@@ -44,6 +47,7 @@ export const GRUPOS: GrupoSecciones[] = [
       { id: "tutor", nombre: "Tutor socrático", icono: "tutor", descripcion: "Preguntas desde tu material" },
       { id: "explicame", nombre: "Explicámelo vos", icono: "explicame", descripcion: "Los huecos de tu razonamiento" },
       { id: "pasoapaso", nombre: "Paso a paso", icono: "explicame", descripcion: "Desarmá la consigna que te traba" },
+      { id: "prueba", nombre: "Tengo prueba", icono: "simulador", descripcion: "El repaso que entra en el tiempo que tenés" },
       { id: "simulador", nombre: "Simulacro", icono: "simulador", descripcion: "Prueba cronometrada y corregida" },
     ],
   },
