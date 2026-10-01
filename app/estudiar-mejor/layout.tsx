@@ -3,7 +3,18 @@ import "./estudiar.css";
 
 export const metadata: Metadata = {
   title: "Estudiar Mejor | Acompañamiento para estudiantes de secundaria",
-  icons: { icon: "/estudiar-mejor.svg", shortcut: "/estudiar-mejor.svg" },
+  // El SVG sirve para la pestaña; los teléfonos necesitan el PNG aparte, y sin
+  // él iOS dibuja una letra en vez del logo al agregarla a la pantalla de inicio.
+  icons: {
+    icon: [
+      { url: "/estudiar-mejor.svg", type: "image/svg+xml" },
+      { url: "/icono-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    shortcut: "/estudiar-mejor.svg",
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "Estudiar Mejor", statusBarStyle: "black-translucent" },
   description:
     "Plataforma que organiza, pregunta y hace razonar. Nunca resuelve tareas ni redacta trabajos: planificador, tutor socrático, mapa de dominio, registro de errores y simulacros, todo en tu navegador.",
 };
