@@ -982,3 +982,21 @@ test("takes a consigna apart without ever answering it", async () => {
   assert.match(pantalla, /disabled=\{!anterior\}/);
   assert.match(pantalla, /ninguna respuesta puede venir de acá/);
 });
+
+test("leaving a group is leaving it, not a delete the server undoes", async () => {
+  const almacen = await readFile(new URL("../app/estudiar-mejor/lib/store.tsx", import.meta.url), "utf8");
+  const modulo = await readFile(new URL("../app/estudiar-mejor/modulos/Grupos.tsx", import.meta.url), "utf8");
+
+  // Antes, borrar un grupo lo sacaba de la pantalla y la sincronizacion
+  // siguiente lo traia de vuelta, porque seguia en el servidor con tu correo.
+  assert.match(almacen, /gruposIgnorados/);
+  assert.match(almacen, /if \(!aPedido && olvidados\.includes\(ficha\.codigo\)\) return previo;/);
+  // Volver a entrar a pedido (un codigo, una invitacion) borra ese olvido.
+  assert.match(almacen, /adoptarGrupoPublicado: \(ficha, aPedido = false\)/);
+  assert.match(modulo, /true,\n\s*\);/);
+
+  // Y salir tambien te saca de la ficha del servidor, para los demas.
+  assert.match(modulo, /const salirDelGrupo = async/);
+  assert.match(modulo, /correos: ficha\.correos\.filter/);
+  assert.match(modulo, /Salir del grupo/);
+});

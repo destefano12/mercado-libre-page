@@ -63,13 +63,16 @@ export function Invitacion() {
     if (!ficha) return;
 
     const mio = normalizarCorreo(registrado ? estado.email : correo);
-    acciones.adoptarGrupoPublicado({
-      ...ficha,
-      correos: [...ficha.correos, mio].filter(Boolean),
-      integrantes: mio && !ficha.correos.includes(mio)
-        ? [...ficha.integrantes, { nombre: (registrado ? estado.nombre : nombre).trim(), email: mio, rol: "Integrante" }]
-        : ficha.integrantes,
-    });
+    acciones.adoptarGrupoPublicado(
+      {
+        ...ficha,
+        correos: [...ficha.correos, mio].filter(Boolean),
+        integrantes: mio && !ficha.correos.includes(mio)
+          ? [...ficha.integrantes, { nombre: (registrado ? estado.nombre : nombre).trim(), email: mio, rol: "Integrante" }]
+          : ficha.integrantes,
+      },
+      true,
+    );
 
     olvidarInvitacion();
     setCerrada(true);

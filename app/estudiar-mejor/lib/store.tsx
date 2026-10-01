@@ -95,8 +95,12 @@ export interface AccionesEstudiar {
     integrantes: { nombre: string; email?: string; rol: string }[],
   ) => void;
   eliminarGrupo: (id: string) => void;
-  /** Trae un grupo que armó otra persona y en el que figura tu correo. */
-  adoptarGrupoPublicado: (grupo: GrupoPublicado) => void;
+  /**
+   * Trae un grupo que armó otra persona y en el que figura tu correo. Con
+   * `aPedido` en verdadero entrás porque lo pediste (un código o una
+   * invitación), y eso borra el olvido si antes te habías ido.
+   */
+  adoptarGrupoPublicado: (grupo: GrupoPublicado, aPedido?: boolean) => void;
   agregarIntegrante: (grupoId: string, nombre: string, email: string, rol: string) => void;
   eliminarIntegrante: (grupoId: string, integranteId: string) => void;
   agregarTarea: (grupoId: string, integranteId: string, titulo: string) => void;
@@ -443,9 +447,15 @@ export function ProveedorEstudiar({ children }: { children: ReactNode }) {
        * estaba, se suman los integrantes que faltaban sin tocar las tareas
        * que cada uno ya venía marcando en este dispositivo.
        */
-      adoptarGrupoPublicado: (ficha) =>
+      adoptarGrupoPublicado: (ficha, aPedido = false) =>
         setEstado((previo) => {
           const mio = normalizarCorreo(previo.email);
+
+          // Si te fuiste de este grupo, no vuelve solo. Vuelve si lo pedís.
+          const olvidados = previo.gruposIgnorados ?? [];
+          if (!aPedido && olvidados.includes(ficha.codigo)) return previo;
+          const gruposIgnorados = aPedido ? olvidados.filter((codigo) => codigo !== ficha.codigo) : olvidados;
+
           const existente = previo.grupos.find((grupo) => grupo.codigo === ficha.codigo);
 
           const nuevoIntegrante = (integrante: GrupoPublicado["integrantes"][number]): Integrante => {
@@ -464,6 +474,7 @@ export function ProveedorEstudiar({ children }: { children: ReactNode }) {
           if (!existente) {
             return {
               ...previo,
+              gruposIgnorados,
               grupos: [
                 {
                   id: crearId("grupo"),
@@ -485,10 +496,13 @@ export function ProveedorEstudiar({ children }: { children: ReactNode }) {
             const email = normalizarCorreo(integrante.email);
             return email && !conocidos.has(email);
           });
-          if (faltantes.length === 0) return previo;
+          if (faltantes.length === 0) {
+            return gruposIgnorados === olvidados ? previo : { ...previo, gruposIgnorados };
+          }
 
           return {
             ...previo,
+            gruposIgnorados,
             grupos: previo.grupos.map((grupo) =>
               grupo.codigo === ficha.codigo
                 ? { ...grupo, integrantes: [...grupo.integrantes, ...faltantes.map(nuevoIntegrante)] }
@@ -497,8 +511,22 @@ export function ProveedorEstudiar({ children }: { children: ReactNode }) {
           };
         }),
 
+      /**
+       * Borrar un grupo es irse de él. Se anota el código para que el servidor
+       * no te lo devuelva en la próxima sincronización, que era lo que hacía
+       * que el grupo reapareciera solo al rato de borrarlo.
+       */
       eliminarGrupo: (id) =>
-        setEstado((previo) => ({ ...previo, grupos: previo.grupos.filter((grupo) => grupo.id !== id) })),
+        setEstado((previo) => {
+          const saliendo = previo.grupos.find((grupo) => grupo.id === id);
+          const olvidados = previo.gruposIgnorados ?? [];
+          return {
+            ...previo,
+            grupos: previo.grupos.filter((grupo) => grupo.id !== id),
+            gruposIgnorados:
+              saliendo && !olvidados.includes(saliendo.codigo) ? [...olvidados, saliendo.codigo] : olvidados,
+          };
+        }),
 
       agregarIntegrante: (grupoId, nombre, email, rol) =>
         mapearGrupo(grupoId, (grupo) => {

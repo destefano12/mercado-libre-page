@@ -13,6 +13,7 @@ export function estadoInicialVacio(): EstadoEstudiar {
     tarjetas: [],
     errores: [],
     grupos: [],
+    gruposIgnorados: [],
     agenda: [],
     logs: [],
     explicaciones: [],

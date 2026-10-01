@@ -11,9 +11,11 @@ const r2 = null;
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
 
+// Las banderas de compatibilidad viven en wrangler.jsonc, que es la
+// configuracion del proyecto. Repetirlas aca hace que el runtime local se
+// niegue a arrancar por bandera duplicada.
 const localBindingConfig = {
   main: "./worker/index.ts",
-  compatibility_flags: ["nodejs_compat"],
   d1_databases: d1
     ? [
         {

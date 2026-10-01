@@ -227,6 +227,8 @@ export interface EstadoEstudiar {
   tarjetas: TarjetaTutor[];
   errores: RegistroError[];
   grupos: Grupo[];
+  /** Códigos de grupos de los que te fuiste: no vuelven aunque sigan en el servidor. */
+  gruposIgnorados: string[];
   agenda: EventoAgenda[];
   logs: LogEstudio[];
   explicaciones: Explicacion[];

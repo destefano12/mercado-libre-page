@@ -67,6 +67,33 @@ export function Grupos() {
   };
 
   /**
+   * Salir de un grupo: se va de tu pantalla y también te saca de la ficha del
+   * servidor, para que tus compañeros vean que no estás y para que no te lo
+   * vuelvan a mandar. Sin conexión, igual te vas de tu lado.
+   */
+  const salirDelGrupo = async (grupoId: string, codigo: string) => {
+    acciones.eliminarGrupo(grupoId);
+
+    const mio = estado.email.trim().toLowerCase();
+    if (!mio) return;
+
+    const chat = await conectarChat();
+    const ficha = await chat?.buscarGrupo?.(codigo);
+    if (!chat || !ficha) return;
+
+    await chat
+      .publicarGrupo({
+        ...ficha,
+        correos: ficha.correos.filter((correo) => correo.toLowerCase() !== mio),
+        integrantes: ficha.integrantes.filter((integrante) => integrante.email.toLowerCase() !== mio),
+        actualizado: new Date().toISOString(),
+      })
+      .catch(() => {
+        // Si no se puede avisar al servidor, de tu lado ya saliste igual.
+      });
+  };
+
+  /**
    * Un código suelto no alcanza para entrar: se busca el grupo en el servidor
    * y, si no existe, no se crea nada. Un grupo inventado no le sirve a nadie.
    */
@@ -105,13 +132,16 @@ export function Grupos() {
     }
 
     const mio = estado.email.trim().toLowerCase();
-    acciones.adoptarGrupoPublicado({
-      ...ficha,
-      correos: mio ? [...ficha.correos, mio] : ficha.correos,
-      integrantes: mio && !ficha.correos.includes(mio)
-        ? [...ficha.integrantes, { nombre: estado.nombre || "Vos", email: mio, rol: "Integrante" }]
-        : ficha.integrantes,
-    });
+    acciones.adoptarGrupoPublicado(
+      {
+        ...ficha,
+        correos: mio ? [...ficha.correos, mio] : ficha.correos,
+        integrantes: mio && !ficha.correos.includes(mio)
+          ? [...ficha.integrantes, { nombre: estado.nombre || "Vos", email: mio, rol: "Integrante" }]
+          : ficha.integrantes,
+      },
+      true,
+    );
     setAvisoDeCodigo({ tono: "logro", texto: `Entraste a "${ficha.nombre}".` });
     setCodigoParaEntrar("");
   };
@@ -194,8 +224,8 @@ export function Grupos() {
                     {grupo.materia} · entrega {fechaLarga(grupo.entrega)} ({cuandoEs(grupo.entrega)})
                   </p>
                 </div>
-                <Boton variante="peligro" onClick={() => acciones.eliminarGrupo(grupo.id)}>
-                  Borrar
+                <Boton variante="peligro" onClick={() => void salirDelGrupo(grupo.id, grupo.codigo)}>
+                  Salir del grupo
                 </Boton>
               </div>
 
