@@ -1047,3 +1047,21 @@ test("answers what tomorrow needs from the timetable", async () => {
   assert.match(horario, /agenda\.filter/);
   assert.match(pantalla, /Para mañana/);
 });
+
+test("reads a scanned PDF instead of turning it away", async () => {
+  const pdf = await readFile(new URL("../app/estudiar-mejor/lib/pdf.ts", import.meta.url), "utf8");
+  const tutor = await readFile(new URL("../app/estudiar-mejor/modulos/Tutor.tsx", import.meta.url), "utf8");
+
+  // Un PDF sin capa de texto son fotos de letras: se dibujan y se escanean.
+  assert.match(pdf, /async function escanearPaginas/);
+  assert.match(pdf, /await import\("\.\/ocr"\)/);
+  assert.match(pdf, /getViewport\(\{ scale: 2 \}\)/);
+  assert.doesNotMatch(pdf, /son imágenes escaneadas\. Probá con uno donde puedas seleccionar/);
+
+  // Tarda mucho mas, asi que se avisa, y se pone un tope de paginas.
+  assert.match(pdf, /const TOPE_ESCANEADO = 10/);
+  assert.match(tutor, /lo estoy leyendo como foto/);
+
+  // La tarea de pdf.js se libera por los dos caminos.
+  assert.match(pdf, /} finally \{\n\s*await tarea\.destroy\(\);/);
+});

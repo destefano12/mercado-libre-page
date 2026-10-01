@@ -169,8 +169,13 @@ export function Tutor() {
 
         if (clase === "pdf") {
           actualizarAdjunto(id, { detalle: "Abriendo el PDF…" });
-          contenido = await extraerTextoDePdf(archivo, ({ pagina, total }) =>
-            actualizarAdjunto(id, { detalle: `Leyendo página ${pagina} de ${total}…` }),
+          contenido = await extraerTextoDePdf(archivo, ({ pagina, total, escaneando }) =>
+            actualizarAdjunto(id, {
+              // Un PDF escaneado se lee como foto: tarda bastante más y conviene avisarlo.
+              detalle: escaneando
+                ? `Este PDF es un escaneo: lo estoy leyendo como foto. Página ${pagina} de ${total}, tené paciencia…`
+                : `Leyendo página ${pagina} de ${total}…`,
+            }),
           );
         } else if (clase === "imagen") {
           actualizarAdjunto(id, { detalle: "Preparando el escáner…" });

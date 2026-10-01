@@ -6,6 +6,8 @@ import { cargarPdfjs } from "./cargarPdfjs";
  */
 
 export interface AvanceLectura {
+  /** Verdadero mientras se leen las páginas como imagen, que tarda más. */
+  escaneando?: boolean;
   pagina: number;
   total: number;
 }
@@ -24,6 +26,10 @@ interface ItemTexto {
 
 interface PaginaPdf {
   getTextContent: () => Promise<{ items: ItemTexto[] }>;
+  getViewport: (opciones: { scale: number }) => { width: number; height: number };
+  render: (opciones: { canvasContext: CanvasRenderingContext2D; viewport: { width: number; height: number } }) => {
+    promise: Promise<void>;
+  };
   cleanup: () => void;
 }
 
@@ -57,6 +63,62 @@ function limpiar(texto: string): string {
     .replace(/ ?\n ?/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+/** Cuántas páginas se escanean como imagen: más que esto tarda demasiado. */
+const TOPE_ESCANEADO = 10;
+
+/**
+ * Un PDF escaneado no tiene letras, tiene fotos de letras. Para esos se dibuja
+ * cada página y se la pasa por el mismo escáner que usan las fotos sacadas con
+ * el celular. Es más lento que leer el texto, así que sólo se hace cuando el
+ * PDF no trae ninguno.
+ */
+async function escanearPaginas(
+  documento: DocumentoPdf,
+  onAvance?: (avance: AvanceLectura) => void,
+): Promise<string> {
+  const { escanearImagen } = await import("./ocr");
+  const hasta = Math.min(documento.numPages, TOPE_ESCANEADO);
+  const partes: string[] = [];
+
+  for (let numero = 1; numero <= hasta; numero += 1) {
+    onAvance?.({ pagina: numero, total: hasta, escaneando: true });
+
+    const pagina = await documento.getPage(numero);
+    // El doble de tamaño: el escáner lee bastante mejor con más resolución.
+    const vista = pagina.getViewport({ scale: 2 });
+    const lienzo = document.createElement("canvas");
+    lienzo.width = Math.round(vista.width);
+    lienzo.height = Math.round(vista.height);
+    const pincel = lienzo.getContext("2d");
+    if (!pincel) break;
+
+    await pagina.render({ canvasContext: pincel, viewport: vista }).promise;
+    pagina.cleanup();
+
+    const imagen = await new Promise<Blob | null>((listo) => lienzo.toBlob(listo, "image/png"));
+    lienzo.width = 0;
+    lienzo.height = 0;
+    if (!imagen) continue;
+
+    try {
+      partes.push(await escanearImagen(new File([imagen], `pagina-${numero}.png`, { type: "image/png" })));
+    } catch {
+      // Una página que no se deja leer no tira abajo las demás.
+    }
+  }
+
+  const texto = limpiar(partes.join("\n\n"));
+  if (texto.replace(/\s/g, "").length < 40) {
+    throw new ErrorPdf(
+      "Ese PDF son imágenes escaneadas y no pude leerlas. Si están torcidas o con poca luz, probá sacando la foto de nuevo, o copiá el texto a mano.",
+    );
+  }
+
+  return documento.numPages > hasta
+    ? `${texto}\n\n[Se leyeron las primeras ${hasta} páginas de ${documento.numPages}.]`
+    : texto;
 }
 
 export async function extraerTextoDePdf(
@@ -107,14 +169,12 @@ export async function extraerTextoDePdf(
     pagina.cleanup();
   }
 
-  await tarea.destroy();
   const texto = limpiar(partes.join("\n\n"));
 
-  if (texto.replace(/\s/g, "").length < 40) {
-    throw new ErrorPdf(
-      "Ese PDF no tiene texto: son imágenes escaneadas. Probá con uno donde puedas seleccionar las letras.",
-    );
+  // Sin texto, el PDF es un escaneo: se lo pasa por el escáner de fotos.
+  try {
+    return texto.replace(/\s/g, "").length < 40 ? await escanearPaginas(documento, onAvance) : texto;
+  } finally {
+    await tarea.destroy();
   }
-
-  return texto;
 }
