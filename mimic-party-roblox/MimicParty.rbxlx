@@ -1,0 +1,5121 @@
+<roblox version="4">
+  <Item class="ReplicatedStorage" referent="0">
+    <Properties>
+      <string name="Name">ReplicatedStorage</string>
+    </Properties>
+    <Item class="Folder" referent="1">
+      <Properties>
+        <string name="Name">Shared</string>
+      </Properties>
+      <Item class="ModuleScript" referent="2">
+        <Properties>
+          <string name="Name">Characters</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- Characters.luau — the roster. Colour schemes and a stage name, nothing that
+-- changes the rules: no character scores better than another. Cosmetic only,
+-- on purpose, so the wheel stays the only source of unfairness.
+
+local Characters = {}
+
+local function rgb(r, g, b) return Color3.fromRGB(r, g, b) end
+
+local roster = {
+	{ id = "duna",   name = "Duna",   tag = "la que nunca ensaya",      body = rgb(206, 170, 126), shirt = rgb(92, 64, 82),   pants = rgb(48, 42, 52),  accent = rgb(214, 160, 86) },
+	{ id = "tito",   name = "Tito",   tag = "cree que afina",           body = rgb(176, 132, 98),  shirt = rgb(66, 86, 92),   pants = rgb(42, 48, 52),  accent = rgb(126, 174, 182) },
+	{ id = "mora",   name = "Mora",   tag = "ataca primero",            body = rgb(228, 196, 164), shirt = rgb(104, 58, 58),  pants = rgb(52, 38, 38),  accent = rgb(192, 92, 92) },
+	{ id = "rulo",   name = "Rulo",   tag = "especialista en pedos",     body = rgb(150, 112, 82),  shirt = rgb(74, 88, 58),   pants = rgb(44, 50, 38),  accent = rgb(146, 172, 110) },
+	{ id = "sol",    name = "Sol",    tag = "melodía impecable",         body = rgb(238, 212, 184), shirt = rgb(112, 96, 56),  pants = rgb(56, 50, 36),  accent = rgb(226, 188, 74) },
+	{ id = "nene",   name = "Nene",   tag = "solo hace ruidos",          body = rgb(124, 94, 72),   shirt = rgb(58, 62, 86),   pants = rgb(38, 40, 52),  accent = rgb(118, 128, 186) },
+	{ id = "beba",   name = "Beba",   tag = "ritmo de metrónomo",        body = rgb(214, 180, 148), shirt = rgb(86, 70, 92),   pants = rgb(46, 40, 52),  accent = rgb(166, 134, 190) },
+	{ id = "chino",  name = "Chino",  tag = "sabotea por deporte",       body = rgb(188, 146, 110), shirt = rgb(48, 52, 56),   pants = rgb(34, 36, 40),  accent = rgb(150, 145, 156) },
+}
+
+local byId = {}
+for i, c in ipairs(roster) do
+	c.order = i
+	byId[c.id] = c
+end
+
+function Characters.all()
+	return roster
+end
+
+function Characters.get(id)
+	return byId[id]
+end
+
+function Characters.default()
+	return roster[1]
+end
+
+-- Pick a character nobody in `taken` is using, so two players on stage are
+-- never the same silhouette.
+function Characters.firstFree(taken)
+	for _, c in ipairs(roster) do
+		if not taken[c.id] then
+			return c
+		end
+	end
+	return roster[1]
+end
+
+return Characters
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="3">
+        <Properties>
+          <string name="Name">Config</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- Config.luau — single source of truth for every tunable in Mimic Party.
+-- Nothing else in the codebase hardcodes a number that belongs here.
+
+local Config = {}
+
+-- ─── Match shape ──────────────────────────────────────────────────────────────
+Config.MIN_PLAYERS = 2
+Config.MAX_PLAYERS = 5
+Config.ROUNDS_PER_PARTY = 4
+
+-- ─── Phase durations (seconds) ────────────────────────────────────────────────
+Config.PHASE = {
+	LOBBY_COUNTDOWN = 20,  -- shortens to QUICK_START once the room is full
+	QUICK_START = 6,
+	PROCESSION = 7.5,      -- players walk from the house to their marks
+	ROUND_INTRO = 2.6,
+	REFERENCE_PAD = 1.1,   -- breathing room before/after the reference plays
+	COUNT_IN = 3,          -- 3 · 2 · 1 · GO
+	TAKE_TAIL = 0.45,      -- grace after the take window closes
+	PLAYBACK_GAP = 1.5,    -- reaction window between takes
+	ROULETTE_SPIN = 4.2,
+	SABOTAGE_PICK = 7,
+	RESULTS = 11,
+}
+
+-- ─── Recording ────────────────────────────────────────────────────────────────
+Config.TAKE = {
+	-- One shot. No retries, no undo. This flag exists to be read, never flipped.
+	ALLOW_RETRY = false,
+	PITCH_RANGE = 9,       -- ± semitones the player can reach with the mouse
+	MIN_NOTE = 0.05,       -- shorter than this is a click, not an attack
+	MAX_NOTES = 48,
+	ENVELOPE_SAMPLES = 96, -- waveform resolution
+}
+
+-- ─── Scoring ──────────────────────────────────────────────────────────────────
+-- Faithful to the original: melody, rhythm and attacks. Never timbre, never
+-- absolute pitch — contours are mean-normalised so registers score equally.
+Config.SCORING = {
+	WEIGHT_MELODY = 0.40,
+	WEIGHT_RHYTHM = 0.35,
+	WEIGHT_ATTACKS = 0.25,
+	MELODY_SAMPLES = 64,
+	MELODY_TOLERANCE = 7.0,  -- semitones of contour error that zeroes the axis
+	RHYTHM_TOLERANCE = 0.35, -- seconds of onset error that zeroes the axis
+	MAX_SCORE = 1000,
+}
+
+-- ─── Roulette ─────────────────────────────────────────────────────────────────
+Config.ROULETTE = {
+	SABOTAGE_POINT_PENALTY = 120,
+	MULTIPLIER_DECAY = 1,    -- multipliers last this many rounds
+}
+
+-- ─── Solo modes ───────────────────────────────────────────────────────────────
+Config.SURVIVAL = { SOUNDS = 50, LIVES = 3, TARGET_START = 300, TARGET_STEP = 25, TARGET_CAP = 720 }
+Config.JUST_PLAY = { ROUNDS = 3 }
+Config.DAILY = { SOUNDS = 4 }
+
+-- ─── Presentation ─────────────────────────────────────────────────────────────
+Config.STAGE_MARKS = 5
+Config.CAMERA_FOV = { HOUSE = 58, WIDE = 52, BOOTH = 36, ROULETTE = 44, CLOSE = 30 }
+
+-- ─── Audio assets ─────────────────────────────────────────────────────────────
+-- Every sound in the library runs through a synthesised fallback voice, so the
+-- game is fully playable with zero uploads. Drop your own ids here to replace it.
+Config.AUDIO = {
+	-- A sustained, pitch-neutral tone. The engine pitch-shifts it per note.
+	VOICE_TONE = "rbxassetid://9112854440",
+	UI_CLICK = "rbxassetid://6042053626",
+	UI_CONFIRM = "rbxassetid://6042583426",
+	COUNT_TICK = "rbxassetid://9118823101",
+	WHEEL_TICK = "rbxassetid://9118823101",
+	-- The sabotage that replaces a whole take. Yes, that one.
+	SWAP_SFX = "rbxassetid://5338534197",
+	APPLAUSE = "rbxassetid://9125573137",
+}
+
+return Config
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="4">
+        <Properties>
+          <string name="Name">Modes</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- Modes.luau — every way to play, in one table.
+-- Party runs on the server state machine; the four solo modes run client-side
+-- against the same Scoring module, so a solo score and a party score mean
+-- exactly the same thing.
+
+local Config = require(script.Parent.Config)
+
+return {
+	{
+		id = "party",
+		name = "Fiesta",
+		players = "2–5 · online",
+		blurb = "Cuatro rondas. Todos graban a la vez, una sola toma, y la ruleta decide el resto.",
+		solo = false,
+		rounds = Config.ROUNDS_PER_PARTY,
+	},
+	{
+		id = "passthemic",
+		name = "Pasá el Micro",
+		players = "2–5 · un dispositivo",
+		blurb = "Por turnos en la misma pantalla. Cuatro rondas, resultados locales.",
+		solo = true,
+		rounds = 4,
+		local_turns = true,
+	},
+	{
+		id = "survival",
+		name = "Supervivencia",
+		players = "1 jugador",
+		blurb = ("%d sonidos, %d vidas, y el objetivo sube cada ronda."):format(
+			Config.SURVIVAL.SOUNDS, Config.SURVIVAL.LIVES),
+		solo = true,
+		rounds = Config.SURVIVAL.SOUNDS,
+	},
+	{
+		id = "justplay",
+		name = "Suelto",
+		players = "1 jugador",
+		blurb = "Tres rondas rápidas con ruleta de bonus y rutas: segura, arriesgada o enfocada.",
+		solo = true,
+		rounds = Config.JUST_PLAY.ROUNDS,
+		routes = {
+			{ id = "safe",    name = "Segura",    blurb = "Puntaje tal cual.",                     mult = 1.0 },
+			{ id = "risky",   name = "Arriesgada", blurb = "×2, pero por debajo de 500 no cuenta.", mult = 2.0, floor = 500 },
+			{ id = "focused", name = "Enfocada",  blurb = "Solo melodía, ×1.5.",                    mult = 1.5, axis = "melody" },
+		},
+	},
+	{
+		id = "daily",
+		name = "Racha Diaria",
+		players = "1 jugador",
+		blurb = ("%d sonidos iguales para todo el mundo. Se reinicia a las 00:00 UTC."):format(Config.DAILY.SOUNDS),
+		solo = true,
+		rounds = Config.DAILY.SOUNDS,
+		daily = true,
+	},
+}
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="5">
+        <Properties>
+          <string name="Name">Net</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- Net.luau — the only place RemoteEvents are named. The server creates them,
+-- the client waits for them; callers on both sides use the same accessor.
+
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local IS_SERVER = RunService:IsServer()
+local FOLDER_NAME = "MimicPartyNet"
+
+local Net = {}
+
+-- Server → client
+Net.State = "State"                 -- authoritative phase payload
+Net.Playback = "Playback"           -- one take is about to play
+Net.RouletteSpin = "RouletteSpin"   -- wheel result for the whole table
+Net.SabotageHit = "SabotageHit"     -- you were targeted (revealed at playback)
+Net.Scores = "Scores"               -- scoreboard delta
+Net.Toast = "Toast"                 -- short room-wide notice
+
+-- Client → server
+Net.SubmitTake = "SubmitTake"
+Net.ChooseCharacter = "ChooseCharacter"
+Net.ChooseSabotageTarget = "ChooseSabotageTarget"
+Net.SetReady = "SetReady"
+Net.RequestSoloScore = "RequestSoloScore"
+
+local ALL = {
+	Net.State, Net.Playback, Net.RouletteSpin, Net.SabotageHit, Net.Scores, Net.Toast,
+	Net.SubmitTake, Net.ChooseCharacter, Net.ChooseSabotageTarget, Net.SetReady,
+	Net.RequestSoloScore,
+}
+
+local folder
+
+local function root()
+	if folder then
+		return folder
+	end
+	if IS_SERVER then
+		folder = ReplicatedStorage:FindFirstChild(FOLDER_NAME)
+		if not folder then
+			folder = Instance.new("Folder")
+			folder.Name = FOLDER_NAME
+			folder.Parent = ReplicatedStorage
+		end
+		for _, name in ipairs(ALL) do
+			if not folder:FindFirstChild(name) then
+				local remote = Instance.new("RemoteEvent")
+				remote.Name = name
+				remote.Parent = folder
+			end
+		end
+	else
+		folder = ReplicatedStorage:WaitForChild(FOLDER_NAME, 30)
+	end
+	return folder
+end
+
+function Net.get(name)
+	local r = root()
+	if not r then
+		error("[Net] network folder never replicated", 2)
+	end
+	local remote = r:FindFirstChild(name) or r:WaitForChild(name, 20)
+	if not remote then
+		error(("[Net] remote %q is missing"):format(tostring(name)), 2)
+	end
+	return remote
+end
+
+-- Convenience wrappers so call sites read cleanly.
+function Net.fireClient(name, player, payload)
+	Net.get(name):FireClient(player, payload)
+end
+
+function Net.fireAll(name, payload)
+	Net.get(name):FireAllClients(payload)
+end
+
+function Net.fireServer(name, payload)
+	Net.get(name):FireServer(payload)
+end
+
+function Net.onServer(name, fn)
+	return Net.get(name).OnServerEvent:Connect(fn)
+end
+
+function Net.onClient(name, fn)
+	return Net.get(name).OnClientEvent:Connect(fn)
+end
+
+function Net.init()
+	assert(IS_SERVER, "Net.init is server-only")
+	root()
+end
+
+return Net
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="6">
+        <Properties>
+          <string name="Name">Palette</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- Palette.luau — a muted theatre palette. Warm woods, deep plum, brass, cream.
+-- Deliberately low-contrast and low-saturation: no neon, no strobes, nothing
+-- that fights the performance for attention.
+
+local function rgb(r, g, b) return Color3.fromRGB(r, g, b) end
+
+return {
+	-- Room
+	HouseFloor   = rgb(38, 33, 36),
+	HouseWall    = rgb(30, 27, 30),
+	Scrim        = rgb(22, 20, 23),
+
+	-- Stage
+	Deck         = rgb(122, 86, 55),
+	DeckDark     = rgb(92, 64, 41),
+	Fascia       = rgb(46, 38, 38),
+	Trim         = rgb(150, 116, 66),   -- brass
+	TrimDark     = rgb(104, 79, 44),
+	Truss        = rgb(44, 42, 45),
+
+	-- Curtain
+	Curtain      = rgb(84, 40, 56),
+	CurtainFold  = rgb(66, 31, 45),
+	Valance      = rgb(96, 48, 64),
+
+	-- Crowd
+	Crowd        = rgb(26, 24, 28),
+
+	-- Light
+	Practical    = rgb(255, 214, 160),
+	Wash         = rgb(255, 228, 192),
+
+	-- UI
+	Ink          = rgb(18, 17, 20),
+	Panel        = rgb(29, 28, 33),
+	PanelRaised  = rgb(38, 37, 43),
+	Hairline     = rgb(58, 56, 64),
+	Cream        = rgb(238, 233, 224),
+	Muted        = rgb(150, 145, 156),
+
+	-- The two signature waveform colours, straight from the original.
+	Reference    = rgb(226, 188, 74),   -- yellow — the sound you must match
+	Yours        = rgb(118, 196, 128),  -- green  — your voice
+
+	Good         = rgb(118, 196, 128),
+	Warn         = rgb(214, 160, 86),
+	Bad          = rgb(192, 92, 92),
+}
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="7">
+        <Properties>
+          <string name="Name">Roulette</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- Roulette.luau — the wheel between rounds. One spin, the whole table at once.
+--
+-- The wheel is the reason this game is not a karaoke scoreboard. Weights are
+-- tuned so roughly a third of spins hand somebody a sabotage: enough that the
+-- threat is real every round, rare enough that it still lands as an event.
+
+local Sabotages = require(script.Parent.Sabotages)
+
+local Roulette = {}
+
+local segments = {
+	{ id = "p50",   kind = "points",     label = "+50",        amount = 50,   weight = 14 },
+	{ id = "p100",  kind = "points",     label = "+100",       amount = 100,  weight = 10 },
+	{ id = "p150",  kind = "points",     label = "+150",       amount = 150,  weight = 6 },
+	{ id = "m15",   kind = "multiplier", label = "×1.5",       amount = 1.5,  weight = 8 },
+	{ id = "m20",   kind = "multiplier", label = "×2",         amount = 2.0,  weight = 4 },
+	{ id = "sab1",  kind = "sabotage",   label = "SATURACIÓN", sabotage = "saturate", weight = 7 },
+	{ id = "sab2",  kind = "sabotage",   label = "ECO",        sabotage = "echo",     weight = 7 },
+	{ id = "sab3",  kind = "sabotage",   label = "TONO",       sabotage = "pitch",    weight = 7 },
+	{ id = "sab4",  kind = "sabotage",   label = "PICADO",     sabotage = "chop",     weight = 6 },
+	{ id = "sab5",  kind = "sabotage",   label = "SUSTITUIR",  sabotage = "swap",     weight = 4 },
+	{ id = "none",  kind = "nothing",    label = "APLAUSO",    weight = 5 },
+}
+
+local total = 0
+for _, s in ipairs(segments) do
+	total += s.weight
+end
+
+function Roulette.segments()
+	return segments
+end
+
+function Roulette.indexOf(id)
+	for i, s in ipairs(segments) do
+		if s.id == id then
+			return i
+		end
+	end
+	return nil
+end
+
+-- Weighted draw. `rng` is passed in so the server stays the only authority.
+function Roulette.spin(rng)
+	local roll = (rng and rng:NextNumber() or math.random()) * total
+	local acc = 0
+	for i, s in ipairs(segments) do
+		acc += s.weight
+		if roll <= acc then
+			return i, s
+		end
+	end
+	return #segments, segments[#segments]
+end
+
+function Roulette.describe(segment)
+	if segment.kind == "points" then
+		return ("Te llevás %d puntos."):format(segment.amount)
+	elseif segment.kind == "multiplier" then
+		return ("Tu próxima ronda vale ×%s."):format(segment.amount)
+	elseif segment.kind == "sabotage" then
+		local def = Sabotages.get(segment.sabotage)
+		return def and ("Elegí a quién: " .. def.blurb) or "Elegí a quién."
+	end
+	return "Nada. La mesa aplaude igual."
+end
+
+return Roulette
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="8">
+        <Properties>
+          <string name="Name">Sabotages</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- Sabotages.luau — what the wheel lets you do to somebody else's take.
+--
+-- Every one of these is a native Roblox SoundEffect, so the ruined take is
+-- genuinely ruined in the audio graph rather than faked with a label. The
+-- victim finds out only when their own take plays back — nothing here is
+-- announced earlier, and that delay is the point.
+
+local Config = require(script.Parent.Config)
+
+local Sabotages = {}
+
+local defs = {
+	{
+		id = "saturate",
+		name = "Saturación",
+		blurb = "Su toma sale reventada, al borde del clip.",
+		icon = "▲",
+		apply = function(sound)
+			local fx = Instance.new("DistortionSoundEffect")
+			fx.Level = 0.72
+			fx.Parent = sound
+			local gain = Instance.new("EqualizerSoundEffect")
+			gain.LowGain = 4
+			gain.MidGain = 6
+			gain.HighGain = -2
+			gain.Parent = sound
+			return function()
+				fx:Destroy()
+				gain:Destroy()
+			end
+		end,
+	},
+	{
+		id = "echo",
+		name = "Eco",
+		blurb = "Se repite, y se repite, y se repite.",
+		icon = "◌",
+		apply = function(sound)
+			local fx = Instance.new("EchoSoundEffect")
+			fx.Delay = 0.19
+			fx.Feedback = 0.62
+			fx.DryLevel = 0
+			fx.WetLevel = -2
+			fx.Parent = sound
+			return function()
+				fx:Destroy()
+			end
+		end,
+	},
+	{
+		id = "pitch",
+		name = "Cambio de tono",
+		blurb = "Ardilla o demonio. No elige quién lo recibe.",
+		icon = "◆",
+		apply = function(sound)
+			local fx = Instance.new("PitchShiftSoundEffect")
+			fx.Octave = (math.random() < 0.5) and 0.58 or 1.72
+			fx.Parent = sound
+			return function()
+				fx:Destroy()
+			end
+		end,
+	},
+	{
+		id = "chop",
+		name = "Picado",
+		blurb = "La toma se corta en pedazos a media frase.",
+		icon = "▌",
+		apply = function(sound)
+			-- A hard gate on the fader: Roblox has no stutter effect, so we cut
+			-- the volume on a fixed grid while the take plays.
+			local original = sound.Volume
+			local alive = true
+			task.spawn(function()
+				local open = true
+				while alive and sound.Parent do
+					sound.Volume = open and original or 0
+					open = not open
+					task.wait(0.085)
+				end
+			end)
+			return function()
+				alive = false
+				if sound.Parent then
+					sound.Volume = original
+				end
+			end
+		end,
+	},
+	{
+		id = "swap",
+		name = "Sustitución",
+		blurb = "La mesa no escucha su voz. Escucha otra cosa.",
+		icon = "✖",
+		-- Handled upstream by the audio engine: the take is never rendered,
+		-- Config.AUDIO.SWAP_SFX plays in its place.
+		replacesTake = true,
+		apply = function()
+			return function() end
+		end,
+	},
+}
+
+local byId = {}
+for _, d in ipairs(defs) do
+	byId[d.id] = d
+end
+
+function Sabotages.all()
+	return defs
+end
+
+function Sabotages.get(id)
+	return byId[id]
+end
+
+function Sabotages.penalty()
+	return Config.ROULETTE.SABOTAGE_POINT_PENALTY
+end
+
+-- Applies a sabotage to a live Sound and returns a cleanup function.
+-- Safe to call with nil / unknown ids: you get a no-op cleanup back.
+function Sabotages.applyTo(sound, id)
+	local def = id and byId[id]
+	if not def or not sound then
+		return function() end
+	end
+	local ok, cleanup = pcall(def.apply, sound)
+	if not ok or type(cleanup) ~= "function" then
+		warn(("[Sabotages] %q failed to apply: %s"):format(tostring(id), tostring(cleanup)))
+		return function() end
+	end
+	return cleanup
+end
+
+return Sabotages
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="9">
+        <Properties>
+          <string name="Name">Scoring</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- Scoring.luau — melody, rhythm, attacks. Never timbre.
+--
+-- The one rule that matters: contours are mean-normalised before comparison,
+-- so a low voice and a high voice tracing the same shape score identically.
+-- Shared verbatim by server (party rounds) and client (solo modes), so a solo
+-- run and a party round are graded by the same code path.
+
+local Config = require(script.Parent.Config)
+
+local Scoring = {}
+local S = Config.SCORING
+
+local function clamp01(x)
+	return math.clamp(x, 0, 1)
+end
+
+-- Sample a note list into a per-frame pitch contour plus a voiced mask.
+local function contour(notes, duration, samples)
+	local pitch = table.create(samples, 0)
+	local voiced = table.create(samples, false)
+	if duration <= 0 then
+		return pitch, voiced
+	end
+	for i = 1, samples do
+		local t = (i - 0.5) / samples * duration
+		for _, n in ipairs(notes) do
+			if t >= n.t and t <= n.t + n.dur then
+				pitch[i] = n.pitch
+				voiced[i] = true
+				break
+			end
+		end
+	end
+	return pitch, voiced
+end
+
+-- ── Melody ───────────────────────────────────────────────────────────────────
+-- Compared only where both performances are voiced, each side mean-centred.
+local function melodyAxis(ref, take, duration)
+	local n = S.MELODY_SAMPLES
+	local rp, rv = contour(ref.notes, duration, n)
+	local tp, tv = contour(take.notes, duration, n)
+
+	local idx, sumR, sumT = {}, 0, 0
+	for i = 1, n do
+		if rv[i] and tv[i] then
+			table.insert(idx, i)
+			sumR += rp[i]
+			sumT += tp[i]
+		end
+	end
+	if #idx == 0 then
+		return 0, 0
+	end
+
+	local meanR, meanT = sumR / #idx, sumT / #idx
+	local err = 0
+	for _, i in ipairs(idx) do
+		err += math.abs((rp[i] - meanR) - (tp[i] - meanT))
+	end
+	err /= #idx
+
+	-- Overlap matters too: nailing the shape of one third of the sound is not
+	-- the same as nailing the whole sound.
+	local voicedRef = 0
+	for i = 1, n do
+		if rv[i] then voicedRef += 1 end
+	end
+	local coverage = voicedRef > 0 and (#idx / voicedRef) or 0
+
+	local shape = clamp01(1 - err / S.MELODY_TOLERANCE)
+	return shape * (0.35 + 0.65 * coverage), coverage
+end
+
+-- ── Rhythm ───────────────────────────────────────────────────────────────────
+-- Onset-to-onset alignment, penalised for dropped or invented onsets.
+local function rhythmAxis(ref, take)
+	local a, b = ref.notes, take.notes
+	local n = math.min(#a, #b)
+	if n == 0 then
+		return 0
+	end
+	local err = 0
+	for i = 1, n do
+		err += math.abs(a[i].t - b[i].t)
+	end
+	err /= n
+
+	local accuracy = clamp01(1 - err / S.RHYTHM_TOLERANCE)
+	local pairing = n / math.max(#a, #b)
+	return accuracy * pairing
+end
+
+-- ── Attacks ──────────────────────────────────────────────────────────────────
+-- How many times you actually hit it. Counting, not shaping.
+local function attacksAxis(ref, take)
+	local want = #ref.notes
+	local got = #take.notes
+	if want == 0 then
+		return got == 0 and 1 or 0
+	end
+	return clamp01(1 - math.abs(got - want) / want)
+end
+
+-- ── Public ───────────────────────────────────────────────────────────────────
+-- `take` is { notes = {...} }. Returns every axis in 0..MAX_SCORE plus total.
+function Scoring.grade(ref, take)
+	take = take or { notes = {} }
+	local duration = math.max(ref.duration, 0.2)
+
+	local melody, coverage = melodyAxis(ref, take, duration)
+	local rhythm = rhythmAxis(ref, take)
+	local attacks = attacksAxis(ref, take)
+
+	local blended = melody * S.WEIGHT_MELODY
+		+ rhythm * S.WEIGHT_RHYTHM
+		+ attacks * S.WEIGHT_ATTACKS
+
+	local max = S.MAX_SCORE
+	return {
+		melody = math.floor(melody * max + 0.5),
+		rhythm = math.floor(rhythm * max + 0.5),
+		attacks = math.floor(attacks * max + 0.5),
+		total = math.floor(blended * max + 0.5),
+		coverage = coverage,
+	}
+end
+
+-- Plain-language verdict for the playback card.
+function Scoring.verdict(total)
+	if total >= 900 then return "IDÉNTICO" end
+	if total >= 780 then return "CLAVADO" end
+	if total >= 620 then return "CERCA" end
+	if total >= 440 then return "RECONOCIBLE" end
+	if total >= 240 then return "LEJOS" end
+	return "¿QUÉ FUE ESO?"
+end
+
+return Scoring
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="10">
+        <Properties>
+          <string name="Name">Signal</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- Signal.luau — a minimal, allocation-light signal. No dependencies.
+
+local Signal = {}
+Signal.__index = Signal
+
+function Signal.new()
+	return setmetatable({ _handlers = {} }, Signal)
+end
+
+function Signal:Connect(fn)
+	local handlers = self._handlers
+	handlers[fn] = true
+	return {
+		Disconnect = function()
+			handlers[fn] = nil
+		end,
+	}
+end
+
+function Signal:Fire(...)
+	for fn in pairs(self._handlers) do
+		task.spawn(fn, ...)
+	end
+end
+
+function Signal:Destroy()
+	table.clear(self._handlers)
+end
+
+return Signal
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="11">
+        <Properties>
+          <string name="Name">SoundLibrary</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- SoundLibrary.luau — the reference sounds, authored as pitch/time patterns.
+--
+-- A reference is not a waveform here: it is a *contour*. Each note is
+-- { t = onset seconds, dur = length seconds, pitch = semitones from centre }.
+-- The audio engine renders it through one sustained tone, so the whole library
+-- plays with no uploaded assets; set `asset` on any entry to use real audio
+-- instead and the pattern keeps driving the scoring and the waveform.
+
+local Config = require(script.Parent.Config)
+
+local SoundLibrary = {}
+
+local packs = {}
+local byId = {}
+
+local function pack(id, name, blurb, entries)
+	local p = { id = id, name = name, blurb = blurb, sounds = {} }
+	for _, e in ipairs(entries) do
+		local notes = {}
+		local duration = 0
+		for _, n in ipairs(e[4]) do
+			local note = { t = n[1], dur = n[2], pitch = n[3] }
+			table.insert(notes, note)
+			duration = math.max(duration, note.t + note.dur)
+		end
+		local sound = {
+			id = e[1],
+			name = e[2],
+			difficulty = e[3],     -- 1 easy · 2 medium · 3 hard
+			notes = notes,
+			duration = duration + 0.12,
+			pack = id,
+			asset = e[5],
+		}
+		table.insert(p.sounds, sound)
+		byId[sound.id] = sound
+	end
+	table.insert(packs, p)
+	return p
+end
+
+-- ── Reaction Studio ──────────────────────────────────────────────────────────
+pack("reaction", "Reaction Studio", "Meme reflexes. Short, sharp, merciless.", {
+	{ "nice",      "Nice",                1, { {0,0.30,2}, {0.34,0.44,-2} } },
+	{ "bruh",      "Bruh",                1, { {0,0.62,-4} } },
+	{ "hello",     "Hello There",         2, { {0,0.26,0}, {0.28,0.22,3}, {0.56,0.50,-1} } },
+	{ "yeet",      "Yeet",                1, { {0,0.18,-2}, {0.19,0.34,7} } },
+	{ "wow",       "Wow",                 1, { {0,0.50,-1}, {0.52,0.40,4} } },
+	{ "bababooey", "Bababooey",           3, { {0,0.16,0}, {0.18,0.16,0}, {0.36,0.16,2}, {0.54,0.18,2}, {0.74,0.42,-3} } },
+	{ "damage",    "Emotional Damage",    3, { {0,0.22,4}, {0.24,0.20,4}, {0.46,0.26,6}, {0.74,0.46,1} } },
+	{ "running",   "Why Are You Running", 3, { {0,0.20,1}, {0.22,0.18,3}, {0.42,0.18,1}, {0.62,0.20,3}, {0.84,0.44,-2} } },
+	{ "getout",    "Get Out",             2, { {0,0.30,5}, {0.34,0.54,-4} } },
+})
+
+-- ── Wild Voices ──────────────────────────────────────────────────────────────
+pack("wild", "Wild Voices", "Animals. The pack that breaks dignity first.", {
+	{ "catchirp",  "Cat Chirp",       2, { {0,0.14,6}, {0.16,0.12,9}, {0.30,0.18,4} } },
+	{ "sneeze",    "Puppy Sneeze",    1, { {0,0.10,2}, {0.12,0.30,-5} } },
+	{ "owl",       "Night Owl",       1, { {0,0.44,-2}, {0.60,0.52,-5} } },
+	{ "seal",      "Seal Bark",       2, { {0,0.18,-3}, {0.26,0.18,-3}, {0.52,0.22,-5} } },
+	{ "bigbird",   "Big Bird",        2, { {0,0.26,8}, {0.30,0.22,5}, {0.56,0.30,8} } },
+	{ "hohoho",    "Ho Ho Ho",        1, { {0,0.24,-6}, {0.30,0.24,-6}, {0.60,0.38,-7} } },
+	{ "sheep",     "Screaming Sheep", 3, { {0,0.30,3}, {0.32,0.16,8}, {0.50,0.60,5} } },
+	{ "peacock",   "Peacock Call",    3, { {0,0.22,7}, {0.26,0.26,2}, {0.56,0.22,7}, {0.82,0.34,1} } },
+	{ "frogs",     "Frog Chorus",     3, { {0,0.14,-4}, {0.22,0.14,-4}, {0.44,0.14,-2}, {0.62,0.14,-4}, {0.84,0.14,-6}, {1.02,0.22,-4} } },
+})
+
+-- ── Rhythm Lab ───────────────────────────────────────────────────────────────
+pack("rhythm", "Rhythm Lab", "Machines. Timing is the whole grade here.", {
+	{ "radiobeep", "Radio Beep",      1, { {0,0.16,4}, {0.32,0.16,4}, {0.64,0.30,4} } },
+	{ "notif",     "Notification",    1, { {0,0.18,2}, {0.22,0.30,7} } },
+	{ "errchime",  "Error Chime",     2, { {0,0.22,0}, {0.26,0.22,-5}, {0.52,0.34,-5} } },
+	{ "doorbell",  "Doorbell Dance",  2, { {0,0.26,5}, {0.30,0.38,0}, {0.72,0.26,5}, {1.02,0.38,0} } },
+	{ "badumtss",  "Ba Dum Tss",      1, { {0,0.16,-4}, {0.24,0.16,-2}, {0.48,0.34,6} } },
+	{ "printer",   "Printer Rhythm",  3, { {0,0.10,0}, {0.14,0.10,0}, {0.28,0.10,2}, {0.42,0.10,0}, {0.56,0.10,2}, {0.70,0.26,-2} } },
+	{ "beatbox",   "Beatbox Fill",    3, { {0,0.12,-6}, {0.18,0.10,4}, {0.32,0.12,-6}, {0.46,0.10,4}, {0.58,0.10,4}, {0.74,0.24,-6} } },
+	{ "dialup",    "Dial-Up Song",    3, { {0,0.22,3}, {0.26,0.18,-2}, {0.48,0.30,6}, {0.82,0.44,-4}, {1.30,0.52,1} } },
+	{ "glitch",    "Computer Glitch", 3, { {0,0.08,8}, {0.10,0.08,-6}, {0.22,0.08,8}, {0.32,0.08,-6}, {0.42,0.20,2} } },
+})
+
+-- ── Melody Club ──────────────────────────────────────────────────────────────
+pack("melody", "Melody Club", "Longer lines. Contour carries the score.", {
+	{ "slowmel",   "Slow Melody",     1, { {0,0.50,0}, {0.56,0.50,4}, {1.12,0.70,2} } },
+	{ "kazoo",     "Kazoo Fanfare",   2, { {0,0.26,0}, {0.30,0.26,4}, {0.60,0.26,7}, {0.90,0.58,9} } },
+	{ "synth",     "Synth Steps",     2, { {0,0.24,0}, {0.28,0.24,2}, {0.56,0.24,4}, {0.84,0.24,5}, {1.12,0.40,7} } },
+	{ "dancehook", "Dance Hook",      3, { {0,0.22,7}, {0.26,0.22,5}, {0.52,0.22,2}, {0.78,0.22,5}, {1.04,0.46,0} } },
+	{ "retro",     "Retro Chorus",    3, { {0,0.30,2}, {0.34,0.30,5}, {0.68,0.30,9}, {1.02,0.30,5}, {1.36,0.56,2} } },
+	{ "blues",     "Blues Riff",      3, { {0,0.26,0}, {0.30,0.20,3}, {0.54,0.26,-2}, {0.84,0.20,3}, {1.08,0.52,-5} } },
+	{ "heyya",     "Hey Ya",          2, { {0,0.28,4}, {0.32,0.24,4}, {0.60,0.34,-1}, {0.98,0.46,2} } },
+	{ "opera",     "Opera Moment",    3, { {0,0.62,-3}, {0.68,0.46,4}, {1.18,0.40,9}, {1.62,0.90,7} } },
+	{ "comeback",  "Comeback Hook",   3, { {0,0.20,-5}, {0.24,0.20,0}, {0.48,0.20,4}, {0.72,0.20,7}, {0.96,0.24,9}, {1.24,0.62,4} } },
+})
+
+function SoundLibrary.packs()
+	return packs
+end
+
+function SoundLibrary.get(id)
+	return byId[id]
+end
+
+function SoundLibrary.all()
+	local out = {}
+	for _, p in ipairs(packs) do
+		for _, s in ipairs(p.sounds) do
+			table.insert(out, s)
+		end
+	end
+	return out
+end
+
+-- A deterministic shuffle so every client in a room can derive the same order
+-- from a single seed the server sends, instead of replicating whole playlists.
+function SoundLibrary.playlist(seed, count, packFilter)
+	local pool = {}
+	for _, p in ipairs(packs) do
+		if not packFilter or packFilter == p.id then
+			for _, s in ipairs(p.sounds) do
+				table.insert(pool, s)
+			end
+		end
+	end
+	local rng = Random.new(seed)
+	for i = #pool, 2, -1 do
+		local j = rng:NextInteger(1, i)
+		pool[i], pool[j] = pool[j], pool[i]
+	end
+	local out = {}
+	for i = 1, math.min(count, #pool) do
+		out[i] = pool[i]
+	end
+	-- Survival asks for more sounds than the library holds: wrap, reshuffling.
+	while #out < count do
+		local extra = SoundLibrary.playlist(seed + #out, math.min(count - #out, #pool), packFilter)
+		for _, s in ipairs(extra) do
+			table.insert(out, s)
+		end
+	end
+	return out
+end
+
+-- Envelope used by both the waveform renderer and the audio engine.
+function SoundLibrary.envelope(notes, duration, samples)
+	samples = samples or Config.TAKE.ENVELOPE_SAMPLES
+	local out = table.create(samples, 0)
+	for i = 1, samples do
+		local t = (i - 0.5) / samples * duration
+		for _, n in ipairs(notes) do
+			if t >= n.t and t <= n.t + n.dur then
+				-- Soft attack, soft release: reads as a voice, not a square gate.
+				local local_t = (t - n.t) / math.max(n.dur, 1e-3)
+				local shape = math.min(1, local_t / 0.18) * math.min(1, (1 - local_t) / 0.22 + 0.35)
+				out[i] = math.clamp(0.35 + 0.65 * shape, 0, 1)
+				break
+			end
+		end
+	end
+	return out
+end
+
+return SoundLibrary
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="ServerScriptService" referent="12">
+    <Properties>
+      <string name="Name">ServerScriptService</string>
+    </Properties>
+    <Item class="Script" referent="13">
+      <Properties>
+        <string name="Name">Server</string>
+        <token name="RunContext">0</token>
+        <string name="Source"><![CDATA[--!nonstrict
+-- init.server.luau — boot order, and nothing else.
+--
+-- Build the venue before anyone can spawn, open the network, then hand control
+-- to MatchService. Everything after this line is event-driven.
+
+local Players = game:GetService("Players")
+
+local Net = require(game.ReplicatedStorage.Shared.Net)
+
+local StageBuilder = require(script.StageBuilder)
+local LightingRig = require(script.LightingRig)
+local MatchService = require(script.MatchService)
+
+-- Players must not fall into a half-built room.
+Players.CharacterAutoLoads = false
+
+LightingRig.apply()
+StageBuilder.build()
+Net.init()
+
+MatchService.bindRemotes()
+
+Players.PlayerAdded:Connect(function(player)
+	MatchService.onPlayerAdded(player)
+	player:LoadCharacter()
+end)
+
+Players.PlayerRemoving:Connect(MatchService.onPlayerRemoving)
+
+-- Anyone already in (Studio solo test, or a hot reload).
+for _, player in ipairs(Players:GetPlayers()) do
+	MatchService.onPlayerAdded(player)
+	player:LoadCharacter()
+end
+
+MatchService.start()
+
+print("[Mimic Party] venue built, match loop running.")
+]]></string>
+      </Properties>
+      <Item class="ModuleScript" referent="14">
+        <Properties>
+          <string name="Name">LightingRig</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- LightingRig.luau — the house look. Dim, warm, low contrast.
+--
+-- Explicit brief: no strong lights, nothing that flashes. So: exposure pulled
+-- down, bloom barely above threshold, saturation slightly cut, and a warm haze
+-- that lets the spot wash read as volume instead of glare. The rig never
+-- animates during a round — no strobes, no colour swings, not even on a
+-- sabotage. The audio carries the chaos; the light stays still.
+
+local Lighting = game:GetService("Lighting")
+local Palette = require(game.ReplicatedStorage.Shared.Palette)
+
+local LightingRig = {}
+
+local function clear(className)
+	for _, child in ipairs(Lighting:GetChildren()) do
+		if child:IsA(className) then
+			child:Destroy()
+		end
+	end
+end
+
+function LightingRig.apply()
+	Lighting.Technology = Enum.Technology.Future
+	Lighting.Ambient = Color3.fromRGB(26, 22, 24)
+	Lighting.OutdoorAmbient = Color3.fromRGB(18, 16, 19)
+	Lighting.Brightness = 1.1
+	Lighting.ClockTime = 21
+	Lighting.GeographicLatitude = 0
+	Lighting.EnvironmentDiffuseScale = 0.22
+	Lighting.EnvironmentSpecularScale = 0.14
+	Lighting.ExposureCompensation = -0.18
+	Lighting.GlobalShadows = true
+	Lighting.ShadowSoftness = 0.75
+	Lighting.FogEnd = 320
+
+	clear("Atmosphere")
+	local atmosphere = Instance.new("Atmosphere")
+	atmosphere.Density = 0.3
+	atmosphere.Offset = 0.1
+	atmosphere.Color = Color3.fromRGB(176, 158, 150)
+	atmosphere.Decay = Color3.fromRGB(88, 76, 74)
+	atmosphere.Glare = 0.08
+	atmosphere.Haze = 1.25
+	atmosphere.Parent = Lighting
+
+	clear("BloomEffect")
+	local bloom = Instance.new("BloomEffect")
+	bloom.Intensity = 0.32
+	bloom.Size = 26
+	bloom.Threshold = 1.7   -- only the neon practicals cross it
+	bloom.Parent = Lighting
+
+	clear("ColorCorrectionEffect")
+	local cc = Instance.new("ColorCorrectionEffect")
+	cc.Brightness = -0.015
+	cc.Contrast = 0.045
+	cc.Saturation = -0.07
+	cc.TintColor = Color3.fromRGB(255, 247, 238)
+	cc.Parent = Lighting
+
+	clear("SunRaysEffect")   -- indoors; nothing to flare
+	clear("BlurEffect")
+
+	local depth = Instance.new("DepthOfFieldEffect")
+	depth.FarIntensity = 0.1
+	depth.NearIntensity = 0.04
+	depth.FocusDistance = 28
+	depth.InFocusRadius = 22
+	depth.Parent = Lighting
+
+	-- Keyed to the practicals so the warm wash is consistent room-wide.
+	Lighting.ColorShift_Top = Palette.Practical:Lerp(Color3.new(0, 0, 0), 0.72)
+	Lighting.ColorShift_Bottom = Color3.fromRGB(20, 17, 20)
+end
+
+return LightingRig
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="15">
+        <Properties>
+          <string name="Name">MatchService</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- MatchService.luau — the authoritative match loop.
+--
+-- One coroutine owns the whole match. Phases advance on the server clock and
+-- every transition is broadcast with an absolute deadline (GetServerTimeNow),
+-- so clients render countdowns without ever being asked what time it is.
+--
+-- Three rules this file exists to enforce:
+--   1. One take per round. TakeStore rejects a second submission outright.
+--   2. The server grades. A client's own number is never read, only its contour.
+--   3. A sabotage is revealed at playback, never when it is aimed.
+
+local Players = game:GetService("Players")
+
+local Shared = game.ReplicatedStorage.Shared
+local Config = require(Shared.Config)
+local Net = require(Shared.Net)
+local Scoring = require(Shared.Scoring)
+local SoundLibrary = require(Shared.SoundLibrary)
+local Roulette = require(Shared.Roulette)
+local Sabotages = require(Shared.Sabotages)
+
+local PlayerProfiles = require(script.Parent.PlayerProfiles)
+local TakeStore = require(script.Parent.TakeStore)
+local StageBuilder = require(script.Parent.StageBuilder)
+local VoiceGate = require(script.Parent.VoiceGate)
+
+local MatchService = {}
+local PHASE = Config.PHASE
+
+local state = {
+	phase = "boot",
+	round = 0,
+	rounds = Config.ROUNDS_PER_PARTY,
+	soundId = nil,
+	seed = 0,
+	playlist = {},
+	endsAt = 0,
+	running = false,
+	sabotagePickers = {},
+}
+
+local anchors
+
+-- ── broadcast ────────────────────────────────────────────────────────────────
+
+local function now()
+	return workspace:GetServerTimeNow()
+end
+
+local function broadcast(extra)
+	local payload = {
+		phase = state.phase,
+		round = state.round,
+		rounds = state.rounds,
+		soundId = state.soundId,
+		endsAt = state.endsAt,
+		serverNow = now(),
+		scores = PlayerProfiles.snapshot(),
+		sabotagePickers = state.sabotagePickers,
+		minPlayers = Config.MIN_PLAYERS,
+		playerCount = #Players:GetPlayers(),
+	}
+	if extra then
+		for k, v in pairs(extra) do
+			payload[k] = v
+		end
+	end
+	Net.fireAll(Net.State, payload)
+end
+
+local function setPhase(phase, duration, extra)
+	state.phase = phase
+	state.endsAt = duration and (now() + duration) or 0
+	broadcast(extra)
+end
+
+local function toast(text, tone)
+	Net.fireAll(Net.Toast, { text = text, tone = tone or "neutral" })
+end
+
+-- ── stage choreography ───────────────────────────────────────────────────────
+
+local function freeze(player, frozen)
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid.WalkSpeed = frozen and 0 or 10
+		humanoid.JumpPower = frozen and 0 or 0   -- nobody jumps on a stage
+		humanoid.AutoRotate = not frozen
+	end
+end
+
+local function assignMarks()
+	local profiles = PlayerProfiles.all()
+	for i, profile in ipairs(profiles) do
+		profile.markIndex = math.clamp(i, 1, Config.STAGE_MARKS)
+	end
+end
+
+-- Puts everyone in the house, then walks them to their mark. This is the
+-- opening shot of a party and the reason the venue has an aisle at all.
+local function procession()
+	assignMarks()
+	anchors = anchors or StageBuilder.anchors()
+	if not anchors then
+		return
+	end
+
+	for _, profile in ipairs(PlayerProfiles.all()) do
+		local player = profile.player
+		local character = player.Character
+		local spawnCF = anchors:FindFirstChild("SpawnCFrame" .. (profile.markIndex or 1))
+		if character and spawnCF then
+			character:PivotTo(spawnCF.Value + Vector3.new(0, 3, 0))
+		end
+		freeze(player, false)
+		PlayerProfiles.dress(player)
+	end
+
+	setPhase("procession", PHASE.PROCESSION)
+
+	-- Staggered departures: five people stepping off in unison looks like a
+	-- cutscene, a half-second apart looks like a group of friends.
+	for i, profile in ipairs(PlayerProfiles.all()) do
+		task.delay((i - 1) * 0.45, function()
+			local character = profile.player.Character
+			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+			local mark = anchors:FindFirstChild("Mark" .. (profile.markIndex or 1))
+			if humanoid and mark then
+				humanoid:MoveTo(mark.Position)
+			end
+		end)
+	end
+
+	task.wait(PHASE.PROCESSION)
+
+	-- Snap to the mark and lock: the recording phase must not have anybody
+	-- drifting off their light.
+	for _, profile in ipairs(PlayerProfiles.all()) do
+		local character = profile.player.Character
+		local markCF = anchors:FindFirstChild("MarkCFrame" .. (profile.markIndex or 1))
+		if character and markCF then
+			character:PivotTo(markCF.Value)
+		end
+		freeze(profile.player, true)
+	end
+end
+
+-- ── rounds ───────────────────────────────────────────────────────────────────
+
+local function collectTakes(sound)
+	TakeStore.clear()
+	local deadline = PHASE.COUNT_IN + sound.duration + PHASE.TAKE_TAIL
+	setPhase("record", deadline, { countIn = PHASE.COUNT_IN })
+
+	local expected = #PlayerProfiles.all()
+	local started = now()
+	-- Close the window early once everybody is in, but never before the take
+	-- window itself has elapsed — an early submit must not cut anyone short.
+	while now() - started < deadline do
+		if TakeStore.count() >= expected and now() - started >= PHASE.COUNT_IN + sound.duration then
+			break
+		end
+		task.wait(0.1)
+	end
+end
+
+local function gradeAndPlayback(sound)
+	setPhase("playback")
+
+	local gated = VoiceGate.closeAll()
+
+	for _, profile in ipairs(PlayerProfiles.all()) do
+		local take = TakeStore.get(profile.userId) or TakeStore.empty()
+		local grade = Scoring.grade(sound, take)
+
+		-- Multiplier won on a previous wheel.
+		local awarded = math.floor(grade.total * profile.multiplier + 0.5)
+
+		-- Sabotage: the penalty and the reveal land together, right here.
+		local sabotage = profile.incomingSabotage
+		if sabotage then
+			awarded = math.max(0, awarded - Sabotages.penalty())
+		end
+
+		profile.score += awarded
+		profile.lastGrade = grade
+
+		Net.fireAll(Net.Playback, {
+			userId = profile.userId,
+			name = profile.name,
+			characterId = profile.characterId,
+			soundId = sound.id,
+			take = take,
+			grade = grade,
+			awarded = awarded,
+			multiplier = profile.multiplier,
+			sabotage = sabotage and sabotage.id or nil,
+			sabotageFrom = sabotage and sabotage.fromName or nil,
+			verdict = Scoring.verdict(grade.total),
+			voiceGated = gated,
+		})
+
+		profile.incomingSabotage = nil
+
+		task.wait(sound.duration + PHASE.PLAYBACK_GAP)
+	end
+
+	VoiceGate.openAll()
+
+	-- Multipliers are spent now that the round they applied to is scored.
+	for _, profile in ipairs(PlayerProfiles.all()) do
+		if profile.multiplierRounds > 0 then
+			profile.multiplierRounds -= 1
+			if profile.multiplierRounds <= 0 then
+				profile.multiplier = 1
+			end
+		end
+	end
+
+	Net.fireAll(Net.Scores, { scores = PlayerProfiles.snapshot() })
+end
+
+local function spinWheel()
+	local rng = Random.new(os.clock() * 1e6 % 2 ^ 31)
+	local results = {}
+	state.sabotagePickers = {}
+
+	for _, profile in ipairs(PlayerProfiles.all()) do
+		local index, segment = Roulette.spin(rng)
+		table.insert(results, {
+			userId = profile.userId,
+			name = profile.name,
+			segmentIndex = index,
+			segmentId = segment.id,
+			kind = segment.kind,
+			label = segment.label,
+			detail = Roulette.describe(segment),
+		})
+
+		if segment.kind == "points" then
+			profile.score += segment.amount
+		elseif segment.kind == "multiplier" then
+			profile.multiplier = segment.amount
+			profile.multiplierRounds = Config.ROULETTE.MULTIPLIER_DECAY
+		elseif segment.kind == "sabotage" then
+			profile.pendingSabotage = segment.sabotage
+			table.insert(state.sabotagePickers, profile.userId)
+		end
+	end
+
+	setPhase("roulette", PHASE.ROULETTE_SPIN)
+	Net.fireAll(Net.RouletteSpin, { results = results, spin = PHASE.ROULETTE_SPIN })
+	task.wait(PHASE.ROULETTE_SPIN)
+
+	-- Aiming window. Only the winners see a picker; everyone else waits, and
+	-- crucially nobody is told who is being aimed at.
+	if #state.sabotagePickers > 0 then
+		setPhase("sabotage_pick", PHASE.SABOTAGE_PICK)
+		local deadline = now() + PHASE.SABOTAGE_PICK
+		while now() < deadline do
+			local outstanding = false
+			for _, profile in ipairs(PlayerProfiles.all()) do
+				if profile.pendingSabotage then
+					outstanding = true
+					break
+				end
+			end
+			if not outstanding then
+				break
+			end
+			task.wait(0.15)
+		end
+
+		-- Unaimed sabotages pick a victim themselves. Declining is not an out.
+		for _, profile in ipairs(PlayerProfiles.all()) do
+			if profile.pendingSabotage then
+				local candidates = {}
+				for _, other in ipairs(PlayerProfiles.all()) do
+					if other ~= profile then
+						table.insert(candidates, other)
+					end
+				end
+				if #candidates > 0 then
+					local victim = candidates[math.random(1, #candidates)]
+					victim.incomingSabotage = {
+						id = profile.pendingSabotage,
+						fromName = profile.name,
+					}
+				end
+				profile.pendingSabotage = nil
+			end
+		end
+		state.sabotagePickers = {}
+	end
+
+	Net.fireAll(Net.Scores, { scores = PlayerProfiles.snapshot() })
+end
+
+-- ── the loop ─────────────────────────────────────────────────────────────────
+
+local function enoughPlayers()
+	return #Players:GetPlayers() >= Config.MIN_PLAYERS
+end
+
+local function lobby()
+	PlayerProfiles.resetScores()
+	TakeStore.clear()
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		freeze(player, false)
+	end
+
+	-- Wait for a room. The countdown restarts if the room empties out.
+	while not enoughPlayers() do
+		setPhase("lobby")
+		repeat
+			task.wait(0.5)
+		until enoughPlayers()
+	end
+
+	local wait_for = (#Players:GetPlayers() >= Config.MAX_PLAYERS)
+		and PHASE.QUICK_START
+		or PHASE.LOBBY_COUNTDOWN
+	setPhase("lobby", wait_for)
+
+	local deadline = now() + wait_for
+	while now() < deadline do
+		if not enoughPlayers() then
+			return false   -- room collapsed; start over
+		end
+		if #Players:GetPlayers() >= Config.MAX_PLAYERS and deadline - now() > PHASE.QUICK_START then
+			deadline = now() + PHASE.QUICK_START
+			state.endsAt = deadline
+			broadcast()
+		end
+		task.wait(0.25)
+	end
+
+	return enoughPlayers()
+end
+
+local function playParty()
+	state.seed = os.time() + math.random(1, 10000)
+	state.playlist = SoundLibrary.playlist(state.seed, state.rounds)
+	state.rounds = Config.ROUNDS_PER_PARTY
+
+	procession()
+
+	for round = 1, state.rounds do
+		if not enoughPlayers() then
+			toast("La sala se quedó vacía. Volvemos al lobby.", "warn")
+			return
+		end
+
+		local sound = state.playlist[round]
+		state.round = round
+		state.soundId = sound.id
+
+		setPhase("round_intro", PHASE.ROUND_INTRO)
+		task.wait(PHASE.ROUND_INTRO)
+
+		-- The reference plays for the whole table at once.
+		setPhase("reference", sound.duration + PHASE.REFERENCE_PAD * 2)
+		task.wait(sound.duration + PHASE.REFERENCE_PAD * 2)
+
+		collectTakes(sound)
+		gradeAndPlayback(sound)
+
+		if round < state.rounds then
+			spinWheel()
+		end
+	end
+
+	state.soundId = nil
+	setPhase("results", PHASE.RESULTS)
+
+	local ranked = PlayerProfiles.snapshot()
+	if ranked[1] then
+		toast(("Gana %s con %d puntos."):format(ranked[1].name, ranked[1].score), "good")
+	end
+	task.wait(PHASE.RESULTS)
+end
+
+function MatchService.start()
+	if state.running then
+		return
+	end
+	state.running = true
+
+	anchors = StageBuilder.anchors()
+
+	task.spawn(function()
+		while true do
+			local ok, err = pcall(function()
+				if lobby() then
+					playParty()
+				end
+			end)
+			if not ok then
+				-- A match must never take the server down with it: log, reset,
+				-- and put everybody back in the lobby.
+				warn("[MatchService] match aborted: " .. tostring(err))
+				VoiceGate.openAll()
+				state.round = 0
+				state.soundId = nil
+				toast("Hubo un problema en la partida. Reiniciando la sala.", "bad")
+				task.wait(3)
+			end
+			state.round = 0
+			TakeStore.clear()
+			task.wait(1)
+		end
+	end)
+end
+
+-- ── client intents ───────────────────────────────────────────────────────────
+
+function MatchService.bindRemotes()
+	Net.onServer(Net.SubmitTake, function(player, payload)
+		if state.phase ~= "record" then
+			return
+		end
+		local profile = PlayerProfiles.get(player)
+		local sound = state.soundId and SoundLibrary.get(state.soundId)
+		if not profile or not sound then
+			return
+		end
+		TakeStore.submit(profile.userId, payload, sound.duration)
+	end)
+
+	Net.onServer(Net.ChooseCharacter, function(player, payload)
+		if state.phase ~= "lobby" and state.phase ~= "results" then
+			return   -- no swapping costume mid-performance
+		end
+		if type(payload) ~= "table" or type(payload.characterId) ~= "string" then
+			return
+		end
+		if PlayerProfiles.setCharacter(player, payload.characterId) then
+			broadcast()
+		end
+	end)
+
+	Net.onServer(Net.ChooseSabotageTarget, function(player, payload)
+		if state.phase ~= "sabotage_pick" then
+			return
+		end
+		local profile = PlayerProfiles.get(player)
+		if not profile or not profile.pendingSabotage then
+			return
+		end
+		if type(payload) ~= "table" or type(payload.userId) ~= "number" then
+			return
+		end
+		local victim = PlayerProfiles.byUserId(payload.userId)
+		if not victim or victim == profile then
+			return
+		end
+		victim.incomingSabotage = {
+			id = profile.pendingSabotage,
+			fromName = profile.name,
+		}
+		profile.pendingSabotage = nil
+		-- The victim is told nothing. They find out when their take plays.
+		Net.fireClient(Net.SabotageHit, player, { aimed = true, at = victim.name })
+	end)
+
+	Net.onServer(Net.SetReady, function(player, payload)
+		local profile = PlayerProfiles.get(player)
+		if profile then
+			profile.ready = type(payload) == "table" and payload.ready == true
+			broadcast()
+		end
+	end)
+end
+
+function MatchService.onPlayerAdded(player)
+	PlayerProfiles.add(player)
+	player.CharacterAppearanceLoaded:Connect(function()
+		PlayerProfiles.dress(player)
+	end)
+	player.CharacterAdded:Connect(function()
+		task.wait(0.2)
+		PlayerProfiles.dress(player)
+		freeze(player, state.phase == "record" or state.phase == "playback")
+	end)
+	broadcast()
+end
+
+function MatchService.onPlayerRemoving(player)
+	PlayerProfiles.remove(player)
+	broadcast()
+end
+
+return MatchService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="16">
+        <Properties>
+          <string name="Name">PlayerProfiles</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- PlayerProfiles.luau — per-player match state, and the character they wear.
+
+local Players = game:GetService("Players")
+local Characters = require(game.ReplicatedStorage.Shared.Characters)
+
+local PlayerProfiles = {}
+local profiles = {}
+
+local function takenCharacters(except)
+	local taken = {}
+	for player, p in pairs(profiles) do
+		if player ~= except and p.characterId then
+			taken[p.characterId] = true
+		end
+	end
+	return taken
+end
+
+function PlayerProfiles.add(player)
+	local character = Characters.firstFree(takenCharacters(player))
+	profiles[player] = {
+		player = player,
+		userId = player.UserId,
+		name = player.DisplayName,
+		characterId = character.id,
+		score = 0,
+		multiplier = 1,
+		multiplierRounds = 0,
+		ready = false,
+		markIndex = nil,
+		lastGrade = nil,
+		incomingSabotage = nil,   -- set by a saboteur, consumed at playback
+		pendingSabotage = nil,    -- won from the wheel, not yet aimed
+	}
+	return profiles[player]
+end
+
+function PlayerProfiles.remove(player)
+	profiles[player] = nil
+end
+
+function PlayerProfiles.get(player)
+	return profiles[player]
+end
+
+function PlayerProfiles.byUserId(userId)
+	for _, p in pairs(profiles) do
+		if p.userId == userId then
+			return p
+		end
+	end
+	return nil
+end
+
+function PlayerProfiles.all()
+	local out = {}
+	for _, p in pairs(profiles) do
+		table.insert(out, p)
+	end
+	table.sort(out, function(a, b)
+		return a.userId < b.userId
+	end)
+	return out
+end
+
+function PlayerProfiles.setCharacter(player, characterId)
+	local profile = profiles[player]
+	local character = Characters.get(characterId)
+	if not profile or not character then
+		return false
+	end
+	if takenCharacters(player)[characterId] then
+		return false   -- somebody on stage is already wearing it
+	end
+	profile.characterId = characterId
+	PlayerProfiles.dress(player)
+	return true
+end
+
+-- Applies the character's palette to the avatar. Cosmetic only.
+function PlayerProfiles.dress(player)
+	local profile = profiles[player]
+	if not profile then
+		return
+	end
+	local character = Characters.get(profile.characterId)
+	local model = player.Character
+	if not character or not model then
+		return
+	end
+
+	local colors = model:FindFirstChildOfClass("BodyColors") or Instance.new("BodyColors")
+	colors.HeadColor3 = character.body
+	colors.LeftArmColor3 = character.body
+	colors.RightArmColor3 = character.body
+	colors.TorsoColor3 = character.shirt
+	colors.LeftLegColor3 = character.pants
+	colors.RightLegColor3 = character.pants
+	colors.Parent = model
+
+	for _, part in ipairs(model:GetChildren()) do
+		if part:IsA("BasePart") then
+			part.Material = Enum.Material.SmoothPlastic
+		end
+	end
+
+	-- Stage name over the performer, legible from the house camera.
+	local head = model:FindFirstChild("Head")
+	if head then
+		local old = head:FindFirstChild("StageName")
+		if old then
+			old:Destroy()
+		end
+		local gui = Instance.new("BillboardGui")
+		gui.Name = "StageName"
+		gui.Size = UDim2.fromOffset(190, 46)
+		gui.StudsOffsetWorldSpace = Vector3.new(0, 2.3, 0)
+		gui.AlwaysOnTop = false
+		gui.MaxDistance = 90
+		gui.Parent = head
+
+		local label = Instance.new("TextLabel")
+		label.Size = UDim2.fromScale(1, 0.62)
+		label.BackgroundTransparency = 1
+		label.Text = character.name
+		label.TextColor3 = Color3.fromRGB(238, 233, 224)
+		label.TextScaled = true
+		label.FontFace = Font.fromEnum(Enum.Font.GothamBold)
+		label.TextStrokeTransparency = 0.6
+		label.Parent = gui
+
+		local tag = Instance.new("TextLabel")
+		tag.Size = UDim2.fromScale(1, 0.38)
+		tag.Position = UDim2.fromScale(0, 0.62)
+		tag.BackgroundTransparency = 1
+		tag.Text = character.tag
+		tag.TextColor3 = character.accent
+		tag.TextScaled = true
+		tag.FontFace = Font.fromEnum(Enum.Font.Gotham)
+		tag.TextStrokeTransparency = 0.8
+		tag.Parent = gui
+	end
+end
+
+function PlayerProfiles.resetScores()
+	for _, p in pairs(profiles) do
+		p.score = 0
+		p.multiplier = 1
+		p.multiplierRounds = 0
+		p.lastGrade = nil
+		p.incomingSabotage = nil
+		p.pendingSabotage = nil
+	end
+end
+
+-- The payload every client gets for the scoreboard.
+function PlayerProfiles.snapshot()
+	local out = {}
+	for _, p in ipairs(PlayerProfiles.all()) do
+		table.insert(out, {
+			userId = p.userId,
+			name = p.name,
+			characterId = p.characterId,
+			score = p.score,
+			multiplier = p.multiplier,
+			markIndex = p.markIndex,
+		})
+	end
+	table.sort(out, function(a, b)
+		if a.score == b.score then
+			return a.name < b.name
+		end
+		return a.score > b.score
+	end)
+	return out
+end
+
+Players.PlayerRemoving:Connect(PlayerProfiles.remove)
+
+return PlayerProfiles
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="17">
+        <Properties>
+          <string name="Name">StageBuilder</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- StageBuilder.luau — builds the venue procedurally, at runtime.
+--
+-- Everything here is primitives, because the project ships without uploaded
+-- assets. The trick to not looking like a pile of boxes is layering: nested
+-- trims to read as mouldings, cylinders on every exposed edge to kill the hard
+-- 90° corner, and controlled randomness on the curtain and the crowd so no two
+-- panels line up. Swap any folder for a real model later; the anchors below are
+-- the only contract the rest of the game depends on.
+--
+-- Geometry: the deck sits at y = 4, centred on x = 0. The audience looks toward
+-- −Z; performers face +Z. Marks run left to right at x = −20 … +20.
+
+local Workspace = game:GetService("Workspace")
+local Palette = require(game.ReplicatedStorage.Shared.Palette)
+local Config = require(game.ReplicatedStorage.Shared.Config)
+
+local StageBuilder = {}
+
+local DECK_Y = 4
+local DECK_HALF_X = 31
+local DECK_Z_FRONT = 8
+local DECK_Z_BACK = -14
+local CURTAIN_Z = -13.2
+local ARCH_Z = 8.6
+
+-- ── primitives ───────────────────────────────────────────────────────────────
+
+local function box(parent, size, position, color, material, props)
+	local p = Instance.new("Part")
+	p.Size = size
+	p.Position = position
+	p.Color = color
+	p.Material = material or Enum.Material.SmoothPlastic
+	p.Anchored = true
+	p.CanCollide = false
+	p.CastShadow = true
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	if props then
+		for k, v in pairs(props) do
+			p[k] = v
+		end
+	end
+	p.Parent = parent
+	return p
+end
+
+local function cyl(parent, diameter, length, cframe, color, material, props)
+	local p = Instance.new("Part")
+	p.Shape = Enum.PartType.Cylinder
+	p.Size = Vector3.new(length, diameter, diameter)
+	p.CFrame = cframe
+	p.Color = color
+	p.Material = material or Enum.Material.SmoothPlastic
+	p.Anchored = true
+	p.CanCollide = false
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	if props then
+		for k, v in pairs(props) do
+			p[k] = v
+		end
+	end
+	p.Parent = parent
+	return p
+end
+
+local function ball(parent, diameter, position, color, material)
+	local p = Instance.new("Part")
+	p.Shape = Enum.PartType.Ball
+	p.Size = Vector3.new(diameter, diameter, diameter)
+	p.Position = position
+	p.Color = color
+	p.Material = material or Enum.Material.SmoothPlastic
+	p.Anchored = true
+	p.CanCollide = false
+	p.Parent = parent
+	return p
+end
+
+local function wedge(parent, size, cframe, color, material)
+	local p = Instance.new("WedgePart")
+	p.Size = size
+	p.CFrame = cframe
+	p.Color = color
+	p.Material = material or Enum.Material.SmoothPlastic
+	p.Anchored = true
+	p.CanCollide = false
+	p.Parent = parent
+	return p
+end
+
+local function folder(name, parent)
+	local f = Instance.new("Folder")
+	f.Name = name
+	f.Parent = parent
+	return f
+end
+
+-- A horizontal moulding: three stacked slabs of decreasing width. Cheap, and
+-- it is the single biggest difference between "stage" and "grey block".
+local function moulding(parent, width, centre, depth, color, colorDark)
+	box(parent, Vector3.new(width, 0.5, depth + 0.5), centre, colorDark, Enum.Material.Wood)
+	box(parent, Vector3.new(width - 0.6, 0.35, depth + 0.9), centre + Vector3.new(0, 0.42, 0), color, Enum.Material.Metal)
+	box(parent, Vector3.new(width - 1.4, 0.28, depth + 0.3), centre + Vector3.new(0, 0.74, 0), colorDark, Enum.Material.Wood)
+end
+
+-- ── the room ─────────────────────────────────────────────────────────────────
+
+local function buildShell(root)
+	local shell = folder("Shell", root)
+
+	-- House floor, raked slightly toward the stage so the crowd reads as tiered.
+	for i = 0, 5 do
+		local z = 13 + i * 6
+		box(shell, Vector3.new(84, 1.2, 6.2), Vector3.new(0, 0.6 + i * 0.9, z),
+			Palette.HouseFloor, Enum.Material.Fabric, { CanCollide = true })
+	end
+	-- Flat apron between the front row and the stage.
+	box(shell, Vector3.new(84, 1.2, 6), Vector3.new(0, 0.6, 10),
+		Palette.HouseFloor, Enum.Material.Fabric, { CanCollide = true })
+
+	-- Walls.
+	box(shell, Vector3.new(2, 40, 84), Vector3.new(-42, 20, 8), Palette.HouseWall, Enum.Material.Concrete, { CanCollide = true })
+	box(shell, Vector3.new(2, 40, 84), Vector3.new(42, 20, 8), Palette.HouseWall, Enum.Material.Concrete, { CanCollide = true })
+	box(shell, Vector3.new(86, 40, 2), Vector3.new(0, 20, 50), Palette.HouseWall, Enum.Material.Concrete, { CanCollide = true })
+	box(shell, Vector3.new(86, 2, 86), Vector3.new(0, 39, 8), Palette.Scrim, Enum.Material.Concrete)
+
+	-- Vertical wall ribs: breaks up 80 studs of flat concrete.
+	for i = 0, 7 do
+		local z = 16 + i * 4.5
+		for _, x in ipairs({ -40.6, 40.6 }) do
+			box(shell, Vector3.new(0.8, 26, 1.1), Vector3.new(x, 14, z), Palette.Scrim, Enum.Material.Wood)
+		end
+	end
+
+	-- Wall sconces: warm, dim, and the only light source in the house.
+	for i = 0, 3 do
+		local z = 18 + i * 8
+		for _, x in ipairs({ -40, 40 }) do
+			local housing = box(shell, Vector3.new(0.6, 2.2, 1.4), Vector3.new(x, 13, z),
+				Palette.TrimDark, Enum.Material.Metal)
+			cyl(shell, 1.3, 0.5, CFrame.new(x, 14.3, z) * CFrame.Angles(0, 0, math.rad(90)),
+				Palette.Practical, Enum.Material.Neon)
+			local light = Instance.new("PointLight")
+			light.Brightness = 0.55
+			light.Range = 17
+			light.Color = Palette.Practical
+			light.Shadows = false
+			light.Parent = housing
+		end
+	end
+
+	return shell
+end
+
+-- ── the deck ─────────────────────────────────────────────────────────────────
+
+local function buildDeck(root)
+	local deck = folder("Deck", root)
+	local depth = DECK_Z_FRONT - DECK_Z_BACK
+
+	-- Structural slab (the collidable one).
+	box(deck, Vector3.new(DECK_HALF_X * 2, 4, depth),
+		Vector3.new(0, DECK_Y - 2, (DECK_Z_FRONT + DECK_Z_BACK) / 2),
+		Palette.Fascia, Enum.Material.WoodPlanks, { CanCollide = true })
+
+	-- Individual planks on top, with per-plank tone variation.
+	local plankW = 1.55
+	local count = math.floor((DECK_HALF_X * 2) / plankW)
+	for i = 0, count - 1 do
+		local x = -DECK_HALF_X + plankW * (i + 0.5)
+		local shade = (i % 3 == 0) and Palette.DeckDark or Palette.Deck
+		local jitter = (i % 7) * 0.004
+		box(deck, Vector3.new(plankW - 0.08, 0.35, depth - 0.3),
+			Vector3.new(x, DECK_Y - 0.17, (DECK_Z_FRONT + DECK_Z_BACK) / 2),
+			shade:Lerp(Color3.new(0, 0, 0), jitter), Enum.Material.WoodPlanks,
+			{ CanCollide = true, Reflectance = 0.02 })
+	end
+
+	-- Bullnose along the downstage edge: no hard corner facing the audience.
+	cyl(deck, 0.9, DECK_HALF_X * 2, CFrame.new(0, DECK_Y - 0.25, DECK_Z_FRONT) * CFrame.Angles(0, 0, math.rad(90)),
+		Palette.DeckDark, Enum.Material.Wood)
+
+	-- Fascia with recessed panels.
+	local fasciaZ = DECK_Z_FRONT + 0.18
+	box(deck, Vector3.new(DECK_HALF_X * 2, 3.6, 0.4), Vector3.new(0, DECK_Y - 2.1, fasciaZ),
+		Palette.Fascia, Enum.Material.Wood)
+	for i = 0, 9 do
+		local x = -27.9 + i * 6.2
+		box(deck, Vector3.new(4.9, 2.2, 0.22), Vector3.new(x, DECK_Y - 2.1, fasciaZ + 0.22),
+			Palette.Scrim, Enum.Material.Wood)
+		box(deck, Vector3.new(5.5, 2.7, 0.14), Vector3.new(x, DECK_Y - 2.1, fasciaZ + 0.16),
+			Palette.TrimDark, Enum.Material.Metal)
+	end
+	moulding(deck, DECK_HALF_X * 2, Vector3.new(0, DECK_Y - 3.8, fasciaZ), 0.5, Palette.Trim, Palette.TrimDark)
+
+	-- Two steps up from the house, stage left and right.
+	for _, sx in ipairs({ -1, 1 }) do
+		for s = 0, 2 do
+			box(deck, Vector3.new(7, 1.35, 2.2),
+				Vector3.new(sx * 23, 1.1 + s * 1.3, DECK_Z_FRONT + 3.4 - s * 2.1),
+				Palette.DeckDark, Enum.Material.Wood, { CanCollide = true })
+		end
+	end
+
+	return deck
+end
+
+-- ── proscenium ───────────────────────────────────────────────────────────────
+
+local function buildProscenium(root)
+	local arch = folder("Proscenium", root)
+
+	for _, sx in ipairs({ -1, 1 }) do
+		local x = sx * 33
+		-- Nested pylon: three shells, each narrower, reads as a fluted column.
+		box(arch, Vector3.new(6.4, 30, 4.6), Vector3.new(x, 16, ARCH_Z), Palette.Scrim, Enum.Material.Concrete)
+		box(arch, Vector3.new(5.2, 29, 3.6), Vector3.new(x, 16.2, ARCH_Z + 0.4), Palette.HouseWall, Enum.Material.Wood)
+		box(arch, Vector3.new(3.6, 27.5, 2.6), Vector3.new(x, 16.4, ARCH_Z + 0.8), Palette.Fascia, Enum.Material.Wood)
+		-- Flutes.
+		for i = -1, 1 do
+			cyl(arch, 0.7, 26, CFrame.new(x + i * 1.1, 16.4, ARCH_Z + 2.0) * CFrame.Angles(0, 0, math.rad(90)) * CFrame.Angles(math.rad(90), 0, 0),
+				Palette.Scrim, Enum.Material.Wood)
+		end
+		-- Base and capital.
+		moulding(arch, 7.4, Vector3.new(x, 3.2, ARCH_Z), 5.4, Palette.Trim, Palette.TrimDark)
+		moulding(arch, 7.4, Vector3.new(x, 29.4, ARCH_Z), 5.4, Palette.Trim, Palette.TrimDark)
+		cyl(arch, 1.1, 5.6, CFrame.new(x, 31.1, ARCH_Z) * CFrame.Angles(0, math.rad(90), 0) * CFrame.Angles(0, 0, math.rad(90)),
+			Palette.Trim, Enum.Material.Metal)
+	end
+
+	-- Header beam with coffers.
+	box(arch, Vector3.new(73, 4.4, 4.6), Vector3.new(0, 31.5, ARCH_Z), Palette.Scrim, Enum.Material.Concrete)
+	for i = 0, 11 do
+		local x = -30 + i * 5.45
+		box(arch, Vector3.new(4.1, 2.6, 0.5), Vector3.new(x, 31.5, ARCH_Z + 2.4), Palette.HouseWall, Enum.Material.Wood)
+		box(arch, Vector3.new(4.7, 3.1, 0.3), Vector3.new(x, 31.5, ARCH_Z + 2.2), Palette.TrimDark, Enum.Material.Metal)
+	end
+	moulding(arch, 74, Vector3.new(0, 29.2, ARCH_Z), 5, Palette.Trim, Palette.TrimDark)
+	moulding(arch, 74, Vector3.new(0, 33.6, ARCH_Z), 5, Palette.Trim, Palette.TrimDark)
+
+	-- Scalloped valance hanging just upstage of the arch.
+	local valance = folder("Valance", arch)
+	for i = 0, 23 do
+		local x = -29.5 + i * 2.57
+		local drop = 3.1 + math.abs(math.sin(i * 0.78)) * 1.5
+		box(valance, Vector3.new(2.7, drop, 1.0), Vector3.new(x, 29 - drop / 2, ARCH_Z - 2.6),
+			Palette.Valance, Enum.Material.Fabric)
+		wedge(valance, Vector3.new(1.0, 1.5, 2.7),
+			CFrame.new(x, 29 - drop - 0.75, ARCH_Z - 2.6) * CFrame.Angles(0, math.rad(90), math.rad(180)),
+			Palette.CurtainFold, Enum.Material.Fabric)
+	end
+
+	return arch
+end
+
+-- ── curtain ──────────────────────────────────────────────────────────────────
+
+local function buildCurtain(root)
+	local curtain = folder("Curtain", root)
+	-- Parted, hanging upstage. Folds come from alternating depth and a small
+	-- per-panel yaw; a flat plane here would kill the whole room.
+	for _, side in ipairs({ -1, 1 }) do
+		local panels = 13
+		for i = 0, panels - 1 do
+			local inner = 4 + i * 2.3
+			local x = side * inner
+			local fold = (i % 2 == 0)
+			local depth = fold and 1.5 or 0.9
+			local color = fold and Palette.Curtain or Palette.CurtainFold
+			local yaw = math.rad(side * (fold and -7 or 6))
+			local height = 25 - math.abs(math.sin(i * 0.5)) * 0.8
+			local p = box(curtain, Vector3.new(2.5, height, depth),
+				Vector3.new(x, DECK_Y + height / 2 - 0.2, CURTAIN_Z),
+				color, Enum.Material.Fabric)
+			p.CFrame = CFrame.new(p.Position) * CFrame.Angles(0, yaw, 0)
+			-- Weighted hem.
+			cyl(curtain, 1.0, 2.5, CFrame.new(x, DECK_Y - 0.1, CURTAIN_Z) * CFrame.Angles(0, yaw, 0) * CFrame.Angles(0, 0, math.rad(90)),
+				Palette.CurtainFold, Enum.Material.Fabric)
+		end
+	end
+	-- Track and pelmet.
+	box(curtain, Vector3.new(70, 0.8, 2.2), Vector3.new(0, DECK_Y + 25.2, CURTAIN_Z), Palette.Truss, Enum.Material.Metal)
+	return curtain
+end
+
+-- ── backdrop ─────────────────────────────────────────────────────────────────
+
+local function buildBackdrop(root)
+	local back = folder("Backdrop", root)
+	-- Slatted timber wall with a dark scrim behind it: depth for free.
+	box(back, Vector3.new(70, 30, 1.2), Vector3.new(0, DECK_Y + 14, DECK_Z_BACK - 1.4),
+		Palette.Scrim, Enum.Material.Concrete, { CanCollide = true })
+	for i = 0, 45 do
+		local x = -34 + i * 1.5
+		local shade = (i % 4 == 0) and Palette.DeckDark or Palette.Fascia
+		box(back, Vector3.new(1.1, 27, 0.45), Vector3.new(x, DECK_Y + 13.5, DECK_Z_BACK - 0.7),
+			shade, Enum.Material.WoodPlanks)
+	end
+	moulding(back, 70, Vector3.new(0, DECK_Y + 0.6, DECK_Z_BACK - 0.7), 1.2, Palette.Trim, Palette.TrimDark)
+	return back
+end
+
+-- ── truss and stage light ────────────────────────────────────────────────────
+
+local function buildTruss(root)
+	local truss = folder("Truss", root)
+	local y = DECK_Y + 24
+
+	for _, z in ipairs({ -2, 4 }) do
+		-- Two chords plus cross-bracing: a real truss silhouette, not a bar.
+		cyl(truss, 0.7, 66, CFrame.new(0, y + 0.9, z) * CFrame.Angles(0, 0, math.rad(90)), Palette.Truss, Enum.Material.Metal)
+		cyl(truss, 0.7, 66, CFrame.new(0, y - 0.9, z) * CFrame.Angles(0, 0, math.rad(90)), Palette.Truss, Enum.Material.Metal)
+		for i = 0, 21 do
+			local x = -31 + i * 2.95
+			local lean = (i % 2 == 0) and 32 or -32
+			cyl(truss, 0.42, 2.9, CFrame.new(x, y, z) * CFrame.Angles(0, 0, math.rad(lean)), Palette.Truss, Enum.Material.Metal)
+		end
+	end
+
+	-- Six soft practicals. Low brightness, wide angle, warm: a wash, not a beam.
+	for i = 0, 5 do
+		local x = -25 + i * 10
+		local body = cyl(truss, 2.0, 2.6,
+			CFrame.new(x, y - 2.4, 1) * CFrame.Angles(0, 0, math.rad(90)) * CFrame.Angles(math.rad(26), 0, 0),
+			Palette.Truss, Enum.Material.Metal)
+		cyl(truss, 1.5, 0.4, CFrame.new(x, y - 3.5, 1.9) * CFrame.Angles(0, 0, math.rad(90)),
+			Palette.Wash, Enum.Material.Neon, { Transparency = 0.25 })
+		-- Yoke.
+		box(truss, Vector3.new(0.3, 2.4, 0.3), Vector3.new(x - 1.2, y - 1.4, 1), Palette.Truss, Enum.Material.Metal)
+		box(truss, Vector3.new(0.3, 2.4, 0.3), Vector3.new(x + 1.2, y - 1.4, 1), Palette.Truss, Enum.Material.Metal)
+
+		local spot = Instance.new("SpotLight")
+		spot.Angle = 86
+		spot.Brightness = 1.35
+		spot.Range = 46
+		spot.Color = Palette.Wash
+		spot.Face = Enum.NormalId.Bottom
+		spot.Shadows = true
+		spot.Parent = body
+	end
+
+	return truss
+end
+
+-- ── performance marks ────────────────────────────────────────────────────────
+
+local function buildMarks(root, anchors)
+	local marks = folder("Marks", root)
+	local xs = { -20, -10, 0, 10, 20 }
+
+	for i = 1, Config.STAGE_MARKS do
+		local x = xs[i]
+		local base = Vector3.new(x, DECK_Y, 0)
+
+		-- Brass inlay ring set into the deck.
+		cyl(marks, 5.4, 0.12, CFrame.new(x, DECK_Y + 0.04, 0) * CFrame.Angles(0, 0, math.rad(90)),
+			Palette.TrimDark, Enum.Material.Metal)
+		cyl(marks, 4.6, 0.16, CFrame.new(x, DECK_Y + 0.06, 0) * CFrame.Angles(0, 0, math.rad(90)),
+			Palette.Trim, Enum.Material.Metal, { Reflectance = 0.08 })
+		cyl(marks, 4.0, 0.2, CFrame.new(x, DECK_Y + 0.07, 0) * CFrame.Angles(0, 0, math.rad(90)),
+			Palette.DeckDark, Enum.Material.Wood)
+
+		-- Mic stand: tripod foot, column, boom, capsule.
+		local standZ = -2.4
+		cyl(marks, 2.6, 0.3, CFrame.new(x, DECK_Y + 0.2, standZ) * CFrame.Angles(0, 0, math.rad(90)),
+			Palette.Truss, Enum.Material.Metal)
+		for leg = 0, 2 do
+			local a = math.rad(leg * 120)
+			cyl(marks, 0.3, 1.8,
+				CFrame.new(x + math.cos(a) * 0.8, DECK_Y + 0.35, standZ + math.sin(a) * 0.8)
+					* CFrame.Angles(0, -a, 0) * CFrame.Angles(0, 0, math.rad(74)),
+				Palette.Truss, Enum.Material.Metal)
+		end
+		cyl(marks, 0.36, 6.2, CFrame.new(x, DECK_Y + 3.3, standZ), Palette.Truss, Enum.Material.Metal)
+		cyl(marks, 0.3, 1.9, CFrame.new(x, DECK_Y + 6.2, standZ + 0.75) * CFrame.Angles(math.rad(90), 0, 0) * CFrame.Angles(0, 0, math.rad(90)),
+			Palette.Truss, Enum.Material.Metal)
+		local capsule = cyl(marks, 0.9, 1.5,
+			CFrame.new(x, DECK_Y + 6.05, standZ + 1.5) * CFrame.Angles(math.rad(62), 0, 0) * CFrame.Angles(0, 0, math.rad(90)),
+			Palette.Fascia, Enum.Material.Metal)
+		ball(marks, 0.95, capsule.Position + Vector3.new(0, 0.35, 0.2), Palette.Truss, Enum.Material.DiamondPlate)
+
+		-- Anchors the rest of the game reads.
+		local mark = Instance.new("Part")
+		mark.Name = "Mark" .. i
+		mark.Size = Vector3.new(3, 0.2, 3)
+		mark.Position = base + Vector3.new(0, 0.2, 0)
+		mark.Transparency = 1
+		mark.Anchored = true
+		mark.CanCollide = false
+		mark.CanQuery = false
+		mark.Parent = anchors
+
+		local cf = Instance.new("CFrameValue")
+		cf.Name = "MarkCFrame" .. i
+		cf.Value = CFrame.lookAt(base + Vector3.new(0, 3, 0), base + Vector3.new(0, 3, 20))
+		cf.Parent = anchors
+	end
+
+	return marks
+end
+
+-- ── crowd ────────────────────────────────────────────────────────────────────
+
+local function buildCrowd(root)
+	local crowd = folder("Crowd", root)
+	local rng = Random.new(20260827)
+	for row = 0, 5 do
+		local z = 14 + row * 6
+		local y = 1.2 + row * 0.9
+		for seat = 0, 15 do
+			if rng:NextNumber() > 0.12 then
+				local x = -36 + seat * 4.8 + rng:NextNumber(-0.7, 0.7)
+				local h = rng:NextNumber(3.3, 4.1)
+				local shade = Palette.Crowd:Lerp(Palette.HouseWall, rng:NextNumber(0, 0.45))
+				-- Torso + head silhouette, slightly turned. Dark on purpose:
+				-- the crowd should register peripherally and never pull focus.
+				local torso = box(crowd, Vector3.new(2.3, h, 1.5), Vector3.new(x, y + h / 2, z), shade, Enum.Material.Fabric)
+				torso.CFrame = CFrame.new(torso.Position) * CFrame.Angles(0, rng:NextNumber(-0.25, 0.25), 0)
+				ball(crowd, 1.5, Vector3.new(x, y + h + 0.6, z), shade, Enum.Material.Fabric)
+				-- Seat back.
+				box(crowd, Vector3.new(3.4, 2.1, 0.6), Vector3.new(x, y + 1.1, z + 1.8),
+					Palette.Curtain:Lerp(Color3.new(0, 0, 0), 0.45), Enum.Material.Fabric)
+			end
+		end
+	end
+	return crowd
+end
+
+-- ── spawns ───────────────────────────────────────────────────────────────────
+
+local function buildSpawns(root, anchors)
+	local spawns = folder("Spawns", root)
+	-- Players arrive in the house, centre aisle, facing the stage. The walk to
+	-- the marks is the opening shot, so the spawn has to be behind the camera's
+	-- subject, not on the deck.
+	for i = 1, Config.STAGE_MARKS do
+		local x = -8 + (i - 1) * 4
+		local s = Instance.new("SpawnLocation")
+		s.Name = "Spawn" .. i
+		s.Size = Vector3.new(3.6, 0.4, 3.6)
+		s.CFrame = CFrame.lookAt(Vector3.new(x, 1.5, 34), Vector3.new(x, 1.5, 0))
+		s.Anchored = true
+		s.Neutral = true
+		s.Duration = 0
+		s.Transparency = 1
+		s.CanCollide = false
+		s.Parent = spawns
+
+		local cf = Instance.new("CFrameValue")
+		cf.Name = "SpawnCFrame" .. i
+		cf.Value = s.CFrame
+		cf.Parent = anchors
+	end
+	return spawns
+end
+
+-- ── camera anchors ───────────────────────────────────────────────────────────
+
+local function buildCameraAnchors(anchors)
+	local function shot(name, from, look, fov)
+		local cf = Instance.new("CFrameValue")
+		cf.Name = name
+		cf.Value = CFrame.lookAt(from, look)
+		cf.Parent = anchors
+		local f = Instance.new("NumberValue")
+		f.Name = name .. "FOV"
+		f.Value = fov
+		f.Parent = anchors
+	end
+
+	-- House: the menu shot. Stage framed from the back of the room.
+	shot("CamHouse", Vector3.new(0, 16, 44), Vector3.new(0, 9, -2), Config.CAMERA_FOV.HOUSE)
+	-- Procession: low and wide, down the aisle, so the walk reads as an entrance.
+	shot("CamProcession", Vector3.new(-14, 7.5, 27), Vector3.new(2, 6, 2), Config.CAMERA_FOV.HOUSE)
+	-- Wide: the shot that shows every performer on their mark at once.
+	shot("CamWide", Vector3.new(0, 13.5, 29), Vector3.new(0, 7.5, 0), Config.CAMERA_FOV.WIDE)
+	-- Booth: pushed in for recording, so the waveform UI owns the frame.
+	shot("CamBooth", Vector3.new(0, 10.5, 20), Vector3.new(0, 7, 0), Config.CAMERA_FOV.BOOTH)
+	-- Roulette: slight off-axis, looking up at the wheel.
+	shot("CamRoulette", Vector3.new(9, 11, 23), Vector3.new(0, 9, 2), Config.CAMERA_FOV.ROULETTE)
+	-- Results: the curtain call.
+	shot("CamResults", Vector3.new(-7, 11, 24), Vector3.new(0, 7.5, -1), Config.CAMERA_FOV.CLOSE)
+end
+
+-- ── entry point ──────────────────────────────────────────────────────────────
+
+function StageBuilder.build()
+	local existing = Workspace:FindFirstChild("Venue")
+	if existing then
+		existing:Destroy()
+	end
+
+	local root = Instance.new("Model")
+	root.Name = "Venue"
+
+	local anchors = folder("StageAnchors", root)
+
+	buildShell(root)
+	buildDeck(root)
+	buildBackdrop(root)
+	buildCurtain(root)
+	buildProscenium(root)
+	buildTruss(root)
+	buildMarks(root, anchors)
+	buildCrowd(root)
+	buildSpawns(root, anchors)
+	buildCameraAnchors(anchors)
+
+	root.Parent = Workspace
+
+	-- Everything is anchored decor; keep it out of raycasts and physics work.
+	for _, d in ipairs(root:GetDescendants()) do
+		if d:IsA("BasePart") and not d.CanCollide then
+			d.CanQuery = false
+			d.CanTouch = false
+		end
+	end
+
+	return root
+end
+
+function StageBuilder.anchors()
+	local venue = Workspace:WaitForChild("Venue", 30)
+	return venue and venue:WaitForChild("StageAnchors", 10)
+end
+
+return StageBuilder
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="18">
+        <Properties>
+          <string name="Name">TakeStore</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- TakeStore.luau — holds this round's takes, and refuses anything malformed.
+--
+-- Takes arrive from the client, so they are untrusted input: a crafted payload
+-- could otherwise claim a perfect contour, 10 000 notes, or negative times.
+-- Everything is clamped and re-sorted here before it ever reaches Scoring,
+-- and the server does its own grading — the client's score is never trusted.
+
+local Config = require(game.ReplicatedStorage.Shared.Config)
+
+local TakeStore = {}
+local takes = {}
+
+local MAX_NOTES = Config.TAKE.MAX_NOTES
+local MIN_NOTE = Config.TAKE.MIN_NOTE
+local PITCH_RANGE = Config.TAKE.PITCH_RANGE
+
+local function sanitise(raw, duration)
+	if type(raw) ~= "table" then
+		return nil
+	end
+	local rawNotes = raw.notes
+	if type(rawNotes) ~= "table" then
+		return nil
+	end
+
+	local notes = {}
+	for _, n in ipairs(rawNotes) do
+		if #notes >= MAX_NOTES then
+			break
+		end
+		if type(n) == "table"
+			and type(n.t) == "number" and type(n.dur) == "number" and type(n.pitch) == "number"
+			and n.t == n.t and n.dur == n.dur and n.pitch == n.pitch   -- reject NaN
+		then
+			local t = math.clamp(n.t, 0, duration)
+			local dur = math.clamp(n.dur, MIN_NOTE, duration)
+			if t + dur > duration then
+				dur = math.max(MIN_NOTE, duration - t)
+			end
+			table.insert(notes, {
+				t = t,
+				dur = dur,
+				pitch = math.clamp(n.pitch, -PITCH_RANGE, PITCH_RANGE),
+			})
+		end
+	end
+
+	table.sort(notes, function(a, b)
+		return a.t < b.t
+	end)
+
+	return { notes = notes }
+end
+
+function TakeStore.submit(userId, raw, duration)
+	if takes[userId] then
+		return false, "already-submitted"   -- one take. No retries.
+	end
+	local clean = sanitise(raw, duration)
+	if not clean then
+		return false, "malformed"
+	end
+	takes[userId] = clean
+	return true
+end
+
+function TakeStore.get(userId)
+	return takes[userId]
+end
+
+function TakeStore.has(userId)
+	return takes[userId] ~= nil
+end
+
+function TakeStore.count()
+	local n = 0
+	for _ in pairs(takes) do
+		n += 1
+	end
+	return n
+end
+
+function TakeStore.clear()
+	table.clear(takes)
+end
+
+-- A silent take, for a player who never submitted (left, crashed, froze).
+function TakeStore.empty()
+	return { notes = {} }
+end
+
+return TakeStore
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="19">
+        <Properties>
+          <string name="Name">VoiceGate</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- VoiceGate.luau — mutes the table while a take plays back.
+--
+-- In the original, mics close during playback so everyone hears the same take,
+-- then reopen for the reaction. Roblox can do this properly through the current
+-- audio API: each player with voice chat gets an AudioDeviceInput, and the
+-- server can deactivate it. Older places, or places with voice chat disabled,
+-- have no such instance — so every call is guarded and degrades to a no-op,
+-- and the client shows the "MESA SILENCIADA" indicator either way.
+
+local Players = game:GetService("Players")
+
+local VoiceGate = {}
+
+local function deviceInput(player)
+	local ok, found = pcall(function()
+		return player:FindFirstChildOfClass("AudioDeviceInput")
+	end)
+	return ok and found or nil
+end
+
+local function setActive(player, active)
+	local input = deviceInput(player)
+	if not input then
+		return false
+	end
+	local ok = pcall(function()
+		input.Active = active
+	end)
+	return ok
+end
+
+-- Returns true if at least one real mic was actually gated.
+function VoiceGate.closeAll()
+	local gated = false
+	for _, player in ipairs(Players:GetPlayers()) do
+		if setActive(player, false) then
+			gated = true
+		end
+	end
+	return gated
+end
+
+function VoiceGate.openAll()
+	for _, player in ipairs(Players:GetPlayers()) do
+		setActive(player, true)
+	end
+end
+
+-- Keeps one player audible (used for nothing today, but the playback phase of a
+-- "Pass the Mic" party needs exactly this, so it stays in the surface).
+function VoiceGate.soloOnly(target)
+	for _, player in ipairs(Players:GetPlayers()) do
+		setActive(player, player == target)
+	end
+end
+
+return VoiceGate
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="SoundService" referent="20">
+    <Properties>
+      <string name="Name">SoundService</string>
+      <token name="AmbientReverb">7</token>
+      <float name="DistanceFactor">10</float>
+      <bool name="RespectFilteringEnabled">true</bool>
+    </Properties>
+  </Item>
+  <Item class="StarterPlayer" referent="21">
+    <Properties>
+      <string name="Name">StarterPlayer</string>
+    </Properties>
+    <Item class="StarterPlayerScripts" referent="22">
+      <Properties>
+        <string name="Name">StarterPlayerScripts</string>
+      </Properties>
+      <Item class="LocalScript" referent="23">
+        <Properties>
+          <string name="Name">Client</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- init.client.luau — wiring. The server owns truth; this file owns the show.
+--
+-- Every phase transition arrives as one State payload with an absolute
+-- deadline, so the client never negotiates timing: it renders, it records when
+-- told, and it submits once.
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local StarterGui = game:GetService("StarterGui")
+
+local Shared = game.ReplicatedStorage.Shared
+local Config = require(Shared.Config)
+local Net = require(Shared.Net)
+local SoundLibrary = require(Shared.SoundLibrary)
+local Modes = require(Shared.Modes)
+local Sabotages = require(Shared.Sabotages)
+local Roulette = require(Shared.Roulette)
+
+local CameraDirector = require(script.CameraDirector)
+local AudioEngine = require(script.AudioEngine)
+local Booth = require(script.Booth)
+local SoloRunner = require(script.SoloRunner)
+local Root = require(script.UI.Root)
+
+local localPlayer = Players.LocalPlayer
+
+-- The stage has to exist before the camera can be framed against it.
+local anchors do
+	local venue = workspace:WaitForChild("Venue", 60)
+	anchors = venue and venue:WaitForChild("StageAnchors", 20)
+end
+
+pcall(function()
+	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
+	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Health, false)
+end)
+
+CameraDirector.init(anchors)
+
+local lastSabotageWon = nil
+local state = { phase = "boot", round = 0, rounds = Config.ROUNDS_PER_PARTY, endsAt = 0, soundId = nil }
+local selectedMode = "party"
+local armedMode = nil
+local referenceHandle
+local recording = false
+
+local ui
+
+local function modeById(id)
+	for _, m in ipairs(Modes) do
+		if m.id == id then
+			return m
+		end
+	end
+	return nil
+end
+
+ui = Root.new({
+	onMode = function(id)
+		local mode = modeById(id)
+		selectedMode = id
+		if not mode then
+			return
+		end
+		AudioEngine.click()
+
+		if not mode.solo then
+			armedMode = nil
+			ui.menu:setStatus("Fiesta online. Arranca sola cuando haya 2 jugadores en la sala.")
+			return
+		end
+
+		if armedMode == id then
+			-- Second click on an armed mode starts it.
+			armedMode = nil
+			ui.menu:setStatus("")
+			AudioEngine.confirm()
+			SoloRunner.start(id, ui, function()
+				ui.menu:setStatus("")
+			end)
+		else
+			armedMode = id
+			ui.menu:setStatus(("%s — tocá otra vez para empezar."):format(mode.name))
+		end
+	end,
+
+	onCharacter = function(id)
+		AudioEngine.click()
+		ui.menu:setCharacter(id)
+		Net.fireServer(Net.ChooseCharacter, { characterId = id })
+	end,
+})
+
+ui:setPhase("lobby")
+ui.menu:setStatus("Fiesta online. Arranca sola cuando haya 2 jugadores en la sala.")
+
+-- ── the take ───────────────────────────────────────────────────────────────────
+-- Started by the record phase, submitted exactly once, never retried.
+local function runTake(sound)
+	if recording or SoloRunner.isRunning() then
+		return
+	end
+	recording = true
+
+	ui.stage:setHint("MANTENÉ APRETADO · MOVÉ EL MOUSE PARA EL TONO")
+
+	local ok, take = pcall(Booth.record, sound, {
+		onCountIn = function(n)
+			ui.stage:showCountIn(n)
+		end,
+		onFrame = function(alpha, pitch, voiced, index, level)
+			ui.stage:onRecordFrame(alpha, pitch, voiced, index, level)
+		end,
+	})
+
+	recording = false
+
+	if not ok then
+		warn("[Client] take failed: " .. tostring(take))
+		Net.fireServer(Net.SubmitTake, { notes = {} })
+		return
+	end
+
+	ui.stage:showTake(take, sound.duration)
+	ui.stage:setHint("TOMA ENVIADA")
+	-- Only the contour travels. The server grades it.
+	Net.fireServer(Net.SubmitTake, { notes = take.notes })
+end
+
+-- ── phase handling ─────────────────────────────────────────────────────────────
+local function onPhase(payload)
+	local phase = payload.phase
+	local sound = payload.soundId and SoundLibrary.get(payload.soundId)
+
+	if SoloRunner.isRunning() then
+		return   -- a solo run owns the screen until it finishes
+	end
+
+	CameraDirector.onPhase(phase)
+	ui:setPhase(phase)
+	ui.scoreboard:update(payload.scores)
+
+	if phase == "lobby" then
+		local need = math.max(0, (payload.minPlayers or 2) - (payload.playerCount or 0))
+		if need > 0 then
+			ui.menu:setStatus(("Falta%s %d jugador%s para arrancar la fiesta.")
+				:format(need == 1 and "" or "n", need, need == 1 and "" or "es"))
+		elseif payload.endsAt and payload.endsAt > 0 then
+			ui.menu:setStatus("Sala lista. Arrancando.")
+		end
+		ui:setVoiceGated(false)
+
+	elseif phase == "round_intro" then
+		ui.stage:setSound(sound, payload.round, payload.rounds)
+		ui.stage:setHint("ESCUCHÁ LA REFERENCIA")
+
+	elseif phase == "reference" then
+		ui.stage:setSound(sound, payload.round, payload.rounds)
+		if referenceHandle then
+			referenceHandle:stop()
+		end
+		if sound then
+			referenceHandle = AudioEngine.playReference(sound, {
+				onFrame = function(alpha)
+					ui.stage:setReferencePlayhead(alpha)
+				end,
+				onFinish = function()
+					ui.stage:setReferencePlayhead(nil)
+				end,
+			})
+		end
+
+	elseif phase == "record" then
+		if sound then
+			task.spawn(runTake, sound)
+		end
+
+	elseif phase == "playback" then
+		ui.stage:setHint("")
+		ui:setVoiceGated(true)
+
+	elseif phase == "roulette" then
+		ui:setVoiceGated(false)
+
+	elseif phase == "sabotage_pick" then
+		-- Only a player who actually won a sabotage gets the picker.
+		local isPicker = false
+		for _, userId in ipairs(payload.sabotagePickers or {}) do
+			if userId == localPlayer.UserId then
+				isPicker = true
+			end
+		end
+		if isPicker then
+			local candidates = {}
+			for _, entry in ipairs(payload.scores or {}) do
+				if entry.userId ~= localPlayer.UserId then
+					table.insert(candidates, entry)
+				end
+			end
+			ui.roulette.root.Visible = true
+			ui.roulette:showTargetPicker(lastSabotageWon, candidates, function(userId)
+				Net.fireServer(Net.ChooseSabotageTarget, { userId = userId })
+			end)
+		end
+
+	elseif phase == "results" then
+		ui:showResults(payload.scores)
+		AudioEngine.applause()
+		ui:setVoiceGated(false)
+	end
+
+	state = payload
+end
+
+Net.onClient(Net.State, onPhase)
+
+Net.onClient(Net.Playback, function(payload)
+	if SoloRunner.isRunning() then
+		return
+	end
+
+	local sound = SoundLibrary.get(payload.soundId)
+	if not sound then
+		return
+	end
+
+	-- Push in on whoever is up.
+	local entry
+	for _, s in ipairs(state.scores or {}) do
+		if s.userId == payload.userId then
+			entry = s
+		end
+	end
+	CameraDirector.focusMark(entry and entry.markIndex or 3, 2.6)
+
+	ui.stage:setSound(sound, state.round, state.rounds)
+	ui.stage:showTake(payload.take or { notes = {} }, sound.duration)
+	ui.stage:showCard(payload)
+	ui:setVoiceGated(payload.voiceGated == true)
+
+	if payload.sabotage and payload.userId == localPlayer.UserId then
+		local def = Sabotages.get(payload.sabotage)
+		ui:showToast(("Te sabotearon: %s%s"):format(
+			def and def.name or "?",
+			payload.sabotageFrom and (" — " .. payload.sabotageFrom) or ""), "bad")
+	end
+
+	-- The whole table hears the same take, sabotage included.
+	AudioEngine.playTake(payload.take or { notes = {} }, sound.duration, payload.sabotage, {
+		onFrame = function(alpha)
+			ui.stage.yours:setPlayhead(alpha)
+		end,
+		onFinish = function()
+			ui.stage.yours:setPlayhead(nil)
+		end,
+	})
+end)
+
+Net.onClient(Net.RouletteSpin, function(payload)
+	if SoloRunner.isRunning() then
+		return
+	end
+	-- Remember which sabotage we won, so the picker that follows knows what it
+	-- is aiming. The server already holds the authoritative copy.
+	lastSabotageWon = nil
+	for _, r in ipairs(payload.results or {}) do
+		if r.userId == localPlayer.UserId and r.kind == "sabotage" then
+			for _, seg in ipairs(Roulette.segments()) do
+				if seg.id == r.segmentId then
+					lastSabotageWon = seg.sabotage
+				end
+			end
+		end
+	end
+	ui.roulette:spin(payload.results, payload.spin or Config.PHASE.ROULETTE_SPIN, localPlayer.UserId)
+end)
+
+Net.onClient(Net.Scores, function(payload)
+	ui.scoreboard:update(payload.scores)
+end)
+
+Net.onClient(Net.Toast, function(payload)
+	ui:showToast(payload.text, payload.tone)
+end)
+
+Net.onClient(Net.SabotageHit, function(payload)
+	if payload.aimed then
+		ui:showToast(("Apuntado a %s. No lo sabe todavía."):format(payload.at or "?"), "warn")
+	end
+end)
+
+-- ── the clock ──────────────────────────────────────────────────────────────────
+RunService.Heartbeat:Connect(function()
+	if not state.endsAt or state.endsAt <= 0 then
+		ui:setClock(nil)
+		return
+	end
+	ui:setClock(state.endsAt - workspace:GetServerTimeNow())
+end)
+
+-- Escape closes a solo run's menus; it must never cancel a take in progress.
+UserInputService.InputBegan:Connect(function(input, processed)
+	if processed then
+		return
+	end
+	if input.KeyCode == Enum.KeyCode.Escape and Booth.isRecording() then
+		ui:showToast("Una sola toma. No se puede cancelar.", "warn")
+	end
+end)
+
+print("[Mimic Party] client ready.")
+]]></string>
+        </Properties>
+        <Item class="ModuleScript" referent="24">
+          <Properties>
+            <string name="Name">AudioEngine</string>
+            <string name="Source"><![CDATA[--!nonstrict
+-- AudioEngine.luau — renders a contour as audible sound, and ruins it on cue.
+--
+-- There is no audio file per reference. One sustained tone is pitch-shifted
+-- per note and gated by the envelope, which means the entire 36-sound library
+-- plays with zero uploads, and a take sounds like the same instrument as the
+-- reference it is being compared to — which is the fair way to do it.
+--
+-- Sabotages are applied to the live Sound as real SoundEffects, so a saturated
+-- take is genuinely clipping and a chopped one is genuinely being cut.
+
+local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
+
+local Shared = game.ReplicatedStorage.Shared
+local Config = require(Shared.Config)
+local Sabotages = require(Shared.Sabotages)
+
+local AudioEngine = {}
+
+local group = Instance.new("SoundGroup")
+group.Name = "MimicPartyVoices"
+group.Volume = 0.85
+group.Parent = SoundService
+
+local function newTone(volume)
+	local s = Instance.new("Sound")
+	s.SoundId = Config.AUDIO.VOICE_TONE
+	s.Looped = true
+	s.Volume = 0
+	s.RollOffMode = Enum.RollOffMode.Linear
+	s.SoundGroup = group
+	s.Parent = SoundService
+	s:Play()
+	s.Volume = 0
+	s.TimePosition = 0
+	s.Volume = volume or 0
+	return s
+end
+
+local function semitonesToSpeed(semitones)
+	return 2 ^ (semitones / 12)
+end
+
+-- Renders `notes` over `duration`. Returns a handle: :stop(), .done (bool),
+-- and an optional per-frame callback for the playhead.
+function AudioEngine.playPattern(notes, duration, opts)
+	opts = opts or {}
+	local tone = newTone(0)
+	local cleanupSabotage = Sabotages.applyTo(tone, opts.sabotage)
+
+	local handle = { done = false }
+	local started = os.clock()
+	local baseVolume = opts.volume or 0.52
+	local conn
+
+	conn = RunService.RenderStepped:Connect(function()
+		local t = os.clock() - started
+		if t >= duration or handle.done then
+			if conn then
+				conn:Disconnect()
+				conn = nil
+			end
+			handle.done = true
+			cleanupSabotage()
+			tone:Stop()
+			tone:Destroy()
+			if opts.onFinish then
+				opts.onFinish()
+			end
+			return
+		end
+
+		local active
+		for _, n in ipairs(notes) do
+			if t >= n.t and t <= n.t + n.dur then
+				active = n
+				break
+			end
+		end
+
+		if active then
+			-- Short attack / release so each note has an edge instead of a click.
+			local localT = (t - active.t) / math.max(active.dur, 1e-3)
+			local shape = math.min(1, localT / 0.1) * math.min(1, (1 - localT) / 0.14 + 0.4)
+			tone.PlaybackSpeed = semitonesToSpeed(active.pitch) * (opts.speed or 1)
+			tone.Volume = baseVolume * math.clamp(shape, 0, 1)
+		else
+			tone.Volume = 0
+		end
+
+		if opts.onFrame then
+			opts.onFrame(t / duration, active and active.pitch or nil, active ~= nil)
+		end
+	end)
+
+	function handle:stop()
+		self.done = true
+		if conn then
+			conn:Disconnect()
+			conn = nil
+		end
+		cleanupSabotage()
+		if tone.Parent then
+			tone:Stop()
+			tone:Destroy()
+		end
+	end
+
+	return handle
+end
+
+function AudioEngine.playReference(sound, opts)
+	opts = opts or {}
+	opts.volume = opts.volume or 0.6
+	return AudioEngine.playPattern(sound.notes, sound.duration, opts)
+end
+
+-- Plays somebody's take, honouring the sabotage aimed at them.
+-- `swap` short-circuits the whole thing: the table hears the SFX, not the voice.
+function AudioEngine.playTake(take, duration, sabotageId, opts)
+	opts = opts or {}
+	local def = sabotageId and Sabotages.get(sabotageId)
+
+	if def and def.replacesTake then
+		local s = Instance.new("Sound")
+		s.SoundId = Config.AUDIO.SWAP_SFX
+		s.Volume = 0.65
+		s.SoundGroup = group
+		s.Parent = SoundService
+		s:Play()
+		task.delay(math.max(duration, 1.2), function()
+			s:Destroy()
+			if opts.onFinish then
+				opts.onFinish()
+			end
+		end)
+		local handle = { done = false }
+		function handle:stop()
+			self.done = true
+			if s.Parent then
+				s:Destroy()
+			end
+		end
+		return handle
+	end
+
+	opts.sabotage = sabotageId
+	opts.volume = opts.volume or 0.55
+	return AudioEngine.playPattern(take.notes, duration, opts)
+end
+
+-- Live monitoring while you record: you hear your own contour as you make it.
+function AudioEngine.openMonitor()
+	local tone = newTone(0)
+	tone.Volume = 0
+	local monitor = {}
+
+	function monitor:set(pitch, voiced)
+		if not tone.Parent then
+			return
+		end
+		tone.PlaybackSpeed = semitonesToSpeed(pitch or 0)
+		tone.Volume = voiced and 0.4 or 0
+	end
+
+	function monitor:close()
+		if tone.Parent then
+			tone:Stop()
+			tone:Destroy()
+		end
+	end
+
+	return monitor
+end
+
+local uiCache = {}
+function AudioEngine.ui(assetId, volume)
+	local s = uiCache[assetId]
+	if not s or not s.Parent then
+		s = Instance.new("Sound")
+		s.SoundId = assetId
+		s.Volume = volume or 0.3
+		s.Parent = SoundService
+		uiCache[assetId] = s
+	end
+	s.TimePosition = 0
+	s:Play()
+end
+
+function AudioEngine.click()
+	AudioEngine.ui(Config.AUDIO.UI_CLICK, 0.22)
+end
+
+function AudioEngine.confirm()
+	AudioEngine.ui(Config.AUDIO.UI_CONFIRM, 0.28)
+end
+
+function AudioEngine.tick()
+	AudioEngine.ui(Config.AUDIO.COUNT_TICK, 0.3)
+end
+
+function AudioEngine.applause()
+	AudioEngine.ui(Config.AUDIO.APPLAUSE, 0.35)
+end
+
+return AudioEngine
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="25">
+          <Properties>
+            <string name="Name">Booth</string>
+            <string name="Source"><![CDATA[--!nonstrict
+-- Booth.luau — the recording booth. This is the input half of the game.
+--
+-- Roblox cannot read a microphone: no script can reach the audio samples, so a
+-- real voice cannot be scored on this platform. What is preserved instead is
+-- the thing that was actually being measured — melody, rhythm and attacks —
+-- with the mouse standing in for the throat:
+--
+--     hold  (mouse / Space / touch) → you are vocalising
+--     move  up / down               → pitch, ±9 semitones
+--     release                       → that attack ends
+--
+-- Everything else behaves exactly like the original: one countdown, one take,
+-- a hard stop at the end of the window, and no retry. You monitor yourself
+-- live while recording, and the take is submitted the instant it closes.
+
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+
+local Shared = game.ReplicatedStorage.Shared
+local Config = require(Shared.Config)
+local SoundLibrary = require(Shared.SoundLibrary)
+
+local AudioEngine = require(script.Parent.AudioEngine)
+
+local Booth = {}
+
+local PITCH_RANGE = Config.TAKE.PITCH_RANGE
+local MIN_NOTE = Config.TAKE.MIN_NOTE
+local MAX_NOTES = Config.TAKE.MAX_NOTES
+local SAMPLES = Config.TAKE.ENVELOPE_SAMPLES
+
+local active = false
+
+-- Screen Y → semitones. Inverted, because up should mean higher.
+local function pitchFromPointer()
+	local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize
+	if not viewport or viewport.Y <= 0 then
+		return 0
+	end
+	local y = UserInputService:GetMouseLocation().Y
+	-- The usable band is the middle 70% of the screen, so the extremes are
+	-- reachable without hunting for the last pixel.
+	local alpha = math.clamp((y / viewport.Y - 0.15) / 0.7, 0, 1)
+	return (0.5 - alpha) * 2 * PITCH_RANGE
+end
+
+local function isHeld()
+	return UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
+		or UserInputService:IsKeyDown(Enum.KeyCode.Space)
+		or UserInputService:IsKeyDown(Enum.KeyCode.ButtonA)
+end
+
+-- Runs one take. Blocking (call from a coroutine).
+--   sound    the reference being imitated
+--   hooks    { onCountIn(n), onFrame(alpha, pitch, voiced, envelopeIndex, level), onClose() }
+-- Returns the take: { notes = { {t, dur, pitch}, ... } }
+function Booth.record(sound, hooks)
+	assert(not active, "[Booth] a take is already being recorded")
+	active = true
+	hooks = hooks or {}
+
+	-- ── count-in ──
+	for n = Config.PHASE.COUNT_IN, 1, -1 do
+		if hooks.onCountIn then
+			hooks.onCountIn(n)
+		end
+		AudioEngine.tick()
+		task.wait(1)
+	end
+	if hooks.onCountIn then
+		hooks.onCountIn(0)   -- "GO"
+	end
+
+	-- ── the take ──
+	local duration = sound.duration
+	local notes = {}
+	local envelope = table.create(SAMPLES, 0)
+	local monitor = AudioEngine.openMonitor()
+
+	local openNote = nil
+	local started = os.clock()
+	local touchHeld = false
+
+	-- Touch devices have no mouse button to hold: a finger down is the hold.
+	local touchBegan = UserInputService.TouchStarted:Connect(function()
+		touchHeld = true
+	end)
+	local touchEnded = UserInputService.TouchEnded:Connect(function()
+		touchHeld = false
+	end)
+
+	local function closeNote(at)
+		if not openNote then
+			return
+		end
+		openNote.dur = math.max(MIN_NOTE, at - openNote.t)
+		if openNote.t + openNote.dur > duration then
+			openNote.dur = math.max(MIN_NOTE, duration - openNote.t)
+		end
+		openNote = nil
+	end
+
+	local conn
+	conn = RunService.RenderStepped:Connect(function()
+		local t = os.clock() - started
+		if t >= duration then
+			return
+		end
+
+		local held = isHeld() or touchHeld
+		local pitch = pitchFromPointer()
+
+		if held and not openNote and #notes < MAX_NOTES then
+			openNote = { t = t, dur = MIN_NOTE, pitch = pitch }
+			table.insert(notes, openNote)
+		elseif held and openNote then
+			-- A held attack tracks the pointer: the note bends with your hand,
+			-- which is what makes a contour possible at all.
+			openNote.pitch = openNote.pitch * 0.72 + pitch * 0.28
+			openNote.dur = math.max(MIN_NOTE, t - openNote.t)
+		elseif not held and openNote then
+			closeNote(t)
+		end
+
+		local index = math.clamp(math.floor(t / duration * SAMPLES) + 1, 1, SAMPLES)
+		local level = held and 1 or 0
+		envelope[index] = math.max(envelope[index], level)
+
+		monitor:set(openNote and openNote.pitch or pitch, held)
+
+		if hooks.onFrame then
+			hooks.onFrame(t / duration, openNote and openNote.pitch or pitch, held, index, level)
+		end
+	end)
+
+	task.wait(duration)
+
+	-- Hard stop. One take.
+	conn:Disconnect()
+	touchBegan:Disconnect()
+	touchEnded:Disconnect()
+	closeNote(duration)
+	monitor:close()
+
+	-- Drop accidental taps: a 2-frame click is not an attack.
+	local cleaned = {}
+	for _, n in ipairs(notes) do
+		if n.dur >= MIN_NOTE then
+			table.insert(cleaned, { t = n.t, dur = n.dur, pitch = n.pitch })
+		end
+	end
+
+	if hooks.onClose then
+		hooks.onClose()
+	end
+	active = false
+
+	return { notes = cleaned, envelope = envelope }
+end
+
+function Booth.isRecording()
+	return active
+end
+
+-- The envelope the waveform should draw for a finished take.
+function Booth.envelopeFor(take, duration)
+	return SoundLibrary.envelope(take.notes, duration, SAMPLES)
+end
+
+return Booth
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="26">
+          <Properties>
+            <string name="Name">CameraDirector</string>
+            <string name="Source"><![CDATA[--!nonstrict
+-- CameraDirector.luau — the camera is a character in this game.
+--
+-- Six framed shots live on the stage anchors; this module blends between them
+-- with a critically-damped spring, so nothing ever snaps and nothing overshoots.
+-- The procession shot is the only live one: it tracks the centroid of the
+-- players walking down the aisle, which is the shot the whole opening is for.
+
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+
+local Config = require(game.ReplicatedStorage.Shared.Config)
+
+local CameraDirector = {}
+
+local camera = Workspace.CurrentCamera
+local anchors
+local current = { cf = nil, fov = Config.CAMERA_FOV.HOUSE }
+local target = { cf = nil, fov = Config.CAMERA_FOV.HOUSE }
+local mode = "static"
+local blend = 3.2        -- higher = tighter follow
+local bound = false
+
+local function anchorShot(name)
+	if not anchors then
+		return nil, nil
+	end
+	local cf = anchors:FindFirstChild(name)
+	local fov = anchors:FindFirstChild(name .. "FOV")
+	return cf and cf.Value or nil, fov and fov.Value or nil
+end
+
+local function centroidOfPlayers()
+	local sum, count = Vector3.zero, 0
+	for _, player in ipairs(Players:GetPlayers()) do
+		local character = player.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		if root then
+			sum += root.Position
+			count += 1
+		end
+	end
+	if count == 0 then
+		return nil
+	end
+	return sum / count
+end
+
+function CameraDirector.init(stageAnchors)
+	anchors = stageAnchors
+	camera = Workspace.CurrentCamera
+	camera.CameraType = Enum.CameraType.Scriptable
+	camera.FieldOfView = Config.CAMERA_FOV.HOUSE
+
+	local cf = select(1, anchorShot("CamHouse"))
+	current.cf = cf or CFrame.new(0, 16, 44)
+	target.cf = current.cf
+	camera.CFrame = current.cf
+
+	if bound then
+		RunService:UnbindFromRenderStep("MimicPartyCamera")
+		bound = false
+	end
+
+	bound = true
+	RunService:BindToRenderStep("MimicPartyCamera", Enum.RenderPriority.Camera.Value + 1, function(dt)
+		if not camera or not current.cf then
+			return
+		end
+
+		if mode == "procession" then
+			-- Dolly from the back of the house toward the apron while keeping the
+			-- group framed slightly left of centre: a tracking shot, not a pan.
+			local base = select(1, anchorShot("CamProcession"))
+			local focus = centroidOfPlayers()
+			if base and focus then
+				local drift = math.clamp((focus.Z - 2) / 32, 0, 1)
+				local from = base.Position:Lerp(Vector3.new(-6, 8.5, 18), 1 - drift)
+				target.cf = CFrame.lookAt(from, focus + Vector3.new(0, 2.4, 0))
+			elseif base then
+				target.cf = base
+			end
+		end
+
+		-- Exponential smoothing: frame-rate independent, never overshoots.
+		local alpha = 1 - math.exp(-blend * dt)
+		current.cf = current.cf:Lerp(target.cf, alpha)
+		current.fov += (target.fov - current.fov) * alpha
+
+		camera.CFrame = current.cf
+		camera.FieldOfView = current.fov
+	end)
+end
+
+-- `tightness` lets a cut feel like a cut (high) or a drift feel like a drift (low).
+function CameraDirector.setShot(name, tightness)
+	local cf, fov = anchorShot(name)
+	if not cf then
+		return
+	end
+	mode = "static"
+	target.cf = cf
+	target.fov = fov or Config.CAMERA_FOV.WIDE
+	blend = tightness or 3.2
+end
+
+function CameraDirector.setProcession()
+	mode = "procession"
+	target.fov = Config.CAMERA_FOV.HOUSE
+	blend = 1.5   -- slow, so the walk has weight
+end
+
+-- Pushes in on one mark. Used when a single take is playing back.
+function CameraDirector.focusMark(markIndex, tightness)
+	if not anchors then
+		return
+	end
+	local mark = anchors:FindFirstChild("Mark" .. tostring(markIndex))
+	if not mark then
+		CameraDirector.setShot("CamWide", tightness)
+		return
+	end
+	mode = "static"
+	local focus = mark.Position + Vector3.new(0, 4.2, 0)
+	target.cf = CFrame.lookAt(focus + Vector3.new(mark.Position.X * -0.12, 2.6, 15.5), focus)
+	target.fov = Config.CAMERA_FOV.CLOSE + 6
+	blend = tightness or 2.6
+end
+
+function CameraDirector.stop()
+	if bound then
+		RunService:UnbindFromRenderStep("MimicPartyCamera")
+		bound = false
+	end
+	if camera then
+		camera.CameraType = Enum.CameraType.Custom
+	end
+end
+
+-- Phase → shot. The single place the look of the game is decided.
+local SHOTS = {
+	lobby = function() CameraDirector.setShot("CamHouse", 2.0) end,
+	procession = function() CameraDirector.setProcession() end,
+	round_intro = function() CameraDirector.setShot("CamWide", 2.4) end,
+	reference = function() CameraDirector.setShot("CamWide", 2.4) end,
+	record = function() CameraDirector.setShot("CamBooth", 3.0) end,
+	playback = function() CameraDirector.setShot("CamWide", 2.8) end,
+	roulette = function() CameraDirector.setShot("CamRoulette", 3.4) end,
+	sabotage_pick = function() CameraDirector.setShot("CamRoulette", 3.0) end,
+	results = function() CameraDirector.setShot("CamResults", 2.2) end,
+}
+
+function CameraDirector.onPhase(phase)
+	local shot = SHOTS[phase]
+	if shot then
+		shot()
+	end
+end
+
+return CameraDirector
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="27">
+          <Properties>
+            <string name="Name">SoloRunner</string>
+            <string name="Source"><![CDATA[--!nonstrict
+-- SoloRunner.luau — Supervivencia, Suelto, Racha Diaria y Pasá el Micro.
+--
+-- These run entirely on the client against the same Scoring module the server
+-- uses for party rounds, which is the whole point: a 740 in Supervivencia and
+-- a 740 in a party round mean the same performance.
+
+local Players = game:GetService("Players")
+
+local Shared = game.ReplicatedStorage.Shared
+local Config = require(Shared.Config)
+local Modes = require(Shared.Modes)
+local Scoring = require(Shared.Scoring)
+local SoundLibrary = require(Shared.SoundLibrary)
+local Roulette = require(Shared.Roulette)
+
+local AudioEngine = require(script.Parent.AudioEngine)
+local Booth = require(script.Parent.Booth)
+local CameraDirector = require(script.Parent.CameraDirector)
+
+local SoloRunner = {}
+
+local running = false
+
+local function modeById(id)
+	for _, m in ipairs(Modes) do
+		if m.id == id then
+			return m
+		end
+	end
+	return nil
+end
+
+-- Same four sounds for everybody, keyed to the UTC date. Rolls over at 00:00 UTC.
+local function dailySeed()
+	local t = os.date("!*t", os.time())
+	return t.year * 10000 + t.month * 100 + t.day
+end
+
+-- One round: reference, count-in, take, grade. Shared by every solo mode.
+local function runRound(ui, sound, round, rounds, header)
+	ui.stage:setSound(sound, round, rounds)
+	ui.stage:setVisible(true)
+	ui.stage:hideCard()
+	ui:setPhase("reference")
+	if header then
+		ui.stage:setHint(header)
+	end
+
+	CameraDirector.setShot("CamWide", 2.4)
+
+	-- Reference.
+	local done = false
+	AudioEngine.playReference(sound, {
+		onFrame = function(alpha)
+			ui.stage:setReferencePlayhead(alpha)
+		end,
+		onFinish = function()
+			done = true
+		end,
+	})
+	repeat
+		task.wait(0.05)
+	until done
+	ui.stage:setReferencePlayhead(nil)
+	task.wait(Config.PHASE.REFERENCE_PAD)
+
+	-- Take.
+	ui:setPhase("record")
+	CameraDirector.setShot("CamBooth", 3.0)
+	ui.stage:setHint("MANTENÉ APRETADO · MOVÉ EL MOUSE PARA EL TONO")
+
+	local take = Booth.record(sound, {
+		onCountIn = function(n)
+			ui.stage:showCountIn(n)
+		end,
+		onFrame = function(alpha, pitch, voiced, index, level)
+			ui.stage:onRecordFrame(alpha, pitch, voiced, index, level)
+		end,
+	})
+
+	ui.stage:showTake(take, sound.duration)
+	ui.stage:setReferencePlayhead(nil)
+
+	-- Grade and play it back against the reference, as the original does.
+	local grade = Scoring.grade(sound, take)
+	ui:setPhase("playback")
+	CameraDirector.focusMark(3, 2.6)
+	AudioEngine.playTake(take, sound.duration, nil)
+	ui.stage:showCard({
+		name = Players.LocalPlayer.DisplayName,
+		grade = grade,
+		awarded = grade.total,
+		verdict = Scoring.verdict(grade.total),
+	})
+	task.wait(sound.duration + 1.4)
+
+	return grade
+end
+
+-- ── Supervivencia ────────────────────────────────────────────────────────────
+local function survival(ui)
+	local cfg = Config.SURVIVAL
+	local playlist = SoundLibrary.playlist(os.time(), cfg.SOUNDS)
+	local lives = cfg.LIVES
+	local total = 0
+
+	for round = 1, cfg.SOUNDS do
+		local target = math.min(cfg.TARGET_CAP, cfg.TARGET_START + (round - 1) * cfg.TARGET_STEP)
+		local grade = runRound(ui, playlist[round], round, cfg.SOUNDS,
+			("OBJETIVO %d  ·  VIDAS %s"):format(target, string.rep("●", lives)))
+		total += grade.total
+
+		if grade.total < target then
+			lives -= 1
+			ui:showToast(("%d < %d. Te queda%s %d vida%s.")
+				:format(grade.total, target, lives == 1 and "" or "n", lives, lives == 1 and "" or "s"),
+				lives > 0 and "warn" or "bad")
+			if lives <= 0 then
+				ui:showToast(("Fin. %d rondas, %d puntos."):format(round, total), "bad")
+				return total, round
+			end
+		else
+			ui:showToast(("%d ≥ %d. Seguís."):format(grade.total, target), "good")
+		end
+		task.wait(1.2)
+	end
+
+	AudioEngine.applause()
+	ui:showToast(("Las %d. %d puntos."):format(cfg.SOUNDS, total), "good")
+	return total, cfg.SOUNDS
+end
+
+-- ── Suelto ───────────────────────────────────────────────────────────────────
+local function justPlay(ui)
+	local mode = modeById("justplay")
+	local playlist = SoundLibrary.playlist(os.time(), Config.JUST_PLAY.ROUNDS)
+	local total = 0
+
+	for round = 1, Config.JUST_PLAY.ROUNDS do
+		-- Route choice before the sound: the bet is made blind, on purpose.
+		local route = mode.routes[1]
+		local picked = false
+		ui:showToast("Elegí ruta: 1 Segura · 2 Arriesgada · 3 Enfocada", "neutral")
+		local conn
+		conn = game:GetService("UserInputService").InputBegan:Connect(function(input, processed)
+			if processed or picked then
+				return
+			end
+			local map = { [Enum.KeyCode.One] = 1, [Enum.KeyCode.Two] = 2, [Enum.KeyCode.Three] = 3 }
+			local index = map[input.KeyCode]
+			if index then
+				route = mode.routes[index]
+				picked = true
+			end
+		end)
+		local deadline = os.clock() + 5
+		repeat
+			task.wait(0.1)
+		until picked or os.clock() > deadline
+		conn:Disconnect()
+
+		ui:showToast(("Ruta %s · %s"):format(route.name, route.blurb), "neutral")
+		task.wait(0.8)
+
+		local grade = runRound(ui, playlist[round], round, Config.JUST_PLAY.ROUNDS,
+			("RUTA %s  ·  ×%s"):format(route.name:upper(), route.mult))
+
+		local base = route.axis and grade[route.axis] or grade.total
+		local awarded = math.floor(base * route.mult + 0.5)
+		if route.floor and grade.total < route.floor then
+			awarded = 0
+			ui:showToast(("Por debajo de %d. La ruta arriesgada no paga."):format(route.floor), "bad")
+		end
+		total += awarded
+
+		-- Bonus wheel between rounds, same wheel, points only.
+		if round < Config.JUST_PLAY.ROUNDS then
+			local rng = Random.new(os.clock() * 1e6 % 2 ^ 31)
+			local index, segment = Roulette.spin(rng)
+			ui.roulette:spin({ {
+				userId = Players.LocalPlayer.UserId,
+				name = Players.LocalPlayer.DisplayName,
+				segmentIndex = index, segmentId = segment.id,
+				kind = segment.kind, label = segment.label,
+			} }, Config.PHASE.ROULETTE_SPIN, Players.LocalPlayer.UserId)
+			ui:setPhase("roulette")
+			CameraDirector.setShot("CamRoulette", 3.4)
+			task.wait(Config.PHASE.ROULETTE_SPIN + 0.6)
+			if segment.kind == "points" then
+				total += segment.amount
+			end
+			ui.roulette:hide()
+		end
+	end
+
+	ui:showToast(("Suelto: %d puntos."):format(total), "good")
+	return total
+end
+
+-- ── Racha Diaria ─────────────────────────────────────────────────────────────
+local function daily(ui)
+	local playlist = SoundLibrary.playlist(dailySeed(), Config.DAILY.SOUNDS)
+	local total = 0
+	for round = 1, Config.DAILY.SOUNDS do
+		local grade = runRound(ui, playlist[round], round, Config.DAILY.SOUNDS, "RACHA DIARIA")
+		total += grade.total
+	end
+	ui:showToast(("Racha de hoy: %d puntos. Se reinicia a las 00:00 UTC."):format(total), "good")
+	return total
+end
+
+-- ── Pasá el Micro ────────────────────────────────────────────────────────────
+-- Several people, one device, taking turns. Local results, no server involved.
+local function passTheMic(ui)
+	local turns = 4
+	local playlist = SoundLibrary.playlist(os.time(), turns)
+	local results = {}
+
+	for turn = 1, turns do
+		ui:showToast(("Turno %d de %d. Pasá el micro y apretá para empezar."):format(turn, turns), "neutral")
+		local ready = false
+		local conn
+		conn = game:GetService("UserInputService").InputBegan:Connect(function(input, processed)
+			if not processed and input.UserInputType == Enum.UserInputType.MouseButton1 then
+				ready = true
+			end
+		end)
+		repeat
+			task.wait(0.1)
+		until ready
+		conn:Disconnect()
+		task.wait(0.4)
+
+		local grade = runRound(ui, playlist[turn], turn, turns, ("JUGADOR %d"):format(turn))
+		table.insert(results, { name = ("Jugador %d"):format(turn), score = grade.total })
+	end
+
+	table.sort(results, function(a, b)
+		return a.score > b.score
+	end)
+	ui:setPhase("results")
+	ui:showResults(results)
+	AudioEngine.applause()
+	task.wait(Config.PHASE.RESULTS)
+	return results[1] and results[1].score or 0
+end
+
+local RUNNERS = {
+	survival = survival,
+	justplay = justPlay,
+	daily = daily,
+	passthemic = passTheMic,
+}
+
+function SoloRunner.isRunning()
+	return running
+end
+
+-- Returns immediately; the mode plays out in its own coroutine.
+function SoloRunner.start(modeId, ui, onFinish)
+	if running then
+		return false
+	end
+	local runner = RUNNERS[modeId]
+	if not runner then
+		return false
+	end
+	running = true
+
+	task.spawn(function()
+		local ok, err = pcall(runner, ui)
+		if not ok then
+			warn("[SoloRunner] " .. tostring(err))
+			ui:showToast("Se cortó el modo solo. Volvés al lobby.", "bad")
+		end
+		running = false
+		ui.stage:setVisible(false)
+		ui.stage:hideCard()
+		ui.roulette:hide()
+		ui:setPhase("lobby")
+		CameraDirector.setShot("CamHouse", 2.0)
+		if onFinish then
+			onFinish()
+		end
+	end)
+
+	return true
+end
+
+return SoloRunner
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="Folder" referent="28">
+          <Properties>
+            <string name="Name">UI</string>
+          </Properties>
+          <Item class="ModuleScript" referent="29">
+            <Properties>
+              <string name="Name">Menu</string>
+              <string name="Source"><![CDATA[--!nonstrict
+-- Menu.luau — the lobby. Modes, roster, and the one-screen explanation.
+--
+-- It lives inside the venue (the house camera is behind it), so it is a panel
+-- over a room rather than a title screen in a void.
+
+local Theme = require(script.Parent.Theme)
+local Palette = require(game.ReplicatedStorage.Shared.Palette)
+local Modes = require(game.ReplicatedStorage.Shared.Modes)
+local Characters = require(game.ReplicatedStorage.Shared.Characters)
+local SoundLibrary = require(game.ReplicatedStorage.Shared.SoundLibrary)
+
+local Menu = {}
+Menu.__index = Menu
+
+function Menu.new(parent, callbacks)
+	local self = setmetatable({}, Menu)
+	self.callbacks = callbacks or {}
+	self.selectedMode = "party"
+
+	self.root = Instance.new("Frame")
+	self.root.BackgroundTransparency = 1
+	self.root.Size = UDim2.fromScale(1, 1)
+	self.root.Visible = true
+	self.root.Parent = parent
+
+	-- Masthead.
+	local head = Instance.new("Frame")
+	head.BackgroundTransparency = 1
+	head.Position = UDim2.new(0, 34, 0, 28)
+	head.Size = UDim2.fromOffset(520, 76)
+	head.Parent = self.root
+
+	Theme.label(head, "MIMIC", {
+		Size = UDim2.new(1, 0, 0, 44), TextSize = 42, FontFace = Theme.Font.Display,
+	})
+	Theme.label(head, "PARTY", {
+		Position = UDim2.new(0, 124, 0, 0), Size = UDim2.new(1, 0, 0, 44),
+		TextSize = 42, FontFace = Theme.Font.Display, TextColor3 = Palette.Reference,
+	})
+	Theme.caption(head, "Suena. Lo imitás. Una sola toma.", {
+		Position = UDim2.new(0, 2, 0, 46), Size = UDim2.new(1, 0, 0, 18), TextSize = 14,
+	})
+
+	-- ── modes column ──
+	local modesPanel = Theme.panel(self.root, {
+		Position = UDim2.new(0, 34, 0, 118),
+		Size = UDim2.fromOffset(340, 356),
+	})
+	Theme.pad(modesPanel, 16)
+	Theme.caption(modesPanel, "MODOS", { Size = UDim2.new(1, 0, 0, 14), TextSize = 11 })
+
+	local modeList = Instance.new("Frame")
+	modeList.BackgroundTransparency = 1
+	modeList.Position = UDim2.new(0, 0, 0, 22)
+	modeList.Size = UDim2.new(1, 0, 1, -22)
+	modeList.Parent = modesPanel
+	Theme.list(modeList, 7)
+
+	self.modeButtons = {}
+	for _, mode in ipairs(Modes) do
+		local b = Theme.button(modeList, "", function()
+			self:selectMode(mode.id)
+		end, { Size = UDim2.new(1, 0, 0, 56), Text = "" })
+
+		Theme.label(b, mode.name, {
+			Position = UDim2.new(0, 12, 0, 8), Size = UDim2.new(1, -24, 0, 18),
+			TextSize = 15, FontFace = Theme.Font.Medium,
+		})
+		Theme.caption(b, mode.players, {
+			Position = UDim2.new(0, 12, 0, 26), Size = UDim2.new(1, -24, 0, 14),
+			TextSize = 11, TextColor3 = Palette.Reference,
+		})
+		Theme.caption(b, mode.blurb, {
+			Position = UDim2.new(0, 12, 0, 38), Size = UDim2.new(1, -24, 0, 14),
+			TextSize = 11, TextTruncate = Enum.TextTruncate.AtEnd,
+		})
+
+		self.modeButtons[mode.id] = b
+	end
+
+	-- ── roster ──
+	local rosterPanel = Theme.panel(self.root, {
+		Position = UDim2.new(0, 390, 0, 118),
+		Size = UDim2.fromOffset(372, 356),
+	})
+	Theme.pad(rosterPanel, 16)
+	Theme.caption(rosterPanel, "PERSONAJE", { Size = UDim2.new(1, 0, 0, 14), TextSize = 11 })
+
+	local grid = Instance.new("Frame")
+	grid.BackgroundTransparency = 1
+	grid.Position = UDim2.new(0, 0, 0, 22)
+	grid.Size = UDim2.new(1, 0, 1, -22)
+	grid.Parent = rosterPanel
+
+	local layout = Instance.new("UIGridLayout")
+	layout.CellSize = UDim2.fromOffset(164, 74)
+	layout.CellPadding = UDim2.fromOffset(8, 8)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = grid
+
+	self.characterButtons = {}
+	for _, character in ipairs(Characters.all()) do
+		local b = Theme.button(grid, "", function()
+			if self.callbacks.onCharacter then
+				self.callbacks.onCharacter(character.id)
+			end
+		end, { Size = UDim2.fromOffset(164, 74), Text = "" })
+
+		local swatch = Instance.new("Frame")
+		swatch.BackgroundColor3 = character.accent
+		swatch.BorderSizePixel = 0
+		swatch.Position = UDim2.new(0, 10, 0, 10)
+		swatch.Size = UDim2.fromOffset(6, 54)
+		swatch.Parent = b
+		Theme.corner(swatch, UDim.new(1, 0))
+
+		Theme.label(b, character.name, {
+			Position = UDim2.new(0, 24, 0, 12), Size = UDim2.new(1, -34, 0, 18),
+			TextSize = 15, FontFace = Theme.Font.Medium,
+		})
+		Theme.caption(b, character.tag, {
+			Position = UDim2.new(0, 24, 0, 32), Size = UDim2.new(1, -34, 0, 28),
+			TextSize = 11, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top,
+		})
+
+		self.characterButtons[character.id] = b
+	end
+
+	-- ── how it works ──
+	local howPanel = Theme.panel(self.root, {
+		Position = UDim2.new(0, 778, 0, 118),
+		Size = UDim2.fromOffset(330, 356),
+	})
+	Theme.pad(howPanel, 16)
+	Theme.caption(howPanel, "CÓMO SE JUEGA", { Size = UDim2.new(1, 0, 0, 14), TextSize = 11 })
+
+	local steps = {
+		{ "1", "Suena el sonido de referencia para toda la mesa." },
+		{ "2", "Mantené apretado para vocalizar. Movés el mouse arriba y abajo para el tono." },
+		{ "3", "Todos graban a la vez, con la misma cuenta atrás. Una sola toma, sin repetir." },
+		{ "4", "Las tomas se escuchan una por una. Se puntúa melodía, ritmo y ataques — nunca tu timbre." },
+		{ "5", "La ruleta reparte puntos, multiplicadores y sabotajes. Si te toca uno, elegís víctima." },
+	}
+
+	local stepList = Instance.new("Frame")
+	stepList.BackgroundTransparency = 1
+	stepList.Position = UDim2.new(0, 0, 0, 24)
+	stepList.Size = UDim2.new(1, 0, 1, -82)
+	stepList.Parent = howPanel
+	Theme.list(stepList, 10)
+
+	for _, step in ipairs(steps) do
+		local row = Instance.new("Frame")
+		row.BackgroundTransparency = 1
+		row.Size = UDim2.new(1, 0, 0, 46)
+		row.Parent = stepList
+
+		Theme.label(row, step[1], {
+			Size = UDim2.fromOffset(20, 20), TextSize = 15,
+			FontFace = Theme.Font.Display, TextColor3 = Palette.Reference,
+		})
+		Theme.caption(row, step[2], {
+			Position = UDim2.new(0, 24, 0, 0), Size = UDim2.new(1, -24, 1, 0),
+			TextSize = 12, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top,
+		})
+	end
+
+	local packCount = #SoundLibrary.packs()
+	local soundCount = #SoundLibrary.all()
+	Theme.caption(howPanel, ("%d sonidos · %d paquetes"):format(soundCount, packCount), {
+		Position = UDim2.new(0, 0, 1, -52), Size = UDim2.new(1, 0, 0, 14), TextSize = 11,
+	})
+
+	self.status = Theme.label(howPanel, "", {
+		Position = UDim2.new(0, 0, 1, -34),
+		Size = UDim2.new(1, 0, 0, 30),
+		TextSize = 13,
+		FontFace = Theme.Font.Medium,
+		TextWrapped = true,
+		TextColor3 = Palette.Reference,
+	})
+
+	self:selectMode("party")
+	return self
+end
+
+function Menu:selectMode(id)
+	self.selectedMode = id
+	for modeId, button in pairs(self.modeButtons) do
+		local on = (modeId == id)
+		button.BackgroundColor3 = on and Palette.PanelRaised:Lerp(Palette.Reference, 0.12) or Palette.PanelRaised
+	end
+	if self.callbacks.onMode then
+		self.callbacks.onMode(id)
+	end
+end
+
+function Menu:setCharacter(id)
+	for characterId, button in pairs(self.characterButtons) do
+		local on = (characterId == id)
+		button.BackgroundColor3 = on and Palette.PanelRaised:Lerp(Palette.Yours, 0.16) or Palette.PanelRaised
+	end
+end
+
+function Menu:setStatus(text)
+	self.status.Text = text or ""
+end
+
+function Menu:setVisible(visible)
+	self.root.Visible = visible
+end
+
+return Menu
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="30">
+            <Properties>
+              <string name="Name">Root</string>
+              <string name="Source"><![CDATA[--!nonstrict
+-- Root.luau — the screen. Owns the ScreenGui and every panel on it, and is the
+-- only thing init.client talks to about pixels.
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+
+local Theme = require(script.Parent.Theme)
+local Menu = require(script.Parent.Menu)
+local StagePanel = require(script.Parent.StagePanel)
+local Scoreboard = require(script.Parent.Scoreboard)
+local RouletteUI = require(script.Parent.RouletteUI)
+local Palette = require(game.ReplicatedStorage.Shared.Palette)
+
+local Root = {}
+Root.__index = Root
+
+local PHASE_TEXT = {
+	lobby = "ESPERANDO A LA SALA",
+	procession = "AL ESCENARIO",
+	round_intro = "PREPARATE",
+	reference = "ESCUCHÁ",
+	record = "GRABANDO",
+	playback = "ESCUCHANDO LAS TOMAS",
+	roulette = "LA RULETA",
+	sabotage_pick = "ELEGÍ VÍCTIMA",
+	results = "RESULTADOS",
+}
+
+function Root.new(callbacks)
+	local self = setmetatable({}, Root)
+	self.callbacks = callbacks or {}
+
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "MimicParty"
+	gui.ResetOnSpawn = false
+	gui.IgnoreGuiInset = true
+	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+	self.gui = gui
+
+	-- A gentle vignette. It is the only full-screen effect, and it never moves.
+	local vignette = Instance.new("Frame")
+	vignette.BackgroundTransparency = 1
+	vignette.Size = UDim2.fromScale(1, 1)
+	vignette.ZIndex = 0
+	vignette.Parent = gui
+	local topShade = Instance.new("Frame")
+	topShade.BackgroundColor3 = Palette.Ink
+	topShade.BorderSizePixel = 0
+	topShade.Size = UDim2.new(1, 0, 0, 150)
+	topShade.Parent = vignette
+	local g1 = Instance.new("UIGradient")
+	g1.Rotation = 90
+	g1.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.45),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	g1.Parent = topShade
+
+	-- ── phase banner ──
+	self.banner = Theme.panel(gui, {
+		AnchorPoint = Vector2.new(0, 0),
+		Position = UDim2.new(0, 22, 0, 22),
+		Size = UDim2.fromOffset(250, 60),
+		BackgroundTransparency = 0.12,
+		Visible = false,
+		ZIndex = 4,
+	})
+	Theme.pad(self.banner, 12)
+	self.bannerPhase = Theme.label(self.banner, "", {
+		Size = UDim2.new(1, 0, 0, 18), TextSize = 13, FontFace = Theme.Font.Medium,
+		TextColor3 = Palette.Reference,
+	})
+	self.bannerClock = Theme.label(self.banner, "", {
+		Position = UDim2.new(0, 0, 0, 18), Size = UDim2.new(1, 0, 0, 22),
+		TextSize = 19, FontFace = Theme.Font.Mono,
+	})
+
+	-- ── mic / voice indicator ──
+	self.voiceTag = Theme.panel(gui, {
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 22),
+		Size = UDim2.fromOffset(238, 34),
+		BackgroundTransparency = 0.06,
+		Visible = false,
+		ZIndex = 5,
+	})
+	Theme.label(self.voiceTag, "MESA SILENCIADA", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(1, 1),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextSize = 12,
+		FontFace = Theme.Font.Medium,
+		TextColor3 = Palette.Warn,
+	})
+
+	-- ── toast ──
+	self.toast = Theme.panel(gui, {
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, 40),
+		Size = UDim2.fromOffset(520, 44),
+		BackgroundTransparency = 0.02,
+		ZIndex = 9,
+	})
+	self.toastLabel = Theme.label(self.toast, "", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.92, 1),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextSize = 14,
+		FontFace = Theme.Font.Medium,
+	})
+
+	-- ── panels ──
+	self.menu = Menu.new(gui, {
+		onMode = function(id)
+			if self.callbacks.onMode then
+				self.callbacks.onMode(id)
+			end
+		end,
+		onCharacter = function(id)
+			if self.callbacks.onCharacter then
+				self.callbacks.onCharacter(id)
+			end
+		end,
+	})
+	self.stage = StagePanel.new(gui)
+	self.scoreboard = Scoreboard.new(gui)
+	self.roulette = RouletteUI.new(gui)
+	self.roulette.root.ZIndex = 6
+
+	-- ── results ──
+	self.results = Theme.panel(gui, {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.46),
+		Size = UDim2.fromOffset(460, 330),
+		BackgroundTransparency = 0.02,
+		Visible = false,
+		ZIndex = 7,
+	})
+	Theme.pad(self.results, 20)
+	Theme.title(self.results, "FIN DE LA FIESTA", { Size = UDim2.new(1, 0, 0, 30), TextSize = 23 })
+	self.resultsList = Instance.new("Frame")
+	self.resultsList.BackgroundTransparency = 1
+	self.resultsList.Position = UDim2.new(0, 0, 0, 44)
+	self.resultsList.Size = UDim2.new(1, 0, 1, -44)
+	self.resultsList.Parent = self.results
+	Theme.list(self.resultsList, 8)
+
+	return self
+end
+
+function Root:setPhase(phase)
+	local inMenu = (phase == "lobby" or phase == "boot")
+	self.menu:setVisible(inMenu)
+	self.stage:setVisible(not inMenu and phase ~= "results")
+	self.banner.Visible = not inMenu
+	self.bannerPhase.Text = PHASE_TEXT[phase] or ""
+
+	if phase ~= "roulette" and phase ~= "sabotage_pick" then
+		self.roulette:hide()
+	end
+	if phase ~= "playback" then
+		self.stage:hideCard()
+	end
+	self.results.Visible = (phase == "results")
+end
+
+function Root:setClock(secondsLeft)
+	if not secondsLeft or secondsLeft <= 0 then
+		self.bannerClock.Text = "—"
+		return
+	end
+	self.bannerClock.Text = ("%0.1f s"):format(secondsLeft)
+end
+
+function Root:setVoiceGated(gated)
+	self.voiceTag.Visible = gated == true
+end
+
+function Root:showToast(text, tone)
+	local color = Palette.Cream
+	if tone == "good" then color = Palette.Good end
+	if tone == "warn" then color = Palette.Warn end
+	if tone == "bad" then color = Palette.Bad end
+
+	self.toastLabel.Text = text
+	self.toastLabel.TextColor3 = color
+
+	TweenService:Create(self.toast, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+		Position = UDim2.new(0.5, 0, 1, -24),
+	}):Play()
+
+	self._toastToken = (self._toastToken or 0) + 1
+	local token = self._toastToken
+	task.delay(4, function()
+		if self._toastToken ~= token then
+			return
+		end
+		TweenService:Create(self.toast, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+			Position = UDim2.new(0.5, 0, 1, 40),
+		}):Play()
+	end)
+end
+
+function Root:showResults(scores)
+	for _, child in ipairs(self.resultsList:GetChildren()) do
+		if child:IsA("GuiObject") then
+			child:Destroy()
+		end
+	end
+	for i, entry in ipairs(scores or {}) do
+		local row = Theme.panel(self.resultsList, {
+			Size = UDim2.new(1, 0, 0, 46),
+			BackgroundTransparency = i == 1 and 0.0 or 0.4,
+		})
+		Theme.pad(row, 10)
+		Theme.label(row, ("%d"):format(i), {
+			Size = UDim2.fromOffset(26, 24), TextSize = 17, FontFace = Theme.Font.Display,
+			TextColor3 = i == 1 and Palette.Reference or Palette.Muted,
+		})
+		Theme.label(row, entry.name, {
+			Position = UDim2.new(0, 32, 0, 0), Size = UDim2.new(1, -118, 0, 24),
+			TextSize = 15, FontFace = Theme.Font.Medium,
+		})
+		Theme.label(row, tostring(entry.score), {
+			Position = UDim2.new(1, -86, 0, 0), Size = UDim2.fromOffset(80, 24),
+			TextXAlignment = Enum.TextXAlignment.Right, FontFace = Theme.Font.Mono, TextSize = 16,
+		})
+	end
+end
+
+return Root
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="31">
+            <Properties>
+              <string name="Name">RouletteUI</string>
+              <string name="Source"><![CDATA[--!nonstrict
+-- RouletteUI.luau — the wheel. One spin, the whole table at once.
+--
+-- Built as a ring of segment chips rather than a rendered disc: it stays
+-- readable at any resolution, it tells you the odds by showing every outcome,
+-- and the deceleration curve is the only animation in the game that is allowed
+-- to be showy.
+
+local TweenService = game:GetService("TweenService")
+
+local Theme = require(script.Parent.Theme)
+local Palette = require(game.ReplicatedStorage.Shared.Palette)
+local Roulette = require(game.ReplicatedStorage.Shared.Roulette)
+local Sabotages = require(game.ReplicatedStorage.Shared.Sabotages)
+
+local RouletteUI = {}
+RouletteUI.__index = RouletteUI
+
+local function colorFor(kind)
+	if kind == "points" then return Palette.Reference end
+	if kind == "multiplier" then return Palette.Yours end
+	if kind == "sabotage" then return Palette.Bad end
+	return Palette.Muted
+end
+
+function RouletteUI.new(parent)
+	local self = setmetatable({}, RouletteUI)
+
+	self.root = Instance.new("Frame")
+	self.root.BackgroundTransparency = 1
+	self.root.AnchorPoint = Vector2.new(0.5, 0.5)
+	self.root.Position = UDim2.fromScale(0.5, 0.46)
+	self.root.Size = UDim2.fromOffset(620, 420)
+	self.root.Visible = false
+	self.root.Parent = parent
+
+	local panel = Theme.panel(self.root, { BackgroundTransparency = 0.04 })
+	Theme.pad(panel, 20)
+	self.panel = panel
+
+	Theme.title(panel, "LA RULETA", { Size = UDim2.new(1, 0, 0, 30), TextSize = 22 })
+	Theme.caption(panel, "Gira una vez para toda la mesa.", {
+		Position = UDim2.new(0, 0, 0, 30), Size = UDim2.new(1, 0, 0, 16),
+	})
+
+	-- The ring.
+	self.ring = Instance.new("Frame")
+	self.ring.BackgroundTransparency = 1
+	self.ring.AnchorPoint = Vector2.new(0.5, 0)
+	self.ring.Position = UDim2.new(0.5, 0, 0, 56)
+	self.ring.Size = UDim2.fromOffset(260, 260)
+	self.ring.Parent = panel
+
+	self.segments = {}
+	local defs = Roulette.segments()
+	for i, seg in ipairs(defs) do
+		local angle = (i - 1) / #defs * math.pi * 2
+		local chip = Instance.new("TextLabel")
+		chip.AnchorPoint = Vector2.new(0.5, 0.5)
+		chip.Position = UDim2.fromScale(0.5 + math.sin(angle) * 0.42, 0.5 - math.cos(angle) * 0.42)
+		chip.Size = UDim2.fromOffset(92, 26)
+		chip.BackgroundColor3 = Palette.PanelRaised
+		chip.BackgroundTransparency = 0.3
+		chip.BorderSizePixel = 0
+		chip.Text = seg.label
+		chip.TextColor3 = colorFor(seg.kind)
+		chip.TextSize = 12
+		chip.FontFace = Theme.Font.Medium
+		chip.Parent = self.ring
+		Theme.corner(chip, UDim.new(0, 6))
+		self.segments[i] = chip
+	end
+
+	-- Hub and needle.
+	local hub = Instance.new("Frame")
+	hub.AnchorPoint = Vector2.new(0.5, 0.5)
+	hub.Position = UDim2.fromScale(0.5, 0.5)
+	hub.Size = UDim2.fromOffset(104, 104)
+	hub.BackgroundColor3 = Palette.Ink
+	hub.BorderSizePixel = 0
+	hub.Parent = self.ring
+	Theme.corner(hub, UDim.new(1, 0))
+	Theme.stroke(hub, Palette.TrimDark, 2, 0.1)
+
+	self.needle = Instance.new("Frame")
+	self.needle.AnchorPoint = Vector2.new(0.5, 1)
+	self.needle.Position = UDim2.fromScale(0.5, 0.5)
+	self.needle.Size = UDim2.fromOffset(3, 104)
+	self.needle.BackgroundColor3 = Palette.Trim
+	self.needle.BorderSizePixel = 0
+	self.needle.Parent = self.ring
+	Theme.corner(self.needle, UDim.new(1, 0))
+
+	self.result = Theme.label(hub, "", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.9, 0.5),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextScaled = true,
+		FontFace = Theme.Font.Display,
+	})
+
+	-- Per-player outcome strip.
+	self.outcomes = Instance.new("Frame")
+	self.outcomes.BackgroundTransparency = 1
+	self.outcomes.Position = UDim2.new(0, 0, 0, 326)
+	self.outcomes.Size = UDim2.new(1, 0, 0, 54)
+	self.outcomes.Parent = panel
+	Theme.list(self.outcomes, 6, Enum.FillDirection.Horizontal)
+
+	return self
+end
+
+-- `results` is the server's list; `localUserId` decides which card is yours.
+function RouletteUI:spin(results, seconds, localUserId)
+	self.root.Visible = true
+	self.result.Text = ""
+
+	for _, child in ipairs(self.outcomes:GetChildren()) do
+		if child:IsA("GuiObject") then
+			child:Destroy()
+		end
+	end
+
+	local mine
+	for _, r in ipairs(results) do
+		if r.userId == localUserId then
+			mine = r
+		end
+	end
+
+	local count = #Roulette.segments()
+	local landing = mine and mine.segmentIndex or 1
+	-- Five full turns plus the landing offset, decelerating into place.
+	local degrees = 360 * 5 + (landing - 1) / count * 360
+
+	self.needle.Rotation = 0
+	local tween = TweenService:Create(self.needle, TweenInfo.new(
+		seconds * 0.82, Enum.EasingStyle.Quint, Enum.EasingDirection.Out
+	), { Rotation = degrees })
+	tween:Play()
+
+	task.delay(seconds * 0.84, function()
+		if not self.root.Visible then
+			return
+		end
+		for i, chip in ipairs(self.segments) do
+			chip.BackgroundTransparency = (i == landing) and 0 or 0.55
+			chip.TextTransparency = (i == landing) and 0 or 0.35
+		end
+		if mine then
+			self.result.Text = mine.label
+			self.result.TextColor3 = colorFor(mine.kind)
+		end
+
+		for _, r in ipairs(results) do
+			local card = Theme.panel(self.outcomes, {
+				Size = UDim2.new(0, 112, 1, 0),
+				BackgroundTransparency = 0.3,
+			})
+			Theme.pad(card, 8)
+			Theme.caption(card, r.name, { Size = UDim2.new(1, 0, 0, 14), TextSize = 11,
+				TextTruncate = Enum.TextTruncate.AtEnd })
+			Theme.label(card, r.label, {
+				Position = UDim2.new(0, 0, 0, 16),
+				Size = UDim2.new(1, 0, 0, 18),
+				TextSize = 14,
+				FontFace = Theme.Font.Display,
+				TextColor3 = colorFor(r.kind),
+			})
+		end
+	end)
+end
+
+-- The aiming window: only shown to a player who actually won a sabotage.
+function RouletteUI:showTargetPicker(sabotageId, candidates, onPick)
+	local def = Sabotages.get(sabotageId)
+	self.picker = Theme.panel(self.root, {
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -10),
+		Size = UDim2.fromOffset(560, 118),
+		BackgroundTransparency = 0.02,
+	})
+	Theme.pad(self.picker, 14)
+
+	Theme.title(self.picker, ("ELEGÍ A QUIÉN · %s"):format(def and def.name:upper() or "SABOTAJE"), {
+		Size = UDim2.new(1, 0, 0, 22), TextSize = 17, TextColor3 = Palette.Bad,
+	})
+	Theme.caption(self.picker, def and def.blurb or "", {
+		Position = UDim2.new(0, 0, 0, 24), Size = UDim2.new(1, 0, 0, 14),
+	})
+
+	local row = Instance.new("Frame")
+	row.BackgroundTransparency = 1
+	row.Position = UDim2.new(0, 0, 0, 44)
+	row.Size = UDim2.new(1, 0, 0, 44)
+	row.Parent = self.picker
+	Theme.list(row, 8, Enum.FillDirection.Horizontal)
+
+	for _, candidate in ipairs(candidates) do
+		Theme.button(row, candidate.name, function()
+			if onPick then
+				onPick(candidate.userId)
+			end
+			self:hideTargetPicker()
+		end, { Size = UDim2.new(0, 128, 1, 0), TextSize = 14 })
+	end
+end
+
+function RouletteUI:hideTargetPicker()
+	if self.picker then
+		self.picker:Destroy()
+		self.picker = nil
+	end
+end
+
+function RouletteUI:hide()
+	self.root.Visible = false
+	self:hideTargetPicker()
+	for _, chip in ipairs(self.segments) do
+		chip.BackgroundTransparency = 0.3
+		chip.TextTransparency = 0
+	end
+end
+
+return RouletteUI
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="32">
+            <Properties>
+              <string name="Name">Scoreboard</string>
+              <string name="Source"><![CDATA[--!nonstrict
+-- Scoreboard.luau — standings, always on screen, never in the way.
+-- Rows reorder with a tween so overtakes are visible rather than instant.
+
+local Theme = require(script.Parent.Theme)
+local Palette = require(game.ReplicatedStorage.Shared.Palette)
+local Characters = require(game.ReplicatedStorage.Shared.Characters)
+
+local Scoreboard = {}
+Scoreboard.__index = Scoreboard
+
+local ROW_H = 38
+
+function Scoreboard.new(parent)
+	local self = setmetatable({}, Scoreboard)
+
+	self.root = Theme.panel(parent, {
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -22, 0, 22),
+		Size = UDim2.fromOffset(268, 60),
+		BackgroundTransparency = 0.12,
+	})
+	Theme.pad(self.root, 12)
+
+	Theme.caption(self.root, "EN ESCENA", { Size = UDim2.new(1, 0, 0, 14), TextSize = 11 })
+
+	self.list = Instance.new("Frame")
+	self.list.BackgroundTransparency = 1
+	self.list.Position = UDim2.new(0, 0, 0, 22)
+	self.list.Size = UDim2.new(1, 0, 1, -22)
+	self.list.Parent = self.root
+
+	self.rows = {}
+	return self
+end
+
+local function buildRow(parent)
+	local row = Instance.new("Frame")
+	row.BackgroundColor3 = Palette.PanelRaised
+	row.BackgroundTransparency = 0.45
+	row.BorderSizePixel = 0
+	row.Size = UDim2.new(1, 0, 0, ROW_H - 6)
+	row.Parent = parent
+	Theme.corner(row, UDim.new(0, 7))
+
+	local chip = Instance.new("Frame")
+	chip.BackgroundColor3 = Palette.Muted
+	chip.BorderSizePixel = 0
+	chip.Position = UDim2.new(0, 8, 0.5, -9)
+	chip.Size = UDim2.fromOffset(4, 18)
+	chip.Parent = row
+	Theme.corner(chip, UDim.new(1, 0))
+
+	local name = Theme.label(row, "", {
+		Position = UDim2.new(0, 20, 0, 0),
+		Size = UDim2.new(1, -96, 1, 0),
+		TextSize = 14,
+		FontFace = Theme.Font.Medium,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	})
+
+	local score = Theme.label(row, "0", {
+		Position = UDim2.new(1, -78, 0, 0),
+		Size = UDim2.fromOffset(70, ROW_H - 6),
+		TextXAlignment = Enum.TextXAlignment.Right,
+		FontFace = Theme.Font.Mono,
+		TextSize = 15,
+	})
+
+	return { frame = row, chip = chip, name = name, score = score }
+end
+
+function Scoreboard:update(scores)
+	scores = scores or {}
+
+	for i, entry in ipairs(scores) do
+		local row = self.rows[i]
+		if not row then
+			row = buildRow(self.list)
+			self.rows[i] = row
+		end
+
+		local character = Characters.get(entry.characterId)
+		row.chip.BackgroundColor3 = character and character.accent or Palette.Muted
+
+		local mult = (entry.multiplier and entry.multiplier > 1)
+			and (" <font color='#D6A056'>×%s</font>"):format(entry.multiplier)
+			or ""
+		row.name.Text = entry.name .. mult
+		row.score.Text = tostring(entry.score)
+		row.frame.Visible = true
+		row.frame:TweenPosition(UDim2.new(0, 0, 0, (i - 1) * ROW_H), Enum.EasingDirection.Out,
+			Enum.EasingStyle.Quart, 0.4, true)
+	end
+
+	for i = #scores + 1, #self.rows do
+		self.rows[i].frame.Visible = false
+	end
+
+	self.root.Size = UDim2.fromOffset(268, 34 + math.max(#scores, 1) * ROW_H + 12)
+end
+
+return Scoreboard
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="33">
+            <Properties>
+              <string name="Name">StagePanel</string>
+              <string name="Source"><![CDATA[--!nonstrict
+-- StagePanel.luau — the performance HUD: the two waveforms and everything
+-- attached to them. This is the panel the original is recognisable by, so the
+-- layout is deliberate: reference on top in yellow, the pitch ribbon in the
+-- middle, your voice underneath in green, and a count-in that covers nothing.
+
+local Theme = require(script.Parent.Theme)
+local Waveform = require(script.Parent.Waveform)
+local Palette = require(game.ReplicatedStorage.Shared.Palette)
+local Scoring = require(game.ReplicatedStorage.Shared.Scoring)
+local Sabotages = require(game.ReplicatedStorage.Shared.Sabotages)
+local SoundLibrary = require(game.ReplicatedStorage.Shared.SoundLibrary)
+
+local StagePanel = {}
+StagePanel.__index = StagePanel
+
+function StagePanel.new(parent)
+	local self = setmetatable({}, StagePanel)
+
+	self.root = Instance.new("Frame")
+	self.root.BackgroundTransparency = 1
+	self.root.AnchorPoint = Vector2.new(0.5, 1)
+	self.root.Position = UDim2.new(0.5, 0, 1, -24)
+	self.root.Size = UDim2.fromOffset(900, 268)
+	self.root.Visible = false
+	self.root.Parent = parent
+
+	local panel = Theme.panel(self.root, { BackgroundTransparency = 0.08 })
+	Theme.pad(panel, 18)
+	self.panel = panel
+
+	-- Header: what you are imitating, and which pack it came from.
+	self.soundName = Theme.title(panel, "", { Size = UDim2.new(1, -200, 0, 26), TextSize = 21 })
+	self.packName = Theme.caption(panel, "", {
+		Position = UDim2.new(0, 0, 0, 26), Size = UDim2.new(1, -200, 0, 14), TextSize = 11,
+	})
+	self.roundTag = Theme.label(panel, "", {
+		Position = UDim2.new(1, -200, 0, 0), Size = UDim2.fromOffset(200, 26),
+		TextXAlignment = Enum.TextXAlignment.Right, FontFace = Theme.Font.Mono,
+		TextSize = 14, TextColor3 = Palette.Muted,
+	})
+
+	-- ── reference track (yellow) ──
+	local refLabel = Theme.caption(panel, "REFERENCIA", {
+		Position = UDim2.new(0, 0, 0, 50), Size = UDim2.fromOffset(100, 12),
+		TextSize = 10, TextColor3 = Palette.Reference,
+	})
+	self.refLabel = refLabel
+
+	local refBox = Instance.new("Frame")
+	refBox.BackgroundColor3 = Palette.Ink
+	refBox.BackgroundTransparency = 0.4
+	refBox.BorderSizePixel = 0
+	refBox.Position = UDim2.new(0, 0, 0, 66)
+	refBox.Size = UDim2.new(1, 0, 0, 56)
+	refBox.Parent = panel
+	Theme.corner(refBox, UDim.new(0, 8))
+	self.reference = Waveform.new(refBox, Palette.Reference, false)
+
+	-- ── pitch ribbon ──
+	local ribbonBox = Instance.new("Frame")
+	ribbonBox.BackgroundTransparency = 1
+	ribbonBox.Position = UDim2.new(0, 0, 0, 124)
+	ribbonBox.Size = UDim2.new(1, 0, 0, 44)
+	ribbonBox.Parent = panel
+	self.ribbon = Waveform.Ribbon.new(ribbonBox)
+
+	-- ── your track (green) ──
+	local yourBox = Instance.new("Frame")
+	yourBox.BackgroundColor3 = Palette.Ink
+	yourBox.BackgroundTransparency = 0.4
+	yourBox.BorderSizePixel = 0
+	yourBox.Position = UDim2.new(0, 0, 0, 170)
+	yourBox.Size = UDim2.new(1, 0, 0, 56)
+	yourBox.Parent = panel
+	Theme.corner(yourBox, UDim.new(0, 8))
+	self.yours = Waveform.new(yourBox, Palette.Yours, true)
+
+	self.yourLabel = Theme.caption(panel, "TU VOZ", {
+		Position = UDim2.new(0, 0, 0, 228), Size = UDim2.fromOffset(100, 12),
+		TextSize = 10, TextColor3 = Palette.Yours,
+	})
+
+	self.hint = Theme.caption(panel, "", {
+		Position = UDim2.new(0, 108, 0, 228), Size = UDim2.new(1, -108, 0, 12),
+		TextSize = 11, TextXAlignment = Enum.TextXAlignment.Right,
+	})
+
+	-- ── count-in overlay ──
+	self.countIn = Theme.label(panel, "", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.52),
+		Size = UDim2.fromOffset(240, 120),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextSize = 86,
+		FontFace = Theme.Font.Display,
+		Visible = false,
+	})
+
+	-- ── playback card ──
+	self.card = Theme.panel(parent, {
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 96),
+		Size = UDim2.fromOffset(452, 232),
+		BackgroundTransparency = 0.02,
+		Visible = false,
+	})
+	Theme.pad(self.card, 16)
+
+	self.cardWho = Theme.title(self.card, "", { Size = UDim2.new(1, -110, 0, 26), TextSize = 20 })
+	self.cardVerdict = Theme.label(self.card, "", {
+		Position = UDim2.new(1, -110, 0, 0), Size = UDim2.fromOffset(110, 26),
+		TextXAlignment = Enum.TextXAlignment.Right, FontFace = Theme.Font.Display, TextSize = 15,
+	})
+	self.cardSabotage = Theme.caption(self.card, "", {
+		Position = UDim2.new(0, 0, 0, 26), Size = UDim2.new(1, 0, 0, 16),
+		TextSize = 12, TextColor3 = Palette.Bad,
+	})
+
+	local meters = Instance.new("Frame")
+	meters.BackgroundTransparency = 1
+	meters.Position = UDim2.new(0, 0, 0, 50)
+	meters.Size = UDim2.new(1, 0, 0, 96)
+	meters.Parent = self.card
+	Theme.list(meters, 2)
+
+	self.meterMelody = Theme.meter(meters, "Melodía", Palette.Reference)
+	self.meterRhythm = Theme.meter(meters, "Ritmo", Palette.Yours)
+	self.meterAttacks = Theme.meter(meters, "Ataques", Palette.Warn)
+
+	local rule = Instance.new("Frame")
+	rule.BackgroundColor3 = Palette.Hairline
+	rule.BackgroundTransparency = 0.4
+	rule.BorderSizePixel = 0
+	rule.Position = UDim2.new(0, 0, 0, 152)
+	rule.Size = UDim2.new(1, 0, 0, 1)
+	rule.Parent = self.card
+
+	Theme.caption(self.card, "TOTAL", {
+		Position = UDim2.new(0, 0, 0, 162), Size = UDim2.fromOffset(80, 36), TextSize = 11,
+	})
+	self.cardTotal = Theme.label(self.card, "0", {
+		Position = UDim2.new(0, 0, 0, 160), Size = UDim2.new(1, 0, 0, 40),
+		TextXAlignment = Enum.TextXAlignment.Right, FontFace = Theme.Font.Display, TextSize = 34,
+	})
+	self.cardAwarded = Theme.caption(self.card, "", {
+		Position = UDim2.new(0, 0, 0, 198), Size = UDim2.new(1, 0, 0, 14),
+		TextXAlignment = Enum.TextXAlignment.Right, TextSize = 11,
+	})
+
+	return self
+end
+
+function StagePanel:setVisible(visible)
+	self.root.Visible = visible
+	if not visible then
+		self.card.Visible = false
+	end
+end
+
+function StagePanel:setSound(sound, round, rounds)
+	self.soundName.Text = sound and sound.name:upper() or ""
+	if sound then
+		local pack
+		for _, p in ipairs(SoundLibrary.packs()) do
+			if p.id == sound.pack then
+				pack = p
+			end
+		end
+		local stars = string.rep("●", sound.difficulty) .. string.rep("○", 3 - sound.difficulty)
+		self.packName.Text = ("%s   %s   %.1fs"):format(pack and pack.name or sound.pack, stars, sound.duration)
+		self.reference:setEnvelope(SoundLibrary.envelope(sound.notes, sound.duration))
+		self.ribbon:setReference(sound.notes, sound.duration)
+	else
+		self.packName.Text = ""
+		self.reference:clear()
+	end
+	self.roundTag.Text = (round and rounds) and ("RONDA %d / %d"):format(round, rounds) or ""
+	self.yours:clear()
+	self.ribbon:setCursor(0, 0, false)
+end
+
+function StagePanel:setHint(text)
+	self.hint.Text = text or ""
+end
+
+function StagePanel:setReferencePlayhead(alpha)
+	self.reference:setPlayhead(alpha)
+end
+
+function StagePanel:showCountIn(n)
+	if n == nil then
+		self.countIn.Visible = false
+		return
+	end
+	self.countIn.Visible = true
+	self.countIn.Text = (n > 0) and tostring(n) or "¡YA!"
+	self.countIn.TextColor3 = (n > 0) and Palette.Cream or Palette.Yours
+	if n == 0 then
+		task.delay(0.55, function()
+			self.countIn.Visible = false
+		end)
+	end
+end
+
+-- Live, per frame, while the take is being recorded.
+function StagePanel:onRecordFrame(alpha, pitch, voiced, index, level)
+	self.yours:setBar(index, level)
+	self.yours:setPlayhead(alpha)
+	self.reference:setPlayhead(alpha)
+	self.ribbon:setCursor(alpha, pitch, voiced)
+end
+
+function StagePanel:showTake(take, duration)
+	self.yours:setEnvelope(SoundLibrary.envelope(take.notes, duration))
+end
+
+function StagePanel:showCard(payload)
+	local grade = payload.grade or { melody = 0, rhythm = 0, attacks = 0, total = 0 }
+
+	self.card.Visible = true
+	self.cardWho.Text = (payload.name or "?"):upper()
+	self.cardVerdict.Text = payload.verdict or Scoring.verdict(grade.total)
+	self.cardVerdict.TextColor3 = grade.total >= 620 and Palette.Good
+		or (grade.total >= 380 and Palette.Warn or Palette.Bad)
+
+	if payload.sabotage then
+		local def = Sabotages.get(payload.sabotage)
+		self.cardSabotage.Text = ("SABOTEADO · %s%s  −%d"):format(
+			def and def.name:upper() or "?",
+			payload.sabotageFrom and (" por " .. payload.sabotageFrom) or "",
+			Sabotages.penalty())
+	else
+		self.cardSabotage.Text = ""
+	end
+
+	self.meterMelody.set(grade.melody)
+	self.meterRhythm.set(grade.rhythm)
+	self.meterAttacks.set(grade.attacks)
+
+	self.cardTotal.Text = tostring(grade.total)
+	local mult = payload.multiplier or 1
+	self.cardAwarded.Text = (mult > 1)
+		and ("×%s  →  +%d al marcador"):format(mult, payload.awarded or grade.total)
+		or ("+%d al marcador"):format(payload.awarded or grade.total)
+end
+
+function StagePanel:hideCard()
+	self.card.Visible = false
+end
+
+return StagePanel
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="34">
+            <Properties>
+              <string name="Name">Theme</string>
+              <string name="Source"><![CDATA[--!nonstrict
+-- Theme.luau — the UI kit. Every pixel in this game is built from these.
+--
+-- House style: dark panels, one hairline, generous padding, two type weights,
+-- and colour used only to carry meaning (yellow = reference, green = you,
+-- red = damage). No gradients that pulse, no glow, no pure white.
+
+local Palette = require(game.ReplicatedStorage.Shared.Palette)
+
+local Theme = {}
+
+Theme.Palette = Palette
+Theme.CORNER = UDim.new(0, 10)
+Theme.PAD = 14
+
+local function font(enum)
+	return Font.fromEnum(enum)
+end
+
+Theme.Font = {
+	Display = font(Enum.Font.GothamBold),
+	Body = font(Enum.Font.Gotham),
+	Medium = font(Enum.Font.GothamMedium),
+	Mono = font(Enum.Font.Code),
+}
+
+function Theme.corner(instance, radius)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = radius or Theme.CORNER
+	c.Parent = instance
+	return c
+end
+
+function Theme.stroke(instance, color, thickness, transparency)
+	local s = Instance.new("UIStroke")
+	s.Color = color or Palette.Hairline
+	s.Thickness = thickness or 1
+	s.Transparency = transparency or 0.25
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	s.Parent = instance
+	return s
+end
+
+function Theme.pad(instance, amount)
+	local p = Instance.new("UIPadding")
+	local v = UDim.new(0, amount or Theme.PAD)
+	p.PaddingTop, p.PaddingBottom, p.PaddingLeft, p.PaddingRight = v, v, v, v
+	p.Parent = instance
+	return p
+end
+
+-- A panel: the base surface everything else sits on.
+function Theme.panel(parent, props)
+	local f = Instance.new("Frame")
+	f.BackgroundColor3 = Palette.Panel
+	f.BackgroundTransparency = 0.06
+	f.BorderSizePixel = 0
+	f.Size = UDim2.fromScale(1, 1)
+	if props then
+		for k, v in pairs(props) do
+			f[k] = v
+		end
+	end
+	f.Parent = parent
+	Theme.corner(f)
+	Theme.stroke(f)
+
+	-- A barely-there vertical gradient so a large panel does not read flat.
+	local g = Instance.new("UIGradient")
+	g.Rotation = 90
+	g.Color = ColorSequence.new(Palette.PanelRaised, Palette.Panel)
+	g.Parent = f
+	return f
+end
+
+function Theme.label(parent, text, props)
+	local l = Instance.new("TextLabel")
+	l.BackgroundTransparency = 1
+	l.Text = text or ""
+	l.TextColor3 = Palette.Cream
+	l.FontFace = Theme.Font.Body
+	l.TextSize = 16
+	l.TextXAlignment = Enum.TextXAlignment.Left
+	l.TextYAlignment = Enum.TextYAlignment.Center
+	l.RichText = true
+	l.Size = UDim2.new(1, 0, 0, 20)
+	if props then
+		for k, v in pairs(props) do
+			l[k] = v
+		end
+	end
+	l.Parent = parent
+	return l
+end
+
+function Theme.title(parent, text, props)
+	local merged = { FontFace = Theme.Font.Display, TextSize = 26, TextColor3 = Palette.Cream }
+	if props then
+		for k, v in pairs(props) do
+			merged[k] = v
+		end
+	end
+	return Theme.label(parent, text, merged)
+end
+
+function Theme.caption(parent, text, props)
+	local merged = { TextSize = 13, TextColor3 = Palette.Muted, FontFace = Theme.Font.Medium }
+	if props then
+		for k, v in pairs(props) do
+			merged[k] = v
+		end
+	end
+	return Theme.label(parent, text, merged)
+end
+
+-- A button with a real pressed state. No tween on hover that outlives the
+-- cursor; everything settles in under 120ms.
+function Theme.button(parent, text, onClick, props)
+	local b = Instance.new("TextButton")
+	b.BackgroundColor3 = Palette.PanelRaised
+	b.BorderSizePixel = 0
+	b.AutoButtonColor = false
+	b.Text = text
+	b.TextColor3 = Palette.Cream
+	b.FontFace = Theme.Font.Medium
+	b.TextSize = 16
+	b.Size = UDim2.new(1, 0, 0, 42)
+	if props then
+		for k, v in pairs(props) do
+			b[k] = v
+		end
+	end
+	b.Parent = parent
+	Theme.corner(b, UDim.new(0, 8))
+	local stroke = Theme.stroke(b, Palette.Hairline, 1, 0.2)
+
+	local base = b.BackgroundColor3
+	b.MouseEnter:Connect(function()
+		b.BackgroundColor3 = base:Lerp(Palette.Cream, 0.07)
+		stroke.Transparency = 0
+	end)
+	b.MouseLeave:Connect(function()
+		b.BackgroundColor3 = base
+		stroke.Transparency = 0.2
+	end)
+	b.MouseButton1Down:Connect(function()
+		b.BackgroundColor3 = base:Lerp(Color3.new(0, 0, 0), 0.25)
+	end)
+	b.MouseButton1Up:Connect(function()
+		b.BackgroundColor3 = base
+	end)
+	if onClick then
+		b.Activated:Connect(onClick)
+	end
+	return b
+end
+
+function Theme.list(parent, padding, direction)
+	local l = Instance.new("UIListLayout")
+	l.FillDirection = direction or Enum.FillDirection.Vertical
+	l.Padding = UDim.new(0, padding or 8)
+	l.SortOrder = Enum.SortOrder.LayoutOrder
+	l.Parent = parent
+	return l
+end
+
+-- A thin meter used for the three scoring axes.
+function Theme.meter(parent, label, color)
+	local row = Instance.new("Frame")
+	row.BackgroundTransparency = 1
+	row.Size = UDim2.new(1, 0, 0, 30)
+	row.Parent = parent
+
+	Theme.caption(row, label, { Size = UDim2.new(0, 96, 1, 0) })
+
+	local track = Instance.new("Frame")
+	track.BackgroundColor3 = Palette.Ink
+	track.BorderSizePixel = 0
+	track.Position = UDim2.new(0, 102, 0.5, -4)
+	track.Size = UDim2.new(1, -160, 0, 8)
+	track.Parent = row
+	Theme.corner(track, UDim.new(1, 0))
+
+	local fill = Instance.new("Frame")
+	fill.BackgroundColor3 = color or Palette.Yours
+	fill.BorderSizePixel = 0
+	fill.Size = UDim2.fromScale(0, 1)
+	fill.Parent = track
+	Theme.corner(fill, UDim.new(1, 0))
+
+	local value = Theme.label(row, "0", {
+		Size = UDim2.new(0, 52, 1, 0),
+		Position = UDim2.new(1, -52, 0, 0),
+		TextXAlignment = Enum.TextXAlignment.Right,
+		FontFace = Theme.Font.Mono,
+		TextSize = 15,
+	})
+
+	return {
+		set = function(score, max)
+			local alpha = math.clamp(score / (max or 1000), 0, 1)
+			fill:TweenSize(UDim2.fromScale(alpha, 1), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.45, true)
+			value.Text = tostring(score)
+		end,
+	}
+end
+
+return Theme
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="35">
+            <Properties>
+              <string name="Name">Waveform</string>
+              <string name="Source"><![CDATA[--!nonstrict
+-- Waveform.luau — the two tracks: yellow reference above, green voice below.
+--
+-- Bars are plain Frames, pooled and reused. The signature detail from the
+-- original is preserved exactly: these show loudness over time, not notes, and
+-- the pitch ribbon that sits between them is what carries contour.
+
+local Theme = require(script.Parent.Theme)
+local Palette = require(game.ReplicatedStorage.Shared.Palette)
+local Config = require(game.ReplicatedStorage.Shared.Config)
+
+local Waveform = {}
+Waveform.__index = Waveform
+
+local BARS = Config.TAKE.ENVELOPE_SAMPLES
+
+function Waveform.new(parent, color, flipped)
+	local self = setmetatable({}, Waveform)
+
+	self.root = Instance.new("Frame")
+	self.root.BackgroundTransparency = 1
+	self.root.Size = UDim2.fromScale(1, 1)
+	self.root.ClipsDescendants = true
+	self.root.Parent = parent
+
+	-- Centre line: gives a silent track something to be, instead of nothing.
+	local axis = Instance.new("Frame")
+	axis.BackgroundColor3 = Palette.Hairline
+	axis.BackgroundTransparency = 0.55
+	axis.BorderSizePixel = 0
+	axis.Size = UDim2.new(1, 0, 0, 1)
+	axis.Position = flipped and UDim2.fromScale(0, 0) or UDim2.new(0, 0, 1, -1)
+	axis.Parent = self.root
+
+	self.bars = table.create(BARS)
+	local width = 1 / BARS
+	for i = 1, BARS do
+		local bar = Instance.new("Frame")
+		bar.BackgroundColor3 = color
+		bar.BorderSizePixel = 0
+		bar.AnchorPoint = flipped and Vector2.new(0, 0) or Vector2.new(0, 1)
+		bar.Position = UDim2.fromScale((i - 1) * width, flipped and 0 or 1)
+		bar.Size = UDim2.new(width * 0.76, 0, 0, 0)
+		bar.BackgroundTransparency = 0.25
+		bar.Parent = self.root
+		Theme.corner(bar, UDim.new(0, 2))
+		self.bars[i] = bar
+	end
+
+	self.playhead = Instance.new("Frame")
+	self.playhead.BackgroundColor3 = Palette.Cream
+	self.playhead.BackgroundTransparency = 0.45
+	self.playhead.BorderSizePixel = 0
+	self.playhead.Size = UDim2.new(0, 1, 1, 0)
+	self.playhead.Visible = false
+	self.playhead.Parent = self.root
+
+	self.color = color
+	return self
+end
+
+function Waveform:setEnvelope(envelope)
+	for i, bar in ipairs(self.bars) do
+		local v = envelope and envelope[i] or 0
+		bar.Size = UDim2.new(bar.Size.X.Scale, 0, v * 0.94, 0)
+		bar.BackgroundTransparency = v > 0 and 0.12 or 0.82
+	end
+end
+
+-- Used while recording: fills in left to right as the take happens.
+function Waveform:setBar(index, value)
+	local bar = self.bars[index]
+	if bar then
+		bar.Size = UDim2.new(bar.Size.X.Scale, 0, math.clamp(value, 0, 1) * 0.94, 0)
+		bar.BackgroundTransparency = value > 0 and 0.12 or 0.82
+	end
+end
+
+function Waveform:clear()
+	for _, bar in ipairs(self.bars) do
+		bar.Size = UDim2.new(bar.Size.X.Scale, 0, 0, 0)
+		bar.BackgroundTransparency = 0.82
+	end
+end
+
+function Waveform:setPlayhead(alpha)
+	if alpha == nil then
+		self.playhead.Visible = false
+		return
+	end
+	self.playhead.Visible = true
+	self.playhead.Position = UDim2.fromScale(math.clamp(alpha, 0, 1), 0)
+end
+
+function Waveform:destroy()
+	self.root:Destroy()
+end
+
+-- The ribbon between the two tracks: reference contour drawn as a line of dots,
+-- with the player's live pitch riding on top of it.
+local Ribbon = {}
+Ribbon.__index = Ribbon
+Waveform.Ribbon = Ribbon
+
+function Ribbon.new(parent)
+	local self = setmetatable({}, Ribbon)
+	self.root = Instance.new("Frame")
+	self.root.BackgroundTransparency = 1
+	self.root.Size = UDim2.fromScale(1, 1)
+	self.root.ClipsDescendants = true
+	self.root.Parent = parent
+
+	self.dots = table.create(BARS)
+	for i = 1, BARS do
+		local dot = Instance.new("Frame")
+		dot.BackgroundColor3 = Palette.Reference
+		dot.BackgroundTransparency = 1
+		dot.BorderSizePixel = 0
+		dot.AnchorPoint = Vector2.new(0.5, 0.5)
+		dot.Size = UDim2.fromOffset(3, 3)
+		dot.Parent = self.root
+		Theme.corner(dot, UDim.new(1, 0))
+		self.dots[i] = dot
+	end
+
+	self.cursor = Instance.new("Frame")
+	self.cursor.BackgroundColor3 = Palette.Yours
+	self.cursor.BorderSizePixel = 0
+	self.cursor.AnchorPoint = Vector2.new(0.5, 0.5)
+	self.cursor.Size = UDim2.fromOffset(11, 11)
+	self.cursor.Visible = false
+	self.cursor.Parent = self.root
+	Theme.corner(self.cursor, UDim.new(1, 0))
+	Theme.stroke(self.cursor, Palette.Ink, 2, 0.2)
+
+	return self
+end
+
+local function pitchToScale(pitch)
+	-- Centre is 0 semitones; the full strip spans ±PITCH_RANGE.
+	return 0.5 - (pitch / (Config.TAKE.PITCH_RANGE * 2))
+end
+
+function Ribbon:setReference(notes, duration)
+	for i, dot in ipairs(self.dots) do
+		local t = (i - 0.5) / #self.dots * duration
+		local pitch, voiced = 0, false
+		for _, n in ipairs(notes) do
+			if t >= n.t and t <= n.t + n.dur then
+				pitch, voiced = n.pitch, true
+				break
+			end
+		end
+		dot.Position = UDim2.fromScale((i - 0.5) / #self.dots, pitchToScale(pitch))
+		dot.BackgroundTransparency = voiced and 0.1 or 1
+	end
+end
+
+function Ribbon:setCursor(alpha, pitch, voiced)
+	self.cursor.Visible = voiced == true
+	self.cursor.Position = UDim2.fromScale(math.clamp(alpha, 0, 1), pitchToScale(pitch or 0))
+end
+
+function Ribbon:destroy()
+	self.root:Destroy()
+end
+
+return Waveform
+]]></string>
+            </Properties>
+          </Item>
+        </Item>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="Workspace" referent="36">
+    <Properties>
+      <string name="Name">Workspace</string>
+      <bool name="FilteringEnabled">true</bool>
+      <float name="Gravity">150</float>
+      <bool name="NeedsPivotMigration">false</bool>
+    </Properties>
+  </Item>
+</roblox>
