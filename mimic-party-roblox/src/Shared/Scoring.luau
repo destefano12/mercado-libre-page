@@ -104,18 +104,30 @@ local function attacksAxis(ref, take)
 end
 
 -- ── Public ───────────────────────────────────────────────────────────────────
--- `take` is { notes = {...} }. Returns every axis in 0..MAX_SCORE plus total.
-function Scoring.grade(ref, take)
+-- `take` is { notes = {...} }.
+-- `weights` is optional and overrides the axis weights — used by the voice-only
+-- input mode, which has no pitch to measure. Weights are renormalised, so a
+-- dropped axis redistributes rather than shrinking the achievable total: a
+-- perfect take scores MAX_SCORE under any weighting.
+function Scoring.grade(ref, take, weights)
 	take = take or { notes = {} }
 	local duration = math.max(ref.duration, 0.2)
+
+	local wM = weights and weights.WEIGHT_MELODY or S.WEIGHT_MELODY
+	local wR = weights and weights.WEIGHT_RHYTHM or S.WEIGHT_RHYTHM
+	local wA = weights and weights.WEIGHT_ATTACKS or S.WEIGHT_ATTACKS
+	local sum = wM + wR + wA
+	if sum <= 0 then
+		wM, wR, wA, sum = S.WEIGHT_MELODY, S.WEIGHT_RHYTHM, S.WEIGHT_ATTACKS, 1
+	else
+		wM, wR, wA = wM / sum, wR / sum, wA / sum
+	end
 
 	local melody, coverage = melodyAxis(ref, take, duration)
 	local rhythm = rhythmAxis(ref, take)
 	local attacks = attacksAxis(ref, take)
 
-	local blended = melody * S.WEIGHT_MELODY
-		+ rhythm * S.WEIGHT_RHYTHM
-		+ attacks * S.WEIGHT_ATTACKS
+	local blended = melody * wM + rhythm * wR + attacks * wA
 
 	local max = S.MAX_SCORE
 	return {
@@ -124,6 +136,8 @@ function Scoring.grade(ref, take)
 		attacks = math.floor(attacks * max + 0.5),
 		total = math.floor(blended * max + 0.5),
 		coverage = coverage,
+		-- Which axes actually counted, so the playback card can grey out the rest.
+		weighted = { melody = wM, rhythm = wR, attacks = wA },
 	}
 end
 

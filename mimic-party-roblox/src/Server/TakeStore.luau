@@ -15,6 +15,10 @@ local MAX_NOTES = Config.TAKE.MAX_NOTES
 local MIN_NOTE = Config.TAKE.MIN_NOTE
 local PITCH_RANGE = Config.TAKE.PITCH_RANGE
 
+-- A client tells us which input it used so we can grade it on the axes it
+-- could actually drive. Anything not in this set is treated as the default.
+local VALID_MODES = { voice = true, voice_only = true, pointer = true }
+
 local function sanitise(raw, duration)
 	if type(raw) ~= "table" then
 		return nil
@@ -50,7 +54,9 @@ local function sanitise(raw, duration)
 		return a.t < b.t
 	end)
 
-	return { notes = notes }
+	local mode = (type(raw.mode) == "string" and VALID_MODES[raw.mode]) and raw.mode or "voice"
+
+	return { notes = notes, mode = mode }
 end
 
 function TakeStore.submit(userId, raw, duration)
@@ -87,7 +93,7 @@ end
 
 -- A silent take, for a player who never submitted (left, crashed, froze).
 function TakeStore.empty()
-	return { notes = {} }
+	return { notes = {}, mode = "voice" }
 end
 
 return TakeStore

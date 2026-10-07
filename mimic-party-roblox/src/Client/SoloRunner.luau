@@ -68,22 +68,29 @@ local function runRound(ui, sound, round, rounds, header)
 	-- Take.
 	ui:setPhase("record")
 	CameraDirector.setShot("CamBooth", 3.0)
-	ui.stage:setHint("MANTENÉ APRETADO · MOVÉ EL MOUSE PARA EL TONO")
-
 	local take = Booth.record(sound, {
+		onMode = function(mode, reason)
+			ui.stage:setInputMode(mode, reason)
+		end,
+		onCalibrate = function(level)
+			ui.stage:setMicLevel(level, true)
+		end,
 		onCountIn = function(n)
 			ui.stage:showCountIn(n)
 		end,
-		onFrame = function(alpha, pitch, voiced, index, level)
+		onFrame = function(alpha, pitch, voiced, index, level, raw)
 			ui.stage:onRecordFrame(alpha, pitch, voiced, index, level)
+			ui.stage:setMicLevel(raw or level, false)
 		end,
 	})
 
 	ui.stage:showTake(take, sound.duration)
 	ui.stage:setReferencePlayhead(nil)
+	ui.stage:setMicLevel(0, false)
 
 	-- Grade and play it back against the reference, as the original does.
-	local grade = Scoring.grade(sound, take)
+	-- Same module, same weights-per-mode rule the server uses.
+	local grade = Scoring.grade(sound, take, Booth.weightsFor(take.mode))
 	ui:setPhase("playback")
 	CameraDirector.focusMark(3, 2.6)
 	AudioEngine.playTake(take, sound.duration, nil)

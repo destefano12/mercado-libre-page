@@ -104,14 +104,19 @@ local function runTake(sound)
 	end
 	recording = true
 
-	ui.stage:setHint("MANTENÉ APRETADO · MOVÉ EL MOUSE PARA EL TONO")
-
 	local ok, take = pcall(Booth.record, sound, {
+		onMode = function(mode, reason)
+			ui.stage:setInputMode(mode, reason)
+		end,
+		onCalibrate = function(level)
+			ui.stage:setMicLevel(level, true)
+		end,
 		onCountIn = function(n)
 			ui.stage:showCountIn(n)
 		end,
-		onFrame = function(alpha, pitch, voiced, index, level)
+		onFrame = function(alpha, pitch, voiced, index, level, raw)
 			ui.stage:onRecordFrame(alpha, pitch, voiced, index, level)
+			ui.stage:setMicLevel(raw or level, false)
 		end,
 	})
 
@@ -125,8 +130,10 @@ local function runTake(sound)
 
 	ui.stage:showTake(take, sound.duration)
 	ui.stage:setHint("TOMA ENVIADA")
-	-- Only the contour travels. The server grades it.
-	Net.fireServer(Net.SubmitTake, { notes = take.notes })
+	ui.stage:setMicLevel(0, false)
+	-- Only the contour travels. The server grades it, on the axes this input
+	-- mode could actually drive.
+	Net.fireServer(Net.SubmitTake, { notes = take.notes, mode = take.mode })
 end
 
 -- ── phase handling ─────────────────────────────────────────────────────────────

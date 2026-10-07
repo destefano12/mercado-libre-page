@@ -15,6 +15,7 @@ local SoundService = game:GetService("SoundService")
 local Shared = game.ReplicatedStorage.Shared
 local Config = require(Shared.Config)
 local Sabotages = require(Shared.Sabotages)
+local AudioCatalog = require(Shared.AudioCatalog)
 
 local AudioEngine = {}
 
@@ -110,10 +111,82 @@ function AudioEngine.playPattern(notes, duration, opts)
 	return handle
 end
 
+-- Plays a real Roblox library asset straight through, while still driving the
+-- playhead from the contour so the waveform stays in step with what is heard.
+local function playAsset(assetId, duration, opts)
+	local s = Instance.new("Sound")
+	s.SoundId = assetId
+	s.Volume = opts.volume or 0.6
+	s.SoundGroup = group
+	s.Parent = SoundService
+	local cleanupSabotage = Sabotages.applyTo(s, opts.sabotage)
+	s:Play()
+
+	local handle = { done = false }
+	local started = os.clock()
+	local conn
+	conn = RunService.RenderStepped:Connect(function()
+		local t = os.clock() - started
+		if t >= duration or handle.done then
+			if conn then
+				conn:Disconnect()
+				conn = nil
+			end
+			handle.done = true
+			cleanupSabotage()
+			if s.Parent then
+				s:Stop()
+				s:Destroy()
+			end
+			if opts.onFinish then
+				opts.onFinish()
+			end
+			return
+		end
+		if opts.onFrame then
+			opts.onFrame(t / duration, nil, true)
+		end
+	end)
+
+	function handle:stop()
+		self.done = true
+		if conn then
+			conn:Disconnect()
+			conn = nil
+		end
+		cleanupSabotage()
+		if s.Parent then
+			s:Stop()
+			s:Destroy()
+		end
+	end
+
+	return handle
+end
+
+-- The reference. Roblox's own audio if the catalog resolved one and it loads
+-- here; the synthesised contour otherwise. The player cannot tell which path
+-- was taken from the scoring, because the contour is what is graded.
 function AudioEngine.playReference(sound, opts)
 	opts = opts or {}
 	opts.volume = opts.volume or 0.6
+
+	local asset = AudioCatalog.assetFor(sound.id)
+	if asset and AudioCatalog.verifyAsync(sound.id, 2) then
+		return playAsset(asset, sound.duration, opts)
+	end
+
 	return AudioEngine.playPattern(sound.notes, sound.duration, opts)
+end
+
+-- Warms the catalog for the sounds a match is about to use, so the first round
+-- does not pay for the asset load.
+function AudioEngine.preload(sounds)
+	task.spawn(function()
+		for _, sound in ipairs(sounds) do
+			AudioCatalog.verifyAsync(sound.id, 4)
+		end
+	end)
 end
 
 -- Plays somebody's take, honouring the sabotage aimed at them.

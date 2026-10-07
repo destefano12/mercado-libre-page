@@ -2,25 +2,27 @@
   "name": "MimicParty",
   "tree": {
     "$className": "DataModel",
-
     "ReplicatedStorage": {
       "$className": "ReplicatedStorage",
-      "Shared": { "$path": "src/Shared" }
+      "Shared": {
+        "$path": "src/Shared"
+      }
     },
-
     "ServerScriptService": {
       "$className": "ServerScriptService",
-      "Server": { "$path": "src/Server" }
+      "Server": {
+        "$path": "src/Server"
+      }
     },
-
     "StarterPlayer": {
       "$className": "StarterPlayer",
       "StarterPlayerScripts": {
         "$className": "StarterPlayerScripts",
-        "Client": { "$path": "src/Client" }
+        "Client": {
+          "$path": "src/Client"
+        }
       }
     },
-
     "Workspace": {
       "$className": "Workspace",
       "$properties": {
@@ -28,13 +30,18 @@
         "Gravity": 150
       }
     },
-
     "SoundService": {
       "$className": "SoundService",
       "$properties": {
         "AmbientReverb": "Auditorium",
         "DistanceFactor": 10,
         "RespectFilteringEnabled": true
+      }
+    },
+    "VoiceChatService": {
+      "$className": "VoiceChatService",
+      "$properties": {
+        "EnableDefaultVoice": true
       }
     }
   }

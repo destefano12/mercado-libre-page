@@ -7,6 +7,7 @@
 local Players = game:GetService("Players")
 
 local Net = require(game.ReplicatedStorage.Shared.Net)
+local AudioCatalog = require(game.ReplicatedStorage.Shared.AudioCatalog)
 
 local StageBuilder = require(script.StageBuilder)
 local LightingRig = require(script.LightingRig)
@@ -18,6 +19,10 @@ Players.CharacterAutoLoads = false
 LightingRig.apply()
 StageBuilder.build()
 Net.init()
+
+-- Pulls reference audio from Roblox's own library. Runs in the background: every
+-- sound has a synthesised fallback, so no round ever waits on this.
+AudioCatalog.resolveAsync()
 
 MatchService.bindRemotes()
 

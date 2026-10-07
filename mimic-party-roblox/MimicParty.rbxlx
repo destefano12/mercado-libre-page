@@ -9,6 +9,220 @@
       </Properties>
       <Item class="ModuleScript" referent="2">
         <Properties>
+          <string name="Name">AudioCatalog</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- AudioCatalog.luau — reference audio, taken from Roblox's own audio library.
+--
+-- Nothing is bundled and nothing is uploaded. At boot the server asks Roblox for
+-- audio matching each sound's keywords (AssetService:SearchAudioAsync), prefers
+-- assets Roblox marks as endorsed, and publishes the chosen ids as attributes on
+-- a replicated folder. Clients read them from there and verify each one actually
+-- loads before relying on it.
+--
+-- Why this way:
+--   · the audio is Roblox-hosted and Roblox-licensed, so there is no third-party
+--     rights question to answer and nothing to clear;
+--   · the search runs once, on the server, so every player in a room hears the
+--     same asset for the same sound;
+--   · search results are documented to sometimes include assets an experience
+--     cannot actually play, so an id is a candidate until a client has loaded it.
+--
+-- Everything degrades: no result, a refused asset, a slow load — the round still
+-- happens, rendered through the synthesised tone. The contour never depends on
+-- any of this, so scoring is identical either way.
+
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local SoundLibrary = require(script.Parent.SoundLibrary)
+
+local AudioCatalog = {}
+
+local FOLDER_NAME = "MimicPartyAudio"
+local MIN_DURATION = 0.3
+local MAX_DURATION = 12
+local PAGE_LIMIT = 1
+
+local folder
+local verified = {}     -- soundId → true (loads) / false (refused)
+
+local function root()
+	if folder and folder.Parent then
+		return folder
+	end
+	if RunService:IsServer() then
+		folder = ReplicatedStorage:FindFirstChild(FOLDER_NAME)
+		if not folder then
+			folder = Instance.new("Folder")
+			folder.Name = FOLDER_NAME
+			folder.Parent = ReplicatedStorage
+		end
+	else
+		folder = ReplicatedStorage:FindFirstChild(FOLDER_NAME)
+			or ReplicatedStorage:WaitForChild(FOLDER_NAME, 20)
+	end
+	return folder
+end
+
+-- ── server: resolve ──────────────────────────────────────────────────────────
+
+-- Scores a search result. Endorsed first, then a duration close to the contour's,
+-- because a 40-second track is useless as a one-second reference.
+local function rank(entry, wanted)
+	local score = 0
+	if entry.IsEndorsed then
+		score += 100
+	end
+	local duration = tonumber(entry.Duration) or 0
+	if duration >= MIN_DURATION and duration <= MAX_DURATION then
+		score += 40
+		score -= math.abs(duration - wanted) * 4
+	else
+		score -= 60
+	end
+	return score
+end
+
+local function searchOne(sound)
+	if sound.asset then
+		return sound.asset   -- pinned by hand; no search
+	end
+	if not sound.search then
+		return nil
+	end
+
+	for _, keyword in ipairs(sound.search) do
+		local ok, pages = pcall(function()
+			local params = Instance.new("AudioSearchParams")
+			params.SearchKeyword = keyword
+			params.MinDuration = MIN_DURATION
+			params.MaxDuration = MAX_DURATION
+			return game:GetService("AssetService"):SearchAudioAsync(params)
+		end)
+
+		if ok and pages then
+			local best, bestScore = nil, -math.huge
+			local page = 0
+			repeat
+				local gotPage, entries = pcall(function()
+					return pages:GetCurrentPage()
+				end)
+				if not gotPage or type(entries) ~= "table" then
+					break
+				end
+				for _, entry in ipairs(entries) do
+					local id = entry.Id or entry.id
+					if id then
+						local score = rank(entry, sound.duration)
+						if score > bestScore then
+							best, bestScore = id, score
+						end
+					end
+				end
+				page += 1
+				local advanced = pcall(function()
+					if not pages.IsFinished then
+						pages:AdvanceToNextPageAsync()
+						return true
+					end
+					return false
+				end)
+			until page >= PAGE_LIMIT or not advanced or pages.IsFinished
+
+			if best then
+				return ("rbxassetid://%d"):format(tonumber(best) or 0)
+			end
+		end
+	end
+
+	return nil
+end
+
+-- Server-only. Runs in its own coroutine; the game does not wait on it, because
+-- the synthesised fallback covers every sound until an id lands.
+function AudioCatalog.resolveAsync()
+	assert(RunService:IsServer(), "AudioCatalog.resolveAsync is server-only")
+	local store = root()
+
+	task.spawn(function()
+		local found, missing = 0, 0
+		for _, sound in ipairs(SoundLibrary.all()) do
+			local asset = searchOne(sound)
+			if asset then
+				store:SetAttribute(sound.id, asset)
+				found += 1
+			else
+				missing += 1
+			end
+			task.wait(0.08)   -- the search is rate-limited; do not hammer it
+		end
+		store:SetAttribute("__resolved", true)
+		print(("[AudioCatalog] %d/%d sonidos resueltos desde la biblioteca de Roblox (%d con tono sintetizado)")
+			:format(found, found + missing, missing))
+	end)
+end
+
+-- ── both: read ───────────────────────────────────────────────────────────────
+
+-- The asset chosen for this sound, or nil to use the synthesised tone.
+function AudioCatalog.assetFor(soundId)
+	if verified[soundId] == false then
+		return nil
+	end
+	local store = root()
+	if not store then
+		return nil
+	end
+	local value = store:GetAttribute(soundId)
+	return (type(value) == "string" and value ~= "") and value or nil
+end
+
+-- Client-side playability check. Search results can include assets this
+-- experience is not allowed to play, so an id is only trusted once a Sound built
+-- from it reports itself loaded.
+function AudioCatalog.verifyAsync(soundId, timeout)
+	if verified[soundId] ~= nil then
+		return verified[soundId]
+	end
+	local asset = AudioCatalog.assetFor(soundId)
+	if not asset then
+		return false
+	end
+
+	local probe = Instance.new("Sound")
+	probe.SoundId = asset
+	probe.Volume = 0
+	probe.Parent = game:GetService("SoundService")
+
+	pcall(function()
+		game:GetService("ContentProvider"):PreloadAsync({ probe })
+	end)
+
+	local deadline = os.clock() + (timeout or 3)
+	while not probe.IsLoaded and os.clock() < deadline do
+		task.wait(0.05)
+	end
+
+	local ok = probe.IsLoaded
+	probe:Destroy()
+	verified[soundId] = ok
+	if not ok then
+		warn(("[AudioCatalog] %s no se pudo cargar; usando tono sintetizado"):format(soundId))
+	end
+	return ok
+end
+
+function AudioCatalog.isResolved()
+	local store = root()
+	return store and store:GetAttribute("__resolved") == true
+end
+
+return AudioCatalog
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="3">
+        <Properties>
           <string name="Name">Characters</string>
           <string name="Source"><![CDATA[--!nonstrict
 -- Characters.luau — the roster. Colour schemes and a stage name, nothing that
@@ -63,7 +277,7 @@ return Characters
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="3">
+      <Item class="ModuleScript" referent="4">
         <Properties>
           <string name="Name">Config</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -92,6 +306,52 @@ Config.PHASE = {
 	RESULTS = 11,
 }
 
+-- ─── Input ────────────────────────────────────────────────────────────────────
+-- Three ways to perform a take, picked per player at record time:
+--   "voice"      real microphone drives loudness/attacks/rhythm, pointer height
+--                drives pitch (the melody axis). The default when voice works.
+--   "voice_only" real microphone drives everything; melody is dropped and its
+--                weight is redistributed. For players who will not touch a mouse.
+--   "pointer"    no microphone available: hold to vocalise, as before.
+Config.INPUT = {
+	DEFAULT = "voice",
+	FALLBACK = "pointer",
+}
+
+-- ─── Microphone ───────────────────────────────────────────────────────────────
+-- Roblox exposes RmsLevel/PeakLevel on a live AudioDeviceInput (client only),
+-- but GetSpectrum() is blocked for microphone inputs, so there is no pitch to
+-- read. Everything below is about turning a loudness stream into clean onsets.
+Config.VOICE = {
+	-- The noise floor is measured during the count-in, per player, per take, so
+	-- a loud room or a hot mic calibrates itself instead of needing a setting.
+	CALIBRATE_FOR = 2.0,
+	FLOOR_MIN = 0.0035,       -- never trust a floor quieter than this
+	FLOOR_HEADROOM = 1.35,    -- measured floor is scaled by this before gating
+
+	-- Hysteresis: opening and closing on the same threshold chatters badly on
+	-- a breathy voice, so the gate opens high and closes low.
+	GATE_OPEN = 3.1,          -- × floor
+	GATE_CLOSE = 1.7,         -- × floor
+
+	-- These two are set against the library, not by feel. The tightest gap in
+	-- SoundLibrary is 90 ms (nothing shorter is articulable by a human voice or
+	-- visible to a 60 fps sampler), so:
+	--   BRIDGE_GAP  must be comfortably under 90 ms, or a fast pattern collapses
+	--               into one attack and the attacks axis — a quarter of the
+	--               score — reads zero.
+	--   BRIDGE_GAP  must be over ~2 frames (33 ms), or a breathy voice chatters
+	--               the gate and one word counts as four.
+	-- 40 ms sits in that window with 50 ms of margin on the library side.
+	REFRACTORY = 0.05,
+	BRIDGE_GAP = 0.04,
+
+	-- RmsLevel is roughly 0..1 but a shout sits far below 1, so the envelope is
+	-- normalised against a running peak for the drawing and the level meter.
+	LEVEL_CEILING_MIN = 0.05,
+	LEVEL_DECAY = 0.75,       -- per second, how fast the running peak falls back
+}
+
 -- ─── Recording ────────────────────────────────────────────────────────────────
 Config.TAKE = {
 	-- One shot. No retries, no undo. This flag exists to be read, never flipped.
@@ -113,6 +373,15 @@ Config.SCORING = {
 	MELODY_TOLERANCE = 7.0,  -- semitones of contour error that zeroes the axis
 	RHYTHM_TOLERANCE = 0.35, -- seconds of onset error that zeroes the axis
 	MAX_SCORE = 1000,
+}
+
+-- When a player performs without pitch control ("voice_only"), the melody axis
+-- has nothing to measure, so it is dropped and its weight is split between the
+-- two axes their voice does drive. Scoring renormalises; totals stay comparable.
+Config.SCORING_VOICE_ONLY = {
+	WEIGHT_MELODY = 0,
+	WEIGHT_RHYTHM = 0.58,
+	WEIGHT_ATTACKS = 0.42,
 }
 
 -- ─── Roulette ─────────────────────────────────────────────────────────────────
@@ -149,7 +418,7 @@ return Config
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="4">
+      <Item class="ModuleScript" referent="5">
         <Properties>
           <string name="Name">Modes</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -213,7 +482,7 @@ return {
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="5">
+      <Item class="ModuleScript" referent="6">
         <Properties>
           <string name="Name">Net</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -317,7 +586,7 @@ return Net
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="6">
+      <Item class="ModuleScript" referent="7">
         <Properties>
           <string name="Name">Palette</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -372,7 +641,7 @@ return {
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="7">
+      <Item class="ModuleScript" referent="8">
         <Properties>
           <string name="Name">Roulette</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -447,7 +716,7 @@ return Roulette
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="8">
+      <Item class="ModuleScript" referent="9">
         <Properties>
           <string name="Name">Sabotages</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -590,7 +859,7 @@ return Sabotages
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="9">
+      <Item class="ModuleScript" referent="10">
         <Properties>
           <string name="Name">Scoring</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -699,18 +968,30 @@ local function attacksAxis(ref, take)
 end
 
 -- ── Public ───────────────────────────────────────────────────────────────────
--- `take` is { notes = {...} }. Returns every axis in 0..MAX_SCORE plus total.
-function Scoring.grade(ref, take)
+-- `take` is { notes = {...} }.
+-- `weights` is optional and overrides the axis weights — used by the voice-only
+-- input mode, which has no pitch to measure. Weights are renormalised, so a
+-- dropped axis redistributes rather than shrinking the achievable total: a
+-- perfect take scores MAX_SCORE under any weighting.
+function Scoring.grade(ref, take, weights)
 	take = take or { notes = {} }
 	local duration = math.max(ref.duration, 0.2)
+
+	local wM = weights and weights.WEIGHT_MELODY or S.WEIGHT_MELODY
+	local wR = weights and weights.WEIGHT_RHYTHM or S.WEIGHT_RHYTHM
+	local wA = weights and weights.WEIGHT_ATTACKS or S.WEIGHT_ATTACKS
+	local sum = wM + wR + wA
+	if sum <= 0 then
+		wM, wR, wA, sum = S.WEIGHT_MELODY, S.WEIGHT_RHYTHM, S.WEIGHT_ATTACKS, 1
+	else
+		wM, wR, wA = wM / sum, wR / sum, wA / sum
+	end
 
 	local melody, coverage = melodyAxis(ref, take, duration)
 	local rhythm = rhythmAxis(ref, take)
 	local attacks = attacksAxis(ref, take)
 
-	local blended = melody * S.WEIGHT_MELODY
-		+ rhythm * S.WEIGHT_RHYTHM
-		+ attacks * S.WEIGHT_ATTACKS
+	local blended = melody * wM + rhythm * wR + attacks * wA
 
 	local max = S.MAX_SCORE
 	return {
@@ -719,6 +1000,8 @@ function Scoring.grade(ref, take)
 		attacks = math.floor(attacks * max + 0.5),
 		total = math.floor(blended * max + 0.5),
 		coverage = coverage,
+		-- Which axes actually counted, so the playback card can grey out the rest.
+		weighted = { melody = wM, rhythm = wR, attacks = wA },
 	}
 end
 
@@ -736,7 +1019,7 @@ return Scoring
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="10">
+      <Item class="ModuleScript" referent="11">
         <Properties>
           <string name="Name">Signal</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -773,17 +1056,28 @@ return Signal
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="11">
+      <Item class="ModuleScript" referent="12">
         <Properties>
           <string name="Name">SoundLibrary</string>
           <string name="Source"><![CDATA[--!nonstrict
--- SoundLibrary.luau — the reference sounds, authored as pitch/time patterns.
+-- SoundLibrary.luau — the reference sounds.
 --
--- A reference is not a waveform here: it is a *contour*. Each note is
--- { t = onset seconds, dur = length seconds, pitch = semitones from centre }.
--- The audio engine renders it through one sustained tone, so the whole library
--- plays with no uploaded assets; set `asset` on any entry to use real audio
--- instead and the pattern keeps driving the scoring and the waveform.
+-- Two things define an entry:
+--
+--   notes    the contour, as { t = onset, dur = length, pitch = semitones }.
+--            This drives the scoring and both waveforms, always, in every mode.
+--   search   keywords handed to Roblox's own audio library at boot
+--            (AssetService:SearchAudioAsync). Whatever comes back is what you
+--            actually hear.
+--
+-- No name here is a meme, a song title or a catchphrase, and no audio file is
+-- bundled: the audio is Roblox's, pulled from Roblox's library at runtime, and
+-- preference is given to assets Roblox marks as endorsed. If a search returns
+-- nothing playable, the contour is rendered through a synthesised tone instead,
+-- so a missing asset degrades the sound and never breaks the round.
+--
+-- To pin an exact asset, set `asset = "rbxassetid://…"` on the entry: the search
+-- is skipped and the contour keeps doing everything else.
 
 local Config = require(script.Parent.Config)
 
@@ -797,19 +1091,20 @@ local function pack(id, name, blurb, entries)
 	for _, e in ipairs(entries) do
 		local notes = {}
 		local duration = 0
-		for _, n in ipairs(e[4]) do
+		for _, n in ipairs(e.notes) do
 			local note = { t = n[1], dur = n[2], pitch = n[3] }
 			table.insert(notes, note)
 			duration = math.max(duration, note.t + note.dur)
 		end
 		local sound = {
-			id = e[1],
-			name = e[2],
-			difficulty = e[3],     -- 1 easy · 2 medium · 3 hard
+			id = e.id,
+			name = e.name,
+			difficulty = e.difficulty,     -- 1 easy · 2 medium · 3 hard
 			notes = notes,
 			duration = duration + 0.12,
 			pack = id,
-			asset = e[5],
+			search = e.search,             -- keywords for the Roblox audio library
+			asset = e.asset,               -- set to pin an exact asset
 		}
 		table.insert(p.sounds, sound)
 		byId[sound.id] = sound
@@ -818,56 +1113,93 @@ local function pack(id, name, blurb, entries)
 	return p
 end
 
--- ── Reaction Studio ──────────────────────────────────────────────────────────
-pack("reaction", "Reaction Studio", "Meme reflexes. Short, sharp, merciless.", {
-	{ "nice",      "Nice",                1, { {0,0.30,2}, {0.34,0.44,-2} } },
-	{ "bruh",      "Bruh",                1, { {0,0.62,-4} } },
-	{ "hello",     "Hello There",         2, { {0,0.26,0}, {0.28,0.22,3}, {0.56,0.50,-1} } },
-	{ "yeet",      "Yeet",                1, { {0,0.18,-2}, {0.19,0.34,7} } },
-	{ "wow",       "Wow",                 1, { {0,0.50,-1}, {0.52,0.40,4} } },
-	{ "bababooey", "Bababooey",           3, { {0,0.16,0}, {0.18,0.16,0}, {0.36,0.16,2}, {0.54,0.18,2}, {0.74,0.42,-3} } },
-	{ "damage",    "Emotional Damage",    3, { {0,0.22,4}, {0.24,0.20,4}, {0.46,0.26,6}, {0.74,0.46,1} } },
-	{ "running",   "Why Are You Running", 3, { {0,0.20,1}, {0.22,0.18,3}, {0.42,0.18,1}, {0.62,0.20,3}, {0.84,0.44,-2} } },
-	{ "getout",    "Get Out",             2, { {0,0.30,5}, {0.34,0.54,-4} } },
+-- ── Voces ────────────────────────────────────────────────────────────────────
+-- Short vocal shapes. Named for what the contour does, not for any catchphrase.
+pack("voces", "Voces", "Formas vocales cortas. Afilado y sin piedad.", {
+	{ id = "dosnotas",  name = "Dos Notas",      difficulty = 1, search = { "voice up down", "human voice short" },
+	  notes = { {0,0.3,2}, {0.39,0.44,-2} } },
+	{ id = "gravelargo", name = "Grave Largo",   difficulty = 1, search = { "deep voice groan", "male voice low" },
+	  notes = { {0,0.62,-4} } },
+	{ id = "saludo",    name = "Saludo",         difficulty = 2, search = { "voice greeting", "person talking short" },
+	  notes = { {0,0.26,0}, {0.35,0.22,3}, {0.66,0.5,-1} } },
+	{ id = "latigazo",  name = "Latigazo",       difficulty = 1, search = { "whoosh voice", "swoosh up" },
+	  notes = { {0,0.18,-2}, {0.27,0.34,7} } },
+	{ id = "asombro",   name = "Asombro",        difficulty = 1, search = { "crowd gasp", "surprise voice" },
+	  notes = { {0,0.5,-1}, {0.59,0.4,4} } },
+	{ id = "cincogolpes", name = "Cinco Golpes", difficulty = 3, search = { "voice stutter", "chatter short" },
+	  notes = { {0,0.16,0}, {0.25,0.16,0}, {0.5,0.16,2}, {0.75,0.18,2}, {1.02,0.42,-3} } },
+	{ id = "reproche",  name = "Reproche",       difficulty = 3, search = { "angry voice short", "scold" },
+	  notes = { {0,0.22,4}, {0.31,0.2,4}, {0.6,0.26,6}, {0.95,0.46,1} } },
+	{ id = "pregunta",  name = "Pregunta",       difficulty = 3, search = { "questioning voice", "voice rising" },
+	  notes = { {0,0.2,1}, {0.29,0.18,3}, {0.56,0.18,1}, {0.83,0.2,3}, {1.12,0.44,-2} } },
+	{ id = "portazo",   name = "Portazo",        difficulty = 2, search = { "shout down", "voice command" },
+	  notes = { {0,0.3,5}, {0.39,0.54,-4} } },
 })
 
--- ── Wild Voices ──────────────────────────────────────────────────────────────
-pack("wild", "Wild Voices", "Animals. The pack that breaks dignity first.", {
-	{ "catchirp",  "Cat Chirp",       2, { {0,0.14,6}, {0.16,0.12,9}, {0.30,0.18,4} } },
-	{ "sneeze",    "Puppy Sneeze",    1, { {0,0.10,2}, {0.12,0.30,-5} } },
-	{ "owl",       "Night Owl",       1, { {0,0.44,-2}, {0.60,0.52,-5} } },
-	{ "seal",      "Seal Bark",       2, { {0,0.18,-3}, {0.26,0.18,-3}, {0.52,0.22,-5} } },
-	{ "bigbird",   "Big Bird",        2, { {0,0.26,8}, {0.30,0.22,5}, {0.56,0.30,8} } },
-	{ "hohoho",    "Ho Ho Ho",        1, { {0,0.24,-6}, {0.30,0.24,-6}, {0.60,0.38,-7} } },
-	{ "sheep",     "Screaming Sheep", 3, { {0,0.30,3}, {0.32,0.16,8}, {0.50,0.60,5} } },
-	{ "peacock",   "Peacock Call",    3, { {0,0.22,7}, {0.26,0.26,2}, {0.56,0.22,7}, {0.82,0.34,1} } },
-	{ "frogs",     "Frog Chorus",     3, { {0,0.14,-4}, {0.22,0.14,-4}, {0.44,0.14,-2}, {0.62,0.14,-4}, {0.84,0.14,-6}, {1.02,0.22,-4} } },
+-- ── Animales ─────────────────────────────────────────────────────────────────
+pack("animales", "Animales", "El paquete que te quita la dignidad primero.", {
+	{ id = "gato",     name = "Gato",            difficulty = 2, search = { "cat meow", "kitten" },
+	  notes = { {0,0.14,6}, {0.23,0.12,9}, {0.44,0.18,4} } },
+	{ id = "estornudo", name = "Estornudo",      difficulty = 1, search = { "dog sneeze", "sneeze" },
+	  notes = { {0,0.1,2}, {0.19,0.3,-5} } },
+	{ id = "buho",     name = "Búho",            difficulty = 1, search = { "owl hoot", "owl night" },
+	  notes = { {0,0.44,-2}, {0.6,0.52,-5} } },
+	{ id = "foca",     name = "Foca",            difficulty = 2, search = { "seal bark", "sea lion" },
+	  notes = { {0,0.18,-3}, {0.27,0.18,-3}, {0.54,0.22,-5} } },
+	{ id = "pajaro",   name = "Pájaro Grande",   difficulty = 2, search = { "large bird call", "squawk" },
+	  notes = { {0,0.26,8}, {0.35,0.22,5}, {0.66,0.3,8} } },
+	{ id = "risagrave", name = "Risa Grave",     difficulty = 1, search = { "deep laugh", "belly laugh" },
+	  notes = { {0,0.24,-6}, {0.33,0.24,-6}, {0.66,0.38,-7} } },
+	{ id = "oveja",    name = "Oveja",           difficulty = 3, search = { "sheep bleat", "goat" },
+	  notes = { {0,0.3,3}, {0.39,0.16,8}, {0.64,0.6,5} } },
+	{ id = "pavoreal", name = "Pavo Real",       difficulty = 3, search = { "peacock call", "exotic bird" },
+	  notes = { {0,0.22,7}, {0.31,0.26,2}, {0.66,0.22,7}, {0.97,0.34,1} } },
+	{ id = "ranas",    name = "Coro de Ranas",   difficulty = 3, search = { "frog croak", "frogs pond" },
+	  notes = { {0,0.14,-4}, {0.23,0.14,-4}, {0.46,0.14,-2}, {0.69,0.14,-4}, {0.92,0.14,-6}, {1.15,0.22,-4} } },
 })
 
--- ── Rhythm Lab ───────────────────────────────────────────────────────────────
-pack("rhythm", "Rhythm Lab", "Machines. Timing is the whole grade here.", {
-	{ "radiobeep", "Radio Beep",      1, { {0,0.16,4}, {0.32,0.16,4}, {0.64,0.30,4} } },
-	{ "notif",     "Notification",    1, { {0,0.18,2}, {0.22,0.30,7} } },
-	{ "errchime",  "Error Chime",     2, { {0,0.22,0}, {0.26,0.22,-5}, {0.52,0.34,-5} } },
-	{ "doorbell",  "Doorbell Dance",  2, { {0,0.26,5}, {0.30,0.38,0}, {0.72,0.26,5}, {1.02,0.38,0} } },
-	{ "badumtss",  "Ba Dum Tss",      1, { {0,0.16,-4}, {0.24,0.16,-2}, {0.48,0.34,6} } },
-	{ "printer",   "Printer Rhythm",  3, { {0,0.10,0}, {0.14,0.10,0}, {0.28,0.10,2}, {0.42,0.10,0}, {0.56,0.10,2}, {0.70,0.26,-2} } },
-	{ "beatbox",   "Beatbox Fill",    3, { {0,0.12,-6}, {0.18,0.10,4}, {0.32,0.12,-6}, {0.46,0.10,4}, {0.58,0.10,4}, {0.74,0.24,-6} } },
-	{ "dialup",    "Dial-Up Song",    3, { {0,0.22,3}, {0.26,0.18,-2}, {0.48,0.30,6}, {0.82,0.44,-4}, {1.30,0.52,1} } },
-	{ "glitch",    "Computer Glitch", 3, { {0,0.08,8}, {0.10,0.08,-6}, {0.22,0.08,8}, {0.32,0.08,-6}, {0.42,0.20,2} } },
+-- ── Máquinas ─────────────────────────────────────────────────────────────────
+pack("maquinas", "Máquinas", "Acá el ritmo es toda la nota.", {
+	{ id = "pitido",   name = "Pitido Triple",   difficulty = 1, search = { "radio beep", "beep beep" },
+	  notes = { {0,0.16,4}, {0.32,0.16,4}, {0.64,0.3,4} } },
+	{ id = "aviso",    name = "Aviso",           difficulty = 1, search = { "notification", "ui ding" },
+	  notes = { {0,0.18,2}, {0.27,0.3,7} } },
+	{ id = "error",    name = "Error",           difficulty = 2, search = { "error sound", "buzzer wrong" },
+	  notes = { {0,0.22,0}, {0.31,0.22,-5}, {0.62,0.34,-5} } },
+	{ id = "timbre",   name = "Timbre",          difficulty = 2, search = { "doorbell", "door chime" },
+	  notes = { {0,0.26,5}, {0.35,0.38,0}, {0.82,0.26,5}, {1.17,0.38,0} } },
+	{ id = "remate",   name = "Remate",          difficulty = 1, search = { "drum rimshot", "comedy drum" },
+	  notes = { {0,0.16,-4}, {0.25,0.16,-2}, {0.5,0.34,6} } },
+	{ id = "impresora", name = "Impresora",      difficulty = 3, search = { "printer", "dot matrix" },
+	  notes = { {0,0.1,0}, {0.19,0.1,0}, {0.38,0.1,2}, {0.57,0.1,0}, {0.76,0.1,2}, {0.95,0.26,-2} } },
+	{ id = "percusion", name = "Percusión",      difficulty = 3, search = { "drum fill", "percussion loop" },
+	  notes = { {0,0.12,-6}, {0.21,0.1,4}, {0.4,0.12,-6}, {0.61,0.1,4}, {0.8,0.1,4}, {0.99,0.24,-6} } },
+	{ id = "modem",    name = "Módem",           difficulty = 3, search = { "dial up modem", "fax" },
+	  notes = { {0,0.22,3}, {0.31,0.18,-2}, {0.58,0.3,6}, {0.97,0.44,-4}, {1.5,0.52,1} } },
+	{ id = "glitch",   name = "Glitch",          difficulty = 3, search = { "glitch", "digital error" },
+	  notes = { {0,0.1,8}, {0.19,0.1,-6}, {0.38,0.1,8}, {0.57,0.1,-6}, {0.76,0.2,2} } },
 })
 
--- ── Melody Club ──────────────────────────────────────────────────────────────
-pack("melody", "Melody Club", "Longer lines. Contour carries the score.", {
-	{ "slowmel",   "Slow Melody",     1, { {0,0.50,0}, {0.56,0.50,4}, {1.12,0.70,2} } },
-	{ "kazoo",     "Kazoo Fanfare",   2, { {0,0.26,0}, {0.30,0.26,4}, {0.60,0.26,7}, {0.90,0.58,9} } },
-	{ "synth",     "Synth Steps",     2, { {0,0.24,0}, {0.28,0.24,2}, {0.56,0.24,4}, {0.84,0.24,5}, {1.12,0.40,7} } },
-	{ "dancehook", "Dance Hook",      3, { {0,0.22,7}, {0.26,0.22,5}, {0.52,0.22,2}, {0.78,0.22,5}, {1.04,0.46,0} } },
-	{ "retro",     "Retro Chorus",    3, { {0,0.30,2}, {0.34,0.30,5}, {0.68,0.30,9}, {1.02,0.30,5}, {1.36,0.56,2} } },
-	{ "blues",     "Blues Riff",      3, { {0,0.26,0}, {0.30,0.20,3}, {0.54,0.26,-2}, {0.84,0.20,3}, {1.08,0.52,-5} } },
-	{ "heyya",     "Hey Ya",          2, { {0,0.28,4}, {0.32,0.24,4}, {0.60,0.34,-1}, {0.98,0.46,2} } },
-	{ "opera",     "Opera Moment",    3, { {0,0.62,-3}, {0.68,0.46,4}, {1.18,0.40,9}, {1.62,0.90,7} } },
-	{ "comeback",  "Comeback Hook",   3, { {0,0.20,-5}, {0.24,0.20,0}, {0.48,0.20,4}, {0.72,0.20,7}, {0.96,0.24,9}, {1.24,0.62,4} } },
+-- ── Melodías ─────────────────────────────────────────────────────────────────
+pack("melodias", "Melodías", "Líneas más largas. El contorno lleva el puntaje.", {
+	{ id = "lenta",    name = "Lenta",           difficulty = 1, search = { "simple melody", "soft chime melody" },
+	  notes = { {0,0.5,0}, {0.59,0.5,4}, {1.18,0.7,2} } },
+	{ id = "fanfarria", name = "Fanfarria",      difficulty = 2, search = { "fanfare", "trumpet short" },
+	  notes = { {0,0.26,0}, {0.35,0.26,4}, {0.7,0.26,7}, {1.05,0.58,9} } },
+	{ id = "escalera", name = "Escalera",        difficulty = 2, search = { "synth arpeggio up", "scale up" },
+	  notes = { {0,0.24,0}, {0.33,0.24,2}, {0.66,0.24,4}, {0.99,0.24,5}, {1.32,0.4,7} } },
+	{ id = "gancho",   name = "Gancho",          difficulty = 3, search = { "dance hook", "electronic riff" },
+	  notes = { {0,0.22,7}, {0.31,0.22,5}, {0.62,0.22,2}, {0.93,0.22,5}, {1.24,0.46,0} } },
+	{ id = "retro",    name = "Retro",           difficulty = 3, search = { "chiptune melody", "8 bit tune" },
+	  notes = { {0,0.3,2}, {0.39,0.3,5}, {0.78,0.3,9}, {1.17,0.3,5}, {1.56,0.56,2} } },
+	{ id = "blues",    name = "Blues",           difficulty = 3, search = { "blues guitar riff", "blues lick" },
+	  notes = { {0,0.26,0}, {0.35,0.2,3}, {0.64,0.26,-2}, {0.99,0.2,3}, {1.28,0.52,-5} } },
+	{ id = "vaiven",   name = "Vaivén",          difficulty = 2, search = { "two note melody", "simple riff" },
+	  notes = { {0,0.28,4}, {0.37,0.24,4}, {0.7,0.34,-1}, {1.13,0.46,2} } },
+	{ id = "opera",    name = "Ópera",           difficulty = 3, search = { "opera singing", "soprano" },
+	  notes = { {0,0.62,-3}, {0.71,0.46,4}, {1.26,0.4,9}, {1.75,0.9,7} } },
+	{ id = "remontada", name = "Remontada",      difficulty = 3, search = { "rising melody", "build up melody" },
+	  notes = { {0,0.2,-5}, {0.29,0.2,0}, {0.58,0.2,4}, {0.87,0.2,7}, {1.16,0.24,9}, {1.49,0.62,4} } },
 })
 
 function SoundLibrary.packs()
@@ -918,7 +1250,7 @@ function SoundLibrary.playlist(seed, count, packFilter)
 	return out
 end
 
--- Envelope used by both the waveform renderer and the audio engine.
+-- Envelope used by the waveform renderer and by the synthesised fallback voice.
 function SoundLibrary.envelope(notes, duration, samples)
 	samples = samples or Config.TAKE.ENVELOPE_SAMPLES
 	local out = table.create(samples, 0)
@@ -943,11 +1275,11 @@ return SoundLibrary
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="12">
+  <Item class="ServerScriptService" referent="13">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Script" referent="13">
+    <Item class="Script" referent="14">
       <Properties>
         <string name="Name">Server</string>
         <token name="RunContext">0</token>
@@ -960,6 +1292,7 @@ return SoundLibrary
 local Players = game:GetService("Players")
 
 local Net = require(game.ReplicatedStorage.Shared.Net)
+local AudioCatalog = require(game.ReplicatedStorage.Shared.AudioCatalog)
 
 local StageBuilder = require(script.StageBuilder)
 local LightingRig = require(script.LightingRig)
@@ -971,6 +1304,10 @@ Players.CharacterAutoLoads = false
 LightingRig.apply()
 StageBuilder.build()
 Net.init()
+
+-- Pulls reference audio from Roblox's own library. Runs in the background: every
+-- sound has a synthesised fallback, so no round ever waits on this.
+AudioCatalog.resolveAsync()
 
 MatchService.bindRemotes()
 
@@ -992,7 +1329,7 @@ MatchService.start()
 print("[Mimic Party] venue built, match loop running.")
 ]]></string>
       </Properties>
-      <Item class="ModuleScript" referent="14">
+      <Item class="ModuleScript" referent="15">
         <Properties>
           <string name="Name">LightingRig</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -1075,7 +1412,7 @@ return LightingRig
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="15">
+      <Item class="ModuleScript" referent="16">
         <Properties>
           <string name="Name">MatchService</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -1099,6 +1436,15 @@ local Scoring = require(Shared.Scoring)
 local SoundLibrary = require(Shared.SoundLibrary)
 local Roulette = require(Shared.Roulette)
 local Sabotages = require(Shared.Sabotages)
+
+-- A take recorded without pitch control is graded without the melody axis; the
+-- weight is redistributed so a perfect take still reaches 1000 either way.
+local function weightsForMode(mode)
+	if mode == "voice_only" then
+		return Config.SCORING_VOICE_ONLY
+	end
+	return nil
+end
 
 local PlayerProfiles = require(script.Parent.PlayerProfiles)
 local TakeStore = require(script.Parent.TakeStore)
@@ -1253,7 +1599,7 @@ local function gradeAndPlayback(sound)
 
 	for _, profile in ipairs(PlayerProfiles.all()) do
 		local take = TakeStore.get(profile.userId) or TakeStore.empty()
-		local grade = Scoring.grade(sound, take)
+		local grade = Scoring.grade(sound, take, weightsForMode(take.mode))
 
 		-- Multiplier won on a previous wheel.
 		local awarded = math.floor(grade.total * profile.multiplier + 0.5)
@@ -1279,6 +1625,7 @@ local function gradeAndPlayback(sound)
 			sabotage = sabotage and sabotage.id or nil,
 			sabotageFrom = sabotage and sabotage.fromName or nil,
 			verdict = Scoring.verdict(grade.total),
+			inputMode = take.mode,
 			voiceGated = gated,
 		})
 
@@ -1577,7 +1924,7 @@ return MatchService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="16">
+      <Item class="ModuleScript" referent="17">
         <Properties>
           <string name="Name">PlayerProfiles</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -1764,7 +2111,7 @@ return PlayerProfiles
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="17">
+      <Item class="ModuleScript" referent="18">
         <Properties>
           <string name="Name">StageBuilder</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -2300,7 +2647,7 @@ return StageBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="18">
+      <Item class="ModuleScript" referent="19">
         <Properties>
           <string name="Name">TakeStore</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -2319,6 +2666,10 @@ local takes = {}
 local MAX_NOTES = Config.TAKE.MAX_NOTES
 local MIN_NOTE = Config.TAKE.MIN_NOTE
 local PITCH_RANGE = Config.TAKE.PITCH_RANGE
+
+-- A client tells us which input it used so we can grade it on the axes it
+-- could actually drive. Anything not in this set is treated as the default.
+local VALID_MODES = { voice = true, voice_only = true, pointer = true }
 
 local function sanitise(raw, duration)
 	if type(raw) ~= "table" then
@@ -2355,7 +2706,9 @@ local function sanitise(raw, duration)
 		return a.t < b.t
 	end)
 
-	return { notes = notes }
+	local mode = (type(raw.mode) == "string" and VALID_MODES[raw.mode]) and raw.mode or "voice"
+
+	return { notes = notes, mode = mode }
 end
 
 function TakeStore.submit(userId, raw, duration)
@@ -2392,14 +2745,14 @@ end
 
 -- A silent take, for a player who never submitted (left, crashed, froze).
 function TakeStore.empty()
-	return { notes = {} }
+	return { notes = {}, mode = "voice" }
 end
 
 return TakeStore
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="19">
+      <Item class="ModuleScript" referent="20">
         <Properties>
           <string name="Name">VoiceGate</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -2465,7 +2818,7 @@ return VoiceGate
       </Item>
     </Item>
   </Item>
-  <Item class="SoundService" referent="20">
+  <Item class="SoundService" referent="21">
     <Properties>
       <string name="Name">SoundService</string>
       <token name="AmbientReverb">7</token>
@@ -2473,15 +2826,15 @@ return VoiceGate
       <bool name="RespectFilteringEnabled">true</bool>
     </Properties>
   </Item>
-  <Item class="StarterPlayer" referent="21">
+  <Item class="StarterPlayer" referent="22">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="22">
+    <Item class="StarterPlayerScripts" referent="23">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="23">
+      <Item class="LocalScript" referent="24">
         <Properties>
           <string name="Name">Client</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -2590,14 +2943,19 @@ local function runTake(sound)
 	end
 	recording = true
 
-	ui.stage:setHint("MANTENÉ APRETADO · MOVÉ EL MOUSE PARA EL TONO")
-
 	local ok, take = pcall(Booth.record, sound, {
+		onMode = function(mode, reason)
+			ui.stage:setInputMode(mode, reason)
+		end,
+		onCalibrate = function(level)
+			ui.stage:setMicLevel(level, true)
+		end,
 		onCountIn = function(n)
 			ui.stage:showCountIn(n)
 		end,
-		onFrame = function(alpha, pitch, voiced, index, level)
+		onFrame = function(alpha, pitch, voiced, index, level, raw)
 			ui.stage:onRecordFrame(alpha, pitch, voiced, index, level)
+			ui.stage:setMicLevel(raw or level, false)
 		end,
 	})
 
@@ -2611,8 +2969,10 @@ local function runTake(sound)
 
 	ui.stage:showTake(take, sound.duration)
 	ui.stage:setHint("TOMA ENVIADA")
-	-- Only the contour travels. The server grades it.
-	Net.fireServer(Net.SubmitTake, { notes = take.notes })
+	ui.stage:setMicLevel(0, false)
+	-- Only the contour travels. The server grades it, on the axes this input
+	-- mode could actually drive.
+	Net.fireServer(Net.SubmitTake, { notes = take.notes, mode = take.mode })
 end
 
 -- ── phase handling ─────────────────────────────────────────────────────────────
@@ -2799,7 +3159,7 @@ end)
 print("[Mimic Party] client ready.")
 ]]></string>
         </Properties>
-        <Item class="ModuleScript" referent="24">
+        <Item class="ModuleScript" referent="25">
           <Properties>
             <string name="Name">AudioEngine</string>
             <string name="Source"><![CDATA[--!nonstrict
@@ -2819,6 +3179,7 @@ local SoundService = game:GetService("SoundService")
 local Shared = game.ReplicatedStorage.Shared
 local Config = require(Shared.Config)
 local Sabotages = require(Shared.Sabotages)
+local AudioCatalog = require(Shared.AudioCatalog)
 
 local AudioEngine = {}
 
@@ -2914,10 +3275,82 @@ function AudioEngine.playPattern(notes, duration, opts)
 	return handle
 end
 
+-- Plays a real Roblox library asset straight through, while still driving the
+-- playhead from the contour so the waveform stays in step with what is heard.
+local function playAsset(assetId, duration, opts)
+	local s = Instance.new("Sound")
+	s.SoundId = assetId
+	s.Volume = opts.volume or 0.6
+	s.SoundGroup = group
+	s.Parent = SoundService
+	local cleanupSabotage = Sabotages.applyTo(s, opts.sabotage)
+	s:Play()
+
+	local handle = { done = false }
+	local started = os.clock()
+	local conn
+	conn = RunService.RenderStepped:Connect(function()
+		local t = os.clock() - started
+		if t >= duration or handle.done then
+			if conn then
+				conn:Disconnect()
+				conn = nil
+			end
+			handle.done = true
+			cleanupSabotage()
+			if s.Parent then
+				s:Stop()
+				s:Destroy()
+			end
+			if opts.onFinish then
+				opts.onFinish()
+			end
+			return
+		end
+		if opts.onFrame then
+			opts.onFrame(t / duration, nil, true)
+		end
+	end)
+
+	function handle:stop()
+		self.done = true
+		if conn then
+			conn:Disconnect()
+			conn = nil
+		end
+		cleanupSabotage()
+		if s.Parent then
+			s:Stop()
+			s:Destroy()
+		end
+	end
+
+	return handle
+end
+
+-- The reference. Roblox's own audio if the catalog resolved one and it loads
+-- here; the synthesised contour otherwise. The player cannot tell which path
+-- was taken from the scoring, because the contour is what is graded.
 function AudioEngine.playReference(sound, opts)
 	opts = opts or {}
 	opts.volume = opts.volume or 0.6
+
+	local asset = AudioCatalog.assetFor(sound.id)
+	if asset and AudioCatalog.verifyAsync(sound.id, 2) then
+		return playAsset(asset, sound.duration, opts)
+	end
+
 	return AudioEngine.playPattern(sound.notes, sound.duration, opts)
+end
+
+-- Warms the catalog for the sounds a match is about to use, so the first round
+-- does not pay for the asset load.
+function AudioEngine.preload(sounds)
+	task.spawn(function()
+		for _, sound in ipairs(sounds) do
+			AudioCatalog.verifyAsync(sound.id, 4)
+		end
+	end)
 end
 
 -- Plays somebody's take, honouring the sabotage aimed at them.
@@ -3012,34 +3445,40 @@ return AudioEngine
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="25">
+        <Item class="ModuleScript" referent="26">
           <Properties>
             <string name="Name">Booth</string>
             <string name="Source"><![CDATA[--!nonstrict
 -- Booth.luau — the recording booth. This is the input half of the game.
 --
--- Roblox cannot read a microphone: no script can reach the audio samples, so a
--- real voice cannot be scored on this platform. What is preserved instead is
--- the thing that was actually being measured — melody, rhythm and attacks —
--- with the mouse standing in for the throat:
+-- You sing, shout, bark or beatbox into your actual microphone and the game
+-- hears you. What it can hear is bounded by the engine, not by this code:
 --
---     hold  (mouse / Space / touch) → you are vocalising
---     move  up / down               → pitch, ±9 semitones
---     release                       → that attack ends
+--   loudness, per audio buffer   →  available (AudioAnalyzer.RmsLevel, client)
+--   frequency / pitch            →  blocked (GetSpectrum returns an empty array
+--                                   for AudioDeviceInput, by design, privacy)
 --
--- Everything else behaves exactly like the original: one countdown, one take,
--- a hard stop at the end of the window, and no retry. You monitor yourself
--- live while recording, and the take is submitted the instant it closes.
+-- So the microphone drives the envelope, the attacks and the rhythm — the real
+-- shape of what you just performed — and pitch, which the engine will not give
+-- up, is taken from how high you hold the pointer. Three input modes:
+--
+--   "voice"       mic + pointer height for pitch        (default)
+--   "voice_only"  mic alone; the melody axis is dropped and its weight is
+--                 redistributed, so totals stay comparable
+--   "pointer"     no mic available: hold to vocalise, pointer for pitch
+--
+-- Every mode produces the identical { t, dur, pitch } note list, so Scoring
+-- never learns which one was used.
 
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
-local Players = game:GetService("Players")
 
 local Shared = game.ReplicatedStorage.Shared
 local Config = require(Shared.Config)
 local SoundLibrary = require(Shared.SoundLibrary)
 
 local AudioEngine = require(script.Parent.AudioEngine)
+local VoiceInput = require(script.Parent.VoiceInput)
 
 local Booth = {}
 
@@ -3049,10 +3488,67 @@ local MAX_NOTES = Config.TAKE.MAX_NOTES
 local SAMPLES = Config.TAKE.ENVELOPE_SAMPLES
 
 local active = false
+local preferred = Config.INPUT.DEFAULT
+local probed, probeOk, probeReason = false, false, nil
 
--- Screen Y → semitones. Inverted, because up should mean higher.
+-- ── mode resolution ──────────────────────────────────────────────────────────
+
+-- Probed once per session: opening the mic graph is cheap but not free, and the
+-- answer cannot change mid-session.
+local function probe()
+	if not probed then
+		probeOk, probeReason = VoiceInput.probe()
+		probed = true
+	end
+	return probeOk, probeReason
+end
+
+function Booth.setPreferredMode(mode)
+	if mode == "voice" or mode == "voice_only" or mode == "pointer" then
+		preferred = mode
+	end
+end
+
+function Booth.preferredMode()
+	return preferred
+end
+
+-- What this take will actually use, and why, in words a player can read.
+function Booth.resolveMode()
+	if preferred == "pointer" then
+		return "pointer", "Puntero: mantené apretado."
+	end
+	local ok, reason = probe()
+	if not ok then
+		return "pointer", reason or "Sin micrófono. Usás el puntero."
+	end
+	return preferred, nil
+end
+
+function Booth.micAvailable()
+	local ok = probe()
+	return ok
+end
+
+function Booth.micReason()
+	local _, reason = probe()
+	return reason
+end
+
+-- The scoring weights that match an input mode. The server is told the mode and
+-- applies the same table, so nobody is graded on an axis they could not drive.
+function Booth.weightsFor(mode)
+	if mode == "voice_only" then
+		return Config.SCORING_VOICE_ONLY
+	end
+	return nil
+end
+
+-- ── pointer pitch ────────────────────────────────────────────────────────────
+
 local function pitchFromPointer()
-	local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize
+	local camera = workspace.CurrentCamera
+	local viewport = camera and camera.ViewportSize
 	if not viewport or viewport.Y <= 0 then
 		return 0
 	end
@@ -3063,23 +3559,111 @@ local function pitchFromPointer()
 	return (0.5 - alpha) * 2 * PITCH_RANGE
 end
 
-local function isHeld()
+local function pointerHeld()
 	return UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
 		or UserInputService:IsKeyDown(Enum.KeyCode.Space)
 		or UserInputService:IsKeyDown(Enum.KeyCode.ButtonA)
 end
 
--- Runs one take. Blocking (call from a coroutine).
---   sound    the reference being imitated
---   hooks    { onCountIn(n), onFrame(alpha, pitch, voiced, envelopeIndex, level), onClose() }
--- Returns the take: { notes = { {t, dur, pitch}, ... } }
+-- ── note builder ─────────────────────────────────────────────────────────────
+-- Shared by every mode: open a note, bend it, close it, drop the accidents.
+
+local function newBuilder(duration)
+	return {
+		notes = {},
+		openNote = nil,
+		duration = duration,
+
+		open = function(self, t, pitch)
+			if #self.notes >= MAX_NOTES or self.openNote then
+				return
+			end
+			self.openNote = { t = t, dur = MIN_NOTE, pitch = pitch }
+			table.insert(self.notes, self.openNote)
+		end,
+
+		bend = function(self, t, pitch)
+			local n = self.openNote
+			if not n then
+				return
+			end
+			-- A held attack tracks the pointer: the note bends with your hand,
+			-- which is what makes a contour possible at all.
+			n.pitch = n.pitch * 0.72 + pitch * 0.28
+			n.dur = math.max(MIN_NOTE, t - n.t)
+		end,
+
+		close = function(self, t)
+			local n = self.openNote
+			if not n then
+				return
+			end
+			n.dur = math.max(MIN_NOTE, t - n.t)
+			if n.t + n.dur > self.duration then
+				n.dur = math.max(MIN_NOTE, self.duration - n.t)
+			end
+			self.openNote = nil
+		end,
+
+		finish = function(self)
+			local out = {}
+			for _, n in ipairs(self.notes) do
+				if n.dur >= MIN_NOTE then
+					table.insert(out, { t = n.t, dur = n.dur, pitch = n.pitch })
+				end
+			end
+			return out
+		end,
+	}
+end
+
+-- ── the take ─────────────────────────────────────────────────────────────────
+-- Blocking; call from a coroutine.
+--   hooks.onCountIn(n)                      3 · 2 · 1 · 0 (= GO)
+--   hooks.onCalibrate(level, floor)         while the room is being measured
+--   hooks.onMode(mode, reason)              resolved input mode, before count-in
+--   hooks.onFrame(alpha, pitch, voiced, i, level)
+--   hooks.onClose()
 function Booth.record(sound, hooks)
 	assert(not active, "[Booth] a take is already being recorded")
 	active = true
 	hooks = hooks or {}
 
-	-- ── count-in ──
-	for n = Config.PHASE.COUNT_IN, 1, -1 do
+	local mode, reason = Booth.resolveMode()
+	local session, openReason
+
+	if mode ~= "pointer" then
+		session, openReason = VoiceInput.open()
+		if not session then
+			mode = Config.INPUT.FALLBACK
+			reason = openReason
+		end
+	end
+
+	if hooks.onMode then
+		hooks.onMode(mode, reason)
+	end
+
+	-- ── count-in, which is also the calibration window ──
+	-- The room is measured while the player is counted in, so calibration costs
+	-- nothing: by "GO" the gate is already tuned to their mic and their room.
+	local countIn = Config.PHASE.COUNT_IN
+	local calibrated = false
+
+	if session then
+		task.spawn(function()
+			session:calibrate(math.min(Config.VOICE.CALIBRATE_FOR, countIn), function(level)
+				if hooks.onCalibrate then
+					hooks.onCalibrate(level, session.floor)
+				end
+			end)
+			calibrated = true
+		end)
+	else
+		calibrated = true
+	end
+
+	for n = countIn, 1, -1 do
 		if hooks.onCountIn then
 			hooks.onCountIn(n)
 		end
@@ -3087,68 +3671,97 @@ function Booth.record(sound, hooks)
 		task.wait(1)
 	end
 	if hooks.onCountIn then
-		hooks.onCountIn(0)   -- "GO"
+		hooks.onCountIn(0)
 	end
 
-	-- ── the take ──
-	local duration = sound.duration
-	local notes = {}
-	local envelope = table.create(SAMPLES, 0)
-	local monitor = AudioEngine.openMonitor()
+	-- Calibration runs inside the count-in, but never start the take before it
+	-- has actually produced a floor.
+	local guard = os.clock() + 0.5
+	while session and not calibrated and os.clock() < guard do
+		task.wait(0.02)
+	end
 
-	local openNote = nil
+	-- ── record ──
+	local duration = sound.duration
+	local builder = newBuilder(duration)
+	local envelope = table.create(SAMPLES, 0)
+	local monitor = (mode == "pointer") and AudioEngine.openMonitor() or nil
+
+	local gate
+	if session then
+		local openAt, closeAt = session:thresholds()
+		gate = VoiceInput.Gate.new(openAt, closeAt)
+	end
+
 	local started = os.clock()
+	local lastFrame = started
 	local touchHeld = false
 
-	-- Touch devices have no mouse button to hold: a finger down is the hold.
-	local touchBegan = UserInputService.TouchStarted:Connect(function()
-		touchHeld = true
-	end)
-	local touchEnded = UserInputService.TouchEnded:Connect(function()
-		touchHeld = false
-	end)
-
-	local function closeNote(at)
-		if not openNote then
-			return
-		end
-		openNote.dur = math.max(MIN_NOTE, at - openNote.t)
-		if openNote.t + openNote.dur > duration then
-			openNote.dur = math.max(MIN_NOTE, duration - openNote.t)
-		end
-		openNote = nil
+	local touchBegan, touchEnded
+	if mode ~= "voice_only" then
+		touchBegan = UserInputService.TouchStarted:Connect(function()
+			touchHeld = true
+		end)
+		touchEnded = UserInputService.TouchEnded:Connect(function()
+			touchHeld = false
+		end)
 	end
 
 	local conn
 	conn = RunService.RenderStepped:Connect(function()
-		local t = os.clock() - started
+		local nowClock = os.clock()
+		local t = nowClock - started
+		local dt = nowClock - lastFrame
+		lastFrame = nowClock
 		if t >= duration then
 			return
 		end
 
-		local held = isHeld() or touchHeld
-		local pitch = pitchFromPointer()
+		local voiced, level, pitch
 
-		if held and not openNote and #notes < MAX_NOTES then
-			openNote = { t = t, dur = MIN_NOTE, pitch = pitch }
-			table.insert(notes, openNote)
-		elseif held and openNote then
-			-- A held attack tracks the pointer: the note bends with your hand,
-			-- which is what makes a contour possible at all.
-			openNote.pitch = openNote.pitch * 0.72 + pitch * 0.28
-			openNote.dur = math.max(MIN_NOTE, t - openNote.t)
-		elseif not held and openNote then
-			closeNote(t)
+		if session then
+			-- ── real microphone ──
+			local rms = session:rms()
+			level = session:level(rms, dt)
+			local event, at
+			voiced, event, at = gate:step(rms, t)
+
+			-- Pitch: the pointer in "voice", nothing in "voice_only".
+			pitch = (mode == "voice") and pitchFromPointer() or 0
+
+			if event == "onset" then
+				builder:open(at or t, pitch)
+			elseif event == "end" then
+				builder:close(at or t)
+			elseif voiced then
+				builder:bend(t, pitch)
+			end
+		else
+			-- ── pointer ──
+			voiced = pointerHeld() or touchHeld
+			pitch = pitchFromPointer()
+			level = voiced and 1 or 0
+
+			if voiced and not builder.openNote then
+				builder:open(t, pitch)
+			elseif voiced then
+				builder:bend(t, pitch)
+			elseif builder.openNote then
+				builder:close(t)
+			end
+
+			if monitor then
+				monitor:set(builder.openNote and builder.openNote.pitch or pitch, voiced)
+			end
 		end
 
+		-- The envelope is the real loudness curve when the mic is driving it,
+		-- which is why the green waveform looks like a voice and not a square.
 		local index = math.clamp(math.floor(t / duration * SAMPLES) + 1, 1, SAMPLES)
-		local level = held and 1 or 0
-		envelope[index] = math.max(envelope[index], level)
-
-		monitor:set(openNote and openNote.pitch or pitch, held)
+		envelope[index] = math.max(envelope[index], voiced and math.max(level, 0.25) or 0)
 
 		if hooks.onFrame then
-			hooks.onFrame(t / duration, openNote and openNote.pitch or pitch, held, index, level)
+			hooks.onFrame(t / duration, pitch, voiced, index, envelope[index], level)
 		end
 	end)
 
@@ -3156,33 +3769,36 @@ function Booth.record(sound, hooks)
 
 	-- Hard stop. One take.
 	conn:Disconnect()
-	touchBegan:Disconnect()
-	touchEnded:Disconnect()
-	closeNote(duration)
-	monitor:close()
-
-	-- Drop accidental taps: a 2-frame click is not an attack.
-	local cleaned = {}
-	for _, n in ipairs(notes) do
-		if n.dur >= MIN_NOTE then
-			table.insert(cleaned, { t = n.t, dur = n.dur, pitch = n.pitch })
-		end
-	end
+	if touchBegan then touchBegan:Disconnect() end
+	if touchEnded then touchEnded:Disconnect() end
+	if gate then gate:forceClose(duration) end
+	builder:close(duration)
+	if monitor then monitor:close() end
+	if session then session:close() end
 
 	if hooks.onClose then
 		hooks.onClose()
 	end
 	active = false
 
-	return { notes = cleaned, envelope = envelope }
+	return {
+		notes = builder:finish(),
+		envelope = envelope,
+		mode = mode,
+	}
 end
 
 function Booth.isRecording()
 	return active
 end
 
--- The envelope the waveform should draw for a finished take.
+-- The envelope the waveform should draw for a finished take. A take recorded
+-- with a microphone carries its own measured envelope; a pointer take is
+-- reconstructed from its notes.
 function Booth.envelopeFor(take, duration)
+	if take.envelope then
+		return take.envelope
+	end
 	return SoundLibrary.envelope(take.notes, duration, SAMPLES)
 end
 
@@ -3190,7 +3806,7 @@ return Booth
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="26">
+        <Item class="ModuleScript" referent="27">
           <Properties>
             <string name="Name">CameraDirector</string>
             <string name="Source"><![CDATA[--!nonstrict
@@ -3357,7 +3973,7 @@ return CameraDirector
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="27">
+        <Item class="ModuleScript" referent="28">
           <Properties>
             <string name="Name">SoloRunner</string>
             <string name="Source"><![CDATA[--!nonstrict
@@ -3430,22 +4046,29 @@ local function runRound(ui, sound, round, rounds, header)
 	-- Take.
 	ui:setPhase("record")
 	CameraDirector.setShot("CamBooth", 3.0)
-	ui.stage:setHint("MANTENÉ APRETADO · MOVÉ EL MOUSE PARA EL TONO")
-
 	local take = Booth.record(sound, {
+		onMode = function(mode, reason)
+			ui.stage:setInputMode(mode, reason)
+		end,
+		onCalibrate = function(level)
+			ui.stage:setMicLevel(level, true)
+		end,
 		onCountIn = function(n)
 			ui.stage:showCountIn(n)
 		end,
-		onFrame = function(alpha, pitch, voiced, index, level)
+		onFrame = function(alpha, pitch, voiced, index, level, raw)
 			ui.stage:onRecordFrame(alpha, pitch, voiced, index, level)
+			ui.stage:setMicLevel(raw or level, false)
 		end,
 	})
 
 	ui.stage:showTake(take, sound.duration)
 	ui.stage:setReferencePlayhead(nil)
+	ui.stage:setMicLevel(0, false)
 
 	-- Grade and play it back against the reference, as the original does.
-	local grade = Scoring.grade(sound, take)
+	-- Same module, same weights-per-mode rule the server uses.
+	local grade = Scoring.grade(sound, take, Booth.weightsFor(take.mode))
 	ui:setPhase("playback")
 	CameraDirector.focusMark(3, 2.6)
 	AudioEngine.playTake(take, sound.duration, nil)
@@ -3654,11 +4277,11 @@ return SoloRunner
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="28">
+        <Item class="Folder" referent="29">
           <Properties>
             <string name="Name">UI</string>
           </Properties>
-          <Item class="ModuleScript" referent="29">
+          <Item class="ModuleScript" referent="30">
             <Properties>
               <string name="Name">Menu</string>
               <string name="Source"><![CDATA[--!nonstrict
@@ -3878,7 +4501,7 @@ return Menu
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="30">
+          <Item class="ModuleScript" referent="31">
             <Properties>
               <string name="Name">Root</string>
               <string name="Source"><![CDATA[--!nonstrict
@@ -4119,7 +4742,7 @@ return Root
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="31">
+          <Item class="ModuleScript" referent="32">
             <Properties>
               <string name="Name">RouletteUI</string>
               <string name="Source"><![CDATA[--!nonstrict
@@ -4351,7 +4974,7 @@ return RouletteUI
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="32">
+          <Item class="ModuleScript" referent="33">
             <Properties>
               <string name="Name">Scoreboard</string>
               <string name="Source"><![CDATA[--!nonstrict
@@ -4460,7 +5083,7 @@ return Scoreboard
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="33">
+          <Item class="ModuleScript" referent="34">
             <Properties>
               <string name="Name">StagePanel</string>
               <string name="Source"><![CDATA[--!nonstrict
@@ -4549,6 +5172,51 @@ function StagePanel.new(parent)
 	self.hint = Theme.caption(panel, "", {
 		Position = UDim2.new(0, 108, 0, 228), Size = UDim2.new(1, -108, 0, 12),
 		TextSize = 11, TextXAlignment = Enum.TextXAlignment.Right,
+	})
+
+	-- ── microphone meter ──
+	-- Sits under your own track, because that is what it is measuring. It is
+	-- the only element that moves continuously, so it is small and desaturated.
+	self.micRow = Instance.new("Frame")
+	self.micRow.BackgroundTransparency = 1
+	self.micRow.AnchorPoint = Vector2.new(0, 1)
+	self.micRow.Position = UDim2.new(0, 0, 1, 28)
+	self.micRow.Size = UDim2.fromOffset(420, 22)
+	self.micRow.Parent = panel
+
+	self.micBadge = Theme.label(self.micRow, "", {
+		Size = UDim2.fromOffset(150, 22), TextSize = 11, FontFace = Theme.Font.Medium,
+		TextColor3 = Palette.Muted,
+	})
+
+	local micTrack = Instance.new("Frame")
+	micTrack.BackgroundColor3 = Palette.Ink
+	micTrack.BackgroundTransparency = 0.3
+	micTrack.BorderSizePixel = 0
+	micTrack.Position = UDim2.new(0, 156, 0.5, -3)
+	micTrack.Size = UDim2.fromOffset(150, 6)
+	micTrack.Parent = self.micRow
+	Theme.corner(micTrack, UDim.new(1, 0))
+
+	self.micFill = Instance.new("Frame")
+	self.micFill.BackgroundColor3 = Palette.Yours
+	self.micFill.BorderSizePixel = 0
+	self.micFill.Size = UDim2.fromScale(0, 1)
+	self.micFill.Parent = micTrack
+	Theme.corner(self.micFill, UDim.new(1, 0))
+
+	-- The gate threshold, drawn on the meter: you can see what counts as sound.
+	self.micGate = Instance.new("Frame")
+	self.micGate.BackgroundColor3 = Palette.Reference
+	self.micGate.BorderSizePixel = 0
+	self.micGate.Size = UDim2.new(0, 1, 1, 4)
+	self.micGate.Position = UDim2.fromScale(0.3, -0.3)
+	self.micGate.Visible = false
+	self.micGate.Parent = micTrack
+
+	self.micNote = Theme.caption(self.micRow, "", {
+		Position = UDim2.new(0, 314, 0, 0), Size = UDim2.new(1, -314, 1, 0),
+		TextSize = 10, TextColor3 = Palette.Warn,
 	})
 
 	-- ── count-in overlay ──
@@ -4677,7 +5345,44 @@ function StagePanel:onRecordFrame(alpha, pitch, voiced, index, level)
 end
 
 function StagePanel:showTake(take, duration)
-	self.yours:setEnvelope(SoundLibrary.envelope(take.notes, duration))
+	-- A microphone take carries the loudness curve the player actually produced;
+	-- only a pointer take has to be reconstructed from its notes.
+	self.yours:setEnvelope(take.envelope or SoundLibrary.envelope(take.notes, duration))
+end
+
+local MODE_TEXT = {
+	voice = "MICRÓFONO + TONO",
+	voice_only = "SOLO MICRÓFONO",
+	pointer = "PUNTERO",
+}
+
+local MODE_HINT = {
+	voice = "HABLÁ AL MICRÓFONO · MOVÉ EL MOUSE PARA EL TONO",
+	voice_only = "HABLÁ AL MICRÓFONO",
+	pointer = "MANTENÉ APRETADO · MOVÉ EL MOUSE PARA EL TONO",
+}
+
+-- Called once per take, before the count-in, with the mode actually resolved.
+function StagePanel:setInputMode(mode, reason)
+	self.inputMode = mode
+	self.micBadge.Text = MODE_TEXT[mode] or ""
+	self.micBadge.TextColor3 = (mode == "pointer") and Palette.Muted or Palette.Yours
+	self.micGate.Visible = (mode ~= "pointer")
+	self.micNote.Text = reason or ""
+	self:setHint(MODE_HINT[mode] or "")
+end
+
+-- `calibrating` draws the meter in the reference colour, so the player can see
+-- the room being measured during the count-in rather than wondering.
+function StagePanel:setMicLevel(level, calibrating)
+	local alpha = math.clamp(level or 0, 0, 1)
+	self.micFill.Size = UDim2.fromScale(alpha, 1)
+	self.micFill.BackgroundColor3 = calibrating and Palette.Reference or Palette.Yours
+	if calibrating then
+		self.micBadge.Text = "MIDIENDO LA SALA…"
+	elseif self.inputMode then
+		self.micBadge.Text = MODE_TEXT[self.inputMode] or ""
+	end
 end
 
 function StagePanel:showCard(payload)
@@ -4699,7 +5404,12 @@ function StagePanel:showCard(payload)
 		self.cardSabotage.Text = ""
 	end
 
-	self.meterMelody.set(grade.melody)
+	-- An axis that carried no weight is shown as not counted, rather than as a
+	-- bad score the player had no way to influence.
+	local weighted = grade.weighted
+	local melodyCounted = (not weighted) or weighted.melody > 0
+	self.meterMelody.set(melodyCounted and grade.melody or 0)
+	self.meterMelody.setMuted(not melodyCounted)
 	self.meterRhythm.set(grade.rhythm)
 	self.meterAttacks.set(grade.attacks)
 
@@ -4718,7 +5428,7 @@ return StagePanel
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="34">
+          <Item class="ModuleScript" referent="35">
             <Properties>
               <string name="Name">Theme</string>
               <string name="Source"><![CDATA[--!nonstrict
@@ -4925,6 +5635,15 @@ function Theme.meter(parent, label, color)
 			fill:TweenSize(UDim2.fromScale(alpha, 1), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.45, true)
 			value.Text = tostring(score)
 		end,
+
+		-- An axis the player's input mode could not drive. Shown as "—", not 0:
+		-- a zero reads as a failure, a dash reads as not applicable.
+		setMuted = function(muted)
+			track.BackgroundTransparency = muted and 0.6 or 0
+			fill.Visible = not muted
+			value.Text = muted and "—" or value.Text
+			value.TextColor3 = muted and Palette.Muted or Palette.Cream
+		end,
 	}
 end
 
@@ -4932,7 +5651,7 @@ return Theme
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="35">
+          <Item class="ModuleScript" referent="36">
             <Properties>
               <string name="Name">Waveform</string>
               <string name="Source"><![CDATA[--!nonstrict
@@ -5107,10 +5826,309 @@ return Waveform
             </Properties>
           </Item>
         </Item>
+        <Item class="ModuleScript" referent="37">
+          <Properties>
+            <string name="Name">VoiceInput</string>
+            <string name="Source"><![CDATA[--!nonstrict
+-- VoiceInput.luau — the real microphone.
+--
+-- What Roblox actually allows, verified against the engine reference:
+--
+--   AudioAnalyzer.RmsLevel / .PeakLevel   live, per audio buffer, CLIENT ONLY
+--                                         ("on the server this property is
+--                                         always 0"). Works on a microphone.
+--   AudioAnalyzer:GetSpectrum()           returns an EMPTY ARRAY if any input
+--                                         comes from an AudioDeviceInput.
+--
+-- So loudness is available and frequency is not. That is the whole shape of
+-- this module: it turns a loudness stream into clean note onsets — which is
+-- genuinely two of the three scoring axes (rhythm and attacks) plus the real
+-- envelope for the green waveform. Pitch has to come from somewhere else, and
+-- SpectrumEnabled is left off because for a mic it would only burn CPU.
+--
+-- Everything is guarded: no voice permission, no AudioDeviceInput, an older
+-- client, a denied mic — each one degrades to `nil` and the Booth falls back to
+-- pointer input instead of failing a take.
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local Config = require(game.ReplicatedStorage.Shared.Config)
+
+local VoiceInput = {}
+
+local V = Config.VOICE
+local localPlayer = Players.LocalPlayer
+
+-- ── capability probe ─────────────────────────────────────────────────────────
+
+-- Returns available, reason. The reason is shown to the player, so it is
+-- written for a player and not for a log.
+function VoiceInput.probe()
+	if not RunService:IsClient() then
+		return false, "El análisis de audio solo corre en el cliente."
+	end
+
+	local ok = pcall(function()
+		return Instance.new("AudioAnalyzer")
+	end)
+	if not ok then
+		return false, "Tu cliente de Roblox no tiene la API de audio nueva."
+	end
+
+	local service = game:FindFirstChild("VoiceChatService") or game:GetService("VoiceChatService")
+	if service then
+		local enabled, result = pcall(function()
+			return service:IsVoiceEnabledForUserIdAsync(localPlayer.UserId)
+		end)
+		if enabled and result == false then
+			return false, "No tenés el chat de voz habilitado en tu cuenta de Roblox."
+		end
+	end
+
+	return true, nil
+end
+
+-- ── session ──────────────────────────────────────────────────────────────────
+
+local Session = {}
+Session.__index = Session
+
+-- Opens the mic → analyzer graph. Returns nil plus a reason on any failure.
+function VoiceInput.open()
+	local available, reason = VoiceInput.probe()
+	if not available then
+		return nil, reason
+	end
+
+	local created = {}
+
+	-- Prefer the input Roblox already made for this player; only create one if
+	-- voice chat has not provided it.
+	local device = localPlayer:FindFirstChildOfClass("AudioDeviceInput")
+	if not device then
+		local ok, made = pcall(function()
+			local d = Instance.new("AudioDeviceInput")
+			d.Player = localPlayer
+			d.Parent = localPlayer
+			return d
+		end)
+		if not ok or not made then
+			return nil, "No se pudo abrir el micrófono."
+		end
+		device = made
+		table.insert(created, device)
+	end
+
+	local analyzer
+	local wire
+	local ok = pcall(function()
+		analyzer = Instance.new("AudioAnalyzer")
+		-- GetSpectrum is empty for microphone inputs anyway; leaving the
+		-- spectrum off "dramatically reduces" the analyzer's CPU cost.
+		analyzer.SpectrumEnabled = false
+		analyzer.Parent = localPlayer
+
+		wire = Instance.new("Wire")
+		wire.SourceInstance = device
+		wire.TargetInstance = analyzer
+		wire.Parent = analyzer
+	end)
+
+	if not ok or not analyzer then
+		for _, inst in ipairs(created) do
+			inst:Destroy()
+		end
+		if analyzer then analyzer:Destroy() end
+		return nil, "No se pudo conectar el micrófono al analizador."
+	end
+
+	table.insert(created, analyzer)
+	table.insert(created, wire)
+
+	local self = setmetatable({
+		device = device,
+		analyzer = analyzer,
+		wire = wire,
+		_created = created,
+		floor = V.FLOOR_MIN,
+		ceiling = V.LEVEL_CEILING_MIN,
+		_closed = false,
+	}, Session)
+
+	-- The device must be live for the analyzer to see anything.
+	pcall(function()
+		device.Active = true
+	end)
+
+	return self
+end
+
+function Session:rms()
+	if self._closed then
+		return 0
+	end
+	local ok, value = pcall(function()
+		return self.analyzer.RmsLevel
+	end)
+	return (ok and type(value) == "number" and value == value) and value or 0
+end
+
+function Session:peak()
+	if self._closed then
+		return 0
+	end
+	local ok, value = pcall(function()
+		return self.analyzer.PeakLevel
+	end)
+	return (ok and type(value) == "number" and value == value) and value or 0
+end
+
+-- Measures the room while the count-in runs. Called with the count-in duration;
+-- uses the 60th percentile rather than the mean so one cough does not raise the
+-- floor for the whole take.
+function Session:calibrate(seconds, onTick)
+	local samples = {}
+	local deadline = os.clock() + math.max(0.4, seconds)
+	while os.clock() < deadline and not self._closed do
+		local v = self:rms()
+		table.insert(samples, v)
+		if onTick then
+			onTick(v)
+		end
+		task.wait(0.03)
+	end
+
+	if #samples == 0 then
+		self.floor = V.FLOOR_MIN
+		return self.floor
+	end
+
+	table.sort(samples)
+	local pick = samples[math.max(1, math.floor(#samples * 0.6))]
+	self.floor = math.max(V.FLOOR_MIN, pick * V.FLOOR_HEADROOM)
+	return self.floor
+end
+
+-- Normalised 0..1 level for the waveform and the meter. Tracks a decaying peak
+-- so a quiet mic still draws a full-height bar when the player shouts.
+function Session:level(rms, dt)
+	self.ceiling = math.max(
+		V.LEVEL_CEILING_MIN,
+		math.max(rms, self.ceiling - self.ceiling * V.LEVEL_DECAY * (dt or 0.016))
+	)
+	return math.clamp(rms / self.ceiling, 0, 1)
+end
+
+function Session:thresholds()
+	return self.floor * V.GATE_OPEN, self.floor * V.GATE_CLOSE
+end
+
+function Session:close()
+	if self._closed then
+		return
+	end
+	self._closed = true
+	-- Only tear down what this session created. If voice chat owns the device,
+	-- destroying it would cut the player's actual voice chat.
+	for _, inst in ipairs(self._created) do
+		if inst ~= self.device or inst.Parent == nil then
+			pcall(function()
+				inst:Destroy()
+			end)
+		end
+	end
+	if self.device and self.device.Parent == localPlayer then
+		local ownedByUs = false
+		for _, inst in ipairs(self._created) do
+			if inst == self.device then
+				ownedByUs = true
+			end
+		end
+		if ownedByUs then
+			pcall(function()
+				self.device:Destroy()
+			end)
+		end
+	end
+end
+
+-- ── gate ─────────────────────────────────────────────────────────────────────
+-- A small state machine that turns the loudness stream into attacks. Pulled out
+-- of the Booth so it can be reasoned about (and tested) on its own.
+
+local Gate = {}
+Gate.__index = Gate
+VoiceInput.Gate = Gate
+
+function Gate.new(openAt, closeAt)
+	return setmetatable({
+		openAt = openAt,
+		closeAt = closeAt,
+		open = false,
+		lastClosed = -math.huge,
+		pendingClose = nil,
+	}, Gate)
+end
+
+-- Feed it (rms, t). Returns: voiced, event, at
+--   event == "onset"  a new attack just started; `at` is t
+--   event == "end"    the current attack just ended; `at` is when the level
+--                     actually dropped, NOT when we decided it had — otherwise
+--                     every note is reported BRIDGE_GAP longer than it was, and
+--                     the melody axis compares a window the player never filled.
+function Gate:step(rms, t)
+	if not self.open then
+		if rms >= self.openAt and (t - self.lastClosed) >= Config.VOICE.REFRACTORY then
+			self.open = true
+			self.pendingClose = nil
+			return true, "onset", t
+		end
+		return false, nil, nil
+	end
+
+	if rms < self.closeAt then
+		-- Do not end the note on a single quiet frame: a syllable boundary is
+		-- not the end of the attack. Wait out BRIDGE_GAP first.
+		self.pendingClose = self.pendingClose or t
+		if (t - self.pendingClose) >= Config.VOICE.BRIDGE_GAP then
+			local droppedAt = self.pendingClose
+			self.open = false
+			self.lastClosed = droppedAt
+			self.pendingClose = nil
+			return false, "end", droppedAt
+		end
+		return true, nil, nil
+	end
+
+	self.pendingClose = nil
+	return true, nil, nil
+end
+
+function Gate:forceClose(t)
+	if self.open then
+		self.open = false
+		self.lastClosed = t
+		self.pendingClose = nil
+		return true
+	end
+	return false
+end
+
+return VoiceInput
+]]></string>
+          </Properties>
+        </Item>
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="36">
+  <Item class="VoiceChatService" referent="38">
+    <Properties>
+      <string name="Name">VoiceChatService</string>
+      <bool name="EnableDefaultVoice">true</bool>
+    </Properties>
+  </Item>
+  <Item class="Workspace" referent="39">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="FilteringEnabled">true</bool>

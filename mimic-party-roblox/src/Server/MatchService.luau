@@ -20,6 +20,15 @@ local SoundLibrary = require(Shared.SoundLibrary)
 local Roulette = require(Shared.Roulette)
 local Sabotages = require(Shared.Sabotages)
 
+-- A take recorded without pitch control is graded without the melody axis; the
+-- weight is redistributed so a perfect take still reaches 1000 either way.
+local function weightsForMode(mode)
+	if mode == "voice_only" then
+		return Config.SCORING_VOICE_ONLY
+	end
+	return nil
+end
+
 local PlayerProfiles = require(script.Parent.PlayerProfiles)
 local TakeStore = require(script.Parent.TakeStore)
 local StageBuilder = require(script.Parent.StageBuilder)
@@ -173,7 +182,7 @@ local function gradeAndPlayback(sound)
 
 	for _, profile in ipairs(PlayerProfiles.all()) do
 		local take = TakeStore.get(profile.userId) or TakeStore.empty()
-		local grade = Scoring.grade(sound, take)
+		local grade = Scoring.grade(sound, take, weightsForMode(take.mode))
 
 		-- Multiplier won on a previous wheel.
 		local awarded = math.floor(grade.total * profile.multiplier + 0.5)
@@ -199,6 +208,7 @@ local function gradeAndPlayback(sound)
 			sabotage = sabotage and sabotage.id or nil,
 			sabotageFrom = sabotage and sabotage.fromName or nil,
 			verdict = Scoring.verdict(grade.total),
+			inputMode = take.mode,
 			voiceGated = gated,
 		})
 

@@ -10,33 +10,93 @@ rojo build -o MimicParty.rbxlx     # ya está hecho: abrí MimicParty.rbxlx
 
 ---
 
-## 1. Lo que no se pudo copiar, y por qué
+## 1. El micrófono: qué entra de verdad
 
-**Roblox no puede grabar ni analizar tu voz.** Ningún script tiene acceso a las
-muestras del micrófono: el chat de voz es una tubería cerrada, no hay FFT ni
-detección de tono. Puntuar una voz real como hace el original es imposible en
-esta plataforma, no difícil.
+**El juego te escucha.** El chat de voz está activado en el place
+(`VoiceChatService.EnableDefaultVoice = true`), tu micrófono se cablea a un
+`AudioAnalyzer`, y lo que decís mueve la forma de onda verde en vivo.
 
-La decisión de diseño de este port es por lo tanto: **se conservan las tres
-dimensiones de puntuación exactas y se cambia solo el dispositivo de entrada.**
+Lo que la plataforma permite y lo que no, verificado contra la referencia del
+motor y no de memoria:
 
-| Original (Steam / web)        | Este port                                   |
-|-------------------------------|---------------------------------------------|
-| La garganta genera el sonido  | Mantener apretado genera el sonido          |
-| El tono sale de tu voz        | El tono sale de la posición vertical del mouse |
-| IA local puntúa melodía/ritmo/ataques | El mismo modelo, mismas tres dimensiones, mismos pesos |
-| El timbre no se puntúa        | El timbre no existe → no se puntúa          |
-| Una toma, sin repetir         | Una toma, sin repetir (`Config.TAKE.ALLOW_RETRY = false`) |
+| Del micrófono real | ¿Roblox lo da? |
+|---|---|
+| Que estás hablando, buffer por buffer (`RmsLevel` / `PeakLevel`) | **Sí**, solo en el cliente |
+| Envolvente de volumen → tu forma de onda real | **Sí** |
+| **Ataques** (cuántas veces lo golpeaste) | **Sí**, desde tu voz |
+| **Ritmo** (cuándo lo golpeaste) | **Sí**, desde tu voz |
+| **Tono / melodía** (`GetSpectrum`) | **No.** Devuelve array vacío si alguna entrada viene de un `AudioDeviceInput` |
 
-Todo lo demás es fiel: cuenta atrás simultánea, reproducción uno por uno,
-silenciado de la mesa durante la escucha, ruleta compartida, sabotajes reales,
-revelación del saboteador solo al reproducir, y los cinco modos de juego.
+Ese último renglón es una decisión de Roblox, por privacidad, no un límite de
+este código. Staff de Roblox, 6 de octubre de 2026: *"this is on our roadmap to
+explore but I'm sorry to say we still don't have a timeline."* El día que lo
+abran, la melodía sale de la voz cambiando un solo módulo — `VoiceInput.luau`,
+que ya deja `SpectrumEnabled` apagado justo por eso.
+
+Así que **dos de los tres ejes del puntaje salen de tu voz real**, y el tono
+sale de la altura del puntero. Tres modos, resueltos por jugador y por toma:
+
+| Modo | Voz | Tono | Cuándo se usa |
+|---|---|---|---|
+| `voice` | micrófono | puntero | **por defecto** |
+| `voice_only` | micrófono | — | si no querés tocar el mouse. Se descarta la melodía y **su peso se redistribuye**, así un 1000 sigue siendo alcanzable |
+| `pointer` | mantener apretado | puntero | sin micrófono, sin permiso de voz, o cliente viejo |
+
+El modo viaja con la toma y **el servidor grada con los pesos de ese modo**, así
+que nadie se puntúa en un eje que no podía manejar. En la tarjeta de puntaje, un
+eje que no contó se muestra como "—", no como 0: un cero se lee como que fallaste.
+
+### El detector de ataques
+
+De un flujo de volumen hay que sacar ataques limpios. `VoiceInput.Gate`:
+
+- **Calibración por toma.** El piso de ruido se mide **durante la cuenta atrás**,
+  con el percentil 60 (no la media, para que una tos no suba el piso de toda la
+  toma). Calibrar sale gratis: para el "¡YA!" el gate ya está ajustado a tu
+  micrófono y a tu habitación. Ninguna configuración que tocar.
+- **Histéresis.** Abre en 3.1× el piso y cierra en 1.7×. Abrir y cerrar en el
+  mismo umbral hace castañetear el gate con una voz con aire.
+- **Puente de sílaba.** Un bache de menos de 40 ms no termina la nota: es una
+  sílaba, no un corte.
+- **Refractario.** Un ataque nuevo no arranca dentro de 50 ms del anterior.
+
+Esos dos números **no están puestos a ojo, están puestos contra la librería.** El
+hueco más chico de los 36 sonidos es de 90 ms, así que el puente tiene que estar
+cómodamente por debajo de 90 (si no, un patrón rápido se colapsa en un solo
+ataque y el eje de ataques —un cuarto del puntaje— se va a cero) y por encima de
+~33 ms (dos frames a 60 fps, si no castañetea). 40 ms cae en esa ventana con
+50 ms de margen.
+
+**La primera versión de este archivo tenía huecos de 20 ms y estaba roto:** un
+tartamudeo de 6 golpes se leía como 1 ataque. Un frame a 60 fps son 16.7 ms, y
+una garganta humana no articula 20 ms tampoco. Los 36 sonidos se re-escribieron
+con un mínimo de 90 ms entre notas y 100 ms de duración mínima — 33 de los 36 se
+alargaron. Ahora son ejecutables con la voz, que es el punto.
+
+Verificado con el código real del gate, simulando 60 fps:
+
+```
+silencio con ruido de fondo                ataques 0  notas 0
+un ataque simple                           ataques 1  notas 1   0.00+0.30
+Coro de Ranas (6 golpes, huecos 90 ms)     ataques 6  notas 6
+Percusion (6 golpes, huecos 90 ms)         ataques 6  notas 6
+una palabra con bache de 30 ms             ataques 1  notas 1   ← no la parte
+nivel entre los dos umbrales               ataques 1  notas 1   ← no castañetea
+duracion medida de un golpe de 0.300 s: 0.300 s (error 0 ms)
+```
+
+Todo degrada: sin permiso de voz, sin micrófono, micrófono denegado o cliente
+viejo → cae a puntero y te dice por qué, en pantalla. Una toma nunca falla por
+esto.
 
 ## 2. Publicar y conseguir el link
 
-El link `roblox.com/games/...` solo lo puede crear tu cuenta. Son dos clics:
+**Hacé doble clic en `MimicParty.rbxl` y se abre solo en Roblox Studio.** Eso es
+todo: es un archivo de lugar de Roblox, Studio es su programa asociado. Van los
+dos formatos — `.rbxl` (binario, el que abre más rápido) y `.rbxlx` (XML, el que
+podés leer y diffear en git).
 
-1. Abrí **`MimicParty.rbxlx`** con Roblox Studio (doble clic, o File → Open).
+1. Doble clic en **`MimicParty.rbxl`**.
 2. Probalo ahí mismo: **Test → Start** (o F5). Para probar la fiesta con varios
    jugadores: **Test → Clients and Servers → 2 Players → Start**.
 3. **File → Publish to Roblox As…**, ponele nombre, Create.
@@ -44,10 +104,10 @@ El link `roblox.com/games/...` solo lo puede crear tu cuenta. Son dos clics:
 5. El link aparece en [create.roblox.com](https://create.roblox.com) → Creations
    → tu juego → el botón de los tres puntos → **Copy Game Link**.
 
-Si querés chat de voz real para las reacciones entre rondas (opcional; el juego
-funciona sin él), activalo en Game Settings → Communication → Voice Chat. El
-silenciado durante la reproducción se aplica solo si está activado — ver
-`src/Server/VoiceGate.luau`.
+**El chat de voz ya viene activado en el archivo** — es lo que usa el juego para
+escucharte. Si Studio te pide confirmarlo, está en Game Settings → Communication
+→ Voice Chat. Para publicarlo con voz, tu cuenta necesita verificación de edad
+en Roblox; sin eso el juego sigue andando y cae a modo puntero.
 
 ### Si preferís trabajar con Rojo
 
@@ -59,18 +119,21 @@ rojo build -o MimicParty.rbxlx
 ## 3. Cómo se juega
 
 ```
-    mantener apretado (mouse / Espacio / dedo)  →  estás vocalizando
-    mover el mouse arriba y abajo               →  tono, ±9 semitonos
-    soltar                                      →  ese ataque termina
+    hablá / gritá / ladrá al micrófono  →  volumen, ataques y ritmo (tu voz real)
+    mover el mouse arriba y abajo       →  tono, ±9 semitonos
 ```
+
+Sin micrófono, mantené apretado (mouse / Espacio / dedo) en lugar de hablar.
 
 Una ronda, en orden:
 
 1. **Referencia** — el sonido suena para toda la mesa. Arriba, en amarillo, su
    forma de onda; en el medio, su contorno de tono como línea de puntos.
 2. **Cuenta atrás** — 3 · 2 · 1 · ¡YA!, igual para todos.
-3. **Toma** — todos graban a la vez. Tu voz se dibuja en verde abajo, en vivo, y
-   te escuchás mientras lo hacés. Se corta en seco al final. No hay repetir.
+3. **Toma** — todos graban a la vez. Hablás al micrófono y tu voz se dibuja en
+   verde abajo, en vivo, con su curva de volumen real. Abajo del todo tenés el
+   medidor de micrófono, con el umbral del gate marcado encima: podés ver qué
+   cuenta como sonido. Se corta en seco al final. No hay repetir.
 4. **Escucha** — las tomas suenan una por una. La mesa queda silenciada para que
    todos oigan lo mismo. Cada una muestra sus tres medidores y su total.
 5. **Ruleta** — un giro para toda la mesa: puntos, multiplicadores o sabotajes.
@@ -145,25 +208,45 @@ un 740 en Supervivencia y un 740 en fiesta significan lo mismo.
 
 En el lobby: el primer clic en un modo solo lo selecciona, el segundo lo arranca.
 
-## 7. Los sonidos
+## 7. Los sonidos — de la biblioteca de Roblox
 
-36 sonidos, 4 paquetes de 9, con los nombres del original.
+**No hay ningún audio empaquetado y no hay nada que subir.** Al arrancar, el
+servidor le pide a Roblox audio que coincida con las palabras clave de cada
+sonido (`AssetService:SearchAudioAsync`), prefiere los assets que Roblox marca
+como **endorsed**, y publica los ids elegidos como atributos en una carpeta
+replicada. Los clientes los leen de ahí.
 
-- **Reaction Studio** — Nice, Bruh, Hello There, Yeet, Wow, Bababooey, Emotional Damage, Why Are You Running, Get Out
-- **Wild Voices** — Cat Chirp, Puppy Sneeze, Night Owl, Seal Bark, Big Bird, Ho Ho Ho, Screaming Sheep, Peacock Call, Frog Chorus
-- **Rhythm Lab** — Radio Beep, Notification, Error Chime, Doorbell Dance, Ba Dum Tss, Printer Rhythm, Beatbox Fill, Dial-Up Song, Computer Glitch
-- **Melody Club** — Slow Melody, Kazoo Fanfare, Synth Steps, Dance Hook, Retro Chorus, Blues Riff, Hey Ya, Opera Moment, Comeback Hook
+Por qué así:
 
-Cada uno está escrito como un **patrón** (`{t, dur, pitch}`), no como un archivo.
-El motor lo reproduce transponiendo un tono sostenido, así que **el juego suena
-completo sin subir un solo audio**, y tu toma suena con el mismo instrumento que
-la referencia — que es la forma justa de compararlas.
+- El audio es de Roblox y está licenciado por Roblox, así que **no hay derechos
+  de terceros que resolver ni nada que gestionar.**
+- La búsqueda corre una sola vez, en el servidor, así todos en la sala escuchan
+  el mismo asset para el mismo sonido.
+- La documentación de Roblox advierte que la búsqueda puede devolver assets que
+  tu experiencia no tiene permiso de reproducir, así que **un id es un candidato
+  hasta que un cliente lo cargó de verdad** (`AudioCatalog.verifyAsync`).
 
-**Para poner audio real:** ponele `asset = "rbxassetid://…"` a la entrada en
-`SoundLibrary.luau`. El patrón sigue manejando la puntuación y la forma de onda.
+Si una búsqueda no devuelve nada reproducible, el contorno se renderiza con un
+tono sintetizado. Una ronda nunca se rompe por un asset faltante, y **la
+puntuación es idéntica por los dos caminos**, porque lo que se grada es el
+contorno, no el archivo.
 
-**Para agregar sonidos:** una línea más en un `pack(...)`. Es el equivalente al
-Workshop de la versión de Steam; no hace falta tocar nada más.
+**Y saqué todos los nombres de memes y canciones.** La versión anterior usaba
+nombres como *Bababooey*, *Emotional Damage* o *Hey Ya*, que son propiedad de
+terceros y te los habría tenido que sacar igual más adelante. Ahora los 36
+sonidos se llaman por lo que hace su contorno:
+
+- **Voces** — Dos Notas, Grave Largo, Saludo, Latigazo, Asombro, Cinco Golpes, Reproche, Pregunta, Portazo
+- **Animales** — Gato, Estornudo, Búho, Foca, Pájaro Grande, Risa Grave, Oveja, Pavo Real, Coro de Ranas
+- **Máquinas** — Pitido Triple, Aviso, Error, Timbre, Remate, Impresora, Percusión, Módem, Glitch
+- **Melodías** — Lenta, Fanfarria, Escalera, Gancho, Retro, Blues, Vaivén, Ópera, Remontada
+
+Cada entrada tiene su contorno y sus palabras clave de búsqueda. Duración media
+1.28 s, hueco mínimo entre notas 90 ms.
+
+**Para fijar un asset exacto:** poné `asset = "rbxassetid://…"` en la entrada y
+se saltea la búsqueda. **Para agregar un sonido:** una línea más en un
+`pack(...)`. Es el equivalente al Workshop de la versión de Steam.
 
 ## 8. El escenario
 
@@ -219,10 +302,19 @@ Ningún número vive fuera de `Config.luau`.
 
 ## 10. Estado
 
-- 29 módulos, 4.898 líneas de Luau. Los 29 compilan (`luau-compile`, sin errores).
-- El algoritmo de puntuación está probado con aserciones; la invariancia al
-  registro está verificada.
+- 31 módulos, 5898 líneas de Luau. Los 31 compilan (`luau-compile`, sin errores).
+- **Probado con aserciones** contra el intérprete real de Luau, no a ojo:
+  - **Puntuación** — una copia exacta da 1000; la misma forma 12 semitonos
+    arriba o 7 abajo da 1000 también (tu registro no cuenta); el silencio da 0;
+    y en modo solo-micrófono una toma sin tono llega a 1000 por redistribución
+    de pesos, cuando graduada con melodía daría 887.
+  - **Detector de ataques** — 7 escenarios, incluidos los dos patrones más
+    rápidos de la librería, el puente de sílaba y la histéresis. Error de
+    duración: 0 ms.
 - Los personajes son **solo cosméticos**, a propósito: ninguno puntúa mejor, así
   la ruleta sigue siendo la única fuente de injusticia.
-- Sin probar en un servidor real con 5 jugadores — eso necesita tu publicación.
-  Lo que sí se puede probar ya: **Test → Clients and Servers → 2 Players**.
+- Lo que no se puede probar desde acá y necesita tu publicación: el micrófono
+  real (hace falta un cliente de Roblox con permiso de voz) y la resolución del
+  catálogo de audio (hace falta un servidor publicado). Los dos tienen su camino
+  de respaldo probado, así que si alguno falla el juego sigue andando.
+- Lo que sí podés probar ya: **Test → Clients and Servers → 2 Players**.

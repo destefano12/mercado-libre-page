@@ -202,6 +202,15 @@ function Theme.meter(parent, label, color)
 			fill:TweenSize(UDim2.fromScale(alpha, 1), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.45, true)
 			value.Text = tostring(score)
 		end,
+
+		-- An axis the player's input mode could not drive. Shown as "—", not 0:
+		-- a zero reads as a failure, a dash reads as not applicable.
+		setMuted = function(muted)
+			track.BackgroundTransparency = muted and 0.6 or 0
+			fill.Visible = not muted
+			value.Text = muted and "—" or value.Text
+			value.TextColor3 = muted and Palette.Muted or Palette.Cream
+		end,
 	}
 end
 

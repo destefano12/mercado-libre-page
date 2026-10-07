@@ -24,6 +24,52 @@ Config.PHASE = {
 	RESULTS = 11,
 }
 
+-- ─── Input ────────────────────────────────────────────────────────────────────
+-- Three ways to perform a take, picked per player at record time:
+--   "voice"      real microphone drives loudness/attacks/rhythm, pointer height
+--                drives pitch (the melody axis). The default when voice works.
+--   "voice_only" real microphone drives everything; melody is dropped and its
+--                weight is redistributed. For players who will not touch a mouse.
+--   "pointer"    no microphone available: hold to vocalise, as before.
+Config.INPUT = {
+	DEFAULT = "voice",
+	FALLBACK = "pointer",
+}
+
+-- ─── Microphone ───────────────────────────────────────────────────────────────
+-- Roblox exposes RmsLevel/PeakLevel on a live AudioDeviceInput (client only),
+-- but GetSpectrum() is blocked for microphone inputs, so there is no pitch to
+-- read. Everything below is about turning a loudness stream into clean onsets.
+Config.VOICE = {
+	-- The noise floor is measured during the count-in, per player, per take, so
+	-- a loud room or a hot mic calibrates itself instead of needing a setting.
+	CALIBRATE_FOR = 2.0,
+	FLOOR_MIN = 0.0035,       -- never trust a floor quieter than this
+	FLOOR_HEADROOM = 1.35,    -- measured floor is scaled by this before gating
+
+	-- Hysteresis: opening and closing on the same threshold chatters badly on
+	-- a breathy voice, so the gate opens high and closes low.
+	GATE_OPEN = 3.1,          -- × floor
+	GATE_CLOSE = 1.7,         -- × floor
+
+	-- These two are set against the library, not by feel. The tightest gap in
+	-- SoundLibrary is 90 ms (nothing shorter is articulable by a human voice or
+	-- visible to a 60 fps sampler), so:
+	--   BRIDGE_GAP  must be comfortably under 90 ms, or a fast pattern collapses
+	--               into one attack and the attacks axis — a quarter of the
+	--               score — reads zero.
+	--   BRIDGE_GAP  must be over ~2 frames (33 ms), or a breathy voice chatters
+	--               the gate and one word counts as four.
+	-- 40 ms sits in that window with 50 ms of margin on the library side.
+	REFRACTORY = 0.05,
+	BRIDGE_GAP = 0.04,
+
+	-- RmsLevel is roughly 0..1 but a shout sits far below 1, so the envelope is
+	-- normalised against a running peak for the drawing and the level meter.
+	LEVEL_CEILING_MIN = 0.05,
+	LEVEL_DECAY = 0.75,       -- per second, how fast the running peak falls back
+}
+
 -- ─── Recording ────────────────────────────────────────────────────────────────
 Config.TAKE = {
 	-- One shot. No retries, no undo. This flag exists to be read, never flipped.
@@ -45,6 +91,15 @@ Config.SCORING = {
 	MELODY_TOLERANCE = 7.0,  -- semitones of contour error that zeroes the axis
 	RHYTHM_TOLERANCE = 0.35, -- seconds of onset error that zeroes the axis
 	MAX_SCORE = 1000,
+}
+
+-- When a player performs without pitch control ("voice_only"), the melody axis
+-- has nothing to measure, so it is dropped and its weight is split between the
+-- two axes their voice does drive. Scoring renormalises; totals stay comparable.
+Config.SCORING_VOICE_ONLY = {
+	WEIGHT_MELODY = 0,
+	WEIGHT_RHYTHM = 0.58,
+	WEIGHT_ATTACKS = 0.42,
 }
 
 -- ─── Roulette ─────────────────────────────────────────────────────────────────

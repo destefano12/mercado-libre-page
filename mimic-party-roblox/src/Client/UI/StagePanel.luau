@@ -86,6 +86,51 @@ function StagePanel.new(parent)
 		TextSize = 11, TextXAlignment = Enum.TextXAlignment.Right,
 	})
 
+	-- ── microphone meter ──
+	-- Sits under your own track, because that is what it is measuring. It is
+	-- the only element that moves continuously, so it is small and desaturated.
+	self.micRow = Instance.new("Frame")
+	self.micRow.BackgroundTransparency = 1
+	self.micRow.AnchorPoint = Vector2.new(0, 1)
+	self.micRow.Position = UDim2.new(0, 0, 1, 28)
+	self.micRow.Size = UDim2.fromOffset(420, 22)
+	self.micRow.Parent = panel
+
+	self.micBadge = Theme.label(self.micRow, "", {
+		Size = UDim2.fromOffset(150, 22), TextSize = 11, FontFace = Theme.Font.Medium,
+		TextColor3 = Palette.Muted,
+	})
+
+	local micTrack = Instance.new("Frame")
+	micTrack.BackgroundColor3 = Palette.Ink
+	micTrack.BackgroundTransparency = 0.3
+	micTrack.BorderSizePixel = 0
+	micTrack.Position = UDim2.new(0, 156, 0.5, -3)
+	micTrack.Size = UDim2.fromOffset(150, 6)
+	micTrack.Parent = self.micRow
+	Theme.corner(micTrack, UDim.new(1, 0))
+
+	self.micFill = Instance.new("Frame")
+	self.micFill.BackgroundColor3 = Palette.Yours
+	self.micFill.BorderSizePixel = 0
+	self.micFill.Size = UDim2.fromScale(0, 1)
+	self.micFill.Parent = micTrack
+	Theme.corner(self.micFill, UDim.new(1, 0))
+
+	-- The gate threshold, drawn on the meter: you can see what counts as sound.
+	self.micGate = Instance.new("Frame")
+	self.micGate.BackgroundColor3 = Palette.Reference
+	self.micGate.BorderSizePixel = 0
+	self.micGate.Size = UDim2.new(0, 1, 1, 4)
+	self.micGate.Position = UDim2.fromScale(0.3, -0.3)
+	self.micGate.Visible = false
+	self.micGate.Parent = micTrack
+
+	self.micNote = Theme.caption(self.micRow, "", {
+		Position = UDim2.new(0, 314, 0, 0), Size = UDim2.new(1, -314, 1, 0),
+		TextSize = 10, TextColor3 = Palette.Warn,
+	})
+
 	-- ── count-in overlay ──
 	self.countIn = Theme.label(panel, "", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -212,7 +257,44 @@ function StagePanel:onRecordFrame(alpha, pitch, voiced, index, level)
 end
 
 function StagePanel:showTake(take, duration)
-	self.yours:setEnvelope(SoundLibrary.envelope(take.notes, duration))
+	-- A microphone take carries the loudness curve the player actually produced;
+	-- only a pointer take has to be reconstructed from its notes.
+	self.yours:setEnvelope(take.envelope or SoundLibrary.envelope(take.notes, duration))
+end
+
+local MODE_TEXT = {
+	voice = "MICRÓFONO + TONO",
+	voice_only = "SOLO MICRÓFONO",
+	pointer = "PUNTERO",
+}
+
+local MODE_HINT = {
+	voice = "HABLÁ AL MICRÓFONO · MOVÉ EL MOUSE PARA EL TONO",
+	voice_only = "HABLÁ AL MICRÓFONO",
+	pointer = "MANTENÉ APRETADO · MOVÉ EL MOUSE PARA EL TONO",
+}
+
+-- Called once per take, before the count-in, with the mode actually resolved.
+function StagePanel:setInputMode(mode, reason)
+	self.inputMode = mode
+	self.micBadge.Text = MODE_TEXT[mode] or ""
+	self.micBadge.TextColor3 = (mode == "pointer") and Palette.Muted or Palette.Yours
+	self.micGate.Visible = (mode ~= "pointer")
+	self.micNote.Text = reason or ""
+	self:setHint(MODE_HINT[mode] or "")
+end
+
+-- `calibrating` draws the meter in the reference colour, so the player can see
+-- the room being measured during the count-in rather than wondering.
+function StagePanel:setMicLevel(level, calibrating)
+	local alpha = math.clamp(level or 0, 0, 1)
+	self.micFill.Size = UDim2.fromScale(alpha, 1)
+	self.micFill.BackgroundColor3 = calibrating and Palette.Reference or Palette.Yours
+	if calibrating then
+		self.micBadge.Text = "MIDIENDO LA SALA…"
+	elseif self.inputMode then
+		self.micBadge.Text = MODE_TEXT[self.inputMode] or ""
+	end
 end
 
 function StagePanel:showCard(payload)
@@ -234,7 +316,12 @@ function StagePanel:showCard(payload)
 		self.cardSabotage.Text = ""
 	end
 
-	self.meterMelody.set(grade.melody)
+	-- An axis that carried no weight is shown as not counted, rather than as a
+	-- bad score the player had no way to influence.
+	local weighted = grade.weighted
+	local melodyCounted = (not weighted) or weighted.melody > 0
+	self.meterMelody.set(melodyCounted and grade.melody or 0)
+	self.meterMelody.setMuted(not melodyCounted)
 	self.meterRhythm.set(grade.rhythm)
 	self.meterAttacks.set(grade.attacks)
 
