@@ -24,6 +24,49 @@ Config.PHASE = {
 	RESULTS = 11,
 }
 
+-- ─── Rooms ────────────────────────────────────────────────────────────────────
+-- A private room is a reserved server of this same place. The host creates one,
+-- gets a code, and anyone who types that code is teleported into it. The host
+-- owns the sound packs and can remove players; nothing else.
+Config.ROOM = {
+	-- How long a freshly created room waits for people before the host is told
+	-- nobody came. Does not kick anyone; it is only a nudge.
+	LONELY_AFTER = 120,
+	MAX_CREATE_ATTEMPTS = 6,    -- code-collision retries before giving up
+	JOIN_COOLDOWN = 3,          -- per player, seconds between join attempts
+	CREATE_COOLDOWN = 10,       -- per player, seconds between room creations
+	-- A host who leaves hands the room to whoever has been there longest, so a
+	-- room does not become unmanageable because one person's wifi died.
+	INHERIT_HOST = true,
+}
+
+-- ─── Voice chat ───────────────────────────────────────────────────────────────
+-- Voice is the point of this game, so the graph is explicit rather than left to
+-- the engine's defaults:
+--
+--   AudioDeviceInput (per player, .Player = them)
+--        └─ Wire ─→ AudioEmitter (on their head)
+--                        └─ heard by AudioListener (SoundService.ListenerLocation)
+--                                 └─ AudioDeviceOutput (engine-provided)
+--
+-- Owning the wires is what makes the rest possible: muting the table during
+-- playback is a real mute on a real input, not a label.
+Config.VOICE_CHAT = {
+	-- Volume over distance, in studs. The house is ~45 studs deep, so a voice on
+	-- stage has to carry to the back row without the five performers turning
+	-- into mud when they are all talking at once.
+	ATTENUATION = {
+		{ 0, 1 },
+		{ 18, 0.92 },
+		{ 40, 0.68 },
+		{ 70, 0.34 },
+		{ 100, 0 },
+	},
+	INPUT_VOLUME = 1,
+	-- Set false to let the engine's default voice routing stand untouched.
+	CUSTOM_ROUTING = true,
+}
+
 -- ─── Input ────────────────────────────────────────────────────────────────────
 -- Three ways to perform a take, picked per player at record time:
 --   "voice"      real microphone drives loudness/attacks/rhythm, pointer height

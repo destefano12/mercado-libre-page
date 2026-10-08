@@ -17,6 +17,7 @@ local SoundLibrary = require(Shared.SoundLibrary)
 local Modes = require(Shared.Modes)
 local Sabotages = require(Shared.Sabotages)
 local Roulette = require(Shared.Roulette)
+local Rooms = require(Shared.Rooms)
 
 local CameraDirector = require(script.CameraDirector)
 local AudioEngine = require(script.AudioEngine)
@@ -40,6 +41,7 @@ end)
 CameraDirector.init(anchors)
 
 local lastSabotageWon = nil
+local inRoom = false
 local state = { phase = "boot", round = 0, rounds = Config.ROUNDS_PER_PARTY, endsAt = 0, soundId = nil }
 local selectedMode = "party"
 local armedMode = nil
@@ -90,6 +92,37 @@ ui = Root.new({
 		AudioEngine.click()
 		ui.menu:setCharacter(id)
 		Net.fireServer(Net.ChooseCharacter, { characterId = id })
+	end,
+
+	-- ── rooms ──
+	onCreateRoom = function()
+		AudioEngine.confirm()
+		ui.room:setStatus("Reservando un servidor…", "neutral")
+		Net.fireServer(Net.CreateRoom, {})
+	end,
+
+	onJoinRoom = function(code)
+		-- Validate the format here so an obviously bad code never costs a trip.
+		local clean, reason = Rooms.normalise(code)
+		if not clean then
+			AudioEngine.click()
+			ui.room:setStatus(reason, "warn")
+			return
+		end
+		AudioEngine.confirm()
+		ui.room:setStatus(("Entrando a %s…"):format(Rooms.display(clean)), "neutral")
+		Net.fireServer(Net.JoinRoom, { code = clean })
+	end,
+
+	onTogglePack = function(packId, enabled)
+		AudioEngine.click()
+		Net.fireServer(Net.SetPackEnabled, { packId = packId, enabled = enabled })
+	end,
+
+	onKick = function(userId, name)
+		AudioEngine.click()
+		ui.room:setStatus(("Sacando a %s…"):format(name or "?"), "warn")
+		Net.fireServer(Net.KickPlayer, { userId = userId })
 	end,
 })
 
@@ -150,8 +183,12 @@ local function onPhase(payload)
 	ui.scoreboard:update(payload.scores)
 
 	if phase == "lobby" then
+		-- Inside a private room the roster copy comes from RoomState instead;
+		-- the public "waiting for players" line would contradict it.
 		local need = math.max(0, (payload.minPlayers or 2) - (payload.playerCount or 0))
-		if need > 0 then
+		if inRoom then
+			-- left to the RoomState handler
+		elseif need > 0 then
 			ui.menu:setStatus(("Falta%s %d jugador%s para arrancar la fiesta.")
 				:format(need == 1 and "" or "n", need, need == 1 and "" or "es"))
 		elseif payload.endsAt and payload.endsAt > 0 then
@@ -290,6 +327,22 @@ end)
 
 Net.onClient(Net.Toast, function(payload)
 	ui:showToast(payload.text, payload.tone)
+end)
+
+Net.onClient(Net.RoomState, function(payload)
+	inRoom = payload.isRoom == true
+	ui.room:update(payload)
+	-- Inside a room the public-lobby copy ("arranca sola cuando haya 2") is
+	-- wrong: a room starts when the host's guests arrive.
+	if payload.isRoom then
+		local count = #(payload.roster or {})
+		if count < 2 then
+			ui.menu:setStatus(("Sala %s · esperando a que entre alguien.")
+				:format(payload.display or "—"))
+		else
+			ui.menu:setStatus(("Sala %s · %d jugadores."):format(payload.display or "—", count))
+		end
+	end
 end)
 
 Net.onClient(Net.SabotageHit, function(payload)

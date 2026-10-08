@@ -161,10 +161,36 @@ end
 
 -- A deterministic shuffle so every client in a room can derive the same order
 -- from a single seed the server sends, instead of replicating whole playlists.
-function SoundLibrary.playlist(seed, count, packFilter)
+--
+-- `enabled` is either nil (every pack), a pack id, or a set { [packId] = true }
+-- — which is what a host's pack toggles produce. A set that turns everything
+-- off falls back to every pack rather than producing an empty match.
+function SoundLibrary.playlist(seed, count, enabled)
+	local function allows(packId)
+		if enabled == nil then
+			return true
+		end
+		if type(enabled) == "string" then
+			return enabled == packId
+		end
+		if type(enabled) == "table" then
+			return enabled[packId] == true
+		end
+		return true
+	end
+
 	local pool = {}
 	for _, p in ipairs(packs) do
-		if not packFilter or packFilter == p.id then
+		if allows(p.id) then
+			for _, s in ipairs(p.sounds) do
+				table.insert(pool, s)
+			end
+		end
+	end
+
+	-- Every pack off, or a filter that matched nothing: use the whole library.
+	if #pool == 0 then
+		for _, p in ipairs(packs) do
 			for _, s in ipairs(p.sounds) do
 				table.insert(pool, s)
 			end
@@ -181,7 +207,7 @@ function SoundLibrary.playlist(seed, count, packFilter)
 	end
 	-- Survival asks for more sounds than the library holds: wrap, reshuffling.
 	while #out < count do
-		local extra = SoundLibrary.playlist(seed + #out, math.min(count - #out, #pool), packFilter)
+		local extra = SoundLibrary.playlist(seed + #out, math.min(count - #out, #pool), enabled)
 		for _, s in ipairs(extra) do
 			table.insert(out, s)
 		end

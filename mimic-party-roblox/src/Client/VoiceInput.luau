@@ -125,9 +125,10 @@ function VoiceInput.open()
 		_closed = false,
 	}, Session)
 
-	-- The device must be live for the analyzer to see anything.
+	-- Unmute so the analyzer sees signal. `.Active` is flagged Roblox Script
+	-- Security and a game script cannot write it — `.Muted` is the one we own.
 	pcall(function()
-		device.Active = true
+		device.Muted = false
 	end)
 
 	return self

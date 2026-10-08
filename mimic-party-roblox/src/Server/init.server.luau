@@ -12,6 +12,8 @@ local AudioCatalog = require(game.ReplicatedStorage.Shared.AudioCatalog)
 local StageBuilder = require(script.StageBuilder)
 local LightingRig = require(script.LightingRig)
 local MatchService = require(script.MatchService)
+local RoomService = require(script.RoomService)
+local VoiceChat = require(script.VoiceChat)
 
 -- Players must not fall into a half-built room.
 Players.CharacterAutoLoads = false
@@ -25,17 +27,31 @@ Net.init()
 AudioCatalog.resolveAsync()
 
 MatchService.bindRemotes()
+RoomService.bindRemotes()
+
+-- Is this a public server or somebody's private room? Everything downstream
+-- (pack selection, host controls) depends on the answer.
+RoomService.start()
+VoiceChat.start()
 
 Players.PlayerAdded:Connect(function(player)
 	MatchService.onPlayerAdded(player)
+	RoomService.onPlayerAdded(player)
+	VoiceChat.onPlayerAdded(player)
 	player:LoadCharacter()
 end)
 
-Players.PlayerRemoving:Connect(MatchService.onPlayerRemoving)
+Players.PlayerRemoving:Connect(function(player)
+	MatchService.onPlayerRemoving(player)
+	RoomService.onPlayerRemoving(player)
+	VoiceChat.onPlayerRemoving(player)
+end)
 
 -- Anyone already in (Studio solo test, or a hot reload).
 for _, player in ipairs(Players:GetPlayers()) do
 	MatchService.onPlayerAdded(player)
+	RoomService.onPlayerAdded(player)
+	VoiceChat.onPlayerAdded(player)
 	player:LoadCharacter()
 end
 

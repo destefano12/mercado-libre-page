@@ -32,7 +32,8 @@ end
 local PlayerProfiles = require(script.Parent.PlayerProfiles)
 local TakeStore = require(script.Parent.TakeStore)
 local StageBuilder = require(script.Parent.StageBuilder)
-local VoiceGate = require(script.Parent.VoiceGate)
+local VoiceChat = require(script.Parent.VoiceChat)
+local RoomService = require(script.Parent.RoomService)
 
 local MatchService = {}
 local PHASE = Config.PHASE
@@ -178,7 +179,7 @@ end
 local function gradeAndPlayback(sound)
 	setPhase("playback")
 
-	local gated = VoiceGate.closeAll()
+	local gated = VoiceChat.closeTable()
 
 	for _, profile in ipairs(PlayerProfiles.all()) do
 		local take = TakeStore.get(profile.userId) or TakeStore.empty()
@@ -217,7 +218,7 @@ local function gradeAndPlayback(sound)
 		task.wait(sound.duration + PHASE.PLAYBACK_GAP)
 	end
 
-	VoiceGate.openAll()
+	VoiceChat.openTable()
 
 	-- Multipliers are spent now that the round they applied to is scored.
 	for _, profile in ipairs(PlayerProfiles.all()) do
@@ -353,7 +354,8 @@ end
 
 local function playParty()
 	state.seed = os.time() + math.random(1, 10000)
-	state.playlist = SoundLibrary.playlist(state.seed, state.rounds)
+	-- In a private room the host decides which packs are in play.
+	state.playlist = SoundLibrary.playlist(state.seed, state.rounds, RoomService.enabledPacks())
 	state.rounds = Config.ROUNDS_PER_PARTY
 
 	procession()
@@ -412,7 +414,7 @@ function MatchService.start()
 				-- A match must never take the server down with it: log, reset,
 				-- and put everybody back in the lobby.
 				warn("[MatchService] match aborted: " .. tostring(err))
-				VoiceGate.openAll()
+				VoiceChat.openTable()
 				state.round = 0
 				state.soundId = nil
 				toast("Hubo un problema en la partida. Reiniciando la sala.", "bad")

@@ -17,6 +17,7 @@ Net.RouletteSpin = "RouletteSpin"   -- wheel result for the whole table
 Net.SabotageHit = "SabotageHit"     -- you were targeted (revealed at playback)
 Net.Scores = "Scores"               -- scoreboard delta
 Net.Toast = "Toast"                 -- short room-wide notice
+Net.RoomState = "RoomState"         -- code, host, pack toggles, roster
 
 -- Client → server
 Net.SubmitTake = "SubmitTake"
@@ -24,11 +25,17 @@ Net.ChooseCharacter = "ChooseCharacter"
 Net.ChooseSabotageTarget = "ChooseSabotageTarget"
 Net.SetReady = "SetReady"
 Net.RequestSoloScore = "RequestSoloScore"
+Net.CreateRoom = "CreateRoom"
+Net.JoinRoom = "JoinRoom"
+Net.SetPackEnabled = "SetPackEnabled"   -- host only
+Net.KickPlayer = "KickPlayer"           -- host only
 
 local ALL = {
 	Net.State, Net.Playback, Net.RouletteSpin, Net.SabotageHit, Net.Scores, Net.Toast,
+	Net.RoomState,
 	Net.SubmitTake, Net.ChooseCharacter, Net.ChooseSabotageTarget, Net.SetReady,
 	Net.RequestSoloScore,
+	Net.CreateRoom, Net.JoinRoom, Net.SetPackEnabled, Net.KickPlayer,
 }
 
 local folder

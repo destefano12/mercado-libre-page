@@ -306,6 +306,49 @@ Config.PHASE = {
 	RESULTS = 11,
 }
 
+-- ─── Rooms ────────────────────────────────────────────────────────────────────
+-- A private room is a reserved server of this same place. The host creates one,
+-- gets a code, and anyone who types that code is teleported into it. The host
+-- owns the sound packs and can remove players; nothing else.
+Config.ROOM = {
+	-- How long a freshly created room waits for people before the host is told
+	-- nobody came. Does not kick anyone; it is only a nudge.
+	LONELY_AFTER = 120,
+	MAX_CREATE_ATTEMPTS = 6,    -- code-collision retries before giving up
+	JOIN_COOLDOWN = 3,          -- per player, seconds between join attempts
+	CREATE_COOLDOWN = 10,       -- per player, seconds between room creations
+	-- A host who leaves hands the room to whoever has been there longest, so a
+	-- room does not become unmanageable because one person's wifi died.
+	INHERIT_HOST = true,
+}
+
+-- ─── Voice chat ───────────────────────────────────────────────────────────────
+-- Voice is the point of this game, so the graph is explicit rather than left to
+-- the engine's defaults:
+--
+--   AudioDeviceInput (per player, .Player = them)
+--        └─ Wire ─→ AudioEmitter (on their head)
+--                        └─ heard by AudioListener (SoundService.ListenerLocation)
+--                                 └─ AudioDeviceOutput (engine-provided)
+--
+-- Owning the wires is what makes the rest possible: muting the table during
+-- playback is a real mute on a real input, not a label.
+Config.VOICE_CHAT = {
+	-- Volume over distance, in studs. The house is ~45 studs deep, so a voice on
+	-- stage has to carry to the back row without the five performers turning
+	-- into mud when they are all talking at once.
+	ATTENUATION = {
+		{ 0, 1 },
+		{ 18, 0.92 },
+		{ 40, 0.68 },
+		{ 70, 0.34 },
+		{ 100, 0 },
+	},
+	INPUT_VOLUME = 1,
+	-- Set false to let the engine's default voice routing stand untouched.
+	CUSTOM_ROUTING = true,
+}
+
 -- ─── Input ────────────────────────────────────────────────────────────────────
 -- Three ways to perform a take, picked per player at record time:
 --   "voice"      real microphone drives loudness/attacks/rhythm, pointer height
@@ -504,6 +547,7 @@ Net.RouletteSpin = "RouletteSpin"   -- wheel result for the whole table
 Net.SabotageHit = "SabotageHit"     -- you were targeted (revealed at playback)
 Net.Scores = "Scores"               -- scoreboard delta
 Net.Toast = "Toast"                 -- short room-wide notice
+Net.RoomState = "RoomState"         -- code, host, pack toggles, roster
 
 -- Client → server
 Net.SubmitTake = "SubmitTake"
@@ -511,11 +555,17 @@ Net.ChooseCharacter = "ChooseCharacter"
 Net.ChooseSabotageTarget = "ChooseSabotageTarget"
 Net.SetReady = "SetReady"
 Net.RequestSoloScore = "RequestSoloScore"
+Net.CreateRoom = "CreateRoom"
+Net.JoinRoom = "JoinRoom"
+Net.SetPackEnabled = "SetPackEnabled"   -- host only
+Net.KickPlayer = "KickPlayer"           -- host only
 
 local ALL = {
 	Net.State, Net.Playback, Net.RouletteSpin, Net.SabotageHit, Net.Scores, Net.Toast,
+	Net.RoomState,
 	Net.SubmitTake, Net.ChooseCharacter, Net.ChooseSabotageTarget, Net.SetReady,
 	Net.RequestSoloScore,
+	Net.CreateRoom, Net.JoinRoom, Net.SetPackEnabled, Net.KickPlayer,
 }
 
 local folder
@@ -643,6 +693,74 @@ return {
       </Item>
       <Item class="ModuleScript" referent="8">
         <Properties>
+          <string name="Name">Rooms</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- Rooms.luau — room codes: the alphabet, the format, and the key naming.
+--
+-- Shared so the client can reject a malformed code before spending a round
+-- trip, and so the server and client can never disagree about what a code is.
+
+local Rooms = {}
+
+-- No O/0, no I/1, no S/5: a code gets read out loud over voice chat, and those
+-- are the pairs people get wrong. 32 symbols, 5 places → 33.5M combinations.
+Rooms.ALPHABET = "ABCDEFGHJKLMNPQRTUVWXYZ2346789"
+Rooms.LENGTH = 5
+Rooms.DATASTORE = "MimicPartyRooms_v1"
+Rooms.TTL = 60 * 60 * 6    -- a code stops resolving after six hours
+
+-- Codes are generated server-side only; this lives here so the format is
+-- defined in one place.
+function Rooms.generate(rng)
+	rng = rng or Random.new(os.clock() * 1e6 % 2 ^ 31)
+	local chars = {}
+	for i = 1, Rooms.LENGTH do
+		local pick = rng:NextInteger(1, #Rooms.ALPHABET)
+		chars[i] = Rooms.ALPHABET:sub(pick, pick)
+	end
+	return table.concat(chars)
+end
+
+-- Accepts what a person typed and returns a canonical code, or nil plus a
+-- reason. Lowercase and stray spaces or dashes are the user being normal.
+function Rooms.normalise(input)
+	if type(input) ~= "string" then
+		return nil, "Escribí un código."
+	end
+	local cleaned = input:upper():gsub("[%s%-_]", "")
+	if #cleaned == 0 then
+		return nil, "Escribí un código."
+	end
+	if #cleaned ~= Rooms.LENGTH then
+		return nil, ("El código tiene %d caracteres."):format(Rooms.LENGTH)
+	end
+	for i = 1, #cleaned do
+		local c = cleaned:sub(i, i)
+		if not Rooms.ALPHABET:find(c, 1, true) then
+			return nil, ("“%s” no es un carácter válido."):format(c)
+		end
+	end
+	return cleaned
+end
+
+function Rooms.key(code)
+	return "room_" .. code
+end
+
+-- Pretty-prints a code for display: ABC-DE reads better than ABCDE.
+function Rooms.display(code)
+	if type(code) ~= "string" or #code ~= Rooms.LENGTH then
+		return code or ""
+	end
+	return code:sub(1, 3) .. "-" .. code:sub(4)
+end
+
+return Rooms
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="9">
+        <Properties>
           <string name="Name">Roulette</string>
           <string name="Source"><![CDATA[--!nonstrict
 -- Roulette.luau — the wheel between rounds. One spin, the whole table at once.
@@ -716,7 +834,7 @@ return Roulette
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="9">
+      <Item class="ModuleScript" referent="10">
         <Properties>
           <string name="Name">Sabotages</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -859,7 +977,7 @@ return Sabotages
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="10">
+      <Item class="ModuleScript" referent="11">
         <Properties>
           <string name="Name">Scoring</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -1019,7 +1137,7 @@ return Scoring
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="11">
+      <Item class="ModuleScript" referent="12">
         <Properties>
           <string name="Name">Signal</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -1056,7 +1174,7 @@ return Signal
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="12">
+      <Item class="ModuleScript" referent="13">
         <Properties>
           <string name="Name">SoundLibrary</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -1222,10 +1340,36 @@ end
 
 -- A deterministic shuffle so every client in a room can derive the same order
 -- from a single seed the server sends, instead of replicating whole playlists.
-function SoundLibrary.playlist(seed, count, packFilter)
+--
+-- `enabled` is either nil (every pack), a pack id, or a set { [packId] = true }
+-- — which is what a host's pack toggles produce. A set that turns everything
+-- off falls back to every pack rather than producing an empty match.
+function SoundLibrary.playlist(seed, count, enabled)
+	local function allows(packId)
+		if enabled == nil then
+			return true
+		end
+		if type(enabled) == "string" then
+			return enabled == packId
+		end
+		if type(enabled) == "table" then
+			return enabled[packId] == true
+		end
+		return true
+	end
+
 	local pool = {}
 	for _, p in ipairs(packs) do
-		if not packFilter or packFilter == p.id then
+		if allows(p.id) then
+			for _, s in ipairs(p.sounds) do
+				table.insert(pool, s)
+			end
+		end
+	end
+
+	-- Every pack off, or a filter that matched nothing: use the whole library.
+	if #pool == 0 then
+		for _, p in ipairs(packs) do
 			for _, s in ipairs(p.sounds) do
 				table.insert(pool, s)
 			end
@@ -1242,7 +1386,7 @@ function SoundLibrary.playlist(seed, count, packFilter)
 	end
 	-- Survival asks for more sounds than the library holds: wrap, reshuffling.
 	while #out < count do
-		local extra = SoundLibrary.playlist(seed + #out, math.min(count - #out, #pool), packFilter)
+		local extra = SoundLibrary.playlist(seed + #out, math.min(count - #out, #pool), enabled)
 		for _, s in ipairs(extra) do
 			table.insert(out, s)
 		end
@@ -1275,11 +1419,11 @@ return SoundLibrary
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="13">
+  <Item class="ServerScriptService" referent="14">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Script" referent="14">
+    <Item class="Script" referent="15">
       <Properties>
         <string name="Name">Server</string>
         <token name="RunContext">0</token>
@@ -1297,6 +1441,8 @@ local AudioCatalog = require(game.ReplicatedStorage.Shared.AudioCatalog)
 local StageBuilder = require(script.StageBuilder)
 local LightingRig = require(script.LightingRig)
 local MatchService = require(script.MatchService)
+local RoomService = require(script.RoomService)
+local VoiceChat = require(script.VoiceChat)
 
 -- Players must not fall into a half-built room.
 Players.CharacterAutoLoads = false
@@ -1310,17 +1456,31 @@ Net.init()
 AudioCatalog.resolveAsync()
 
 MatchService.bindRemotes()
+RoomService.bindRemotes()
+
+-- Is this a public server or somebody's private room? Everything downstream
+-- (pack selection, host controls) depends on the answer.
+RoomService.start()
+VoiceChat.start()
 
 Players.PlayerAdded:Connect(function(player)
 	MatchService.onPlayerAdded(player)
+	RoomService.onPlayerAdded(player)
+	VoiceChat.onPlayerAdded(player)
 	player:LoadCharacter()
 end)
 
-Players.PlayerRemoving:Connect(MatchService.onPlayerRemoving)
+Players.PlayerRemoving:Connect(function(player)
+	MatchService.onPlayerRemoving(player)
+	RoomService.onPlayerRemoving(player)
+	VoiceChat.onPlayerRemoving(player)
+end)
 
 -- Anyone already in (Studio solo test, or a hot reload).
 for _, player in ipairs(Players:GetPlayers()) do
 	MatchService.onPlayerAdded(player)
+	RoomService.onPlayerAdded(player)
+	VoiceChat.onPlayerAdded(player)
 	player:LoadCharacter()
 end
 
@@ -1329,7 +1489,7 @@ MatchService.start()
 print("[Mimic Party] venue built, match loop running.")
 ]]></string>
       </Properties>
-      <Item class="ModuleScript" referent="15">
+      <Item class="ModuleScript" referent="16">
         <Properties>
           <string name="Name">LightingRig</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -1412,7 +1572,7 @@ return LightingRig
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="16">
+      <Item class="ModuleScript" referent="17">
         <Properties>
           <string name="Name">MatchService</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -1449,7 +1609,8 @@ end
 local PlayerProfiles = require(script.Parent.PlayerProfiles)
 local TakeStore = require(script.Parent.TakeStore)
 local StageBuilder = require(script.Parent.StageBuilder)
-local VoiceGate = require(script.Parent.VoiceGate)
+local VoiceChat = require(script.Parent.VoiceChat)
+local RoomService = require(script.Parent.RoomService)
 
 local MatchService = {}
 local PHASE = Config.PHASE
@@ -1595,7 +1756,7 @@ end
 local function gradeAndPlayback(sound)
 	setPhase("playback")
 
-	local gated = VoiceGate.closeAll()
+	local gated = VoiceChat.closeTable()
 
 	for _, profile in ipairs(PlayerProfiles.all()) do
 		local take = TakeStore.get(profile.userId) or TakeStore.empty()
@@ -1634,7 +1795,7 @@ local function gradeAndPlayback(sound)
 		task.wait(sound.duration + PHASE.PLAYBACK_GAP)
 	end
 
-	VoiceGate.openAll()
+	VoiceChat.openTable()
 
 	-- Multipliers are spent now that the round they applied to is scored.
 	for _, profile in ipairs(PlayerProfiles.all()) do
@@ -1770,7 +1931,8 @@ end
 
 local function playParty()
 	state.seed = os.time() + math.random(1, 10000)
-	state.playlist = SoundLibrary.playlist(state.seed, state.rounds)
+	-- In a private room the host decides which packs are in play.
+	state.playlist = SoundLibrary.playlist(state.seed, state.rounds, RoomService.enabledPacks())
 	state.rounds = Config.ROUNDS_PER_PARTY
 
 	procession()
@@ -1829,7 +1991,7 @@ function MatchService.start()
 				-- A match must never take the server down with it: log, reset,
 				-- and put everybody back in the lobby.
 				warn("[MatchService] match aborted: " .. tostring(err))
-				VoiceGate.openAll()
+				VoiceChat.openTable()
 				state.round = 0
 				state.soundId = nil
 				toast("Hubo un problema en la partida. Reiniciando la sala.", "bad")
@@ -1924,7 +2086,7 @@ return MatchService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="17">
+      <Item class="ModuleScript" referent="18">
         <Properties>
           <string name="Name">PlayerProfiles</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -2111,7 +2273,565 @@ return PlayerProfiles
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="18">
+      <Item class="ModuleScript" referent="19">
+        <Properties>
+          <string name="Name">RoomService</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- RoomService.luau — private rooms, by code, on real separate servers.
+--
+-- How a room actually works:
+--
+--   host presses CREAR
+--     → TeleportService:ReserveServerAsync(game.PlaceId) returns an access code
+--       for a brand new, empty server of THIS SAME place
+--     → a short 5-character human code is claimed in a DataStore, pointing at
+--       that access code
+--     → the host is teleported into it, carrying the room's settings in the
+--       teleport data
+--
+--   someone types the code
+--     → the DataStore turns it back into the access code
+--     → TeleportAsync with ReservedServerAccessCode drops them into the very
+--       same server the host is in
+--
+-- So "distintas salas" are distinct servers, not channels inside one server.
+-- That is what makes five simultaneous parties possible, and it is why the code
+-- has to live somewhere both servers can read — hence the DataStore.
+--
+-- The host owns exactly two things: which sound packs are in play, and who is
+-- allowed to stay. Deliberately nothing else: no score editing, no skipping a
+-- round, no muting an individual. A host who could mute people would break the
+-- one rule the game is built on.
+
+local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+local DataStoreService = game:GetService("DataStoreService")
+local RunService = game:GetService("RunService")
+
+local Shared = game.ReplicatedStorage.Shared
+local Config = require(Shared.Config)
+local Net = require(Shared.Net)
+local Rooms = require(Shared.Rooms)
+local SoundLibrary = require(Shared.SoundLibrary)
+
+local RoomService = {}
+local R = Config.ROOM
+
+-- ── state ────────────────────────────────────────────────────────────────────
+
+local state = {
+	isRoom = false,          -- is this server a reserved room?
+	code = nil,
+	hostUserId = nil,
+	packs = {},              -- packId → true
+	createdAt = os.time(),
+	joinOrder = {},          -- userId → monotonic counter, for host inheritance
+	_order = 0,
+}
+
+local lastCreate = {}        -- userId → os.clock()
+local lastJoin = {}
+
+local store
+local storeError
+local storeProbed = false
+
+local function dataStore()
+	if store or storeError then
+		return store
+	end
+	local ok, result = pcall(function()
+		return DataStoreService:GetDataStore(Rooms.DATASTORE)
+	end)
+	if ok and result then
+		store = result
+	else
+		storeError = tostring(result)
+		warn("[RoomService] DataStore unavailable: " .. storeError)
+	end
+	return store
+end
+
+-- GetDataStore hands back a handle even in Studio with API access switched off:
+-- only a real read tells you whether rooms can actually work. Probed once at
+-- boot so the UI can disable CREAR SALA with a reason instead of failing on the
+-- host's click.
+local function probeDataStore()
+	if storeProbed then
+		return store ~= nil and storeError == nil
+	end
+	storeProbed = true
+	local ds = dataStore()
+	if not ds then
+		return false
+	end
+	local ok, err = pcall(function()
+		ds:GetAsync("__probe")
+	end)
+	if not ok then
+		storeError = tostring(err)
+		warn("[RoomService] DataStore read refused: " .. storeError)
+		return false
+	end
+	return true
+end
+
+local function roomsAvailable()
+	return storeProbed and store ~= nil and storeError == nil
+end
+
+-- Every pack on by default.
+local function defaultPacks()
+	local packs = {}
+	for _, pack in ipairs(SoundLibrary.packs()) do
+		packs[pack.id] = true
+	end
+	return packs
+end
+
+state.packs = defaultPacks()
+
+-- ── reserved-server detection ────────────────────────────────────────────────
+
+-- A reserved server has a PrivateServerId but no owner; a VIP/private server
+-- has both. Only the first is a room we created.
+local function detectRoom()
+	local privateId = game.PrivateServerId
+	local ownerId = game.PrivateServerOwnerId
+	return type(privateId) == "string" and privateId ~= "" and (ownerId == nil or ownerId == 0)
+end
+
+-- ── broadcast ────────────────────────────────────────────────────────────────
+
+local function roster()
+	local out = {}
+	for _, player in ipairs(Players:GetPlayers()) do
+		table.insert(out, {
+			userId = player.UserId,
+			name = player.DisplayName,
+			isHost = player.UserId == state.hostUserId,
+		})
+	end
+	table.sort(out, function(a, b)
+		return (state.joinOrder[a.userId] or 0) < (state.joinOrder[b.userId] or 0)
+	end)
+	return out
+end
+
+local function packList()
+	local out = {}
+	for _, pack in ipairs(SoundLibrary.packs()) do
+		local count = 0
+		for _ in ipairs(pack.sounds) do
+			count += 1
+		end
+		table.insert(out, {
+			id = pack.id,
+			name = pack.name,
+			blurb = pack.blurb,
+			sounds = count,
+			enabled = state.packs[pack.id] == true,
+		})
+	end
+	return out
+end
+
+function RoomService.broadcast()
+	Net.fireAll(Net.RoomState, {
+		isRoom = state.isRoom,
+		code = state.code,
+		display = state.code and Rooms.display(state.code) or nil,
+		hostUserId = state.hostUserId,
+		packs = packList(),
+		roster = roster(),
+		canCreate = roomsAvailable(),
+		-- Published-game-only features fail loudly rather than silently.
+		unavailable = (not roomsAvailable())
+			and "Las salas necesitan acceso a DataStores: publicá el juego, o en Studio activá Game Settings → Security → Enable Studio Access to API Services."
+			or nil,
+	})
+end
+
+local function broadcastTo(player)
+	Net.fireClient(Net.RoomState, player, {
+		isRoom = state.isRoom,
+		code = state.code,
+		display = state.code and Rooms.display(state.code) or nil,
+		hostUserId = state.hostUserId,
+		packs = packList(),
+		roster = roster(),
+		canCreate = roomsAvailable(),
+	})
+end
+
+-- ── create ───────────────────────────────────────────────────────────────────
+
+-- Claims a code atomically. UpdateAsync is the only way two servers racing for
+-- the same five characters cannot both win.
+local function claimCode(accessCode, hostUserId, packs)
+	local ds = dataStore()
+	if not ds then
+		return nil, "Las salas necesitan DataStores habilitados."
+	end
+
+	for attempt = 1, R.MAX_CREATE_ATTEMPTS do
+		local code = Rooms.generate()
+		local claimed = false
+
+		local ok, err = pcall(function()
+			ds:UpdateAsync(Rooms.key(code), function(existing)
+				if existing and type(existing) == "table" then
+					-- Taken, unless it has aged out.
+					if (os.time() - (existing.createdAt or 0)) < Rooms.TTL then
+						return nil   -- abort this write, try another code
+					end
+				end
+				claimed = true
+				return {
+					accessCode = accessCode,
+					hostUserId = hostUserId,
+					packs = packs,
+					createdAt = os.time(),
+					placeId = game.PlaceId,
+				}
+			end)
+		end)
+
+		if not ok then
+			return nil, "No se pudo reservar el código: " .. tostring(err)
+		end
+		if claimed then
+			return code
+		end
+	end
+
+	return nil, "No se pudo encontrar un código libre. Probá de nuevo."
+end
+
+function RoomService.createRoom(player)
+	local now = os.clock()
+	if lastCreate[player.UserId] and now - lastCreate[player.UserId] < R.CREATE_COOLDOWN then
+		return false, ("Esperá %d segundos."):format(
+			math.ceil(R.CREATE_COOLDOWN - (now - lastCreate[player.UserId])))
+	end
+	lastCreate[player.UserId] = now
+
+	if game.PlaceId == 0 then
+		return false, "Publicá el juego una vez: un lugar sin publicar no puede reservar servidores."
+	end
+
+	local ok, accessCode = pcall(function()
+		return TeleportService:ReserveServerAsync(game.PlaceId)
+	end)
+	if not ok or type(accessCode) ~= "string" then
+		return false, "Roblox no entregó un servidor reservado. Probá de nuevo."
+	end
+
+	-- The room inherits the pack selection the creator is looking at.
+	local packs = {}
+	for id, on in pairs(state.packs) do
+		packs[id] = on
+	end
+
+	local code, reason = claimCode(accessCode, player.UserId, packs)
+	if not code then
+		return false, reason
+	end
+
+	local options = Instance.new("TeleportOptions")
+	options.ReservedServerAccessCode = accessCode
+	options:SetTeleportData({
+		roomCode = code,
+		hostUserId = player.UserId,
+		packs = packs,
+	})
+
+	local sent = pcall(function()
+		TeleportService:TeleportAsync(game.PlaceId, { player }, options)
+	end)
+	if not sent then
+		return false, "No se pudo mandarte a la sala."
+	end
+
+	return true, code
+end
+
+-- ── join ─────────────────────────────────────────────────────────────────────
+
+function RoomService.joinRoom(player, rawCode)
+	local now = os.clock()
+	if lastJoin[player.UserId] and now - lastJoin[player.UserId] < R.JOIN_COOLDOWN then
+		return false, "Esperá un segundo."
+	end
+	lastJoin[player.UserId] = now
+
+	local code, reason = Rooms.normalise(rawCode)
+	if not code then
+		return false, reason
+	end
+
+	local ds = dataStore()
+	if not ds then
+		return false, "Las salas necesitan DataStores habilitados."
+	end
+
+	local ok, record = pcall(function()
+		return ds:GetAsync(Rooms.key(code))
+	end)
+	if not ok then
+		return false, "No se pudo leer el código."
+	end
+	if type(record) ~= "table" or type(record.accessCode) ~= "string" then
+		return false, ("No existe la sala %s."):format(Rooms.display(code))
+	end
+	if (os.time() - (record.createdAt or 0)) >= Rooms.TTL then
+		return false, ("La sala %s expiró."):format(Rooms.display(code))
+	end
+
+	local options = Instance.new("TeleportOptions")
+	options.ReservedServerAccessCode = record.accessCode
+	options:SetTeleportData({
+		roomCode = code,
+		hostUserId = record.hostUserId,
+		packs = record.packs,
+	})
+
+	local sent = pcall(function()
+		TeleportService:TeleportAsync(record.placeId or game.PlaceId, { player }, options)
+	end)
+	if not sent then
+		return false, "No se pudo mandarte a la sala."
+	end
+
+	return true, code
+end
+
+-- ── host controls ────────────────────────────────────────────────────────────
+
+local function isHost(player)
+	return state.isRoom and state.hostUserId ~= nil and player.UserId == state.hostUserId
+end
+
+RoomService.isHost = isHost
+
+function RoomService.setPackEnabled(player, packId, enabled)
+	if not isHost(player) then
+		return false, "Solo el anfitrión cambia los paquetes."
+	end
+	local found = false
+	for _, pack in ipairs(SoundLibrary.packs()) do
+		if pack.id == packId then
+			found = true
+		end
+	end
+	if not found then
+		return false, "Ese paquete no existe."
+	end
+
+	-- Refuse to turn off the last one: an empty library is not a valid room.
+	if not enabled then
+		local remaining = 0
+		for _, pack in ipairs(SoundLibrary.packs()) do
+			if pack.id ~= packId and state.packs[pack.id] then
+				remaining += 1
+			end
+		end
+		if remaining == 0 then
+			return false, "Tiene que quedar al menos un paquete activo."
+		end
+	end
+
+	state.packs[packId] = enabled and true or nil
+	RoomService.broadcast()
+	return true
+end
+
+function RoomService.kick(player, targetUserId)
+	if not isHost(player) then
+		return false, "Solo el anfitrión saca jugadores."
+	end
+	if targetUserId == player.UserId then
+		return false, "No podés sacarte a vos mismo."
+	end
+	local target = Players:GetPlayerByUserId(targetUserId)
+	if not target then
+		return false, "Ese jugador ya no está."
+	end
+	target:Kick(("El anfitrión te sacó de la sala %s."):format(Rooms.display(state.code or "")))
+	return true, target.DisplayName
+end
+
+-- The packs a match should draw from, in the shape SoundLibrary.playlist wants.
+function RoomService.enabledPacks()
+	local any = false
+	for _, on in pairs(state.packs) do
+		if on then
+			any = true
+		end
+	end
+	return any and state.packs or nil
+end
+
+function RoomService.code()
+	return state.code
+end
+
+function RoomService.isRoomServer()
+	return state.isRoom
+end
+
+-- ── lifecycle ────────────────────────────────────────────────────────────────
+
+-- A room learns what it is from the first arrival's teleport data. Later
+-- arrivals carry the same payload, so it is read defensively and never
+-- overwrites a host that is already established.
+local function adoptJoinData(player)
+	state._order += 1
+	state.joinOrder[player.UserId] = state._order
+
+	if not state.isRoom then
+		return
+	end
+
+	local ok, data = pcall(function()
+		local joinData = player:GetJoinData()
+		return joinData and joinData.TeleportData
+	end)
+	if not ok or type(data) ~= "table" then
+		return
+	end
+
+	if not state.code and type(data.roomCode) == "string" then
+		local code = Rooms.normalise(data.roomCode)
+		state.code = code
+	end
+
+	if not state.hostUserId and type(data.hostUserId) == "number" then
+		state.hostUserId = data.hostUserId
+	end
+
+	if type(data.packs) == "table" then
+		local packs = {}
+		local any = false
+		for _, pack in ipairs(SoundLibrary.packs()) do
+			if data.packs[pack.id] then
+				packs[pack.id] = true
+				any = true
+			end
+		end
+		if any then
+			state.packs = packs
+		end
+	end
+end
+
+function RoomService.onPlayerAdded(player)
+	adoptJoinData(player)
+	RoomService.broadcast()
+	task.delay(1, function()
+		if player.Parent then
+			broadcastTo(player)
+		end
+	end)
+end
+
+function RoomService.onPlayerRemoving(player)
+	state.joinOrder[player.UserId] = nil
+	lastCreate[player.UserId] = nil
+	lastJoin[player.UserId] = nil
+
+	-- The host left. Hand the room to whoever has been here longest, so a dead
+	-- connection does not leave the room unmanageable.
+	if R.INHERIT_HOST and state.isRoom and player.UserId == state.hostUserId then
+		local heir, heirOrder = nil, math.huge
+		for _, other in ipairs(Players:GetPlayers()) do
+			if other ~= player then
+				local order = state.joinOrder[other.UserId] or math.huge
+				if order < heirOrder then
+					heir, heirOrder = other, order
+				end
+			end
+		end
+		if heir then
+			state.hostUserId = heir.UserId
+			Net.fireAll(Net.Toast, {
+				text = ("%s es el nuevo anfitrión."):format(heir.DisplayName),
+				tone = "warn",
+			})
+		else
+			state.hostUserId = nil
+		end
+	end
+
+	RoomService.broadcast()
+end
+
+function RoomService.bindRemotes()
+	Net.onServer(Net.CreateRoom, function(player)
+		local ok, result = RoomService.createRoom(player)
+		if not ok then
+			Net.fireClient(Net.Toast, player, { text = result, tone = "bad" })
+		end
+	end)
+
+	Net.onServer(Net.JoinRoom, function(player, payload)
+		local code = type(payload) == "table" and payload.code or nil
+		local ok, result = RoomService.joinRoom(player, code)
+		if not ok then
+			Net.fireClient(Net.Toast, player, { text = result, tone = "bad" })
+		end
+	end)
+
+	Net.onServer(Net.SetPackEnabled, function(player, payload)
+		if type(payload) ~= "table" then
+			return
+		end
+		local ok, reason = RoomService.setPackEnabled(player, payload.packId, payload.enabled == true)
+		if not ok then
+			Net.fireClient(Net.Toast, player, { text = reason, tone = "warn" })
+		end
+	end)
+
+	Net.onServer(Net.KickPlayer, function(player, payload)
+		if type(payload) ~= "table" or type(payload.userId) ~= "number" then
+			return
+		end
+		local ok, result = RoomService.kick(player, payload.userId)
+		if ok then
+			Net.fireAll(Net.Toast, { text = ("%s salió de la sala."):format(result), tone = "warn" })
+		else
+			Net.fireClient(Net.Toast, player, { text = result, tone = "warn" })
+		end
+	end)
+end
+
+function RoomService.start()
+	probeDataStore()
+	state.isRoom = detectRoom()
+	if state.isRoom then
+		print("[RoomService] servidor reservado: esta es una sala privada")
+	else
+		print("[RoomService] servidor público")
+	end
+
+	-- Nudge a host whose room nobody joined, once.
+	if state.isRoom then
+		task.delay(R.LONELY_AFTER, function()
+			if #Players:GetPlayers() <= 1 and state.code then
+				Net.fireAll(Net.Toast, {
+					text = ("Nadie entró todavía. El código es %s."):format(Rooms.display(state.code)),
+					tone = "neutral",
+				})
+			end
+		end)
+	end
+end
+
+return RoomService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="20">
         <Properties>
           <string name="Name">StageBuilder</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -2647,7 +3367,7 @@ return StageBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="19">
+      <Item class="ModuleScript" referent="21">
         <Properties>
           <string name="Name">TakeStore</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -2752,73 +3472,309 @@ return TakeStore
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="20">
+      <Item class="ModuleScript" referent="22">
         <Properties>
-          <string name="Name">VoiceGate</string>
+          <string name="Name">VoiceChat</string>
           <string name="Source"><![CDATA[--!nonstrict
--- VoiceGate.luau — mutes the table while a take plays back.
+-- VoiceChat.luau — the voice graph, wired by hand.
 --
--- In the original, mics close during playback so everyone hears the same take,
--- then reopen for the reaction. Roblox can do this properly through the current
--- audio API: each player with voice chat gets an AudioDeviceInput, and the
--- server can deactivate it. Older places, or places with voice chat disabled,
--- have no such instance — so every call is guarded and degrades to a no-op,
--- and the client shows the "MESA SILENCIADA" indicator either way.
+-- Voice is the whole game, so none of this is left to the engine's defaults.
+-- The chain, per the current audio API:
+--
+--   AudioDeviceInput (.Player = them, .Muted, .Volume)
+--        └─ Wire ─→ AudioEmitter (parented to their Head, DistanceAttenuation)
+--                        └─ picked up by the listener that
+--                           SoundService.ListenerLocation provides
+--                                └─ AudioDeviceOutput (engine-provided)
+--
+-- Owning the wires is what buys the three things this game needs:
+--
+--   1. A real mute. Closing the table during playback sets `.Muted` on a real
+--      input, so everyone genuinely hears the same take and not five people
+--      reacting over it. `.Active` is NOT usable for this — it is flagged
+--      Roblox Script Security and a game script cannot write it.
+--   2. Reach. The house is ~45 studs deep; the attenuation curve is tuned so a
+--      voice on stage carries to the back row without five performers turning
+--      into mud when they all talk at once.
+--   3. Per-player volume, for the reaction window.
+--
+-- What no amount of configuration can do: give voice to an account that does
+-- not have it. Roblox gates microphone access on age verification, per user.
+-- Those players get the pointer input mode and are told why, in plain words.
 
 local Players = game:GetService("Players")
+local SoundService = game:GetService("SoundService")
 
-local VoiceGate = {}
+local Config = require(game.ReplicatedStorage.Shared.Config)
 
-local function deviceInput(player)
-	local ok, found = pcall(function()
-		return player:FindFirstChildOfClass("AudioDeviceInput")
-	end)
-	return ok and found or nil
+local VoiceChat = {}
+local VC = Config.VOICE_CHAT
+
+local rigs = {}        -- player → { input, emitter, wire, ownsInput }
+local tableClosed = false
+
+-- ── attenuation ──────────────────────────────────────────────────────────────
+
+-- DistanceAttenuation wants { [distance] = volume }. Config keeps it as an
+-- ordered list because a list is readable and a dict is not.
+local function attenuationCurve()
+	local curve = {}
+	for _, point in ipairs(VC.ATTENUATION) do
+		curve[point[1]] = point[2]
+	end
+	return curve
 end
 
-local function setActive(player, active)
-	local input = deviceInput(player)
+-- ── rig ──────────────────────────────────────────────────────────────────────
+
+local function anchorFor(player)
+	local character = player.Character
+	if not character then
+		return nil
+	end
+	return character:FindFirstChild("Head")
+		or character:FindFirstChild("HumanoidRootPart")
+		or character.PrimaryPart
+end
+
+-- Reuses the input the engine already made for this player when default voice
+-- is on; creates one only if there is none. Creating a second input for a player
+-- who already has one would double their voice.
+local function ensureInput(player)
+	local existing = player:FindFirstChildOfClass("AudioDeviceInput")
+	if existing then
+		return existing, false
+	end
+	local ok, made = pcall(function()
+		local input = Instance.new("AudioDeviceInput")
+		input.Player = player
+		input.Parent = player
+		return input
+	end)
+	if ok and made then
+		return made, true
+	end
+	return nil, false
+end
+
+function VoiceChat.rig(player)
+	if not VC.CUSTOM_ROUTING then
+		return nil
+	end
+
+	local anchor = anchorFor(player)
+	if not anchor then
+		return nil
+	end
+
+	-- Already rigged and still valid.
+	local rig = rigs[player]
+	if rig and rig.emitter and rig.emitter.Parent == anchor and rig.input and rig.input.Parent then
+		return rig
+	end
+
+	VoiceChat.unrig(player, true)
+
+	local input, ownsInput = ensureInput(player)
+	if not input then
+		return nil
+	end
+
+	local emitter, wire
+	local ok = pcall(function()
+		-- If default voice already put an emitter on this character, use it
+		-- rather than adding a second one.
+		emitter = anchor:FindFirstChildOfClass("AudioEmitter")
+		if not emitter then
+			emitter = Instance.new("AudioEmitter")
+			emitter.Name = "MimicVoiceEmitter"
+			emitter.Parent = anchor
+		end
+		pcall(function()
+			emitter:SetDistanceAttenuation(attenuationCurve())
+		end)
+
+		-- Only add a wire if this input is not already feeding this emitter.
+		local wired = false
+		for _, existing in ipairs(input:GetConnectedWires("Output")) do
+			if existing.TargetInstance == emitter then
+				wired = true
+			end
+		end
+		if not wired then
+			wire = Instance.new("Wire")
+			wire.Name = "MimicVoiceWire"
+			wire.SourceInstance = input
+			wire.TargetInstance = emitter
+			wire.Parent = emitter
+		end
+
+		input.Volume = VC.INPUT_VOLUME
+		input.Muted = tableClosed
+	end)
+
+	if not ok then
+		return nil
+	end
+
+	rigs[player] = {
+		input = input,
+		emitter = emitter,
+		wire = wire,
+		ownsInput = ownsInput,
+	}
+	return rigs[player]
+end
+
+function VoiceChat.unrig(player, keepEntry)
+	local rig = rigs[player]
+	if not rig then
+		return
+	end
+	-- Only destroy what we made. Tearing down an engine-provided input would
+	-- cut the player's actual voice chat for the rest of the session.
+	if rig.wire then
+		pcall(function() rig.wire:Destroy() end)
+	end
+	if rig.emitter and rig.emitter.Name == "MimicVoiceEmitter" then
+		pcall(function() rig.emitter:Destroy() end)
+	end
+	if rig.ownsInput and rig.input then
+		pcall(function() rig.input:Destroy() end)
+	end
+	if not keepEntry then
+		rigs[player] = nil
+	end
+end
+
+-- ── the gate ─────────────────────────────────────────────────────────────────
+
+local function setMuted(player, muted)
+	local rig = rigs[player]
+	local input = rig and rig.input or player:FindFirstChildOfClass("AudioDeviceInput")
 	if not input then
 		return false
 	end
 	local ok = pcall(function()
-		input.Active = active
+		input.Muted = muted
 	end)
 	return ok
 end
 
--- Returns true if at least one real mic was actually gated.
-function VoiceGate.closeAll()
+VoiceChat.setMuted = setMuted
+
+-- Closes every mic. Returns true if at least one real input was gated, which is
+-- what the client uses to decide whether to show the "MESA SILENCIADA" badge.
+function VoiceChat.closeTable()
+	tableClosed = true
 	local gated = false
 	for _, player in ipairs(Players:GetPlayers()) do
-		if setActive(player, false) then
+		if setMuted(player, true) then
 			gated = true
 		end
 	end
 	return gated
 end
 
-function VoiceGate.openAll()
+function VoiceChat.openTable()
+	tableClosed = false
 	for _, player in ipairs(Players:GetPlayers()) do
-		setActive(player, true)
+		setMuted(player, false)
 	end
 end
 
--- Keeps one player audible (used for nothing today, but the playback phase of a
--- "Pass the Mic" party needs exactly this, so it stays in the surface).
-function VoiceGate.soloOnly(target)
+-- Everyone muted except one. The reaction window after a take uses this when a
+-- single performer is still on their mark.
+function VoiceChat.soloOnly(target)
+	tableClosed = true
 	for _, player in ipairs(Players:GetPlayers()) do
-		setActive(player, player == target)
+		setMuted(player, player ~= target)
 	end
 end
 
-return VoiceGate
+function VoiceChat.isTableClosed()
+	return tableClosed
+end
+
+-- ── lifecycle ────────────────────────────────────────────────────────────────
+
+function VoiceChat.onPlayerAdded(player)
+	player.CharacterAdded:Connect(function()
+		-- The head has to exist before an emitter can hang off it.
+		task.wait(0.35)
+		VoiceChat.rig(player)
+	end)
+	if player.Character then
+		VoiceChat.rig(player)
+	end
+
+	-- Voice is provisioned asynchronously: an input can appear a second or two
+	-- after the player does, so watch for it instead of assuming.
+	player.ChildAdded:Connect(function(child)
+		if child:IsA("AudioDeviceInput") then
+			task.wait(0.1)
+			VoiceChat.rig(player)
+		end
+	end)
+end
+
+function VoiceChat.onPlayerRemoving(player)
+	VoiceChat.unrig(player)
+end
+
+function VoiceChat.start()
+	-- Camera-anchored listening: the camera is where the player's point of view
+	-- actually is in this game, and it is the shot director that moves it.
+	pcall(function()
+		SoundService.ListenerLocation = Enum.ListenerLocation.Camera
+	end)
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		VoiceChat.onPlayerAdded(player)
+	end
+
+	-- A periodic re-rig: respawns, late voice provisioning and character
+	-- reloads all invalidate an emitter, and a silent voice chat is the single
+	-- worst failure this game can have.
+	task.spawn(function()
+		while true do
+			task.wait(5)
+			for _, player in ipairs(Players:GetPlayers()) do
+				if player.Character then
+					VoiceChat.rig(player)
+				end
+			end
+		end
+	end)
+
+	print("[VoiceChat] graph ready (custom routing: " .. tostring(VC.CUSTOM_ROUTING) .. ")")
+end
+
+-- Diagnostics the client can show the host, because "voice is broken" needs to
+-- be answerable without a developer present.
+function VoiceChat.report()
+	local out = {}
+	for _, player in ipairs(Players:GetPlayers()) do
+		local rig = rigs[player]
+		local input = rig and rig.input or player:FindFirstChildOfClass("AudioDeviceInput")
+		table.insert(out, {
+			userId = player.UserId,
+			name = player.DisplayName,
+			hasInput = input ~= nil,
+			muted = input and input.Muted or nil,
+			rigged = rig ~= nil and rig.emitter ~= nil,
+		})
+	end
+	return out
+end
+
+return VoiceChat
 ]]></string>
         </Properties>
       </Item>
     </Item>
   </Item>
-  <Item class="SoundService" referent="21">
+  <Item class="SoundService" referent="23">
     <Properties>
       <string name="Name">SoundService</string>
       <token name="AmbientReverb">7</token>
@@ -2826,15 +3782,15 @@ return VoiceGate
       <bool name="RespectFilteringEnabled">true</bool>
     </Properties>
   </Item>
-  <Item class="StarterPlayer" referent="22">
+  <Item class="StarterPlayer" referent="24">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="23">
+    <Item class="StarterPlayerScripts" referent="25">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="24">
+      <Item class="LocalScript" referent="26">
         <Properties>
           <string name="Name">Client</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -2856,6 +3812,7 @@ local SoundLibrary = require(Shared.SoundLibrary)
 local Modes = require(Shared.Modes)
 local Sabotages = require(Shared.Sabotages)
 local Roulette = require(Shared.Roulette)
+local Rooms = require(Shared.Rooms)
 
 local CameraDirector = require(script.CameraDirector)
 local AudioEngine = require(script.AudioEngine)
@@ -2879,6 +3836,7 @@ end)
 CameraDirector.init(anchors)
 
 local lastSabotageWon = nil
+local inRoom = false
 local state = { phase = "boot", round = 0, rounds = Config.ROUNDS_PER_PARTY, endsAt = 0, soundId = nil }
 local selectedMode = "party"
 local armedMode = nil
@@ -2929,6 +3887,37 @@ ui = Root.new({
 		AudioEngine.click()
 		ui.menu:setCharacter(id)
 		Net.fireServer(Net.ChooseCharacter, { characterId = id })
+	end,
+
+	-- ── rooms ──
+	onCreateRoom = function()
+		AudioEngine.confirm()
+		ui.room:setStatus("Reservando un servidor…", "neutral")
+		Net.fireServer(Net.CreateRoom, {})
+	end,
+
+	onJoinRoom = function(code)
+		-- Validate the format here so an obviously bad code never costs a trip.
+		local clean, reason = Rooms.normalise(code)
+		if not clean then
+			AudioEngine.click()
+			ui.room:setStatus(reason, "warn")
+			return
+		end
+		AudioEngine.confirm()
+		ui.room:setStatus(("Entrando a %s…"):format(Rooms.display(clean)), "neutral")
+		Net.fireServer(Net.JoinRoom, { code = clean })
+	end,
+
+	onTogglePack = function(packId, enabled)
+		AudioEngine.click()
+		Net.fireServer(Net.SetPackEnabled, { packId = packId, enabled = enabled })
+	end,
+
+	onKick = function(userId, name)
+		AudioEngine.click()
+		ui.room:setStatus(("Sacando a %s…"):format(name or "?"), "warn")
+		Net.fireServer(Net.KickPlayer, { userId = userId })
 	end,
 })
 
@@ -2989,8 +3978,12 @@ local function onPhase(payload)
 	ui.scoreboard:update(payload.scores)
 
 	if phase == "lobby" then
+		-- Inside a private room the roster copy comes from RoomState instead;
+		-- the public "waiting for players" line would contradict it.
 		local need = math.max(0, (payload.minPlayers or 2) - (payload.playerCount or 0))
-		if need > 0 then
+		if inRoom then
+			-- left to the RoomState handler
+		elseif need > 0 then
 			ui.menu:setStatus(("Falta%s %d jugador%s para arrancar la fiesta.")
 				:format(need == 1 and "" or "n", need, need == 1 and "" or "es"))
 		elseif payload.endsAt and payload.endsAt > 0 then
@@ -3131,6 +4124,22 @@ Net.onClient(Net.Toast, function(payload)
 	ui:showToast(payload.text, payload.tone)
 end)
 
+Net.onClient(Net.RoomState, function(payload)
+	inRoom = payload.isRoom == true
+	ui.room:update(payload)
+	-- Inside a room the public-lobby copy ("arranca sola cuando haya 2") is
+	-- wrong: a room starts when the host's guests arrive.
+	if payload.isRoom then
+		local count = #(payload.roster or {})
+		if count < 2 then
+			ui.menu:setStatus(("Sala %s · esperando a que entre alguien.")
+				:format(payload.display or "—"))
+		else
+			ui.menu:setStatus(("Sala %s · %d jugadores."):format(payload.display or "—", count))
+		end
+	end
+end)
+
 Net.onClient(Net.SabotageHit, function(payload)
 	if payload.aimed then
 		ui:showToast(("Apuntado a %s. No lo sabe todavía."):format(payload.at or "?"), "warn")
@@ -3159,7 +4168,7 @@ end)
 print("[Mimic Party] client ready.")
 ]]></string>
         </Properties>
-        <Item class="ModuleScript" referent="25">
+        <Item class="ModuleScript" referent="27">
           <Properties>
             <string name="Name">AudioEngine</string>
             <string name="Source"><![CDATA[--!nonstrict
@@ -3445,7 +4454,7 @@ return AudioEngine
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="26">
+        <Item class="ModuleScript" referent="28">
           <Properties>
             <string name="Name">Booth</string>
             <string name="Source"><![CDATA[--!nonstrict
@@ -3806,7 +4815,7 @@ return Booth
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="27">
+        <Item class="ModuleScript" referent="29">
           <Properties>
             <string name="Name">CameraDirector</string>
             <string name="Source"><![CDATA[--!nonstrict
@@ -3973,7 +4982,7 @@ return CameraDirector
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="28">
+        <Item class="ModuleScript" referent="30">
           <Properties>
             <string name="Name">SoloRunner</string>
             <string name="Source"><![CDATA[--!nonstrict
@@ -4277,11 +5286,11 @@ return SoloRunner
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="29">
+        <Item class="Folder" referent="31">
           <Properties>
             <string name="Name">UI</string>
           </Properties>
-          <Item class="ModuleScript" referent="30">
+          <Item class="ModuleScript" referent="32">
             <Properties>
               <string name="Name">Menu</string>
               <string name="Source"><![CDATA[--!nonstrict
@@ -4501,7 +5510,386 @@ return Menu
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="31">
+          <Item class="ModuleScript" referent="33">
+            <Properties>
+              <string name="Name">RoomPanel</string>
+              <string name="Source"><![CDATA[--!nonstrict
+-- RoomPanel.luau — create a room, join one by code, and host controls.
+--
+-- Two states, and the panel is only ever in one of them:
+--
+--   public server  →  CREAR SALA, plus a code field to join someone else's
+--   inside a room  →  the code, big enough to read out loud over voice chat,
+--                     the roster, and — for the host only — pack toggles and a
+--                     remove button per player
+--
+-- Non-hosts see the same roster and the same pack state, greyed out. Hiding it
+-- would leave four people guessing why a pack vanished mid-party.
+
+local Players = game:GetService("Players")
+
+local Theme = require(script.Parent.Theme)
+local Palette = require(game.ReplicatedStorage.Shared.Palette)
+local Rooms = require(game.ReplicatedStorage.Shared.Rooms)
+
+local RoomPanel = {}
+RoomPanel.__index = RoomPanel
+
+local localPlayer = Players.LocalPlayer
+
+function RoomPanel.new(parent, callbacks)
+	local self = setmetatable({}, RoomPanel)
+	self.callbacks = callbacks or {}
+
+	self.root = Theme.panel(parent, {
+		Position = UDim2.new(0, 34, 0, 490),
+		Size = UDim2.fromOffset(1074, 196),
+		BackgroundTransparency = 0.06,
+	})
+	Theme.pad(self.root, 16)
+
+	-- ── left: code / create-join ──
+	local left = Instance.new("Frame")
+	left.BackgroundTransparency = 1
+	left.Size = UDim2.fromOffset(330, 164)
+	left.Parent = self.root
+
+	self.headline = Theme.caption(left, "SALA", { Size = UDim2.new(1, 0, 0, 14), TextSize = 11 })
+
+	-- The code, when we are in a room. Monospaced and large: somebody is going
+	-- to read this out loud over voice chat.
+	self.codeLabel = Theme.label(left, "", {
+		Position = UDim2.new(0, 0, 0, 20),
+		Size = UDim2.new(1, 0, 0, 52),
+		TextSize = 46,
+		FontFace = Theme.Font.Mono,
+		TextColor3 = Palette.Reference,
+		Visible = false,
+	})
+	self.codeHint = Theme.caption(left, "", {
+		Position = UDim2.new(0, 0, 0, 74),
+		Size = UDim2.new(1, 0, 0, 28),
+		TextSize = 11,
+		TextWrapped = true,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		Visible = false,
+	})
+
+	-- Create / join, when we are not.
+	self.createButton = Theme.button(left, "CREAR SALA", function()
+		if self.callbacks.onCreate then
+			self.callbacks.onCreate()
+		end
+	end, {
+		Position = UDim2.new(0, 0, 0, 22),
+		Size = UDim2.fromOffset(330, 44),
+		TextSize = 15,
+	})
+
+	self.codeBox = Instance.new("TextBox")
+	self.codeBox.BackgroundColor3 = Palette.Ink
+	self.codeBox.BackgroundTransparency = 0.2
+	self.codeBox.BorderSizePixel = 0
+	self.codeBox.Position = UDim2.new(0, 0, 0, 78)
+	self.codeBox.Size = UDim2.fromOffset(208, 44)
+	self.codeBox.PlaceholderText = "CÓDIGO"
+	self.codeBox.PlaceholderColor3 = Palette.Muted
+	self.codeBox.Text = ""
+	self.codeBox.TextColor3 = Palette.Cream
+	self.codeBox.FontFace = Theme.Font.Mono
+	self.codeBox.TextSize = 22
+	self.codeBox.ClearTextOnFocus = false
+	self.codeBox.Parent = left
+	Theme.corner(self.codeBox, UDim.new(0, 8))
+	Theme.stroke(self.codeBox)
+
+	-- Uppercase as they type, and refuse characters the alphabet does not have,
+	-- so a bad code is impossible to submit rather than rejected after a trip.
+	self.codeBox:GetPropertyChangedSignal("Text"):Connect(function()
+		local cleaned = self.codeBox.Text:upper():gsub("[^" .. Rooms.ALPHABET .. "]", "")
+		if #cleaned > Rooms.LENGTH then
+			cleaned = cleaned:sub(1, Rooms.LENGTH)
+		end
+		if cleaned ~= self.codeBox.Text then
+			self.codeBox.Text = cleaned
+		end
+	end)
+
+	local function submit()
+		local code = self.codeBox.Text
+		if #code == Rooms.LENGTH and self.callbacks.onJoin then
+			self.callbacks.onJoin(code)
+		end
+	end
+	self.codeBox.FocusLost:Connect(function(enter)
+		if enter then
+			submit()
+		end
+	end)
+
+	self.joinButton = Theme.button(left, "ENTRAR", submit, {
+		Position = UDim2.new(0, 216, 0, 78),
+		Size = UDim2.fromOffset(114, 44),
+		TextSize = 15,
+	})
+
+	self.status = Theme.caption(left, "", {
+		Position = UDim2.new(0, 0, 0, 130),
+		Size = UDim2.new(1, 0, 0, 30),
+		TextSize = 11,
+		TextWrapped = true,
+		TextYAlignment = Enum.TextYAlignment.Top,
+	})
+
+	-- ── middle: packs ──
+	local mid = Instance.new("Frame")
+	mid.BackgroundTransparency = 1
+	mid.Position = UDim2.new(0, 356, 0, 0)
+	mid.Size = UDim2.fromOffset(356, 164)
+	mid.Parent = self.root
+
+	self.packsTitle = Theme.caption(mid, "PAQUETES DE SONIDOS", {
+		Size = UDim2.new(1, 0, 0, 14), TextSize = 11,
+	})
+
+	local packList = Instance.new("Frame")
+	packList.BackgroundTransparency = 1
+	packList.Position = UDim2.new(0, 0, 0, 20)
+	packList.Size = UDim2.new(1, 0, 1, -20)
+	packList.Parent = mid
+	Theme.list(packList, 6)
+	self.packList = packList
+	self.packRows = {}
+
+	-- ── right: roster ──
+	local right = Instance.new("Frame")
+	right.BackgroundTransparency = 1
+	right.Position = UDim2.new(0, 738, 0, 0)
+	right.Size = UDim2.fromOffset(304, 164)
+	right.Parent = self.root
+
+	self.rosterTitle = Theme.caption(right, "EN LA SALA", {
+		Size = UDim2.new(1, 0, 0, 14), TextSize = 11,
+	})
+
+	local rosterList = Instance.new("Frame")
+	rosterList.BackgroundTransparency = 1
+	rosterList.Position = UDim2.new(0, 0, 0, 20)
+	rosterList.Size = UDim2.new(1, 0, 1, -20)
+	rosterList.Parent = right
+	Theme.list(rosterList, 5)
+	self.rosterList = rosterList
+	self.rosterRows = {}
+
+	return self
+end
+
+-- ── packs ────────────────────────────────────────────────────────────────────
+
+function RoomPanel:_packRow(index)
+	local row = self.packRows[index]
+	if row then
+		return row
+	end
+
+	local frame = Instance.new("Frame")
+	frame.BackgroundColor3 = Palette.PanelRaised
+	frame.BackgroundTransparency = 0.45
+	frame.BorderSizePixel = 0
+	frame.Size = UDim2.new(1, 0, 0, 32)
+	frame.LayoutOrder = index
+	frame.Parent = self.packList
+	Theme.corner(frame, UDim.new(0, 7))
+
+	local toggle = Instance.new("TextButton")
+	toggle.BackgroundColor3 = Palette.Ink
+	toggle.BorderSizePixel = 0
+	toggle.AutoButtonColor = false
+	toggle.Position = UDim2.new(0, 8, 0.5, -9)
+	toggle.Size = UDim2.fromOffset(34, 18)
+	toggle.Text = ""
+	toggle.Parent = frame
+	Theme.corner(toggle, UDim.new(1, 0))
+
+	local knob = Instance.new("Frame")
+	knob.BackgroundColor3 = Palette.Muted
+	knob.BorderSizePixel = 0
+	knob.Position = UDim2.new(0, 2, 0.5, -7)
+	knob.Size = UDim2.fromOffset(14, 14)
+	knob.Parent = toggle
+	Theme.corner(knob, UDim.new(1, 0))
+
+	local name = Theme.label(frame, "", {
+		Position = UDim2.new(0, 50, 0, 0),
+		Size = UDim2.new(1, -112, 1, 0),
+		TextSize = 13,
+		FontFace = Theme.Font.Medium,
+	})
+
+	local count = Theme.caption(frame, "", {
+		Position = UDim2.new(1, -58, 0, 0),
+		Size = UDim2.fromOffset(50, 32),
+		TextSize = 11,
+		TextXAlignment = Enum.TextXAlignment.Right,
+	})
+
+	row = { frame = frame, toggle = toggle, knob = knob, name = name, count = count }
+	self.packRows[index] = row
+	return row
+end
+
+-- ── roster ───────────────────────────────────────────────────────────────────
+
+function RoomPanel:_rosterRow(index)
+	local row = self.rosterRows[index]
+	if row then
+		return row
+	end
+
+	local frame = Instance.new("Frame")
+	frame.BackgroundColor3 = Palette.PanelRaised
+	frame.BackgroundTransparency = 0.45
+	frame.BorderSizePixel = 0
+	frame.Size = UDim2.new(1, 0, 0, 27)
+	frame.LayoutOrder = index
+	frame.Parent = self.rosterList
+	Theme.corner(frame, UDim.new(0, 6))
+
+	local name = Theme.label(frame, "", {
+		Position = UDim2.new(0, 10, 0, 0),
+		Size = UDim2.new(1, -100, 1, 0),
+		TextSize = 13,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	})
+
+	local tag = Theme.caption(frame, "", {
+		Position = UDim2.new(1, -90, 0, 0),
+		Size = UDim2.fromOffset(44, 27),
+		TextSize = 10,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		TextColor3 = Palette.Reference,
+	})
+
+	local kick = Theme.button(frame, "SACAR", nil, {
+		Position = UDim2.new(1, -42, 0.5, -10),
+		Size = UDim2.fromOffset(38, 20),
+		TextSize = 10,
+		Visible = false,
+	})
+
+	row = { frame = frame, name = name, tag = tag, kick = kick }
+	self.rosterRows[index] = row
+	return row
+end
+
+-- ── update ───────────────────────────────────────────────────────────────────
+
+function RoomPanel:update(payload)
+	payload = payload or {}
+	local inRoom = payload.isRoom == true
+	local amHost = inRoom and payload.hostUserId == localPlayer.UserId
+
+	-- Left column swaps wholesale between the two states.
+	self.codeLabel.Visible = inRoom and payload.display ~= nil
+	self.codeHint.Visible = inRoom
+	self.createButton.Visible = not inRoom
+	self.codeBox.Visible = not inRoom
+	self.joinButton.Visible = not inRoom
+
+	if inRoom then
+		self.headline.Text = amHost and "TU SALA" or "SALA"
+		self.codeLabel.Text = payload.display or "—"
+		self.codeHint.Text = amHost
+			and "Pasale este código a tus amigos. Sos el anfitrión: elegís los paquetes y podés sacar gente."
+			or "Estás en una sala privada. El anfitrión elige los paquetes."
+	else
+		self.headline.Text = "SALA"
+		self.status.Text = payload.unavailable
+			or "Creá una sala privada y te manda a un servidor propio, o entrá a una con su código."
+		self.status.TextColor3 = payload.unavailable and Palette.Warn or Palette.Muted
+		self.createButton.Active = payload.canCreate ~= false
+		self.createButton.BackgroundColor3 = (payload.canCreate ~= false)
+			and Palette.PanelRaised or Palette.Panel
+	end
+
+	-- Packs. Interactive for the host, visible to everyone.
+	self.packsTitle.Text = amHost and "PAQUETES — TOCÁ PARA ACTIVAR" or "PAQUETES DE SONIDOS"
+	local packs = payload.packs or {}
+	for i, pack in ipairs(packs) do
+		local row = self:_packRow(i)
+		row.frame.Visible = true
+		row.name.Text = pack.name
+		row.count.Text = ("%d"):format(pack.sounds)
+		row.name.TextColor3 = pack.enabled and Palette.Cream or Palette.Muted
+
+		row.knob:TweenPosition(
+			pack.enabled and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7),
+			Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.18, true)
+		row.knob.BackgroundColor3 = pack.enabled and Palette.Yours or Palette.Muted
+		row.toggle.BackgroundColor3 = pack.enabled and Palette.Ink:Lerp(Palette.Yours, 0.2) or Palette.Ink
+		row.toggle.Active = amHost
+		row.toggle.AutoButtonColor = false
+
+		if row.connection then
+			row.connection:Disconnect()
+			row.connection = nil
+		end
+		if amHost then
+			row.connection = row.toggle.Activated:Connect(function()
+				if self.callbacks.onTogglePack then
+					self.callbacks.onTogglePack(pack.id, not pack.enabled)
+				end
+			end)
+		end
+	end
+	for i = #packs + 1, #self.packRows do
+		self.packRows[i].frame.Visible = false
+	end
+
+	-- Roster, with a remove button only where it is allowed to exist.
+	local roster = payload.roster or {}
+	self.rosterTitle.Text = ("EN LA SALA · %d"):format(#roster)
+	for i, entry in ipairs(roster) do
+		local row = self:_rosterRow(i)
+		row.frame.Visible = true
+		row.name.Text = entry.name
+		row.tag.Text = entry.isHost and "ANFITRIÓN" or ""
+		row.kick.Visible = amHost and not entry.isHost
+
+		if row.connection then
+			row.connection:Disconnect()
+			row.connection = nil
+		end
+		if row.kick.Visible then
+			row.connection = row.kick.Activated:Connect(function()
+				if self.callbacks.onKick then
+					self.callbacks.onKick(entry.userId, entry.name)
+				end
+			end)
+		end
+	end
+	for i = #roster + 1, #self.rosterRows do
+		self.rosterRows[i].frame.Visible = false
+	end
+end
+
+function RoomPanel:setStatus(text, tone)
+	self.status.Text = text or ""
+	self.status.TextColor3 = (tone == "bad" and Palette.Bad)
+		or (tone == "warn" and Palette.Warn)
+		or (tone == "good" and Palette.Good)
+		or Palette.Muted
+end
+
+function RoomPanel:setVisible(visible)
+	self.root.Visible = visible
+end
+
+return RoomPanel
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="34">
             <Properties>
               <string name="Name">Root</string>
               <string name="Source"><![CDATA[--!nonstrict
@@ -4516,6 +5904,7 @@ local Menu = require(script.Parent.Menu)
 local StagePanel = require(script.Parent.StagePanel)
 local Scoreboard = require(script.Parent.Scoreboard)
 local RouletteUI = require(script.Parent.RouletteUI)
+local RoomPanel = require(script.Parent.RoomPanel)
 local Palette = require(game.ReplicatedStorage.Shared.Palette)
 
 local Root = {}
@@ -4632,6 +6021,28 @@ function Root.new(callbacks)
 			end
 		end,
 	})
+	self.room = RoomPanel.new(gui, {
+		onCreate = function()
+			if self.callbacks.onCreateRoom then
+				self.callbacks.onCreateRoom()
+			end
+		end,
+		onJoin = function(code)
+			if self.callbacks.onJoinRoom then
+				self.callbacks.onJoinRoom(code)
+			end
+		end,
+		onTogglePack = function(packId, enabled)
+			if self.callbacks.onTogglePack then
+				self.callbacks.onTogglePack(packId, enabled)
+			end
+		end,
+		onKick = function(userId, name)
+			if self.callbacks.onKick then
+				self.callbacks.onKick(userId, name)
+			end
+		end,
+	})
 	self.stage = StagePanel.new(gui)
 	self.scoreboard = Scoreboard.new(gui)
 	self.roulette = RouletteUI.new(gui)
@@ -4661,6 +6072,9 @@ end
 function Root:setPhase(phase)
 	local inMenu = (phase == "lobby" or phase == "boot")
 	self.menu:setVisible(inMenu)
+	-- Room controls belong to the lobby: mid-party is not the moment to be
+	-- toggling packs or removing the person currently on their mark.
+	self.room:setVisible(inMenu)
 	self.stage:setVisible(not inMenu and phase ~= "results")
 	self.banner.Visible = not inMenu
 	self.bannerPhase.Text = PHASE_TEXT[phase] or ""
@@ -4742,7 +6156,7 @@ return Root
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="32">
+          <Item class="ModuleScript" referent="35">
             <Properties>
               <string name="Name">RouletteUI</string>
               <string name="Source"><![CDATA[--!nonstrict
@@ -4974,7 +6388,7 @@ return RouletteUI
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="33">
+          <Item class="ModuleScript" referent="36">
             <Properties>
               <string name="Name">Scoreboard</string>
               <string name="Source"><![CDATA[--!nonstrict
@@ -5083,7 +6497,7 @@ return Scoreboard
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="34">
+          <Item class="ModuleScript" referent="37">
             <Properties>
               <string name="Name">StagePanel</string>
               <string name="Source"><![CDATA[--!nonstrict
@@ -5428,7 +6842,7 @@ return StagePanel
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="35">
+          <Item class="ModuleScript" referent="38">
             <Properties>
               <string name="Name">Theme</string>
               <string name="Source"><![CDATA[--!nonstrict
@@ -5651,7 +7065,7 @@ return Theme
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="36">
+          <Item class="ModuleScript" referent="39">
             <Properties>
               <string name="Name">Waveform</string>
               <string name="Source"><![CDATA[--!nonstrict
@@ -5826,7 +7240,7 @@ return Waveform
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="37">
+        <Item class="ModuleScript" referent="40">
           <Properties>
             <string name="Name">VoiceInput</string>
             <string name="Source"><![CDATA[--!nonstrict
@@ -5956,9 +7370,10 @@ function VoiceInput.open()
 		_closed = false,
 	}, Session)
 
-	-- The device must be live for the analyzer to see anything.
+	-- Unmute so the analyzer sees signal. `.Active` is flagged Roblox Script
+	-- Security and a game script cannot write it — `.Muted` is the one we own.
 	pcall(function()
-		device.Active = true
+		device.Muted = false
 	end)
 
 	return self
@@ -6122,13 +7537,13 @@ return VoiceInput
       </Item>
     </Item>
   </Item>
-  <Item class="VoiceChatService" referent="38">
+  <Item class="VoiceChatService" referent="41">
     <Properties>
       <string name="Name">VoiceChatService</string>
       <bool name="EnableDefaultVoice">true</bool>
     </Properties>
   </Item>
-  <Item class="Workspace" referent="39">
+  <Item class="Workspace" referent="42">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="FilteringEnabled">true</bool>

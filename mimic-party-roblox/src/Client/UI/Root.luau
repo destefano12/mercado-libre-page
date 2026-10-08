@@ -10,6 +10,7 @@ local Menu = require(script.Parent.Menu)
 local StagePanel = require(script.Parent.StagePanel)
 local Scoreboard = require(script.Parent.Scoreboard)
 local RouletteUI = require(script.Parent.RouletteUI)
+local RoomPanel = require(script.Parent.RoomPanel)
 local Palette = require(game.ReplicatedStorage.Shared.Palette)
 
 local Root = {}
@@ -126,6 +127,28 @@ function Root.new(callbacks)
 			end
 		end,
 	})
+	self.room = RoomPanel.new(gui, {
+		onCreate = function()
+			if self.callbacks.onCreateRoom then
+				self.callbacks.onCreateRoom()
+			end
+		end,
+		onJoin = function(code)
+			if self.callbacks.onJoinRoom then
+				self.callbacks.onJoinRoom(code)
+			end
+		end,
+		onTogglePack = function(packId, enabled)
+			if self.callbacks.onTogglePack then
+				self.callbacks.onTogglePack(packId, enabled)
+			end
+		end,
+		onKick = function(userId, name)
+			if self.callbacks.onKick then
+				self.callbacks.onKick(userId, name)
+			end
+		end,
+	})
 	self.stage = StagePanel.new(gui)
 	self.scoreboard = Scoreboard.new(gui)
 	self.roulette = RouletteUI.new(gui)
@@ -155,6 +178,9 @@ end
 function Root:setPhase(phase)
 	local inMenu = (phase == "lobby" or phase == "boot")
 	self.menu:setVisible(inMenu)
+	-- Room controls belong to the lobby: mid-party is not the moment to be
+	-- toggling packs or removing the person currently on their mark.
+	self.room:setVisible(inMenu)
 	self.stage:setVisible(not inMenu and phase ~= "results")
 	self.banner.Visible = not inMenu
 	self.bannerPhase.Text = PHASE_TEXT[phase] or ""

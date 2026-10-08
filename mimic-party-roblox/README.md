@@ -46,6 +46,46 @@ El modo viaja con la toma y **el servidor grada con los pesos de ese modo**, as�
 que nadie se puntúa en un eje que no podía manejar. En la tarjeta de puntaje, un
 eje que no contó se muestra como "—", no como 0: un cero se lee como que fallaste.
 
+### El grafo de voz, cableado a mano
+
+Nada de esto queda en manos de los valores por defecto del motor. La cadena, con
+la API de audio actual:
+
+```
+AudioDeviceInput  (.Player = ese jugador, .Muted, .Volume)
+     └─ Wire ─→  AudioEmitter  (en su cabeza, con DistanceAttenuation)
+                      └─ lo capta el AudioListener que da
+                         SoundService.ListenerLocation = Camera
+                              └─ AudioDeviceOutput  (lo provee el motor)
+```
+
+Tener los cables propios es lo que compra las tres cosas que este juego necesita:
+
+1. **Un silencio real.** Cerrar la mesa durante la reproducción pone `.Muted` en
+   una entrada real, así todos escuchan la misma toma y no a cinco personas
+   reaccionando encima.
+2. **Alcance.** La sala tiene ~45 studs de profundidad; la curva de atenuación
+   está ajustada para que una voz en el escenario llegue a la última fila sin
+   que los cinco se conviertan en puré cuando hablan todos juntos.
+3. **Volumen por jugador**, para la ventana de reacción.
+
+Y un bug mío que esto arregló: mi `VoiceGate` usaba `AudioDeviceInput.Active`,
+que está marcada **"Roblox Script Security"** — un script de juego no puede
+escribirla. La propiedad correcta es **`.Muted`**, que es la que usa el ejemplo
+oficial de push-to-talk. El silenciado durante la escucha nunca habría
+funcionado. `VoiceGate.luau` quedó reemplazado por `VoiceChat.luau`.
+
+También hay un re-cableado periódico cada 5 segundos: un respawn, un personaje
+que recarga o una voz que se provisiona tarde invalidan el emisor, y un chat de
+voz mudo es la peor falla posible en este juego.
+
+Lo que **ninguna configuración** puede hacer es darle voz a una cuenta que no la
+tiene: Roblox pide verificación de edad, por usuario. Esos jugadores entran en
+modo puntero y se les dice por qué, en pantalla. `VoiceChat.report()` existe
+justo para eso: te dice, por jugador, si tiene entrada, si está silenciado y si
+está cableado, para que "no funciona el micrófono" sea contestable sin un
+programador al lado.
+
 ### El detector de ataques
 
 De un flujo de volumen hay que sacar ataques limpios. `VoiceInput.Gate`:
@@ -115,6 +155,67 @@ en Roblox; sin eso el juego sigue andando y cae a modo puntero.
 rojo serve          # y conectá el plugin de Rojo desde Studio
 rojo build -o MimicParty.rbxlx
 ```
+
+## 2b. Salas privadas por código
+
+El menú ahora tiene **CREAR SALA** y un campo de código. Y las salas no son
+canales dentro de un servidor: **cada sala es un servidor reservado aparte de
+este mismo lugar**, que es lo que permite que haya cinco fiestas simultáneas.
+
+```
+el anfitrión aprieta CREAR
+  → TeleportService:ReserveServerAsync(game.PlaceId) devuelve un código de
+    acceso a un servidor nuevo y vacío de ESTE MISMO lugar
+  → se reclama un código humano de 5 caracteres en un DataStore, apuntando a
+    ese código de acceso
+  → el anfitrión viaja ahí, llevando los ajustes de la sala en el teleport data
+
+alguien escribe el código
+  → el DataStore lo convierte de vuelta en el código de acceso
+  → TeleportAsync con ReservedServerAccessCode lo deja en el mismísimo servidor
+```
+
+El código tiene que vivir en algún lugar que los dos servidores puedan leer —
+de ahí el DataStore. Se reclama con `UpdateAsync`, que es la única forma de que
+dos servidores compitiendo por los mismos cinco caracteres no ganen los dos.
+
+**El alfabeto de los códigos no tiene O/0, I/1 ni S/5.** Un código se lee en voz
+alta por el chat de voz, y esos son los pares que la gente confunde. 30 símbolos,
+5 lugares: 24.3 millones de combinaciones.
+
+### Lo que controla el anfitrión
+
+Exactamente dos cosas:
+
+- **Qué paquetes de sonidos entran.** Interruptores en vivo. No puede apagar el
+  último: una librería vacía no es una sala válida.
+- **A quién saca.** Un botón por jugador. No puede sacarse a sí mismo.
+
+**Y deliberadamente nada más.** Sin editar puntajes, sin saltear rondas, sin
+silenciar a alguien en particular. Un anfitrión que pudiera silenciar a una
+persona rompería la única regla sobre la que está construido el juego.
+
+Si el anfitrión se va, la sala pasa a quien lleva más tiempo adentro — una
+conexión caída no debería dejar la sala sin manejar. Los no-anfitriones ven los
+mismos paquetes y el mismo roster, en gris: esconderlo dejaría a cuatro personas
+adivinando por qué desapareció un paquete a mitad de la fiesta.
+
+### Lo que tenés que activar vos
+
+Dos interruptores, los dos en tu cuenta, y el juego te dice en pantalla cuál
+falta en vez de fallar en silencio:
+
+1. **DataStores** — las salas no funcionan sin esto. En un juego publicado ya
+   vienen activos. Para probar en Studio: **Game Settings → Security → Enable
+   Studio Access to API Services**. El servidor hace una lectura de prueba al
+   arrancar, así que si está apagado el botón CREAR SALA aparece deshabilitado
+   con el motivo escrito, en lugar de romperse cuando lo apretás.
+2. **Chat de voz** — ya viene activado en el archivo
+   (`VoiceChatService.EnableDefaultVoice = true`). Para publicarlo con voz tu
+   cuenta necesita verificación de edad en Roblox.
+
+Un lugar sin publicar no puede reservar servidores (`game.PlaceId == 0`), así que
+publicá una vez antes de probar las salas. El juego te lo dice con esas palabras.
 
 ## 3. Cómo se juega
 
@@ -285,12 +386,15 @@ se acerca a la marca de quien está sonando.
 ## 9. Estructura
 
 ```
-src/Shared/      Config · Palette · Net · Signal · SoundLibrary
-                 Scoring · Sabotages · Roulette · Characters · Modes
-src/Server/      init.server · MatchService · StageBuilder · LightingRig
-                 PlayerProfiles · TakeStore · VoiceGate
-src/Client/      init.client · CameraDirector · AudioEngine · Booth · SoloRunner
-src/Client/UI/   Root · Menu · StagePanel · Waveform · Scoreboard · RouletteUI · Theme
+src/Shared/      Config · Palette · Net · Signal · Rooms · SoundLibrary
+                 AudioCatalog · Scoring · Sabotages · Roulette
+                 Characters · Modes
+src/Server/      init.server · MatchService · RoomService · VoiceChat
+                 StageBuilder · LightingRig · PlayerProfiles · TakeStore
+src/Client/      init.client · CameraDirector · AudioEngine · VoiceInput
+                 Booth · SoloRunner
+src/Client/UI/   Root · Menu · RoomPanel · StagePanel · Waveform
+                 Scoreboard · RouletteUI · Theme
 ```
 
 `MatchService` es la única autoridad: una corrutina maneja toda la partida y cada
@@ -302,7 +406,7 @@ Ningún número vive fuera de `Config.luau`.
 
 ## 10. Estado
 
-- 31 módulos, 5898 líneas de Luau. Los 31 compilan (`luau-compile`, sin errores).
+- 34 módulos, 7.295 líneas de Luau. Todos compilan (`luau-compile`, sin errores).
 - **Probado con aserciones** contra el intérprete real de Luau, no a ojo:
   - **Puntuación** — una copia exacta da 1000; la misma forma 12 semitonos
     arriba o 7 abajo da 1000 también (tu registro no cuenta); el silencio da 0;
@@ -311,10 +415,15 @@ Ningún número vive fuera de `Config.luau`.
   - **Detector de ataques** — 7 escenarios, incluidos los dos patrones más
     rápidos de la librería, el puente de sílaba y la histéresis. Error de
     duración: 0 ms.
+  - **Códigos de sala** — 20.000 códigos generados y todos aceptados por el
+    normalizador; sin caracteres ambiguos; acepta minúsculas, espacios, guiones
+    y la forma `ABC-DE` pegada de vuelta; rechaza vacío, corto, largo, fuera de
+    alfabeto y tipos no-string.
 - Los personajes son **solo cosméticos**, a propósito: ninguno puntúa mejor, así
   la ruleta sigue siendo la única fuente de injusticia.
 - Lo que no se puede probar desde acá y necesita tu publicación: el micrófono
-  real (hace falta un cliente de Roblox con permiso de voz) y la resolución del
-  catálogo de audio (hace falta un servidor publicado). Los dos tienen su camino
-  de respaldo probado, así que si alguno falla el juego sigue andando.
-- Lo que sí podés probar ya: **Test → Clients and Servers → 2 Players**.
+  real (hace falta un cliente de Roblox con permiso de voz), las salas (hacen
+  falta DataStores y un lugar publicado) y la resolución del catálogo de audio.
+  Los tres tienen su camino de respaldo probado y te dicen en pantalla qué falta.
+- Lo que sí podés probar ya en Studio: **Test → Clients and Servers → 2 Players**
+  para la fiesta completa, y los cuatro modos solo, que no necesitan nada.
