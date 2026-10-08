@@ -18,12 +18,12 @@ R = Path(__file__).parent
 V = json.loads((R / "venue.json").read_text())
 
 W, H = 1600, 900
-BG = np.array([0.055, 0.048, 0.058])      # matches Palette.Scrim, darkened
+BG = np.array([0.13, 0.08, 0.11])      # matches Palette.Scrim, darkened
 # LightingRig: Ambient (26,22,24), Brightness 1.1 at ClockTime 21 — indoors at
 # night, so almost all illumination comes from the 14 fixtures the rig places.
 # Those are read from the dump rather than approximated.
-AMBIENT = np.array([26, 22, 24]) / 255 * 1.9
-SKY = np.array([0.055, 0.050, 0.058])     # the faint top-down term
+AMBIENT = np.array([74, 56, 62]) / 255 * 1.75
+SKY = np.array([0.12, 0.09, 0.11])     # the faint top-down term
 LIGHTS = [
     dict(pos=np.array(l["pos"], dtype=float),
          brightness=l["brightness"],
@@ -36,9 +36,9 @@ LIGHTS = [
          half=math.radians(l["angle"] / 2))
     for l in V["lights"]
 ]
-EXPOSURE = -0.18                          # LightingRig.ExposureCompensation
-SATURATION = -0.07
-FOG_DISTANCE = 135.0
+EXPOSURE = 0.0                          # LightingRig.ExposureCompensation
+SATURATION = 0.22
+FOG_DISTANCE = 260.0
 
 MATERIAL_SPEC = {   # (diffuse multiplier, emissive)
     "Neon": (1.0, 0.92),
@@ -196,7 +196,7 @@ def shade(colour, normal, diff, emis, depth, centre):
     grey = float(np.dot(lit, [0.299, 0.587, 0.114]))
     lit = lit + (grey - lit) * (-SATURATION)
     fog = 1.0 - math.exp(-max(depth, 0.0) / FOG_DISTANCE)
-    haze = np.array([0.105, 0.092, 0.088])
+    haze = np.array([0.30, 0.19, 0.19])
     lit = lit * (1 - fog) + haze * fog
     return tuple(int(max(0.0, min(1.0, c)) ** (1 / 1.05) * 255) for c in lit)
 
@@ -227,13 +227,17 @@ def render(cam_name, parts, out_path, fov_override=None, title=None):
             continue
         mean_depth = float(np.mean(depth))
         centre = wv.mean(axis=0)
-        drawable.append((mean_depth, pts, shade(colour, wn, diff, emis, mean_depth, centre), alpha))
+        ground = 1 if (abs(float(wn[1])) > 0.9 and float(centre[1]) < 1.6) else 0
+        drawable.append((mean_depth, pts, shade(colour, wn, diff, emis, mean_depth, centre),
+                         alpha, ground, float(centre[1])))
 
-    drawable.sort(key=lambda t: -t[0])
+    # Ground first, lowest surface up (floor, then the rug lying on it), each
+    # band far to near; then everything standing on top of it all.
+    drawable.sort(key=lambda t: (-t[4], t[5] if t[4] else 0, -t[0]))
 
     img = Image.new("RGB", (W, H), tuple(int(c * 255) for c in BG))
     draw = ImageDraw.Draw(img, "RGBA")
-    for _, pts, colour, alpha in drawable:
+    for _, pts, colour, alpha, _ground, _y in drawable:
         draw.polygon(pts, fill=colour + (int(alpha * 255),))
 
     # A touch of bloom on the bright practicals, as the rig's BloomEffect does.
@@ -254,17 +258,17 @@ def render(cam_name, parts, out_path, fov_override=None, title=None):
 # ── scenes ───────────────────────────────────────────────────────────────────
 
 base = V["parts"]
-MARK_X = [-20, -10, 0, 10, 20]
+MARK_X = [-16, -8, 0, 8, 16]
 
 on_marks = []
 for i, x in enumerate(MARK_X):
-    on_marks += avatar(x, 4.0, 0.0, i, yaw=math.pi)   # facing the house
+    on_marks += avatar(x, 0.35, -2.0, i, yaw=math.pi)   # on their pad, facing the room
 
 walking = []
 for i, x in enumerate(MARK_X):
     # Mid-procession: staggered down the aisle, as the 0.45 s offsets produce.
-    z = 7.0 + i * 3.6
-    walking += avatar(-8 + i * 4.0, 1.2, z, i, yaw=math.pi)
+    z = 6.0 + i * 3.2
+    walking += avatar(-8 + i * 4.0, 0.35, z, i, yaw=math.pi)
 
 print("renderizando:")
 out = R / "shots"

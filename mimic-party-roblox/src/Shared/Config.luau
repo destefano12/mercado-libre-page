@@ -133,7 +133,10 @@ Config.SCORING = {
 	MELODY_SAMPLES = 64,
 	MELODY_TOLERANCE = 7.0,  -- semitones of contour error that zeroes the axis
 	RHYTHM_TOLERANCE = 0.35, -- seconds of onset error that zeroes the axis
-	MAX_SCORE = 1000,
+	-- The one dial. Every threshold, target and award below is written as a
+	-- fraction of this or derived from it, so changing it rescales the whole
+	-- game instead of leaving half of it on the old scale.
+	MAX_SCORE = 100,
 }
 
 -- When a player performs without pitch control ("voice_only"), the melody axis
@@ -147,12 +150,12 @@ Config.SCORING_VOICE_ONLY = {
 
 -- ─── Roulette ─────────────────────────────────────────────────────────────────
 Config.ROULETTE = {
-	SABOTAGE_POINT_PENALTY = 120,
+	SABOTAGE_POINT_PENALTY = 12,
 	MULTIPLIER_DECAY = 1,    -- multipliers last this many rounds
 }
 
 -- ─── Solo modes ───────────────────────────────────────────────────────────────
-Config.SURVIVAL = { SOUNDS = 50, LIVES = 3, TARGET_START = 300, TARGET_STEP = 25, TARGET_CAP = 720 }
+Config.SURVIVAL = { SOUNDS = 50, LIVES = 3, TARGET_START = 30, TARGET_STEP = 2.5, TARGET_CAP = 72 }
 Config.JUST_PLAY = { ROUNDS = 3 }
 Config.DAILY = { SOUNDS = 4 }
 

@@ -8,7 +8,17 @@ M.ALL = ALL
 
 -- ── Vector3 ──────────────────────────────────────────────────────────────────
 local Vector3 = {}
-Vector3.__index = Vector3
+Vector3.__index = function(t, k)
+    if k == "Magnitude" then
+        return math.sqrt(t.X * t.X + t.Y * t.Y + t.Z * t.Z)
+    end
+    if k == "Unit" then
+        local m = math.sqrt(t.X * t.X + t.Y * t.Y + t.Z * t.Z)
+        if m < 1e-9 then m = 1 end
+        return setmetatable({ X = t.X / m, Y = t.Y / m, Z = t.Z / m }, getmetatable(t))
+    end
+    return rawget(Vector3, k)
+end
 local function v3(x, y, z) return setmetatable({ X = x or 0, Y = y or 0, Z = z or 0 }, Vector3) end
 Vector3.__add = function(a, b) return v3(a.X + b.X, a.Y + b.Y, a.Z + b.Z) end
 Vector3.__sub = function(a, b) return v3(a.X - b.X, a.Y - b.Y, a.Z - b.Z) end
@@ -129,6 +139,13 @@ function Random:NextNumber(a, b)
     return a + r * (b - a)
 end
 function Random:NextInteger(a, b) return math.floor(a + self:_next() * (b - a + 1) - 1e-9) end
+
+-- ── UDim2 / Vector2 / Font (only needed so SurfaceGui signs construct) ──
+M.UDim2 = { fromScale = function(x, y) return { X = x, Y = y } end,
+            fromOffset = function(x, y) return { X = x, Y = y } end,
+            new = function(...) return {} end }
+M.Vector2 = { new = function(x, y) return { X = x, Y = y } end }
+M.Font = { fromEnum = function(e) return { Name = e and e.Name or "Font" } end }
 
 -- ── Instance ─────────────────────────────────────────────────────────────────
 local Instance = {}

@@ -141,14 +141,31 @@ function Scoring.grade(ref, take, weights)
 	}
 end
 
--- Plain-language verdict for the playback card.
+-- Plain-language verdict for the playback card. Written as fractions of
+-- MAX_SCORE so the bands survive a change to the scale.
+local BANDS = {
+	{ 0.90, "IDÉNTICO" },
+	{ 0.78, "CLAVADO" },
+	{ 0.62, "CERCA" },
+	{ 0.44, "RECONOCIBLE" },
+	{ 0.24, "LEJOS" },
+}
+
 function Scoring.verdict(total)
-	if total >= 900 then return "IDÉNTICO" end
-	if total >= 780 then return "CLAVADO" end
-	if total >= 620 then return "CERCA" end
-	if total >= 440 then return "RECONOCIBLE" end
-	if total >= 240 then return "LEJOS" end
+	for _, band in ipairs(BANDS) do
+		if total >= band[1] * S.MAX_SCORE then
+			return band[2]
+		end
+	end
 	return "¿QUÉ FUE ESO?"
+end
+
+-- Shared by the UI so colour bands and verdict bands can never drift apart.
+function Scoring.band(total)
+	local alpha = total / math.max(S.MAX_SCORE, 1)
+	if alpha >= 0.62 then return "good" end
+	if alpha >= 0.38 then return "warn" end
+	return "bad"
 end
 
 return Scoring

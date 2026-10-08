@@ -528,7 +528,13 @@ function RoomService.bindRemotes()
 end
 
 function RoomService.start()
-	probeDataStore()
+	-- Off the boot thread: GetAsync can take seconds, and everything after
+	-- this call (the voice graph, the match loop) would wait behind it.
+	task.spawn(function()
+		probeDataStore()
+		RoomService.broadcast()
+	end)
+
 	state.isRoom = detectRoom()
 	if state.isRoom then
 		print("[RoomService] servidor reservado: esta es una sala privada")

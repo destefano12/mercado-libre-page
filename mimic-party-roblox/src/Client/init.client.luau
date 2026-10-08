@@ -27,18 +27,34 @@ local Root = require(script.UI.Root)
 
 local localPlayer = Players.LocalPlayer
 
--- The stage has to exist before the camera can be framed against it.
-local anchors do
-	local venue = workspace:WaitForChild("Venue", 60)
-	anchors = venue and venue:WaitForChild("StageAnchors", 20)
-end
-
 pcall(function()
 	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
 	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Health, false)
 end)
 
-CameraDirector.init(anchors)
+-- A last-resort overlay. Without it a bootstrap error is a black screen and no
+-- way to tell whether the game is loading or dead.
+local function fatal(err)
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "MimicPartyError"
+	gui.ResetOnSpawn = false
+	gui.IgnoreGuiInset = true
+	gui.Parent = localPlayer:WaitForChild("PlayerGui")
+
+	local box = Instance.new("TextLabel")
+	box.AnchorPoint = Vector2.new(0.5, 0.5)
+	box.Position = UDim2.fromScale(0.5, 0.5)
+	box.Size = UDim2.fromOffset(620, 160)
+	box.BackgroundColor3 = Color3.fromRGB(30, 22, 30)
+	box.BorderSizePixel = 0
+	box.TextColor3 = Color3.fromRGB(240, 84, 84)
+	box.FontFace = Font.fromEnum(Enum.Font.Code)
+	box.TextSize = 15
+	box.TextWrapped = true
+	box.Text = "Mimic Party no pudo arrancar:\n\n" .. tostring(err)
+	box.Parent = gui
+	warn("[Mimic Party] bootstrap failed: " .. tostring(err))
+end
 
 local lastSabotageWon = nil
 local inRoom = false
@@ -59,8 +75,9 @@ local function modeById(id)
 	return nil
 end
 
-ui = Root.new({
+local callbacks = {
 	onMode = function(id)
+		if not ui then return end
 		local mode = modeById(id)
 		selectedMode = id
 		if not mode then
@@ -89,6 +106,7 @@ ui = Root.new({
 	end,
 
 	onCharacter = function(id)
+		if not ui then return end
 		AudioEngine.click()
 		ui.menu:setCharacter(id)
 		Net.fireServer(Net.ChooseCharacter, { characterId = id })
@@ -96,12 +114,14 @@ ui = Root.new({
 
 	-- ── rooms ──
 	onCreateRoom = function()
+		if not ui then return end
 		AudioEngine.confirm()
 		ui.room:setStatus("Reservando un servidor…", "neutral")
 		Net.fireServer(Net.CreateRoom, {})
 	end,
 
 	onJoinRoom = function(code)
+		if not ui then return end
 		-- Validate the format here so an obviously bad code never costs a trip.
 		local clean, reason = Rooms.normalise(code)
 		if not clean then
@@ -115,19 +135,45 @@ ui = Root.new({
 	end,
 
 	onTogglePack = function(packId, enabled)
+		if not ui then return end
 		AudioEngine.click()
 		Net.fireServer(Net.SetPackEnabled, { packId = packId, enabled = enabled })
 	end,
 
 	onKick = function(userId, name)
+		if not ui then return end
 		AudioEngine.click()
 		ui.room:setStatus(("Sacando a %s…"):format(name or "?"), "warn")
 		Net.fireServer(Net.KickPlayer, { userId = userId })
 	end,
-})
+}
+
+-- Construction is the one place a typo takes the whole interface down, so it
+-- reports itself instead of leaving a black screen.
+local built, buildError = pcall(function()
+	ui = Root.new(callbacks)
+end)
+if not built then
+	fatal(buildError)
+	return
+end
 
 ui:setPhase("lobby")
 ui.menu:setStatus("Fiesta online. Arranca sola cuando haya 2 jugadores en la sala.")
+
+-- The camera needs the stage. The menu does not, so it is already on screen by
+-- the time this resolves, and a venue that never arrives costs a toast rather
+-- than the whole interface.
+task.spawn(function()
+	local venue = workspace:WaitForChild("Venue", 120)
+	local anchors = venue and venue:WaitForChild("StageAnchors", 20)
+	if anchors then
+		CameraDirector.init(anchors)
+		CameraDirector.onPhase(state.phase or "lobby")
+	else
+		ui:showToast("No encuentro el escenario. La cámara queda libre.", "bad")
+	end
+end)
 
 -- ── the take ───────────────────────────────────────────────────────────────────
 -- Started by the record phase, submitted exactly once, never retried.

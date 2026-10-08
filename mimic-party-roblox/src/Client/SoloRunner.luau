@@ -113,7 +113,8 @@ local function survival(ui)
 	local total = 0
 
 	for round = 1, cfg.SOUNDS do
-		local target = math.min(cfg.TARGET_CAP, cfg.TARGET_START + (round - 1) * cfg.TARGET_STEP)
+		local target = math.floor(math.min(cfg.TARGET_CAP,
+			cfg.TARGET_START + (round - 1) * cfg.TARGET_STEP) + 0.5)
 		local grade = runRound(ui, playlist[round], round, cfg.SOUNDS,
 			("OBJETIVO %d  ·  VIDAS %s"):format(target, string.rep("●", lives)))
 		total += grade.total

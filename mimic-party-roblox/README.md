@@ -351,58 +351,54 @@ se saltea la búsqueda. **Para agregar un sonido:** una línea más en un
 
 ## 7b. Cómo se ve
 
+![La sala](docs/imagenes/05-la-sala.png)
+
 ![Escuchando las tomas](docs/imagenes/03-escuchando.png)
 
-![Grabando](docs/imagenes/01-grabando.png)
+El lugar es un **living cartoon**, no un teatro: piso de tablones color miel,
+paredes rojizas, una alfombra redonda magenta donde se paran los jugadores,
+sillón rojo, dos torres de parlantes, plantas, un estante con un gato, un disco
+y un cartel en la pared, y una guirnalda de luces de colores cruzando el fondo.
+Seis faroles de papel dan la luz, en dos filas para que la mitad delantera del
+piso no quede en sombra.
 
-![La sala](docs/imagenes/05-la-sala.png)
+La tipografía de títulos es **FredokaOne**, la cara más redonda que trae Roblox,
+y es lo que más hace que la interfaz se lea como un dibujo animado y no como un
+tablero.
 
 ### La tabla de puntajes
 
-Arriba de todo, horizontal, una tarjeta por jugador: **la cara del personaje,
-debajo el nombre, debajo el puntaje.** Cuando una toma se puntúa, los puntos que
-ganó salen volando de esa tarjeta como `+858` mientras el total trepa hasta
-alcanzarlos — se ve de dónde salió el número en vez de mirar una cifra cambiar.
+Arriba de todo, horizontal: **la cara del personaje, debajo el nombre, debajo el
+puntaje.** Cuando una toma se puntúa, los puntos que ganó salen volando de esa
+tarjeta mientras el total trepa hasta alcanzarlos.
 
-La foto es un `ViewportFrame` con un clon del avatar real de ese jugador,
-encuadrado en la cabeza. Así se consigue una cara de verdad en una interfaz de
-Roblox **sin subir una sola imagen**, y la tarjeta muestra a quien realmente es
-el jugador y no un dibujo de relleno.
-
-Las tarjetas van en **orden de escenario, no de puntaje**, así cada una queda
-arriba de la persona a la que pertenece. Al líder se lo marca con el borde
-dorado en lugar de moverlo: una fila que se reordena a mitad de ronda no se
-puede seguir con la vista.
+La foto es un `ViewportFrame` con un clon del avatar real del jugador: una cara
+de verdad **sin subir una sola imagen**. Las tarjetas van en orden de escenario,
+no de puntaje, así cada una queda arriba de quien le corresponde; al líder se lo
+marca con el borde dorado en vez de moverlo.
 
 ### Las ondas
 
-Cada pista es un pozo enmarcado: negro casi puro adentro, un filo brillante del
-color de la pista, y la señal dibujada **simétrica sobre la línea central**.
-Cada barra quema del color de la pista en los extremos a un núcleo casi blanco,
-así el volumen se lee como calor y no sólo como altura — que es lo que hace que
-un pasaje bajo siga siendo legible.
+Cada pista es un pozo enmarcado: casi negro adentro, filo brillante del color de
+la pista, señal **simétrica sobre la línea central**, y cada barra quemando del
+color de la pista a un núcleo casi blanco. El cabezal es **rojo** y corre sobre
+las dos pistas: el único rojo de la interfaz y nunca un puntaje.
 
-El cabezal es **rojo** y corre sobre las dos pistas. Es el único rojo de la
-interfaz y nunca representa un puntaje, así que no se puede confundir con uno.
+### Sobre las imágenes
 
-Las imágenes de `docs/imagenes/` **no son maquetas**. El escenario sale de
-ejecutar `StageBuilder.luau` contra un stub de Roblox, volcar las 693 piezas que
-construye y proyectarlas desde las anclas de cámara del juego con las 22 luces
-del rig. La interfaz encima está dibujada con los tamaños y colores exactos de
-`Theme.luau`, `Scoreboard.luau` y `StagePanel.luau`, y las ondas se calculan con
-la misma función de envolvente que usa el juego, sobre las notas reales de
-*Coro de Ranas*. Ver `tools/`.
+No son maquetas. El cuarto sale de ejecutar `StageBuilder.luau` contra un stub
+de Roblox, volcar cada pieza que construye y proyectarla desde las anclas de
+cámara del juego con las luces del rig. La interfaz encima usa los tamaños y
+colores exactos de `Theme.luau`, `Scoreboard.luau` y `StagePanel.luau`, y la
+paleta se lee directamente de `Palette.luau`, así que no puede desincronizarse.
+Las ondas se calculan con la misma función de envolvente del juego. Ver `tools/`.
 
-Renderizarlo encontró **seis bugs que leyendo el código no se veían**:
-
-| Qué se veía | Qué era |
-|---|---|
-| Un poste de 62 studs atravesando la sala | En Roblox un cilindro **ya** está acostado sobre X. El `CFrame.Angles(0,0,90°)` que puse para acostarlo lo **paraba**. Igual los dos cordones del truss, de 66. |
-| Tubos flotando junto a cada jugador | Las columnas de los pies de micrófono, acostadas por el mismo error invertido. |
-| Caras en sombra | Seis cenitales y **ninguna luz frontal**. Es justo para eso que existe el frente de sala en un teatro. |
-| El wash frontal no iluminaba nada | `Face = Front` es +Z: apuntaba **a la platea**, no a los actores. |
-| La nuca de un espectador tapando media pantalla | La cámara de la procesión, en (−14, 7.5, 27), estaba **dentro de la fila 3**. |
-| Los jugadores caminando entre las sillas | El comentario decía "pasillo central" pero `buildCrowd` llenaba el piso de punta a punta. **No había pasillo.** |
+Renderizar encontró ocho bugs que leyendo el código no se veían — entre ellos un
+poste de 62 studs atravesando la sala (en Roblox un cilindro **ya** está acostado
+sobre X, así que el giro que puse para acostarlo lo paraba), los pies de
+micrófono acostados por el mismo error invertido, la luz frontal apuntando a la
+platea en lugar de a los actores, y la cámara de la procesión metida dentro del
+público.
 
 ## 8. El escenario
 

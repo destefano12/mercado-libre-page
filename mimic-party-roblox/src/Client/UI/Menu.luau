@@ -181,17 +181,22 @@ function Menu.new(parent, callbacks)
 		TextColor3 = Palette.Reference,
 	})
 
-	self:selectMode("party")
+	self:selectMode("party", true)
 	return self
 end
 
-function Menu:selectMode(id)
+-- `silent` paints the selection without announcing it. The constructor needs
+-- that: firing onMode from inside Menu.new reaches a handler whose owner is
+-- still being assigned, so `ui` is nil there and the whole client dies before
+-- it can draw a single pixel. That is one dead LocalScript and a frozen screen
+-- with no menu — which is exactly what it did.
+function Menu:selectMode(id, silent)
 	self.selectedMode = id
 	for modeId, button in pairs(self.modeButtons) do
 		local on = (modeId == id)
 		button.BackgroundColor3 = on and Palette.PanelRaised:Lerp(Palette.Reference, 0.12) or Palette.PanelRaised
 	end
-	if self.callbacks.onMode then
+	if not silent and self.callbacks.onMode then
 		self.callbacks.onMode(id)
 	end
 end

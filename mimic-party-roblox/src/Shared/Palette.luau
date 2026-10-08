@@ -1,61 +1,93 @@
 --!nonstrict
--- Palette.luau — a muted theatre palette. Warm woods, deep plum, brass, cream.
--- Deliberately low-contrast and low-saturation: no neon, no strobes, nothing
--- that fights the performance for attention.
+-- Palette.luau — a cartoon living room.
+--
+-- Taken from the reference footage: honey wood floor, warm red-brown walls, a
+-- magenta rug, a big red armchair, string lights. Saturated and high-value —
+-- every surface is unmistakably a colour, nothing sits near grey.
+--
+-- What does NOT change: nothing here flashes, strobes or animates. Bright is
+-- not harsh. The light holds perfectly still through a round; it just does it
+-- in colour.
 
 local function rgb(r, g, b) return Color3.fromRGB(r, g, b) end
 
 return {
 	-- Room
-	HouseFloor   = rgb(38, 33, 36),
-	HouseWall    = rgb(30, 27, 30),
-	Scrim        = rgb(22, 20, 23),
+	Floor        = rgb(214, 148, 78),
+	FloorDark    = rgb(178, 112, 54),
+	Wall         = rgb(112, 54, 54),
+	WallDark     = rgb(88, 40, 44),
+	Skirting     = rgb(142, 74, 68),
 
-	-- Stage
-	Deck         = rgb(122, 86, 55),
-	DeckDark     = rgb(92, 64, 41),
-	Fascia       = rgb(46, 38, 38),
-	Trim         = rgb(150, 116, 66),   -- brass
-	TrimDark     = rgb(104, 79, 44),
-	Truss        = rgb(44, 42, 45),
+	-- Rug
+	RugOuter     = rgb(192, 62, 96),
+	RugMid       = rgb(214, 92, 124),
+	RugInner     = rgb(236, 130, 156),
 
-	-- Curtain
-	Curtain      = rgb(84, 40, 56),
-	CurtainFold  = rgb(66, 31, 45),
-	Valance      = rgb(96, 48, 64),
+	-- Furniture
+	Chair        = rgb(226, 54, 58),
+	ChairDark    = rgb(178, 36, 44),
+	Speaker      = rgb(86, 102, 128),
+	SpeakerDark  = rgb(58, 70, 92),
+	SpeakerCone  = rgb(42, 44, 54),
+	Plant        = rgb(74, 160, 92),
+	PlantDark    = rgb(48, 120, 70),
+	Pot          = rgb(206, 118, 76),
+	Shelf        = rgb(166, 104, 56),
+	Cat          = rgb(238, 232, 220),
 
-	-- Crowd
-	Crowd        = rgb(26, 24, 28),
+	-- Metal and trim
+	Trim         = rgb(252, 202, 88),
+	TrimDark     = rgb(208, 150, 54),
+	Chrome       = rgb(150, 154, 170),
+	Dark         = rgb(44, 32, 38),
 
 	-- Light
-	Practical    = rgb(255, 214, 160),
-	Wash         = rgb(255, 228, 192),
+	Practical    = rgb(255, 226, 168),
+	Wash         = rgb(255, 240, 212),
+	Bulb         = rgb(255, 214, 128),
+
+	-- Party accents, used for the string lights and the wheel.
+	Pink         = rgb(244, 86, 150),
+	Cyan         = rgb(86, 212, 226),
+	Lime         = rgb(164, 222, 92),
+	Violet       = rgb(168, 110, 232),
+	Orange       = rgb(250, 148, 64),
 
 	-- UI
-	Ink          = rgb(18, 17, 20),
-	Panel        = rgb(29, 28, 33),
-	PanelRaised  = rgb(38, 37, 43),
-	Hairline     = rgb(58, 56, 64),
-	Cream        = rgb(238, 233, 224),
-	Muted        = rgb(150, 145, 156),
+	Ink          = rgb(30, 20, 28),
+	Panel        = rgb(52, 32, 44),
+	PanelRaised  = rgb(72, 46, 60),
+	Hairline     = rgb(122, 82, 98),
+	Cream        = rgb(255, 250, 240),
+	Muted        = rgb(200, 168, 184),
 
-	-- The two signature waveform colours, straight from the original.
-	Reference    = rgb(226, 188, 74),   -- yellow — the sound you must match
-	Yours        = rgb(118, 196, 128),  -- green  — your voice
-
-	-- The hot core each waveform burns to at full level, and the playhead that
-	-- rides over it. Red, because it has to read against both tracks at a
-	-- glance and it is the one element that is never a score.
-	CoreWarm     = rgb(255, 243, 214),
-	CoreCool     = rgb(226, 255, 231),
-	Playhead     = rgb(232, 72, 66),
-	Well         = rgb(11, 10, 13),     -- the near-black inside a waveform frame
+	-- The two signature waveform colours.
+	Reference    = rgb(255, 206, 72),
+	Yours        = rgb(96, 226, 230),   -- the reference footage reads cyan
+	CoreWarm     = rgb(255, 250, 226),
+	CoreCool     = rgb(238, 255, 255),
+	Playhead     = rgb(248, 68, 62),
+	Well         = rgb(18, 14, 24),
 
 	-- Scoreboard cards.
-	CardBack     = rgb(33, 31, 37),
-	CardLeader   = rgb(226, 188, 74),
+	CardBack     = rgb(58, 36, 50),
+	CardLeader   = rgb(252, 202, 88),
 
-	Good         = rgb(118, 196, 128),
-	Warn         = rgb(214, 160, 86),
-	Bad          = rgb(192, 92, 92),
+	Good         = rgb(126, 226, 136),
+	Warn         = rgb(252, 184, 72),
+	Bad          = rgb(246, 86, 86),
+
+	-- Aliases kept so older call sites still resolve.
+	HouseFloor   = rgb(214, 148, 78),
+	HouseWall    = rgb(112, 54, 54),
+	Scrim        = rgb(88, 40, 44),
+	Deck         = rgb(214, 148, 78),
+	DeckDark     = rgb(178, 112, 54),
+	Fascia       = rgb(142, 74, 68),
+	Truss        = rgb(92, 88, 104),
+	Curtain      = rgb(196, 54, 64),
+	CurtainFold  = rgb(152, 34, 48),
+	Valance      = rgb(224, 82, 88),
+	Crowd        = rgb(92, 62, 74),
 }

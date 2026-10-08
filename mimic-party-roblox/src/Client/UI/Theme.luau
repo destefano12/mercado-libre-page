@@ -6,6 +6,7 @@
 -- red = damage). No gradients that pulse, no glow, no pure white.
 
 local Palette = require(game.ReplicatedStorage.Shared.Palette)
+local Config = require(game.ReplicatedStorage.Shared.Config)
 
 local Theme = {}
 
@@ -17,11 +18,13 @@ local function font(enum)
 	return Font.fromEnum(enum)
 end
 
+-- FredokaOne is the roundest display face Roblox ships, and it is what makes
+-- the whole interface read as a cartoon rather than a dashboard.
 Theme.Font = {
-	Display = font(Enum.Font.GothamBold),
+	Display = font(Enum.Font.FredokaOne),
 	Body = font(Enum.Font.Gotham),
 	Medium = font(Enum.Font.GothamMedium),
-	Mono = font(Enum.Font.Code),
+	Mono = font(Enum.Font.FredokaOne),
 }
 
 function Theme.corner(instance, radius)
@@ -198,7 +201,7 @@ function Theme.meter(parent, label, color)
 
 	return {
 		set = function(score, max)
-			local alpha = math.clamp(score / (max or 1000), 0, 1)
+			local alpha = math.clamp(score / (max or Config.SCORING.MAX_SCORE), 0, 1)
 			fill:TweenSize(UDim2.fromScale(alpha, 1), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.45, true)
 			value.Text = tostring(score)
 		end,

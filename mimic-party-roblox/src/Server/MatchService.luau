@@ -21,7 +21,7 @@ local Roulette = require(Shared.Roulette)
 local Sabotages = require(Shared.Sabotages)
 
 -- A take recorded without pitch control is graded without the melody axis; the
--- weight is redistributed so a perfect take still reaches 1000 either way.
+-- weight is redistributed so a perfect take still reaches MAX_SCORE either way.
 local function weightsForMode(mode)
 	if mode == "voice_only" then
 		return Config.SCORING_VOICE_ONLY

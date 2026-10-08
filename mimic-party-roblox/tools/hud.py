@@ -5,7 +5,7 @@ Scoreboard,RoomPanel}.luau. The waveform bars are computed with the same
 envelope function as SoundLibrary.envelope, from a real sound's notes, so the
 shapes on screen are the shapes the game would draw.
 """
-import json, math
+import json, math, re, pathlib
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
@@ -13,17 +13,18 @@ R = Path(__file__).parent
 SHOTS = R / "shots"
 OUT = R / "screens"; OUT.mkdir(exist_ok=True)
 
-# ── palette, from src/Shared/Palette.luau ────────────────────────────────────
-P = dict(
-    Ink=(18,17,20), Panel=(29,28,33), PanelRaised=(38,37,43), Hairline=(58,56,64),
-    Cream=(238,233,224), Muted=(150,145,156),
-    Reference=(226,188,74), Yours=(118,196,128),
-    Good=(118,196,128), Warn=(214,160,86), Bad=(192,92,92),
-    Trim=(150,116,66),
-    CoreWarm=(255,243,214), CoreCool=(226,255,231),
-    Playhead=(232,72,66), Well=(11,10,13),
-    CardBack=(33,31,37), CardLeader=(226,188,74),
-)
+# ── palette ──
+# Parsed straight out of src/Shared/Palette.luau, so the mockup can never drift
+# from the game's actual colours.
+def load_palette(path="Palette.luau"):
+    src = pathlib.Path(path).read_text()
+    out = {}
+    for name, r, g, b in re.findall(r"(\w+)\s*=\s*rgb\((\d+),\s*(\d+),\s*(\d+)\)", src):
+        out[name] = (int(r), int(g), int(b))
+    return out
+
+P = load_palette()
+
 F = "/usr/share/fonts/truetype/dejavu/"
 def font(name, size):
     return ImageFont.truetype(F + name, size)
@@ -98,9 +99,10 @@ def waveform(d, x, y, w, h, env, colour, flipped, played=None, core=None):
             hh = half * frac
             if hh < 0.6: continue
             col = _mix(colour, core, mixt)
-            a = int(alpha * (0.22 if faded else 1.0))
+            if faded:
+                col = _mix(col, P["Well"], 0.72)
             d.rounded_rectangle([bx, mid-hh, bx2, mid+hh],
-                                radius=max(1, int(bw*0.3)), fill=col + (a,))
+                                radius=max(1, int(bw*0.3)), fill=col + (alpha,))
 
 def playhead(d, x, y, w, h, alpha):
     cx = x + S(7) + (w - S(14)) * alpha
@@ -126,7 +128,7 @@ def meter(d, x, y, w, label, score, colour, muted=False):
     tx = x + S(102); tw = w - S(160)
     d.rounded_rectangle([tx, y+S(11), tx+tw, y+S(19)], radius=S(4), fill=P["Ink"]+(255,))
     if not muted:
-        d.rounded_rectangle([tx, y+S(11), tx + tw*score/1000, y+S(19)], radius=S(4), fill=colour+(255,))
+        d.rounded_rectangle([tx, y+S(11), tx + tw*score/100, y+S(19)], radius=S(4), fill=colour+(255,))
     text(d, (x+w, y+S(8)), "—" if muted else str(score), MONO(S(14)),
          P["Muted"] if muted else P["Cream"], anchor="ra")
 
@@ -291,11 +293,11 @@ def compose(shot, builder, out_name):
     print(f"  {out_name}")
 
 #        name      score accent          mult body             shirt            delta
-ROWS = [("Duna",    1180, (214,160,86), "2", (206,170,126), (92,64,82),   None),
-        ("Tito",    1095, (126,174,182), None, (176,132,98),  (66,86,92),   None),
-        ("Mora",    1420, (192,92,92),  None, (228,196,164), (104,58,58),  None),
-        ("Rulo",     860, (146,172,110), None, (150,112,82),  (74,88,58),   None),
-        ("Sol",      705, (226,188,74), None, (238,212,184), (112,96,56),  None)]
+ROWS = [("Duna",    118, (244,86,150),  "2", (206,170,126), (92,64,82),   None),
+        ("Tito",    109, (86,212,226),  None, (176,132,98),  (66,86,92),   None),
+        ("Mora",    142, (246,86,86),   None, (228,196,164), (104,58,58),  None),
+        ("Rulo",     86, (164,222,92),  None, (150,112,82),  (74,88,58),   None),
+        ("Sol",      70, (252,202,88),  None, (238,212,184), (112,96,56),  None)]
 
 def rows_with(name, delta):
     out = []
@@ -321,16 +323,16 @@ compose("04-cabina.png", lambda d,W,H: (
 compose("02-escenario-cinco.png", lambda d,W,H: (
     banner(d, "ESCUCHANDO LAS TOMAS", "—"),
     voice_tag(d, W),
-    cards(d, W, rows_with("Mora", "+858")),
-    playback_card(d, W, "MORA", "CLAVADO", 844, 771, 1000, 858),
+    cards(d, W, rows_with("Mora", "+86")),
+    playback_card(d, W, "MORA", "CLAVADO", 84, 77, 100, 86),
     stage_panel(d, W, H, playhead=0.45, mic=0.0, take=TAKE, hint=""),
 ), "03-escuchando.png")
 
 compose("02-escenario-cinco.png", lambda d,W,H: (
     banner(d, "ESCUCHANDO LAS TOMAS", "—"),
     voice_tag(d, W),
-    cards(d, W, rows_with("Rulo", "+412")),
-    playback_card(d, W, "RULO", "LEJOS", 0, 238, 0, 412,
-                  sab="SABOTEADO · SUSTITUCIÓN por Chino  −120", muted_mel=True),
+    cards(d, W, rows_with("Rulo", "+29")),
+    playback_card(d, W, "RULO", "LEJOS", 0, 24, 0, 29,
+                  sab="SABOTEADO · SUSTITUCIÓN por Chino  −12", muted_mel=True),
     stage_panel(d, W, H, playhead=0.7, mic=0.0, take=TAKE[:3], hint=""),
 ), "04-saboteado.png")

@@ -10,9 +10,9 @@ local Sabotages = require(script.Parent.Sabotages)
 local Roulette = {}
 
 local segments = {
-	{ id = "p50",   kind = "points",     label = "+50",        amount = 50,   weight = 14 },
-	{ id = "p100",  kind = "points",     label = "+100",       amount = 100,  weight = 10 },
-	{ id = "p150",  kind = "points",     label = "+150",       amount = 150,  weight = 6 },
+	{ id = "p50",   kind = "points",     label = "+5",         amount = 5,    weight = 14 },
+	{ id = "p100",  kind = "points",     label = "+10",        amount = 10,   weight = 10 },
+	{ id = "p150",  kind = "points",     label = "+15",        amount = 15,   weight = 6 },
 	{ id = "m15",   kind = "multiplier", label = "×1.5",       amount = 1.5,  weight = 8 },
 	{ id = "m20",   kind = "multiplier", label = "×2",         amount = 2.0,  weight = 4 },
 	{ id = "sab1",  kind = "sabotage",   label = "SATURACIÓN", sabotage = "saturate", weight = 7 },

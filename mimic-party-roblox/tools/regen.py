@@ -8,6 +8,7 @@ dump = dump.replace("StageBuilder.build()\n", "", 1).split("local summary = {}")
 pathlib.Path("combined.luau").write_text(f'''local stub = require("./roblox_stub")
 local Vector3, Color3, CFrame = stub.Vector3, stub.Color3, stub.CFrame
 local Enum, Instance, Random = stub.Enum, stub.Instance, stub.Random
+local UDim2, Vector2, Font = stub.UDim2, stub.Vector2, stub.Font
 local game, workspace = stub.game, stub.Workspace
 local PALETTE = (function()
 {palette_src}

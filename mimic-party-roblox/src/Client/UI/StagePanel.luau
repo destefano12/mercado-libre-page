@@ -298,8 +298,10 @@ function StagePanel:showCard(payload)
 	self.card.Visible = true
 	self.cardWho.Text = (payload.name or "?"):upper()
 	self.cardVerdict.Text = payload.verdict or Scoring.verdict(grade.total)
-	self.cardVerdict.TextColor3 = grade.total >= 620 and Palette.Good
-		or (grade.total >= 380 and Palette.Warn or Palette.Bad)
+	local band = Scoring.band(grade.total)
+	self.cardVerdict.TextColor3 = (band == "good" and Palette.Good)
+		or (band == "warn" and Palette.Warn)
+		or Palette.Bad
 
 	if payload.sabotage then
 		local def = Sabotages.get(payload.sabotage)

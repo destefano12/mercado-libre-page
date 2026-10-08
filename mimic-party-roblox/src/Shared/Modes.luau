@@ -42,7 +42,7 @@ return {
 		rounds = Config.JUST_PLAY.ROUNDS,
 		routes = {
 			{ id = "safe",    name = "Segura",    blurb = "Puntaje tal cual.",                     mult = 1.0 },
-			{ id = "risky",   name = "Arriesgada", blurb = "×2, pero por debajo de 500 no cuenta.", mult = 2.0, floor = 500 },
+			{ id = "risky",   name = "Arriesgada", blurb = "×2, pero por debajo de 50 no cuenta.", mult = 2.0, floor = 50 },
 			{ id = "focused", name = "Enfocada",  blurb = "Solo melodía, ×1.5.",                    mult = 1.5, axis = "melody" },
 		},
 	},
