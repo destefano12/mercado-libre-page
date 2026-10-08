@@ -349,6 +349,33 @@ Cada entrada tiene su contorno y sus palabras clave de búsqueda. Duración medi
 se saltea la búsqueda. **Para agregar un sonido:** una línea más en un
 `pack(...)`. Es el equivalente al Workshop de la versión de Steam.
 
+## 7b. Cómo se ve
+
+![La sala](docs/imagenes/05-la-sala.png)
+
+![Grabando](docs/imagenes/01-grabando.png)
+
+![Una toma saboteada](docs/imagenes/04-saboteado.png)
+
+Las imágenes de `docs/imagenes/` **no son maquetas**. Salen de ejecutar
+`StageBuilder.luau` contra un stub de Roblox, volcar las 693 piezas que
+construye con su transformación, y proyectarlas desde las mismas anclas de
+cámara del juego con las 22 luces que el rig coloca. La interfaz encima está
+dibujada con los tamaños y colores exactos de `Theme.luau` y `StagePanel.luau`,
+y las ondas se calculan con la misma función de envolvente que usa el juego,
+sobre las notas reales de *Coro de Ranas*. Ver `tools/`.
+
+Renderizarlo encontró **seis bugs que leyendo el código no se veían**:
+
+| Qué se veía | Qué era |
+|---|---|
+| Un poste de 62 studs atravesando la sala | En Roblox un cilindro **ya** está acostado sobre X. El `CFrame.Angles(0,0,90°)` que puse para acostarlo lo **paraba**. Igual los dos cordones del truss, de 66. |
+| Tubos flotando junto a cada jugador | Las columnas de los pies de micrófono, acostadas por el mismo error invertido. |
+| Caras en sombra | Seis cenitales y **ninguna luz frontal**. Es justo para eso que existe el frente de sala en un teatro. |
+| El wash frontal no iluminaba nada | `Face = Front` es +Z: apuntaba **a la platea**, no a los actores. |
+| La nuca de un espectador tapando media pantalla | La cámara de la procesión, en (−14, 7.5, 27), estaba **dentro de la fila 3** (las filas van de z=14 a 44 y las cabezas llegan a y≈7). |
+| Los jugadores caminando entre las sillas | El comentario decía "pasillo central" pero `buildCrowd` llenaba el piso de punta a punta. **No había pasillo.** |
+
 ## 8. El escenario
 
 `src/Server/StageBuilder.luau` lo construye en runtime, con primitivas. Lo que

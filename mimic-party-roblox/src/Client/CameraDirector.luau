@@ -76,7 +76,9 @@ function CameraDirector.init(stageAnchors)
 			local focus = centroidOfPlayers()
 			if base and focus then
 				local drift = math.clamp((focus.Z - 2) / 32, 0, 1)
-				local from = base.Position:Lerp(Vector3.new(-6, 8.5, 18), 1 - drift)
+				-- The dolly's end point has to clear the crowd too: the seats run
+				-- to z = 44 and heads reach y ~ 7, so the camera stays above 10.
+				local from = base.Position:Lerp(Vector3.new(-7, 10.5, 21), 1 - drift)
 				target.cf = CFrame.lookAt(from, focus + Vector3.new(0, 2.4, 0))
 			elseif base then
 				target.cf = base

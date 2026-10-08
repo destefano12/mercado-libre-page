@@ -2882,6 +2882,11 @@ local function box(parent, size, position, color, material, props)
 	return p
 end
 
+-- NOTE: a Roblox cylinder already lies along its LOCAL X axis. So `cyl` with no
+-- rotation gives a horizontal rod, and CFrame.Angles(0, 0, rad(90)) STANDS IT
+-- UP. Getting this backwards is how you end up with a 62-stud pole through the
+-- middle of the room — which is exactly what the first render of this file
+-- showed.
 local function cyl(parent, diameter, length, cframe, color, material, props)
 	local p = Instance.new("Part")
 	p.Shape = Enum.PartType.Cylinder
@@ -2977,7 +2982,7 @@ local function buildShell(root)
 		for _, x in ipairs({ -40, 40 }) do
 			local housing = box(shell, Vector3.new(0.6, 2.2, 1.4), Vector3.new(x, 13, z),
 				Palette.TrimDark, Enum.Material.Metal)
-			cyl(shell, 1.3, 0.5, CFrame.new(x, 14.3, z) * CFrame.Angles(0, 0, math.rad(90)),
+			cyl(shell, 1.3, 0.5, CFrame.new(x - (x > 0 and 0.5 or -0.5), 14.3, z),
 				Palette.Practical, Enum.Material.Neon)
 			local light = Instance.new("PointLight")
 			light.Brightness = 0.55
@@ -2986,6 +2991,26 @@ local function buildShell(root)
 			light.Shadows = false
 			light.Parent = housing
 		end
+	end
+
+	-- House pendants. Dim on purpose: the room should read, not compete with the
+	-- stage. Without them the audience is an unreadable black mass in the one
+	-- shot the menu sits on top of.
+	for i = 0, 3 do
+		local z = 17 + i * 9
+		local stem = cyl(shell, 0.3, 5, CFrame.new(0, 31, z) * CFrame.Angles(0, 0, math.rad(90)),
+			Palette.Truss, Enum.Material.Metal)
+		local shade = box(shell, Vector3.new(3.2, 0.7, 3.2), Vector3.new(0, 28.4, z),
+			Palette.TrimDark, Enum.Material.Metal)
+		cyl(shell, 2.4, 0.3, CFrame.new(0, 28, z) * CFrame.Angles(0, 0, math.rad(90)),
+			Palette.Practical, Enum.Material.Neon, { Transparency = 0.3 })
+
+		local pendant = Instance.new("PointLight")
+		pendant.Brightness = 0.7
+		pendant.Range = 40
+		pendant.Color = Palette.Practical
+		pendant.Shadows = false
+		pendant.Parent = shade
 	end
 
 	return shell
@@ -3016,7 +3041,7 @@ local function buildDeck(root)
 	end
 
 	-- Bullnose along the downstage edge: no hard corner facing the audience.
-	cyl(deck, 0.9, DECK_HALF_X * 2, CFrame.new(0, DECK_Y - 0.25, DECK_Z_FRONT) * CFrame.Angles(0, 0, math.rad(90)),
+	cyl(deck, 0.9, DECK_HALF_X * 2, CFrame.new(0, DECK_Y - 0.25, DECK_Z_FRONT),
 		Palette.DeckDark, Enum.Material.Wood)
 
 	-- Fascia with recessed panels.
@@ -3057,13 +3082,13 @@ local function buildProscenium(root)
 		box(arch, Vector3.new(3.6, 27.5, 2.6), Vector3.new(x, 16.4, ARCH_Z + 0.8), Palette.Fascia, Enum.Material.Wood)
 		-- Flutes.
 		for i = -1, 1 do
-			cyl(arch, 0.7, 26, CFrame.new(x + i * 1.1, 16.4, ARCH_Z + 2.0) * CFrame.Angles(0, 0, math.rad(90)) * CFrame.Angles(math.rad(90), 0, 0),
+			cyl(arch, 0.7, 26, CFrame.new(x + i * 1.1, 16.4, ARCH_Z + 2.0) * CFrame.Angles(0, 0, math.rad(90)),
 				Palette.Scrim, Enum.Material.Wood)
 		end
 		-- Base and capital.
 		moulding(arch, 7.4, Vector3.new(x, 3.2, ARCH_Z), 5.4, Palette.Trim, Palette.TrimDark)
 		moulding(arch, 7.4, Vector3.new(x, 29.4, ARCH_Z), 5.4, Palette.Trim, Palette.TrimDark)
-		cyl(arch, 1.1, 5.6, CFrame.new(x, 31.1, ARCH_Z) * CFrame.Angles(0, math.rad(90), 0) * CFrame.Angles(0, 0, math.rad(90)),
+		cyl(arch, 1.1, 7.4, CFrame.new(x, 31.1, ARCH_Z),
 			Palette.Trim, Enum.Material.Metal)
 	end
 
@@ -3101,7 +3126,7 @@ local function buildCurtain(root)
 	for _, side in ipairs({ -1, 1 }) do
 		local panels = 13
 		for i = 0, panels - 1 do
-			local inner = 4 + i * 2.3
+			local inner = 2.4 + i * 2.3
 			local x = side * inner
 			local fold = (i % 2 == 0)
 			local depth = fold and 1.5 or 0.9
@@ -3113,7 +3138,7 @@ local function buildCurtain(root)
 				color, Enum.Material.Fabric)
 			p.CFrame = CFrame.new(p.Position) * CFrame.Angles(0, yaw, 0)
 			-- Weighted hem.
-			cyl(curtain, 1.0, 2.5, CFrame.new(x, DECK_Y - 0.1, CURTAIN_Z) * CFrame.Angles(0, yaw, 0) * CFrame.Angles(0, 0, math.rad(90)),
+			cyl(curtain, 1.0, 2.5, CFrame.new(x, DECK_Y - 0.1, CURTAIN_Z) * CFrame.Angles(0, yaw, 0),
 				Palette.CurtainFold, Enum.Material.Fabric)
 		end
 	end
@@ -3147,8 +3172,8 @@ local function buildTruss(root)
 
 	for _, z in ipairs({ -2, 4 }) do
 		-- Two chords plus cross-bracing: a real truss silhouette, not a bar.
-		cyl(truss, 0.7, 66, CFrame.new(0, y + 0.9, z) * CFrame.Angles(0, 0, math.rad(90)), Palette.Truss, Enum.Material.Metal)
-		cyl(truss, 0.7, 66, CFrame.new(0, y - 0.9, z) * CFrame.Angles(0, 0, math.rad(90)), Palette.Truss, Enum.Material.Metal)
+		cyl(truss, 0.7, 66, CFrame.new(0, y + 0.9, z), Palette.Truss, Enum.Material.Metal)
+		cyl(truss, 0.7, 66, CFrame.new(0, y - 0.9, z), Palette.Truss, Enum.Material.Metal)
 		for i = 0, 21 do
 			local x = -31 + i * 2.95
 			local lean = (i % 2 == 0) and 32 or -32
@@ -3176,6 +3201,32 @@ local function buildTruss(root)
 		spot.Face = Enum.NormalId.Bottom
 		spot.Shadows = true
 		spot.Parent = body
+	end
+
+	-- ── front of house ──
+	-- Four soft washes on the proscenium header, angled down and upstage at the
+	-- marks. Without these the six overheads light the deck and leave every
+	-- face in shadow — which is exactly what the first render showed. Low
+	-- brightness and a wide cone: this is fill, not a follow spot.
+	for i = 0, 3 do
+		local x = -21 + i * 14
+		-- Tilted down and upstage, then lit through its Back face (−Z), so the
+		-- cone actually lands on the performers. Face = Front would throw it
+		-- into the audience's eyes, which is what the first render did.
+		local housing = box(truss, Vector3.new(1.8, 1.4, 2.2), Vector3.new(x, 27.5, ARCH_Z - 1.2),
+			Palette.Truss, Enum.Material.Metal)
+		housing.CFrame = CFrame.new(housing.Position) * CFrame.Angles(math.rad(-52), 0, 0)
+		cyl(truss, 1.2, 0.4, CFrame.new(x, 26.6, ARCH_Z - 2.0) * CFrame.Angles(0, 0, math.rad(90)) * CFrame.Angles(math.rad(38), 0, 0),
+			Palette.Wash, Enum.Material.Neon, { Transparency = 0.35 })
+
+		local wash = Instance.new("SpotLight")
+		wash.Angle = 96
+		wash.Brightness = 1.3
+		wash.Range = 60
+		wash.Color = Palette.Practical
+		wash.Face = Enum.NormalId.Back
+		wash.Shadows = false   -- fill light does not cast; it fills
+		wash.Parent = housing
 	end
 
 	return truss
@@ -3210,13 +3261,14 @@ local function buildMarks(root, anchors)
 					* CFrame.Angles(0, -a, 0) * CFrame.Angles(0, 0, math.rad(74)),
 				Palette.Truss, Enum.Material.Metal)
 		end
-		cyl(marks, 0.36, 6.2, CFrame.new(x, DECK_Y + 3.3, standZ), Palette.Truss, Enum.Material.Metal)
-		cyl(marks, 0.3, 1.9, CFrame.new(x, DECK_Y + 6.2, standZ + 0.75) * CFrame.Angles(math.rad(90), 0, 0) * CFrame.Angles(0, 0, math.rad(90)),
+		cyl(marks, 0.36, 6.2, CFrame.new(x, DECK_Y + 3.3, standZ) * CFrame.Angles(0, 0, math.rad(90)),
+			Palette.Truss, Enum.Material.Metal)
+		cyl(marks, 0.3, 1.9, CFrame.new(x, DECK_Y + 6.2, standZ + 0.95) * CFrame.Angles(0, math.rad(90), 0),
 			Palette.Truss, Enum.Material.Metal)
 		local capsule = cyl(marks, 0.9, 1.5,
-			CFrame.new(x, DECK_Y + 6.05, standZ + 1.5) * CFrame.Angles(math.rad(62), 0, 0) * CFrame.Angles(0, 0, math.rad(90)),
+			CFrame.new(x, DECK_Y + 5.95, standZ + 1.9) * CFrame.Angles(math.rad(-28), math.rad(90), 0),
 			Palette.Fascia, Enum.Material.Metal)
-		ball(marks, 0.95, capsule.Position + Vector3.new(0, 0.35, 0.2), Palette.Truss, Enum.Material.DiamondPlate)
+		ball(marks, 0.95, capsule.Position + Vector3.new(0, -0.3, 0.55), Palette.Truss, Enum.Material.DiamondPlate)
 
 		-- Anchors the rest of the game reads.
 		local mark = Instance.new("Part")
@@ -3247,8 +3299,12 @@ local function buildCrowd(root)
 		local z = 14 + row * 6
 		local y = 1.2 + row * 0.9
 		for seat = 0, 15 do
-			if rng:NextNumber() > 0.12 then
-				local x = -36 + seat * 4.8 + rng:NextNumber(-0.7, 0.7)
+			local x = -36 + seat * 4.8 + rng:NextNumber(-0.7, 0.7)
+			-- Leave the centre aisle actually empty. The spawns sit at x = −8…8
+			-- and the procession walks straight up the middle, so seating across
+			-- the full width meant five people walking through the chairs.
+			local inAisle = math.abs(x) < 7.5
+			if not inAisle and rng:NextNumber() > 0.12 then
 				local h = rng:NextNumber(3.3, 4.1)
 				local shade = Palette.Crowd:Lerp(Palette.HouseWall, rng:NextNumber(0, 0.45))
 				-- Torso + head silhouette, slightly turned. Dark on purpose:
@@ -3309,8 +3365,11 @@ local function buildCameraAnchors(anchors)
 
 	-- House: the menu shot. Stage framed from the back of the room.
 	shot("CamHouse", Vector3.new(0, 16, 44), Vector3.new(0, 9, -2), Config.CAMERA_FOV.HOUSE)
-	-- Procession: low and wide, down the aisle, so the walk reads as an entrance.
-	shot("CamProcession", Vector3.new(-14, 7.5, 27), Vector3.new(2, 6, 2), Config.CAMERA_FOV.HOUSE)
+	-- Procession: down the aisle and over the crowd's heads. It used to sit at
+	-- (-14, 7.5, 27) — which is INSIDE seating row 3 (rows run z = 14…44, heads
+	-- reach y ≈ 7), so the opening shot of every party was the back of an
+	-- audience member's skull. Rendering the venue is how that was caught.
+	shot("CamProcession", Vector3.new(-16, 12.5, 35), Vector3.new(0, 6, 4), Config.CAMERA_FOV.HOUSE)
 	-- Wide: the shot that shows every performer on their mark at once.
 	shot("CamWide", Vector3.new(0, 13.5, 29), Vector3.new(0, 7.5, 0), Config.CAMERA_FOV.WIDE)
 	-- Booth: pushed in for recording, so the waveform UI owns the frame.
@@ -4896,7 +4955,9 @@ function CameraDirector.init(stageAnchors)
 			local focus = centroidOfPlayers()
 			if base and focus then
 				local drift = math.clamp((focus.Z - 2) / 32, 0, 1)
-				local from = base.Position:Lerp(Vector3.new(-6, 8.5, 18), 1 - drift)
+				-- The dolly's end point has to clear the crowd too: the seats run
+				-- to z = 44 and heads reach y ~ 7, so the camera stays above 10.
+				local from = base.Position:Lerp(Vector3.new(-7, 10.5, 21), 1 - drift)
 				target.cf = CFrame.lookAt(from, focus + Vector3.new(0, 2.4, 0))
 			elseif base then
 				target.cf = base
