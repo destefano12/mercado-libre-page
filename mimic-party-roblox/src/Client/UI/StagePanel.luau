@@ -21,7 +21,7 @@ function StagePanel.new(parent)
 	self.root.BackgroundTransparency = 1
 	self.root.AnchorPoint = Vector2.new(0.5, 1)
 	self.root.Position = UDim2.new(0.5, 0, 1, -24)
-	self.root.Size = UDim2.fromOffset(900, 268)
+	self.root.Size = UDim2.fromOffset(900, 300)
 	self.root.Visible = false
 	self.root.Parent = parent
 
@@ -47,14 +47,12 @@ function StagePanel.new(parent)
 	})
 	self.refLabel = refLabel
 
+	-- Plain containers: Waveform draws its own framed well inside them.
 	local refBox = Instance.new("Frame")
-	refBox.BackgroundColor3 = Palette.Ink
-	refBox.BackgroundTransparency = 0.4
-	refBox.BorderSizePixel = 0
+	refBox.BackgroundTransparency = 1
 	refBox.Position = UDim2.new(0, 0, 0, 66)
-	refBox.Size = UDim2.new(1, 0, 0, 56)
+	refBox.Size = UDim2.new(1, 0, 0, 58)
 	refBox.Parent = panel
-	Theme.corner(refBox, UDim.new(0, 8))
 	self.reference = Waveform.new(refBox, Palette.Reference, false)
 
 	-- ── pitch ribbon ──
@@ -67,13 +65,10 @@ function StagePanel.new(parent)
 
 	-- ── your track (green) ──
 	local yourBox = Instance.new("Frame")
-	yourBox.BackgroundColor3 = Palette.Ink
-	yourBox.BackgroundTransparency = 0.4
-	yourBox.BorderSizePixel = 0
+	yourBox.BackgroundTransparency = 1
 	yourBox.Position = UDim2.new(0, 0, 0, 170)
-	yourBox.Size = UDim2.new(1, 0, 0, 56)
+	yourBox.Size = UDim2.new(1, 0, 0, 58)
 	yourBox.Parent = panel
-	Theme.corner(yourBox, UDim.new(0, 8))
 	self.yours = Waveform.new(yourBox, Palette.Yours, true)
 
 	self.yourLabel = Theme.caption(panel, "TU VOZ", {
@@ -92,7 +87,7 @@ function StagePanel.new(parent)
 	self.micRow = Instance.new("Frame")
 	self.micRow.BackgroundTransparency = 1
 	self.micRow.AnchorPoint = Vector2.new(0, 1)
-	self.micRow.Position = UDim2.new(0, 0, 1, 28)
+	self.micRow.Position = UDim2.new(0, 0, 1, 10)
 	self.micRow.Size = UDim2.fromOffset(420, 22)
 	self.micRow.Parent = panel
 
@@ -145,8 +140,8 @@ function StagePanel.new(parent)
 	-- ── playback card ──
 	self.card = Theme.panel(parent, {
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 96),
-		Size = UDim2.fromOffset(452, 232),
+		Position = UDim2.new(0.5, 0, 0, 172),
+		Size = UDim2.fromOffset(452, 224),
 		BackgroundTransparency = 0.02,
 		Visible = false,
 	})
@@ -164,10 +159,10 @@ function StagePanel.new(parent)
 
 	local meters = Instance.new("Frame")
 	meters.BackgroundTransparency = 1
-	meters.Position = UDim2.new(0, 0, 0, 50)
-	meters.Size = UDim2.new(1, 0, 0, 96)
+	meters.Position = UDim2.new(0, 0, 0, 48)
+	meters.Size = UDim2.new(1, 0, 0, 90)
 	meters.Parent = self.card
-	Theme.list(meters, 2)
+	Theme.list(meters, 0)
 
 	self.meterMelody = Theme.meter(meters, "Melodía", Palette.Reference)
 	self.meterRhythm = Theme.meter(meters, "Ritmo", Palette.Yours)
@@ -177,19 +172,19 @@ function StagePanel.new(parent)
 	rule.BackgroundColor3 = Palette.Hairline
 	rule.BackgroundTransparency = 0.4
 	rule.BorderSizePixel = 0
-	rule.Position = UDim2.new(0, 0, 0, 152)
+	rule.Position = UDim2.new(0, 0, 0, 144)
 	rule.Size = UDim2.new(1, 0, 0, 1)
 	rule.Parent = self.card
 
 	Theme.caption(self.card, "TOTAL", {
-		Position = UDim2.new(0, 0, 0, 162), Size = UDim2.fromOffset(80, 36), TextSize = 11,
+		Position = UDim2.new(0, 0, 0, 154), Size = UDim2.fromOffset(80, 32), TextSize = 11,
 	})
 	self.cardTotal = Theme.label(self.card, "0", {
-		Position = UDim2.new(0, 0, 0, 160), Size = UDim2.new(1, 0, 0, 40),
-		TextXAlignment = Enum.TextXAlignment.Right, FontFace = Theme.Font.Display, TextSize = 34,
+		Position = UDim2.new(0, 0, 0, 148), Size = UDim2.new(1, 0, 0, 38),
+		TextXAlignment = Enum.TextXAlignment.Right, FontFace = Theme.Font.Display, TextSize = 32,
 	})
 	self.cardAwarded = Theme.caption(self.card, "", {
-		Position = UDim2.new(0, 0, 0, 198), Size = UDim2.new(1, 0, 0, 14),
+		Position = UDim2.new(0, 0, 0, 178), Size = UDim2.new(1, 0, 0, 14),
 		TextXAlignment = Enum.TextXAlignment.Right, TextSize = 11,
 	})
 

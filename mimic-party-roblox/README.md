@@ -351,19 +351,47 @@ se saltea la búsqueda. **Para agregar un sonido:** una línea más en un
 
 ## 7b. Cómo se ve
 
-![La sala](docs/imagenes/05-la-sala.png)
+![Escuchando las tomas](docs/imagenes/03-escuchando.png)
 
 ![Grabando](docs/imagenes/01-grabando.png)
 
-![Una toma saboteada](docs/imagenes/04-saboteado.png)
+![La sala](docs/imagenes/05-la-sala.png)
 
-Las imágenes de `docs/imagenes/` **no son maquetas**. Salen de ejecutar
-`StageBuilder.luau` contra un stub de Roblox, volcar las 693 piezas que
-construye con su transformación, y proyectarlas desde las mismas anclas de
-cámara del juego con las 22 luces que el rig coloca. La interfaz encima está
-dibujada con los tamaños y colores exactos de `Theme.luau` y `StagePanel.luau`,
-y las ondas se calculan con la misma función de envolvente que usa el juego,
-sobre las notas reales de *Coro de Ranas*. Ver `tools/`.
+### La tabla de puntajes
+
+Arriba de todo, horizontal, una tarjeta por jugador: **la cara del personaje,
+debajo el nombre, debajo el puntaje.** Cuando una toma se puntúa, los puntos que
+ganó salen volando de esa tarjeta como `+858` mientras el total trepa hasta
+alcanzarlos — se ve de dónde salió el número en vez de mirar una cifra cambiar.
+
+La foto es un `ViewportFrame` con un clon del avatar real de ese jugador,
+encuadrado en la cabeza. Así se consigue una cara de verdad en una interfaz de
+Roblox **sin subir una sola imagen**, y la tarjeta muestra a quien realmente es
+el jugador y no un dibujo de relleno.
+
+Las tarjetas van en **orden de escenario, no de puntaje**, así cada una queda
+arriba de la persona a la que pertenece. Al líder se lo marca con el borde
+dorado en lugar de moverlo: una fila que se reordena a mitad de ronda no se
+puede seguir con la vista.
+
+### Las ondas
+
+Cada pista es un pozo enmarcado: negro casi puro adentro, un filo brillante del
+color de la pista, y la señal dibujada **simétrica sobre la línea central**.
+Cada barra quema del color de la pista en los extremos a un núcleo casi blanco,
+así el volumen se lee como calor y no sólo como altura — que es lo que hace que
+un pasaje bajo siga siendo legible.
+
+El cabezal es **rojo** y corre sobre las dos pistas. Es el único rojo de la
+interfaz y nunca representa un puntaje, así que no se puede confundir con uno.
+
+Las imágenes de `docs/imagenes/` **no son maquetas**. El escenario sale de
+ejecutar `StageBuilder.luau` contra un stub de Roblox, volcar las 693 piezas que
+construye y proyectarlas desde las anclas de cámara del juego con las 22 luces
+del rig. La interfaz encima está dibujada con los tamaños y colores exactos de
+`Theme.luau`, `Scoreboard.luau` y `StagePanel.luau`, y las ondas se calculan con
+la misma función de envolvente que usa el juego, sobre las notas reales de
+*Coro de Ranas*. Ver `tools/`.
 
 Renderizarlo encontró **seis bugs que leyendo el código no se veían**:
 
@@ -373,7 +401,7 @@ Renderizarlo encontró **seis bugs que leyendo el código no se veían**:
 | Tubos flotando junto a cada jugador | Las columnas de los pies de micrófono, acostadas por el mismo error invertido. |
 | Caras en sombra | Seis cenitales y **ninguna luz frontal**. Es justo para eso que existe el frente de sala en un teatro. |
 | El wash frontal no iluminaba nada | `Face = Front` es +Z: apuntaba **a la platea**, no a los actores. |
-| La nuca de un espectador tapando media pantalla | La cámara de la procesión, en (−14, 7.5, 27), estaba **dentro de la fila 3** (las filas van de z=14 a 44 y las cabezas llegan a y≈7). |
+| La nuca de un espectador tapando media pantalla | La cámara de la procesión, en (−14, 7.5, 27), estaba **dentro de la fila 3**. |
 | Los jugadores caminando entre las sillas | El comentario decía "pasillo central" pero `buildCrowd` llenaba el piso de punta a punta. **No había pasillo.** |
 
 ## 8. El escenario

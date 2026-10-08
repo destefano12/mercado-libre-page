@@ -79,10 +79,12 @@ function Root.new(callbacks)
 	})
 
 	-- ── mic / voice indicator ──
+	-- Under the round banner, on the left. The top centre belongs to the player
+	-- cards and the centre to the playback card; this is the only clear corner.
 	self.voiceTag = Theme.panel(gui, {
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 22),
-		Size = UDim2.fromOffset(238, 34),
+		AnchorPoint = Vector2.new(0, 0),
+		Position = UDim2.new(0, 22, 0, 92),
+		Size = UDim2.fromOffset(250, 34),
 		BackgroundTransparency = 0.06,
 		Visible = false,
 		ZIndex = 5,
@@ -181,6 +183,7 @@ function Root:setPhase(phase)
 	-- Room controls belong to the lobby: mid-party is not the moment to be
 	-- toggling packs or removing the person currently on their mark.
 	self.room:setVisible(inMenu)
+	self.scoreboard:setVisible(not inMenu)
 	self.stage:setVisible(not inMenu and phase ~= "results")
 	self.banner.Visible = not inMenu
 	self.bannerPhase.Text = PHASE_TEXT[phase] or ""

@@ -684,6 +684,18 @@ return {
 	Reference    = rgb(226, 188, 74),   -- yellow — the sound you must match
 	Yours        = rgb(118, 196, 128),  -- green  — your voice
 
+	-- The hot core each waveform burns to at full level, and the playhead that
+	-- rides over it. Red, because it has to read against both tracks at a
+	-- glance and it is the one element that is never a score.
+	CoreWarm     = rgb(255, 243, 214),
+	CoreCool     = rgb(226, 255, 231),
+	Playhead     = rgb(232, 72, 66),
+	Well         = rgb(11, 10, 13),     -- the near-black inside a waveform frame
+
+	-- Scoreboard cards.
+	CardBack     = rgb(33, 31, 37),
+	CardLeader   = rgb(226, 188, 74),
+
 	Good         = rgb(118, 196, 128),
 	Warn         = rgb(214, 160, 86),
 	Bad          = rgb(192, 92, 92),
@@ -4138,6 +4150,10 @@ Net.onClient(Net.Playback, function(payload)
 	ui.stage:showCard(payload)
 	ui:setVoiceGated(payload.voiceGated == true)
 
+	-- The points this take earned, flying up off that player's card while the
+	-- total climbs to meet them.
+	ui.scoreboard:award(payload.userId, payload.awarded or (payload.grade and payload.grade.total))
+
 	if payload.sabotage and payload.userId == localPlayer.UserId then
 		local def = Sabotages.get(payload.sabotage)
 		ui:showToast(("Te sabotearon: %s%s"):format(
@@ -4173,6 +4189,18 @@ Net.onClient(Net.RouletteSpin, function(payload)
 		end
 	end
 	ui.roulette:spin(payload.results, payload.spin or Config.PHASE.ROULETTE_SPIN, localPlayer.UserId)
+
+	-- Wheel points land on the cards too, once the wheel has stopped.
+	task.delay((payload.spin or Config.PHASE.ROULETTE_SPIN) * 0.9, function()
+		for _, r in ipairs(payload.results or {}) do
+			if r.kind == "points" then
+				local amount = tonumber((r.label or ""):match("%d+"))
+				if amount then
+					ui.scoreboard:award(r.userId, amount)
+				end
+			end
+		end
+	end)
 end)
 
 Net.onClient(Net.Scores, function(payload)
@@ -6034,10 +6062,12 @@ function Root.new(callbacks)
 	})
 
 	-- ── mic / voice indicator ──
+	-- Under the round banner, on the left. The top centre belongs to the player
+	-- cards and the centre to the playback card; this is the only clear corner.
 	self.voiceTag = Theme.panel(gui, {
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 22),
-		Size = UDim2.fromOffset(238, 34),
+		AnchorPoint = Vector2.new(0, 0),
+		Position = UDim2.new(0, 22, 0, 92),
+		Size = UDim2.fromOffset(250, 34),
 		BackgroundTransparency = 0.06,
 		Visible = false,
 		ZIndex = 5,
@@ -6136,6 +6166,7 @@ function Root:setPhase(phase)
 	-- Room controls belong to the lobby: mid-party is not the moment to be
 	-- toggling packs or removing the person currently on their mark.
 	self.room:setVisible(inMenu)
+	self.scoreboard:setVisible(not inMenu)
 	self.stage:setVisible(not inMenu and phase ~= "results")
 	self.banner.Visible = not inMenu
 	self.bannerPhase.Text = PHASE_TEXT[phase] or ""
@@ -6453,8 +6484,25 @@ return RouletteUI
             <Properties>
               <string name="Name">Scoreboard</string>
               <string name="Source"><![CDATA[--!nonstrict
--- Scoreboard.luau — standings, always on screen, never in the way.
--- Rows reorder with a tween so overtakes are visible rather than instant.
+-- Scoreboard.luau — the row of player cards across the top of the screen.
+--
+-- One card per player: their character's face, their name under it, and their
+-- running total under that. When a take is scored the points that take earned
+-- fly up off the card as "+120" and the total counts up to meet them, so you
+-- can see where a number came from instead of watching a figure change.
+--
+-- The portrait is a ViewportFrame holding a clone of that player's actual
+-- avatar, framed on the head. That is how you get a real face in a Roblox UI
+-- without uploading a single image, and it means the card shows whoever the
+-- player actually is rather than a stand-in.
+--
+-- Cards sit in stage order, not score order, so each one is above the person it
+-- belongs to. The leader is marked with a gold edge instead of being moved,
+-- because a row that reshuffles mid-round is unreadable.
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 
 local Theme = require(script.Parent.Theme)
 local Palette = require(game.ReplicatedStorage.Shared.Palette)
@@ -6463,95 +6511,326 @@ local Characters = require(game.ReplicatedStorage.Shared.Characters)
 local Scoreboard = {}
 Scoreboard.__index = Scoreboard
 
-local ROW_H = 38
+local CARD_W, CARD_H = 128, 158
+local PORTRAIT = 104
+local GAP = 10
 
-function Scoreboard.new(parent)
-	local self = setmetatable({}, Scoreboard)
+-- ── portrait ─────────────────────────────────────────────────────────────────
 
-	self.root = Theme.panel(parent, {
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -22, 0, 22),
-		Size = UDim2.fromOffset(268, 60),
-		BackgroundTransparency = 0.12,
-	})
-	Theme.pad(self.root, 12)
-
-	Theme.caption(self.root, "EN ESCENA", { Size = UDim2.new(1, 0, 0, 14), TextSize = 11 })
-
-	self.list = Instance.new("Frame")
-	self.list.BackgroundTransparency = 1
-	self.list.Position = UDim2.new(0, 0, 0, 22)
-	self.list.Size = UDim2.new(1, 0, 1, -22)
-	self.list.Parent = self.root
-
-	self.rows = {}
-	return self
+local function clearViewport(vp)
+	for _, child in ipairs(vp:GetChildren()) do
+		if not child:IsA("Camera") then
+			child:Destroy()
+		end
+	end
 end
 
-local function buildRow(parent)
-	local row = Instance.new("Frame")
-	row.BackgroundColor3 = Palette.PanelRaised
-	row.BackgroundTransparency = 0.45
-	row.BorderSizePixel = 0
-	row.Size = UDim2.new(1, 0, 0, ROW_H - 6)
-	row.Parent = parent
-	Theme.corner(row, UDim.new(0, 7))
+-- Clones the player's avatar into the viewport and frames it on the head.
+-- Returns false when there is nothing to clone yet, so the caller can fall back.
+local function buildPortrait(vp, player)
+	local character = player and player.Character
+	if not character then
+		return false
+	end
+	local head = character:FindFirstChild("Head")
+	if not head then
+		return false
+	end
 
-	local chip = Instance.new("Frame")
-	chip.BackgroundColor3 = Palette.Muted
-	chip.BorderSizePixel = 0
-	chip.Position = UDim2.new(0, 8, 0.5, -9)
-	chip.Size = UDim2.fromOffset(4, 18)
-	chip.Parent = row
-	Theme.corner(chip, UDim.new(1, 0))
+	local ok, clone = pcall(function()
+		return character:Clone()
+	end)
+	if not ok or not clone then
+		return false
+	end
 
-	local name = Theme.label(row, "", {
-		Position = UDim2.new(0, 20, 0, 0),
-		Size = UDim2.new(1, -96, 1, 0),
-		TextSize = 14,
+	-- Strip anything that would try to run, make noise, or draw a second name
+	-- tag inside the card.
+	for _, d in ipairs(clone:GetDescendants()) do
+		if d:IsA("LuaSourceContainer") or d:IsA("Sound") or d:IsA("BillboardGui")
+			or d:IsA("ParticleEmitter") or d:IsA("Light") then
+			d:Destroy()
+		elseif d:IsA("BasePart") then
+			d.Anchored = true
+			d.CanCollide = false
+			d.CanQuery = false
+		end
+	end
+
+	clearViewport(vp)
+	clone.Parent = vp
+
+	local clonedHead = clone:FindFirstChild("Head")
+	if not clonedHead then
+		clone:Destroy()
+		return false
+	end
+
+	local camera = vp.CurrentCamera
+	if not camera then
+		camera = Instance.new("Camera")
+		camera.Parent = vp
+		vp.CurrentCamera = camera
+	end
+	-- Slightly above eye level and a little off-axis: a portrait, not a mugshot.
+	local focus = clonedHead.Position + Vector3.new(0, 0.12, 0)
+	camera.CFrame = CFrame.lookAt(focus + Vector3.new(0.55, 0.35, 2.75), focus)
+	camera.FieldOfView = 34
+
+	return true
+end
+
+-- ── card ─────────────────────────────────────────────────────────────────────
+
+local function buildCard(parent, index)
+	local card = Instance.new("Frame")
+	card.BackgroundColor3 = Palette.CardBack
+	card.BackgroundTransparency = 0.06
+	card.BorderSizePixel = 0
+	card.Size = UDim2.fromOffset(CARD_W, CARD_H)
+	card.LayoutOrder = index
+	card.Parent = parent
+	Theme.corner(card, UDim.new(0, 12))
+	local stroke = Theme.stroke(card, Palette.Hairline, 1, 0.2)
+
+	-- The character's accent, as a cap across the top of the card.
+	local accent = Instance.new("Frame")
+	accent.BackgroundColor3 = Palette.Muted
+	accent.BorderSizePixel = 0
+	accent.Size = UDim2.new(1, 0, 0, 3)
+	accent.Parent = card
+	Theme.corner(accent, UDim.new(0, 3))
+
+	-- Portrait well.
+	local well = Instance.new("Frame")
+	well.BackgroundColor3 = Palette.Well
+	well.BackgroundTransparency = 0.1
+	well.BorderSizePixel = 0
+	well.Position = UDim2.fromOffset((CARD_W - PORTRAIT) / 2, 10)
+	well.Size = UDim2.fromOffset(PORTRAIT, PORTRAIT)
+	well.ClipsDescendants = true
+	well.Parent = card
+	Theme.corner(well, UDim.new(0, 9))
+
+	local vp = Instance.new("ViewportFrame")
+	vp.BackgroundTransparency = 1
+	vp.Size = UDim2.fromScale(1, 1)
+	vp.Ambient = Color3.fromRGB(168, 158, 150)
+	vp.LightColor = Palette.Practical
+	vp.LightDirection = Vector3.new(-0.4, -0.8, -0.5)
+	vp.Parent = well
+
+	-- Shown until an avatar is available to clone.
+	local initial = Theme.label(well, "", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(1, 1),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextSize = 40,
+		FontFace = Theme.Font.Display,
+		TextColor3 = Palette.Muted,
+	})
+
+	local name = Theme.label(card, "", {
+		Position = UDim2.new(0, 6, 0, 118),
+		Size = UDim2.new(1, -12, 0, 18),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextSize = 13,
 		FontFace = Theme.Font.Medium,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 	})
 
-	local score = Theme.label(row, "0", {
-		Position = UDim2.new(1, -78, 0, 0),
-		Size = UDim2.fromOffset(70, ROW_H - 6),
-		TextXAlignment = Enum.TextXAlignment.Right,
+	local score = Theme.label(card, "0", {
+		Position = UDim2.new(0, 6, 0, 134),
+		Size = UDim2.new(1, -12, 0, 22),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextSize = 19,
 		FontFace = Theme.Font.Mono,
-		TextSize = 15,
 	})
 
-	return { frame = row, chip = chip, name = name, score = score }
+	-- The points a take just earned, flying up off the card.
+	local delta = Theme.label(card, "", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0, 134),
+		Size = UDim2.fromOffset(CARD_W, 26),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextSize = 19,
+		FontFace = Theme.Font.Display,
+		TextTransparency = 1,
+	})
+
+	local mult = Theme.label(card, "", {
+		Position = UDim2.new(0, 0, 0, 10),
+		Size = UDim2.fromOffset(CARD_W - 8, 18),
+		TextXAlignment = Enum.TextXAlignment.Right,
+		TextSize = 13,
+		FontFace = Theme.Font.Display,
+		TextColor3 = Palette.Warn,
+	})
+
+	return {
+		frame = card, stroke = stroke, accent = accent, vp = vp, well = well,
+		initial = initial, name = name, score = score, delta = delta, mult = mult,
+		shown = 0, target = 0, portraitOf = nil,
+	}
+end
+
+-- ── public ───────────────────────────────────────────────────────────────────
+
+function Scoreboard.new(parent)
+	local self = setmetatable({}, Scoreboard)
+
+	self.root = Instance.new("Frame")
+	self.root.BackgroundTransparency = 1
+	self.root.AnchorPoint = Vector2.new(0.5, 0)
+	self.root.Position = UDim2.new(0.5, 0, 0, 14)
+	self.root.Size = UDim2.fromOffset(CARD_W, CARD_H)
+	self.root.Parent = parent
+
+	local layout = Instance.new("UIListLayout")
+	layout.FillDirection = Enum.FillDirection.Horizontal
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.VerticalAlignment = Enum.VerticalAlignment.Top
+	layout.Padding = UDim.new(0, GAP)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = self.root
+
+	self.cards = {}
+	self.byUser = {}
+
+	-- Totals ease toward their target rather than snapping, so a jump of 900 is
+	-- visibly bigger than a jump of 90.
+	self._tick = RunService.RenderStepped:Connect(function(dt)
+		for _, card in ipairs(self.cards) do
+			if card.shown ~= card.target then
+				local step = math.max(1, math.abs(card.target - card.shown) * math.min(1, dt * 7))
+				if math.abs(card.target - card.shown) <= step then
+					card.shown = card.target
+				else
+					card.shown += step * (card.target > card.shown and 1 or -1)
+				end
+				card.score.Text = tostring(math.floor(card.shown + 0.5))
+			end
+		end
+	end)
+
+	return self
+end
+
+function Scoreboard:_card(index)
+	local card = self.cards[index]
+	if not card then
+		card = buildCard(self.root, index)
+		self.cards[index] = card
+	end
+	return card
 end
 
 function Scoreboard:update(scores)
 	scores = scores or {}
 
-	for i, entry in ipairs(scores) do
-		local row = self.rows[i]
-		if not row then
-			row = buildRow(self.list)
-			self.rows[i] = row
+	-- Stage order, so a card sits above the person it belongs to. Score order
+	-- would reshuffle the row every round and nobody could follow it.
+	local ordered = table.clone(scores)
+	table.sort(ordered, function(a, b)
+		local am, bm = a.markIndex or 99, b.markIndex or 99
+		if am == bm then
+			return (a.name or "") < (b.name or "")
+		end
+		return am < bm
+	end)
+
+	local best = 0
+	for _, entry in ipairs(ordered) do
+		best = math.max(best, entry.score or 0)
+	end
+
+	table.clear(self.byUser)
+
+	for i, entry in ipairs(ordered) do
+		local card = self:_card(i)
+		local character = Characters.get(entry.characterId)
+		local accent = character and character.accent or Palette.Muted
+		local leader = (entry.score or 0) == best and best > 0
+
+		card.frame.Visible = true
+		card.accent.BackgroundColor3 = accent
+		card.name.Text = entry.name or "?"
+		card.mult.Text = (entry.multiplier and entry.multiplier > 1)
+			and ("×%s"):format(entry.multiplier) or ""
+		card.target = entry.score or 0
+		card.score.TextColor3 = leader and Palette.CardLeader or Palette.Cream
+		card.stroke.Color = leader and Palette.CardLeader or Palette.Hairline
+		card.stroke.Transparency = leader and 0.1 or 0.2
+
+		-- Portrait, rebuilt only when that player's avatar actually changed.
+		local player = Players:GetPlayerByUserId(entry.userId)
+		local currentCharacter = player and player.Character
+		if currentCharacter ~= card.portraitOf then
+			if buildPortrait(card.vp, player) then
+				card.portraitOf = currentCharacter
+				card.initial.Text = ""
+			else
+				card.portraitOf = nil
+				clearViewport(card.vp)
+				card.initial.Text = (entry.name or "?"):sub(1, 1):upper()
+				card.initial.TextColor3 = accent
+			end
 		end
 
-		local character = Characters.get(entry.characterId)
-		row.chip.BackgroundColor3 = character and character.accent or Palette.Muted
-
-		local mult = (entry.multiplier and entry.multiplier > 1)
-			and (" <font color='#D6A056'>×%s</font>"):format(entry.multiplier)
-			or ""
-		row.name.Text = entry.name .. mult
-		row.score.Text = tostring(entry.score)
-		row.frame.Visible = true
-		row.frame:TweenPosition(UDim2.new(0, 0, 0, (i - 1) * ROW_H), Enum.EasingDirection.Out,
-			Enum.EasingStyle.Quart, 0.4, true)
+		self.byUser[entry.userId] = card
 	end
 
-	for i = #scores + 1, #self.rows do
-		self.rows[i].frame.Visible = false
+	for i = #ordered + 1, #self.cards do
+		self.cards[i].frame.Visible = false
 	end
 
-	self.root.Size = UDim2.fromOffset(268, 34 + math.max(#scores, 1) * ROW_H + 12)
+	local count = math.max(#ordered, 1)
+	self.root.Size = UDim2.fromOffset(count * CARD_W + (count - 1) * GAP, CARD_H)
+end
+
+-- Called when a take is scored: the points fly up and the total climbs to meet
+-- them. This is the whole reason the card shows a number at all.
+function Scoreboard:award(userId, amount)
+	local card = self.byUser[userId]
+	if not card or not amount or amount == 0 then
+		return
+	end
+
+	card.delta.Text = (amount > 0 and "+" or "") .. tostring(amount)
+	card.delta.TextColor3 = amount > 0 and Palette.Good or Palette.Bad
+	card.delta.TextTransparency = 0
+	card.delta.Position = UDim2.new(0.5, 0, 0, 134)
+
+	TweenService:Create(card.delta, TweenInfo.new(1.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+		Position = UDim2.new(0.5, 0, 0, 96),
+		TextTransparency = 1,
+	}):Play()
+
+	-- A quick pulse on the card edge, so the eye lands on the right one.
+	local stroke = card.stroke
+	local was = stroke.Color
+	stroke.Color = amount > 0 and Palette.Good or Palette.Bad
+	stroke.Transparency = 0
+	TweenService:Create(stroke, TweenInfo.new(0.8, Enum.EasingStyle.Quad), {
+		Transparency = 0.2,
+	}):Play()
+	task.delay(0.8, function()
+		if stroke.Parent then
+			stroke.Color = was
+		end
+	end)
+end
+
+function Scoreboard:setVisible(visible)
+	self.root.Visible = visible
+end
+
+function Scoreboard:destroy()
+	if self._tick then
+		self._tick:Disconnect()
+	end
+	self.root:Destroy()
 end
 
 return Scoreboard
@@ -6584,7 +6863,7 @@ function StagePanel.new(parent)
 	self.root.BackgroundTransparency = 1
 	self.root.AnchorPoint = Vector2.new(0.5, 1)
 	self.root.Position = UDim2.new(0.5, 0, 1, -24)
-	self.root.Size = UDim2.fromOffset(900, 268)
+	self.root.Size = UDim2.fromOffset(900, 300)
 	self.root.Visible = false
 	self.root.Parent = parent
 
@@ -6610,14 +6889,12 @@ function StagePanel.new(parent)
 	})
 	self.refLabel = refLabel
 
+	-- Plain containers: Waveform draws its own framed well inside them.
 	local refBox = Instance.new("Frame")
-	refBox.BackgroundColor3 = Palette.Ink
-	refBox.BackgroundTransparency = 0.4
-	refBox.BorderSizePixel = 0
+	refBox.BackgroundTransparency = 1
 	refBox.Position = UDim2.new(0, 0, 0, 66)
-	refBox.Size = UDim2.new(1, 0, 0, 56)
+	refBox.Size = UDim2.new(1, 0, 0, 58)
 	refBox.Parent = panel
-	Theme.corner(refBox, UDim.new(0, 8))
 	self.reference = Waveform.new(refBox, Palette.Reference, false)
 
 	-- ── pitch ribbon ──
@@ -6630,13 +6907,10 @@ function StagePanel.new(parent)
 
 	-- ── your track (green) ──
 	local yourBox = Instance.new("Frame")
-	yourBox.BackgroundColor3 = Palette.Ink
-	yourBox.BackgroundTransparency = 0.4
-	yourBox.BorderSizePixel = 0
+	yourBox.BackgroundTransparency = 1
 	yourBox.Position = UDim2.new(0, 0, 0, 170)
-	yourBox.Size = UDim2.new(1, 0, 0, 56)
+	yourBox.Size = UDim2.new(1, 0, 0, 58)
 	yourBox.Parent = panel
-	Theme.corner(yourBox, UDim.new(0, 8))
 	self.yours = Waveform.new(yourBox, Palette.Yours, true)
 
 	self.yourLabel = Theme.caption(panel, "TU VOZ", {
@@ -6655,7 +6929,7 @@ function StagePanel.new(parent)
 	self.micRow = Instance.new("Frame")
 	self.micRow.BackgroundTransparency = 1
 	self.micRow.AnchorPoint = Vector2.new(0, 1)
-	self.micRow.Position = UDim2.new(0, 0, 1, 28)
+	self.micRow.Position = UDim2.new(0, 0, 1, 10)
 	self.micRow.Size = UDim2.fromOffset(420, 22)
 	self.micRow.Parent = panel
 
@@ -6708,8 +6982,8 @@ function StagePanel.new(parent)
 	-- ── playback card ──
 	self.card = Theme.panel(parent, {
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 96),
-		Size = UDim2.fromOffset(452, 232),
+		Position = UDim2.new(0.5, 0, 0, 172),
+		Size = UDim2.fromOffset(452, 224),
 		BackgroundTransparency = 0.02,
 		Visible = false,
 	})
@@ -6727,10 +7001,10 @@ function StagePanel.new(parent)
 
 	local meters = Instance.new("Frame")
 	meters.BackgroundTransparency = 1
-	meters.Position = UDim2.new(0, 0, 0, 50)
-	meters.Size = UDim2.new(1, 0, 0, 96)
+	meters.Position = UDim2.new(0, 0, 0, 48)
+	meters.Size = UDim2.new(1, 0, 0, 90)
 	meters.Parent = self.card
-	Theme.list(meters, 2)
+	Theme.list(meters, 0)
 
 	self.meterMelody = Theme.meter(meters, "Melodía", Palette.Reference)
 	self.meterRhythm = Theme.meter(meters, "Ritmo", Palette.Yours)
@@ -6740,19 +7014,19 @@ function StagePanel.new(parent)
 	rule.BackgroundColor3 = Palette.Hairline
 	rule.BackgroundTransparency = 0.4
 	rule.BorderSizePixel = 0
-	rule.Position = UDim2.new(0, 0, 0, 152)
+	rule.Position = UDim2.new(0, 0, 0, 144)
 	rule.Size = UDim2.new(1, 0, 0, 1)
 	rule.Parent = self.card
 
 	Theme.caption(self.card, "TOTAL", {
-		Position = UDim2.new(0, 0, 0, 162), Size = UDim2.fromOffset(80, 36), TextSize = 11,
+		Position = UDim2.new(0, 0, 0, 154), Size = UDim2.fromOffset(80, 32), TextSize = 11,
 	})
 	self.cardTotal = Theme.label(self.card, "0", {
-		Position = UDim2.new(0, 0, 0, 160), Size = UDim2.new(1, 0, 0, 40),
-		TextXAlignment = Enum.TextXAlignment.Right, FontFace = Theme.Font.Display, TextSize = 34,
+		Position = UDim2.new(0, 0, 0, 148), Size = UDim2.new(1, 0, 0, 38),
+		TextXAlignment = Enum.TextXAlignment.Right, FontFace = Theme.Font.Display, TextSize = 32,
 	})
 	self.cardAwarded = Theme.caption(self.card, "", {
-		Position = UDim2.new(0, 0, 0, 198), Size = UDim2.new(1, 0, 0, 14),
+		Position = UDim2.new(0, 0, 0, 178), Size = UDim2.new(1, 0, 0, 14),
 		TextXAlignment = Enum.TextXAlignment.Right, TextSize = 11,
 	})
 
@@ -7130,11 +7404,20 @@ return Theme
             <Properties>
               <string name="Name">Waveform</string>
               <string name="Source"><![CDATA[--!nonstrict
--- Waveform.luau — the two tracks: yellow reference above, green voice below.
+-- Waveform.luau — the two tracks: the reference above, your voice below.
 --
--- Bars are plain Frames, pooled and reused. The signature detail from the
--- original is preserved exactly: these show loudness over time, not notes, and
--- the pitch ribbon that sits between them is what carries contour.
+-- Each track is a framed well: near-black inside, a bright hairline border in
+-- the track's own colour, and the signal drawn symmetrically about the centre
+-- line. Every bar carries a vertical gradient that burns from the track colour
+-- at its edges to an almost-white core, so loudness reads as heat rather than
+-- as height alone — which is what makes a quiet passage still legible.
+--
+-- A red playhead rides over both. It is the only red in the HUD and never
+-- encodes a score, so it can never be confused with one.
+--
+-- The signature detail from the original is kept exactly: these show loudness
+-- over time, not notes, and the pitch ribbon between them is what carries
+-- contour.
 
 local Theme = require(script.Parent.Theme)
 local Palette = require(game.ReplicatedStorage.Shared.Palette)
@@ -7144,57 +7427,141 @@ local Waveform = {}
 Waveform.__index = Waveform
 
 local BARS = Config.TAKE.ENVELOPE_SAMPLES
+local INSET = 7          -- breathing room inside the frame
+local MIN_BAR = 0.035    -- a silent bar is still a tick, not nothing
 
-function Waveform.new(parent, color, flipped)
+-- Burns from the track colour at the extremes to a near-white core.
+local function barGradient(accent, core)
+	local g = Instance.new("UIGradient")
+	g.Rotation = 90
+	g.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0.00, accent:Lerp(Palette.Ink, 0.45)),
+		ColorSequenceKeypoint.new(0.28, accent),
+		ColorSequenceKeypoint.new(0.50, core),
+		ColorSequenceKeypoint.new(0.72, accent),
+		ColorSequenceKeypoint.new(1.00, accent:Lerp(Palette.Ink, 0.45)),
+	})
+	g.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0.00, 0.55),
+		NumberSequenceKeypoint.new(0.22, 0.08),
+		NumberSequenceKeypoint.new(0.50, 0),
+		NumberSequenceKeypoint.new(0.78, 0.08),
+		NumberSequenceKeypoint.new(1.00, 0.55),
+	})
+	return g
+end
+
+-- `accent` is the track colour. `flipped` is accepted for call-site
+-- compatibility and ignored: a mirrored track has no up or down.
+function Waveform.new(parent, accent, flipped)
 	local self = setmetatable({}, Waveform)
+	self.accent = accent
+	self.core = (accent == Palette.Yours) and Palette.CoreCool or Palette.CoreWarm
 
+	-- ── the well ──
 	self.root = Instance.new("Frame")
-	self.root.BackgroundTransparency = 1
+	self.root.BackgroundColor3 = Palette.Well
+	self.root.BackgroundTransparency = 0.04
+	self.root.BorderSizePixel = 0
 	self.root.Size = UDim2.fromScale(1, 1)
 	self.root.ClipsDescendants = true
 	self.root.Parent = parent
+	Theme.corner(self.root, UDim.new(0, 12))
 
-	-- Centre line: gives a silent track something to be, instead of nothing.
+	local edge = Instance.new("UIStroke")
+	edge.Color = accent
+	edge.Thickness = 1.6
+	edge.Transparency = 0.34
+	edge.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	edge.Parent = self.root
+	self.edge = edge
+
+	-- A faint inner glow along the top and bottom, so the well has depth.
+	local sheen = Instance.new("Frame")
+	sheen.BackgroundColor3 = accent
+	sheen.BackgroundTransparency = 0.94
+	sheen.BorderSizePixel = 0
+	sheen.Size = UDim2.fromScale(1, 1)
+	sheen.Parent = self.root
+	Theme.corner(sheen, UDim.new(0, 12))
+	local sheenGradient = Instance.new("UIGradient")
+	sheenGradient.Rotation = 90
+	sheenGradient.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.3),
+		NumberSequenceKeypoint.new(0.5, 1),
+		NumberSequenceKeypoint.new(1, 0.3),
+	})
+	sheenGradient.Parent = sheen
+
+	-- ── bars ──
+	self.plot = Instance.new("Frame")
+	self.plot.BackgroundTransparency = 1
+	self.plot.Position = UDim2.fromOffset(INSET, INSET)
+	self.plot.Size = UDim2.new(1, -INSET * 2, 1, -INSET * 2)
+	self.plot.Parent = self.root
+
 	local axis = Instance.new("Frame")
-	axis.BackgroundColor3 = Palette.Hairline
-	axis.BackgroundTransparency = 0.55
+	axis.BackgroundColor3 = accent
+	axis.BackgroundTransparency = 0.82
 	axis.BorderSizePixel = 0
+	axis.AnchorPoint = Vector2.new(0, 0.5)
+	axis.Position = UDim2.fromScale(0, 0.5)
 	axis.Size = UDim2.new(1, 0, 0, 1)
-	axis.Position = flipped and UDim2.fromScale(0, 0) or UDim2.new(0, 0, 1, -1)
-	axis.Parent = self.root
+	axis.Parent = self.plot
 
 	self.bars = table.create(BARS)
 	local width = 1 / BARS
 	for i = 1, BARS do
 		local bar = Instance.new("Frame")
-		bar.BackgroundColor3 = color
+		bar.BackgroundColor3 = accent
 		bar.BorderSizePixel = 0
-		bar.AnchorPoint = flipped and Vector2.new(0, 0) or Vector2.new(0, 1)
-		bar.Position = UDim2.fromScale((i - 1) * width, flipped and 0 or 1)
-		bar.Size = UDim2.new(width * 0.76, 0, 0, 0)
-		bar.BackgroundTransparency = 0.25
-		bar.Parent = self.root
-		Theme.corner(bar, UDim.new(0, 2))
+		bar.AnchorPoint = Vector2.new(0.5, 0.5)
+		bar.Position = UDim2.fromScale((i - 0.5) * width, 0.5)
+		bar.Size = UDim2.new(width * 0.68, 0, MIN_BAR, 0)
+		bar.Parent = self.plot
+		Theme.corner(bar, UDim.new(1, 0))
+		barGradient(accent, self.core).Parent = bar
 		self.bars[i] = bar
 	end
 
-	self.playhead = Instance.new("Frame")
-	self.playhead.BackgroundColor3 = Palette.Cream
-	self.playhead.BackgroundTransparency = 0.45
-	self.playhead.BorderSizePixel = 0
-	self.playhead.Size = UDim2.new(0, 1, 1, 0)
-	self.playhead.Visible = false
-	self.playhead.Parent = self.root
+	-- ── playhead ──
+	self.head = Instance.new("Frame")
+	self.head.BackgroundTransparency = 1
+	self.head.AnchorPoint = Vector2.new(0.5, 0)
+	self.head.Size = UDim2.new(0, 14, 1, 0)
+	self.head.Visible = false
+	self.head.Parent = self.root
 
-	self.color = color
+	local halo = Instance.new("Frame")
+	halo.BackgroundColor3 = Palette.Playhead
+	halo.BackgroundTransparency = 0.78
+	halo.BorderSizePixel = 0
+	halo.AnchorPoint = Vector2.new(0.5, 0.5)
+	halo.Position = UDim2.fromScale(0.5, 0.5)
+	halo.Size = UDim2.new(0, 10, 1, 0)
+	halo.Parent = self.head
+	Theme.corner(halo, UDim.new(0, 5))
+
+	local line = Instance.new("Frame")
+	line.BackgroundColor3 = Palette.Playhead
+	line.BorderSizePixel = 0
+	line.AnchorPoint = Vector2.new(0.5, 0.5)
+	line.Position = UDim2.fromScale(0.5, 0.5)
+	line.Size = UDim2.new(0, 2, 1, 0)
+	line.Parent = self.head
+
 	return self
+end
+
+local function applyBar(self, bar, v)
+	local level = math.clamp(v or 0, 0, 1)
+	bar.Size = UDim2.new(bar.Size.X.Scale, 0, math.max(MIN_BAR, level * 0.96), 0)
+	bar.BackgroundTransparency = level > 0 and 0 or 0.72
 end
 
 function Waveform:setEnvelope(envelope)
 	for i, bar in ipairs(self.bars) do
-		local v = envelope and envelope[i] or 0
-		bar.Size = UDim2.new(bar.Size.X.Scale, 0, v * 0.94, 0)
-		bar.BackgroundTransparency = v > 0 and 0.12 or 0.82
+		applyBar(self, bar, envelope and envelope[i] or 0)
 	end
 end
 
@@ -7202,33 +7569,41 @@ end
 function Waveform:setBar(index, value)
 	local bar = self.bars[index]
 	if bar then
-		bar.Size = UDim2.new(bar.Size.X.Scale, 0, math.clamp(value, 0, 1) * 0.94, 0)
-		bar.BackgroundTransparency = value > 0 and 0.12 or 0.82
+		applyBar(self, bar, value)
 	end
 end
 
 function Waveform:clear()
 	for _, bar in ipairs(self.bars) do
-		bar.Size = UDim2.new(bar.Size.X.Scale, 0, 0, 0)
-		bar.BackgroundTransparency = 0.82
+		applyBar(self, bar, 0)
 	end
+	self:setPlayhead(nil)
 end
 
 function Waveform:setPlayhead(alpha)
 	if alpha == nil then
-		self.playhead.Visible = false
+		self.head.Visible = false
 		return
 	end
-	self.playhead.Visible = true
-	self.playhead.Position = UDim2.fromScale(math.clamp(alpha, 0, 1), 0)
+	self.head.Visible = true
+	self.head.Position = UDim2.fromScale(math.clamp(alpha, 0, 1), 0)
+end
+
+-- Dims the whole well, for a track that is not the one being performed.
+function Waveform:setActive(active)
+	self.edge.Transparency = active and 0.2 or 0.55
+	self.plot.Visible = true
 end
 
 function Waveform:destroy()
 	self.root:Destroy()
 end
 
--- The ribbon between the two tracks: reference contour drawn as a line of dots,
--- with the player's live pitch riding on top of it.
+-- ── pitch ribbon ─────────────────────────────────────────────────────────────
+-- The reference contour as a line of dots, with the player's live pitch riding
+-- on top of it. This is where melody lives; the tracks above and below are
+-- loudness only.
+
 local Ribbon = {}
 Ribbon.__index = Ribbon
 Waveform.Ribbon = Ribbon
@@ -7258,17 +7633,16 @@ function Ribbon.new(parent)
 	self.cursor.BackgroundColor3 = Palette.Yours
 	self.cursor.BorderSizePixel = 0
 	self.cursor.AnchorPoint = Vector2.new(0.5, 0.5)
-	self.cursor.Size = UDim2.fromOffset(11, 11)
+	self.cursor.Size = UDim2.fromOffset(12, 12)
 	self.cursor.Visible = false
 	self.cursor.Parent = self.root
 	Theme.corner(self.cursor, UDim.new(1, 0))
-	Theme.stroke(self.cursor, Palette.Ink, 2, 0.2)
+	Theme.stroke(self.cursor, Palette.Ink, 2, 0.15)
 
 	return self
 end
 
 local function pitchToScale(pitch)
-	-- Centre is 0 semitones; the full strip spans ±PITCH_RANGE.
 	return 0.5 - (pitch / (Config.TAKE.PITCH_RANGE * 2))
 end
 

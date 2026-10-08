@@ -43,6 +43,18 @@ return {
 	Reference    = rgb(226, 188, 74),   -- yellow — the sound you must match
 	Yours        = rgb(118, 196, 128),  -- green  — your voice
 
+	-- The hot core each waveform burns to at full level, and the playhead that
+	-- rides over it. Red, because it has to read against both tracks at a
+	-- glance and it is the one element that is never a score.
+	CoreWarm     = rgb(255, 243, 214),
+	CoreCool     = rgb(226, 255, 231),
+	Playhead     = rgb(232, 72, 66),
+	Well         = rgb(11, 10, 13),     -- the near-black inside a waveform frame
+
+	-- Scoreboard cards.
+	CardBack     = rgb(33, 31, 37),
+	CardLeader   = rgb(226, 188, 74),
+
 	Good         = rgb(118, 196, 128),
 	Warn         = rgb(214, 160, 86),
 	Bad          = rgb(192, 92, 92),

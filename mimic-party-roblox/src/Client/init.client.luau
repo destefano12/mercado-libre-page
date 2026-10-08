@@ -284,6 +284,10 @@ Net.onClient(Net.Playback, function(payload)
 	ui.stage:showCard(payload)
 	ui:setVoiceGated(payload.voiceGated == true)
 
+	-- The points this take earned, flying up off that player's card while the
+	-- total climbs to meet them.
+	ui.scoreboard:award(payload.userId, payload.awarded or (payload.grade and payload.grade.total))
+
 	if payload.sabotage and payload.userId == localPlayer.UserId then
 		local def = Sabotages.get(payload.sabotage)
 		ui:showToast(("Te sabotearon: %s%s"):format(
@@ -319,6 +323,18 @@ Net.onClient(Net.RouletteSpin, function(payload)
 		end
 	end
 	ui.roulette:spin(payload.results, payload.spin or Config.PHASE.ROULETTE_SPIN, localPlayer.UserId)
+
+	-- Wheel points land on the cards too, once the wheel has stopped.
+	task.delay((payload.spin or Config.PHASE.ROULETTE_SPIN) * 0.9, function()
+		for _, r in ipairs(payload.results or {}) do
+			if r.kind == "points" then
+				local amount = tonumber((r.label or ""):match("%d+"))
+				if amount then
+					ui.scoreboard:award(r.userId, amount)
+				end
+			end
+		end
+	end)
 end)
 
 Net.onClient(Net.Scores, function(payload)
