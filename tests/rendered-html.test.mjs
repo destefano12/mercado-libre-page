@@ -935,15 +935,18 @@ test("invites classmates from the owner's own mailbox", async () => {
   assert.match(modulo, /Copiar el enlace/);
 });
 
-test("opens on Estudiar Mejor, with the marketplace on its own path", async () => {
-  // La raiz es la aplicacion publicada; el marketplace, el proyecto original
-  // de este repositorio, sigue entero en su propia direccion.
+test("opens on Mercado Live, with Estudiar Mejor on its own path", async () => {
+  // La raiz es el marketplace; Estudiar Mejor sigue entero en su propia
+  // direccion.
   const raiz = await render("/");
   assert.equal(raiz.status, 307);
-  assert.match(raiz.headers.get("location") ?? "", /\/estudiar-mejor$/);
+  assert.match(raiz.headers.get("location") ?? "", /\/mercado-live$/);
 
   const mercado = await render("/mercado-live");
   assert.equal(mercado.status, 200);
+
+  const estudiar = await render("/estudiar-mejor");
+  assert.equal(estudiar.status, 200);
 
   const layout = await readFile(new URL("../app/layout.tsx", import.meta.url), "utf8");
   assert.match(layout, /title: "Estudiar Mejor"/);

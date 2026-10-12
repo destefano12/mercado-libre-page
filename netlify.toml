@@ -12,6 +12,10 @@
 
 [build.environment]
   NODE_VERSION = "22"
+  # Netlify ve `next` en las dependencias y agrega solo su plugin de Next.js,
+  # que espera una carpeta .next. Este proyecto compila con vinext, asi que se
+  # lo apaga: el servidor lo arma netlify/functions/servidor.mts.
+  NETLIFY_NEXT_PLUGIN_SKIP = "true"
 
 [functions]
   directory = "netlify/functions"

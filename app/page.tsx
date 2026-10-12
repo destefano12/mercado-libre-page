@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 
 /**
- * La raiz del sitio lleva a Estudiar Mejor, que es la aplicacion publicada.
- * El marketplace, proyecto original de este repositorio, queda en /mercado-live.
+ * La raiz del sitio lleva al marketplace, Mercado Live.
+ * Estudiar Mejor sigue disponible en /estudiar-mejor.
  */
 export default function Home() {
-  redirect("/estudiar-mejor");
+  redirect("/mercado-live");
 }
