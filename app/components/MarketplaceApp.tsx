@@ -50,6 +50,9 @@ import { formatPrice, ListingVisual, ProductCard } from "./ProductCard";
 import { PublishModal } from "./PublishModal";
 import { ReviewSection } from "./ReviewSection";
 import { ShippingMap, type LiveCourierLocation } from "./ShippingMap";
+import { EstantesPersonales } from "./nuevo/EstantesPersonales";
+import { PortadaCategoria } from "./nuevo/PortadaCategoria";
+import { RegistroActividad } from "./nuevo/RegistroActividad";
 
 type ViewName =
   | "home"
@@ -2125,6 +2128,12 @@ export function MarketplaceApp() {
 
   return (
     <main className={`marketplace-shell${workState?.worker ? " marketplace-shell--worker" : ""}${view === "play" ? " marketplace-shell--play" : ""}`}>
+      <RegistroActividad
+        usuarioId={activeUser?.id ?? null}
+        listingId={view === "detail" ? selectedListing?.id ?? null : null}
+        consulta={view === "results" && !resultCategoryId ? resultQuery : ""}
+        categoriaId={view === "results" ? resultCategoryId ?? null : null}
+      />
       <header className="site-header">
         <div className="header-primary">
           <button className="logo-button" type="button" onClick={goHome} aria-label="Ir al inicio">
@@ -2553,6 +2562,15 @@ export function MarketplaceApp() {
               </button>
             </section>
 
+            <EstantesPersonales
+              state={state}
+              usuarioId={activeUser?.id ?? null}
+              onAbrirListing={openListing}
+              onAbrirCategoria={openCategory}
+              onBuscar={(consulta) => submitSearch(consulta)}
+              onOfertas={() => openOffers()}
+            />
+
             {shelves?.hasPersonalActivity && shelves.inspiredByHistory.length > 0 ? (
               <section className="home-shelf">
                 <div className="home-shelf__heading">
@@ -2875,6 +2893,14 @@ export function MarketplaceApp() {
             <span>›</span>
             <span>{resultCategory?.label ?? resultQuery}</span>
           </div>
+
+          {resultCategory ? (
+            <PortadaCategoria
+              categoria={resultCategory}
+              filtrosActivos={activeFilters}
+              onFiltro={toggleFilter}
+            />
+          ) : null}
 
           {resultCategory?.id === "supermercado" ? (
             <div className="supermarket-page">
