@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "vinext dev",
     "build": "vinext build",
+    "build:netlify": "node build/netlify.mjs",
     "start": "vinext start",
     "test": "npm run build && node --test tests/rendered-html.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
@@ -17,6 +18,7 @@
     "postbuild": "node -e \"require('node:fs').rmSync('.wrangler/deploy/config.json',{force:true})\""
   },
   "dependencies": {
+    "@libsql/client": "0.18.0",
     "drizzle-orm": "0.45.2",
     "next": "16.2.6",
     "pdfjs-dist": "^6.3.289",

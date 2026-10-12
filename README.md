@@ -53,6 +53,30 @@ npm run publicar
 y sube el Worker. La direccion que imprime al terminar es la de la pagina;
 la aplicacion queda en `/estudiar-mejor`.
 
+## Publicar en Netlify
+
+El mismo codigo se publica tambien en Netlify, sin dejar de andar en Cloudflare.
+Como Netlify no tiene D1, la base pasa a ser [Turso](https://turso.tech)
+(SQLite por HTTP, mismo dialecto que D1): las consultas no cambian.
+
+1. Crear la base en Turso (plan gratis) y sacar su URL y un token:
+
+   ```bash
+   turso db create mercado-live
+   turso db show mercado-live --url        # libsql://...
+   turso db tokens create mercado-live
+   ```
+
+2. En Netlify: *Add new site > Import an existing project* y elegir este
+   repositorio. `netlify.toml` ya trae el comando de build y las carpetas.
+3. En *Site configuration > Environment variables* cargar
+   `TURSO_DATABASE_URL` y `TURSO_AUTH_TOKEN` (y `ERLC_API_KEY` si se usa el
+   panel de ER:LC). Las tablas se crean solas en el primer pedido.
+4. Publicar. El marketplace queda en `/mercado-live`.
+
+Para compilar a mano: `npm run build:netlify`. Para probar contra una base
+local: `TURSO_DATABASE_URL=file:local.db`.
+
 ## Estudiar Mejor
 
 El repositorio incluye una segunda aplicacion independiente en `/estudiar-mejor`: una

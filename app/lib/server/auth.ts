@@ -29,12 +29,10 @@ interface SessionAccountRow extends AccountRow {
   expires_at: string;
 }
 
-export async function getDatabase() {
-  const { env } = await import("cloudflare:workers");
-  return env.DB;
-}
+import type { BaseDatos } from "./database";
 
-export type MarketplaceDatabase = Awaited<ReturnType<typeof getDatabase>>;
+export { getDatabase } from "./database";
+export type MarketplaceDatabase = BaseDatos;
 
 export async function ensureAuthTables(database: MarketplaceDatabase) {
   await database.batch([

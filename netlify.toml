@@ -1,0 +1,19 @@
+# Publicacion en Netlify. El mismo repositorio sigue publicandose en Cloudflare
+# con `npm run publicar`; esto es un destino adicional.
+#
+# Variables a cargar en Netlify (Site configuration > Environment variables):
+#   TURSO_DATABASE_URL  libsql://<base>-<usuario>.turso.io
+#   TURSO_AUTH_TOKEN    token de la base
+#   ERLC_API_KEY        opcional, solo para el panel de ER:LC
+
+[build]
+  command = "npm run build:netlify"
+  publish = "dist/client"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+  included_files = ["dist/server/**"]

@@ -1,3 +1,5 @@
+import { resolve } from "node:path";
+
 import vinext from "vinext";
 import { defineConfig } from "vite";
 import { sites } from "./build/sites-vite-plugin";
@@ -10,6 +12,13 @@ const r2 = null;
 
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
+
+// Destino de la compilacion. Por omision Cloudflare, que es donde vive el
+// proyecto; `BUILD_TARGET=netlify` compila el mismo codigo para Netlify, que
+// no tiene ni Workers ni D1. La unica diferencia es el plugin de Cloudflare
+// (que inyecta el runtime workerd) y el modulo `cloudflare:workers`.
+const destino = process.env.BUILD_TARGET ?? "cloudflare";
+const esNetlify = destino === "netlify";
 
 // Las banderas de compatibilidad viven en wrangler.jsonc, que es la
 // configuracion del proyecto. Repetirlas aca hace que el runtime local se
@@ -49,13 +58,27 @@ export default defineConfig(async () => {
     server: isCodexSeatbeltSandbox
       ? { watch: { useFsEvents: false, usePolling: true } }
       : undefined,
+    resolve: esNetlify
+      ? {
+          alias: {
+            "cloudflare:workers": resolve(
+              import.meta.dirname,
+              "build/stubs/cloudflare-workers.ts",
+            ),
+          },
+        }
+      : undefined,
     plugins: [
       vinext(),
       sites(),
-      cloudflare({
-        viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
-        config: localBindingConfig,
-      }),
+      ...(esNetlify
+        ? []
+        : [
+            cloudflare({
+              viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
+              config: localBindingConfig,
+            }),
+          ]),
     ],
   };
 });

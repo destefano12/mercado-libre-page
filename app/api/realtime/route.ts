@@ -1,9 +1,6 @@
-const ROW_ID = "marketplace";
+import { getDatabase, type BaseDatos } from "../../lib/server/database";
 
-async function getDatabase() {
-  const { env } = await import("cloudflare:workers");
-  return env.DB;
-}
+const ROW_ID = "marketplace";
 
 function sanitizePublicState(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -30,7 +27,7 @@ function sanitizePublicState(value: unknown) {
   };
 }
 
-async function ensureTable(database: Awaited<ReturnType<typeof getDatabase>>) {
+async function ensureTable(database: BaseDatos) {
   await database.prepare(
     `CREATE TABLE IF NOT EXISTS marketplace_realtime (
       id TEXT PRIMARY KEY NOT NULL,
