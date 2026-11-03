@@ -1065,3 +1065,12 @@ test("reads a scanned PDF instead of turning it away", async () => {
   // La tarea de pdf.js se libera por los dos caminos.
   assert.match(pdf, /} finally \{\n\s*await tarea\.destroy\(\);/);
 });
+
+test("server-renders the Duomate store", async () => {
+  const response = await render("/duomate");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /Duomate/);
+  assert.match(html, /id="tienda"/);
+  assert.match(html, /Kit Duo Cl(á|&#x?[0-9a-f]+;)sico/i);
+});
