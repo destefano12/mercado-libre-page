@@ -138,7 +138,9 @@ provider.on('ready', () => {
 })
 provider.on('auth_failure', () => { state.status = 'desconectado' })
 
-await createBot({ flow: createFlow([flujoPrincipal]), provider, database: new MemoryDB() })
+const { httpServer } = await createBot({ flow: createFlow([flujoPrincipal]), provider, database: new MemoryDB() })
+// BuilderBot solo conecta con WhatsApp al iniciar su servidor interno (puerto PORT+1, no hace falta abrirlo)
+httpServer(PORT + 1)
 
 // ---------------------------------------------------------------- panel web
 const send = (res, code, body, type = 'application/json') => {
