@@ -5,7 +5,8 @@ import { useCallback, useState } from "react";
 import type { Producto } from "../lib/catalogo";
 import { CarritoProvider, useCarrito } from "../lib/carrito";
 import { Aviso, Carrito, Checkout, VistaRapida, Vuelos } from "./Paneles";
-import { Beneficios, Encabezado, Hero, Marquesina, Newsletter, Opiniones, Pie, Ritual, Sucursal } from "./Secciones";
+import { RitualScroll } from "./RitualScroll";
+import { Beneficios, Encabezado, Hero, Marquesina, Newsletter, Opiniones, Pie, Sucursal } from "./Secciones";
 import { Tienda } from "./Tienda";
 
 export function DuomateApp() {
@@ -35,9 +36,9 @@ function Pagina() {
       <main>
         <Hero onVer={setVista} />
         <Marquesina />
+        <RitualScroll />
         <Beneficios />
         <Tienda onVer={setVista} />
-        <Ritual />
         <Sucursal />
         <Opiniones />
         <Newsletter />

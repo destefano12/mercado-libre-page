@@ -296,46 +296,6 @@ export function Marquesina() {
   );
 }
 
-/* ---------------------------------- Ritual ---------------------------------- */
-
-export function Ritual() {
-  const pasos = [
-    { n: "01", t: "Llená ¾ con yerba", d: "Tapá la boca con la mano, invertí y sacudí: el polvo queda arriba y no tapa la bombilla." },
-    { n: "02", t: "Inclinalo y humedecé", d: "Dejá la yerba en diagonal y volcá un chorrito de agua tibia en el hueco. Esperá un minuto." },
-    { n: "03", t: "Clavá la bombilla", d: "Tapá el pico con el pulgar y apoyala en el lado húmedo, hasta el fondo. No la muevas más." },
-    { n: "04", t: "Cebá a 75–80 °C", d: "Nunca hervida: el agua muy caliente quema la yerba y amarga. El termo Duomate te avisa." },
-  ];
-  return (
-    <section id="ritual" className="dm-seccion dm-ritual" aria-labelledby="titulo-ritual">
-      <div className="dm-contenedor dm-ritual-grilla">
-        <motion.div className="dm-ritual-intro" {...aparecer}>
-          <span className="dm-sobretitulo dm-sobretitulo-claro">El ritual</span>
-          <h2 id="titulo-ritual">Cuatro pasos para el mate perfecto</h2>
-          <p>Lo enseñamos todos los sábados a las 11 h en la sucursal, gratis. Y si es tu primer mate de calabaza, te lo entregamos curado.</p>
-          <div className="dm-temperatura" aria-hidden="true">
-            <span>Temperatura ideal</span>
-            <div className="dm-termometro">
-              <motion.span initial={{ width: 0 }} whileInView={{ width: "78%" }} viewport={{ once: true }} transition={{ duration: 1.4, ease: [0.22, 1, 0.36, 1], delay: 0.3 }} />
-            </div>
-            <strong>75–80 °C</strong>
-          </div>
-        </motion.div>
-        <ol className="dm-pasos">
-          {pasos.map((p, i) => (
-            <motion.li key={p.n} className="dm-paso" {...aparecer} transition={{ ...aparecer.transition, delay: i * 0.1 }} whileHover={{ x: 6 }}>
-              <span className="dm-paso-numero">{p.n}</span>
-              <div>
-                <h3>{p.t}</h3>
-                <p>{p.d}</p>
-              </div>
-            </motion.li>
-          ))}
-        </ol>
-      </div>
-    </section>
-  );
-}
-
 /* ---------------------------------- Sucursal ---------------------------------- */
 
 const HORARIOS = [

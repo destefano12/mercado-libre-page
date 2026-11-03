@@ -2078,3 +2078,198 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* ---------- Ritual 3D guiado por scroll ---------- */
+.dm-ritual3d {
+  position: relative;
+  height: 560vh;
+}
+.dm-ritual3d-fijo {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100svh;
+  overflow: hidden;
+}
+.dm-ritual3d-fondo {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 55% at 62% 58%, #fffaf0 0%, rgb(255 250 240 / 0) 70%),
+    radial-gradient(ellipse 80% 60% at 50% 100%, #eadfc9 0%, rgb(234 223 201 / 0) 70%),
+    linear-gradient(180deg, #f3ecdf 0%, #efe5d2 100%);
+}
+.dm-ritual3d-lienzo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+.dm-ritual3d-lienzo.es-visible {
+  opacity: 1;
+}
+.dm-ritual3d-cargando {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  margin: -22px;
+  border-radius: 50%;
+  border: 3px solid rgb(31 61 43 / 0.15);
+  border-top-color: var(--dm-verde);
+  animation: dm-girar 0.9s linear infinite;
+}
+@keyframes dm-girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.dm-ritual3d-respaldo {
+  position: absolute;
+  inset: 20% 10% 25%;
+}
+.dm-ritual3d-capa {
+  position: relative;
+  height: 100%;
+  pointer-events: none;
+}
+.dm-ritual3d-titulo {
+  position: absolute;
+  top: 88px;
+  left: 16px;
+  right: 16px;
+}
+.dm-ritual3d-titulo h2 {
+  margin-top: 6px;
+  font-size: clamp(26px, 3.6vw, 42px);
+  color: var(--dm-verde);
+  max-width: 460px;
+}
+.dm-ritual3d-pasos {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 28px;
+}
+.dm-ritual3d-paso {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 18px 20px;
+  border-radius: 20px;
+  background: rgb(251 248 242 / 0.86);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: var(--dm-sombra);
+}
+.dm-ritual3d-numero {
+  font-family: var(--dm-serif);
+  font-style: italic;
+  font-size: 30px;
+  line-height: 1;
+  color: var(--dm-terracota);
+}
+.dm-ritual3d-paso h3 {
+  margin-top: 6px;
+  font-family: var(--dm-serif);
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--dm-verde);
+}
+.dm-ritual3d-paso p {
+  margin-top: 6px;
+  font-size: 15px;
+  color: var(--dm-media);
+}
+.dm-ritual3d-riel {
+  display: none;
+}
+.dm-ritual3d-final {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  border-radius: 20px;
+  background: var(--dm-verde);
+  color: var(--dm-crema);
+  box-shadow: var(--dm-sombra-alta);
+}
+.dm-ritual3d-final strong {
+  white-space: nowrap;
+  font-family: var(--dm-serif);
+  font-size: 26px;
+}
+.dm .dm-ritual3d-final .dm-boton-principal {
+  background: var(--dm-oro);
+  color: var(--dm-tinta);
+}
+@media (min-width: 900px) {
+  .dm-ritual3d-titulo {
+    top: 110px;
+    left: 32px;
+  }
+  .dm-ritual3d-pasos {
+    left: 32px;
+    right: auto;
+    top: 50%;
+    bottom: auto;
+    width: 380px;
+  }
+  .dm-ritual3d-paso {
+    top: 0;
+    bottom: auto;
+    padding: 26px 28px;
+    background: rgb(251 248 242 / 0.7);
+  }
+  .dm-ritual3d-paso h3 {
+    font-size: 32px;
+  }
+  .dm-ritual3d-paso p {
+    font-size: 16px;
+  }
+  .dm-ritual3d-riel {
+    display: block;
+    position: absolute;
+    right: 32px;
+    top: 30%;
+    height: 40%;
+    width: 3px;
+    border-radius: 3px;
+    background: rgb(31 61 43 / 0.12);
+  }
+  .dm-ritual3d-riel > span {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    border-radius: inherit;
+    background: var(--dm-terracota);
+  }
+  .dm-ritual3d-riel > i {
+    position: absolute;
+    left: -5px;
+    width: 13px;
+    height: 13px;
+    margin-top: -6px;
+    border-radius: 50%;
+    border: 2px solid var(--dm-papel);
+  }
+  .dm-ritual3d-final {
+    left: 32px;
+    right: auto;
+    bottom: 64px;
+    width: 380px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
