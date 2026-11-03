@@ -96,6 +96,11 @@ ${leerNegocio()}`,
   return (res.text || '').trim()
 }
 
+// Prueba la clave de Gemini al arrancar, para avisar en el panel si está mal
+ai.models.generateContent({ model: MODEL, contents: 'Responde solo: OK' })
+  .then(() => console.log(`✅ Clave de Gemini OK (modelo ${MODEL})`))
+  .catch((e) => anotarError('Gemini (revisá GEMINI_API_KEY en el archivo .env)', e))
+
 // ---------------------------------------------------------------- bot
 let provider
 async function avisarDueno(c, pregunta) {
@@ -130,6 +135,8 @@ const flujoPrincipal = addKeyword(EVENTS.WELCOME).addAction(async (ctx, { flowDy
   } catch (e) {
     anotarError('Gemini', e)
     log(id, 'sistema', '⚠️ Error con Gemini: ' + e.message)
+    const disculpa = '¡Hola! 🙌 Recibimos tu mensaje, en un ratito te respondemos.'
+    try { await flowDynamic(disculpa); log(id, 'bot', disculpa) } catch (e2) { anotarError('Enviar respuesta', e2) }
     await avisarDueno(c, texto + '  (error de Gemini: ' + e.message + ')')
   }
 })
