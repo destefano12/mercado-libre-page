@@ -40,9 +40,12 @@ export function RitualScroll() {
 
     // Three.js se descarga solo cuando hace falta: no pesa en la carga inicial.
     import("../lib/escena3d")
-      .then(({ crearEscena }) => {
-        if (cancelado) return;
-        const e = crearEscena(lienzo);
+      .then(({ crearEscena }) => crearEscena(lienzo))
+      .then((e) => {
+        if (cancelado) {
+          e.destruir();
+          return;
+        }
         escena.current = e;
         e.setProgreso(progreso.get());
         alRedimensionar = () => e.redimensionar();
