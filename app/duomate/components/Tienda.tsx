@@ -1,16 +1,24 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
+import { ProductCard, type ProductCardBadge } from "@/components/ui/product-card-1";
 import { CATEGORIAS, PRODUCTOS, formatearPrecio, type Categoria, type Producto } from "../lib/catalogo";
 import { useCarrito } from "../lib/carrito";
 import { ArteProducto } from "./ArteProducto";
-import { Estrellas, IconoBolsa, IconoBuscar, IconoCheck, IconoCorazon, IconoOjo } from "./Iconos";
+import { IconoBuscar } from "./Iconos";
 
 type Orden = "destacados" | "menor" | "mayor" | "puntaje";
 
-export function Tienda({ onVer }: { onVer: (p: Producto) => void }) {
-  const [categoria, setCategoria] = useState<Categoria | "todo">("todo");
+export function Tienda({
+  onVer,
+  categoria,
+  setCategoria,
+}: {
+  onVer: (p: Producto) => void;
+  categoria: Categoria | "todo";
+  setCategoria: (c: Categoria | "todo") => void;
+}) {
   const [busqueda, setBusqueda] = useState("");
   const [orden, setOrden] = useState<Orden>("destacados");
   const [favoritos, setFavoritos] = useState<Set<string>>(new Set());
@@ -141,16 +149,13 @@ function Tarjeta({
 }) {
   const { agregar } = useCarrito();
   const [variante, setVariante] = useState(p.variantes[0].nombre);
-  const [agregado, setAgregado] = useState(false);
-  const botonRef = useRef<HTMLButtonElement>(null);
   const color = p.variantes.find((v) => v.nombre === variante)?.color ?? p.variantes[0].color;
   const ahorro = p.precioAnterior ? Math.round((1 - p.precio / p.precioAnterior) * 100) : 0;
 
-  const alAgregar = () => {
-    agregar(p, variante, 1, botonRef.current?.getBoundingClientRect() ?? null);
-    setAgregado(true);
-    setTimeout(() => setAgregado(false), 1400);
-  };
+  const insignias: ProductCardBadge[] = [];
+  if (p.etiqueta) insignias.push({ label: p.etiqueta, className: CLASE_ETIQUETA[p.etiqueta] });
+  if (ahorro > 0 && p.etiqueta !== "Oferta") insignias.push({ label: `-${ahorro}%`, className: CLASE_ETIQUETA.Oferta });
+  else if (ahorro > 0) insignias[0].label = `Oferta -${ahorro}%`;
 
   return (
     <motion.li
@@ -161,20 +166,16 @@ function Tarjeta({
       transition={{ duration: 0.45, delay: Math.min(indice, 8) * 0.04, ease: [0.22, 1, 0.36, 1] }}
       className="dm-tarjeta"
     >
-      <div className="dm-tarjeta-imagen" style={{ ["--tinte" as string]: color }}>
-        {p.etiqueta && <span className={`dm-etiqueta dm-etiqueta-${p.etiqueta === "Oferta" ? "oferta" : p.etiqueta === "Nuevo" ? "nuevo" : "base"}`}>{p.etiqueta}</span>}
-        <motion.button
-          className={`dm-favorito ${favorito ? "es-activo" : ""}`}
-          onClick={onFavorito}
-          aria-pressed={favorito}
-          aria-label={favorito ? `Quitar ${p.nombre} de favoritos` : `Guardar ${p.nombre} en favoritos`}
-          whileTap={{ scale: 0.8 }}
-        >
-          <motion.span key={String(favorito)} initial={{ scale: 0.4 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 500, damping: 15 }}>
-            <IconoCorazon size={18} lleno={favorito} />
-          </motion.span>
-        </motion.button>
-        <button className="dm-tarjeta-arte" onClick={onVer} aria-label={`Ver detalle de ${p.nombre}`}>
+      <ProductCard
+        name={p.nombre}
+        description={p.resumen}
+        price={formatearPrecio(p.precio)}
+        originalPrice={p.precioAnterior ? formatearPrecio(p.precioAnterior) : undefined}
+        priceNote={`3 cuotas sin interés de ${formatearPrecio(Math.round(p.precio / 3))}`}
+        rating={p.puntaje}
+        reviewCount={p.opiniones}
+        mediaTint={color}
+        media={
           <AnimatePresence mode="wait" initial={false}>
             <motion.span
               key={color}
@@ -187,70 +188,25 @@ function Tarjeta({
               <ArteProducto arte={p.arte} color={color} className="dm-arte" />
             </motion.span>
           </AnimatePresence>
-          <span className="dm-vista-rapida">
-            <IconoOjo size={16} /> Vista rápida
-          </span>
-        </button>
-      </div>
-
-      <div className="dm-tarjeta-cuerpo">
-        <div className="dm-tarjeta-meta">
-          <Estrellas valor={p.puntaje} size={13} />
-          <span>
-            {p.puntaje.toFixed(1)} ({p.opiniones})
-          </span>
-        </div>
-        <h3>
-          <button className="dm-tarjeta-titulo" onClick={onVer}>
-            {p.nombre}
-          </button>
-        </h3>
-        <p className="dm-tarjeta-resumen">{p.resumen}</p>
-
-        {p.variantes.length > 1 && (
-          <div className="dm-variantes" role="radiogroup" aria-label={`Variante de ${p.nombre}`}>
-            {p.variantes.map((v) => (
-              <button
-                key={v.nombre}
-                role="radio"
-                aria-checked={variante === v.nombre}
-                aria-label={v.nombre}
-                title={v.nombre}
-                className={`dm-muestra ${variante === v.nombre ? "es-activo" : ""}`}
-                style={{ background: v.color }}
-                onClick={() => setVariante(v.nombre)}
-              />
-            ))}
-            <span className="dm-variante-nombre">{variante}</span>
-          </div>
-        )}
-
-        <div className="dm-tarjeta-pie">
-          <div className="dm-precio">
-            {p.precioAnterior && (
-              <span className="dm-precio-anterior">
-                {formatearPrecio(p.precioAnterior)} <em>-{ahorro}%</em>
-              </span>
-            )}
-            <strong>{formatearPrecio(p.precio)}</strong>
-            <span className="dm-cuotas">3 cuotas sin interés de {formatearPrecio(Math.round(p.precio / 3))}</span>
-          </div>
-          <motion.button ref={botonRef} className={`dm-agregar ${agregado ? "es-ok" : ""}`} onClick={alAgregar} whileTap={{ scale: 0.92 }} aria-label={`Agregar ${p.nombre} al carrito`}>
-            <AnimatePresence mode="wait" initial={false}>
-              {agregado ? (
-                <motion.span key="ok" initial={{ y: 12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -12, opacity: 0 }}>
-                  <IconoCheck size={20} />
-                </motion.span>
-              ) : (
-                <motion.span key="bolsa" initial={{ y: 12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -12, opacity: 0 }}>
-                  <IconoBolsa size={20} />
-                </motion.span>
-              )}
-            </AnimatePresence>
-          </motion.button>
-        </div>
-        {p.stock <= 10 && <p className="dm-stock">¡Quedan solo {p.stock} en la sucursal!</p>}
-      </div>
+        }
+        badges={insignias}
+        colors={p.variantes.map((v) => ({ name: v.nombre, value: v.color }))}
+        selectedColor={variante}
+        onColorChange={setVariante}
+        wishlisted={favorito}
+        onWishlistChange={onFavorito}
+        onAddToCart={(origen) => agregar(p, variante, 1, origen)}
+        onOpen={onVer}
+        shippingNote={p.stock > 10 ? "Retiro hoy" : undefined}
+        footnote={p.stock <= 10 ? `¡Quedan solo ${p.stock} en la sucursal!` : undefined}
+      />
     </motion.li>
   );
 }
+
+const CLASE_ETIQUETA: Record<NonNullable<Producto["etiqueta"]>, string> = {
+  "Más vendido": "bg-primary text-primary-foreground hover:bg-primary",
+  Nuevo: "bg-[hsl(var(--accent-strong))] text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent-strong))]",
+  "Edición limitada": "bg-[hsl(var(--foreground))] text-background hover:bg-[hsl(var(--foreground))]",
+  Oferta: "bg-destructive text-destructive-foreground hover:bg-destructive",
+};

@@ -2,8 +2,11 @@
 
 import { AnimatePresence, motion, useScroll, useSpring, useTransform } from "framer-motion";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { PRODUCTOS, formatearPrecio, type Producto } from "../lib/catalogo";
+import { Button } from "@/components/ui/button";
+import { CommerceHeader, CommerceHero } from "@/components/ui/commerce-hero";
+import { PRODUCTOS, formatearPrecio, type Arte, type Categoria, type Producto } from "../lib/catalogo";
 import { useCarrito } from "../lib/carrito";
+import { useRaizDuomate } from "../lib/portal";
 import { ArteProducto } from "./ArteProducto";
 import {
   Estrellas,
@@ -14,8 +17,6 @@ import {
   IconoFlecha,
   IconoHoja,
   IconoInstagram,
-  IconoMenu,
-  IconoCerrar,
   IconoPin,
   IconoReloj,
   IconoTelefono,
@@ -47,12 +48,48 @@ export function Logo() {
 
 /* ---------------------------------- Encabezado ---------------------------------- */
 
+const ENLACES = [
+  { href: "#tienda", name: "Tienda" },
+  { href: "#ritual", name: "El ritual" },
+  { href: "#sucursal", name: "Sucursal" },
+  { href: "#opiniones", name: "Opiniones" },
+];
+
+/** Qué sección está a la vista, para marcar el link activo de la navegación. */
+function useSeccionActiva() {
+  const [activa, setActiva] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    const secciones = ENLACES.map((e) => document.querySelector<HTMLElement>(e.href)).filter((x): x is HTMLElement => !!x);
+    const visibles = new Map<string, number>();
+    const obs = new IntersectionObserver(
+      (entradas) => {
+        entradas.forEach((en) => visibles.set(`#${en.target.id}`, en.isIntersecting ? en.intersectionRatio : 0));
+        let mejor: string | undefined;
+        let max = 0;
+        visibles.forEach((v, k) => {
+          if (v > max) {
+            max = v;
+            mejor = k;
+          }
+        });
+        setActiva(mejor);
+      },
+      { rootMargin: "-35% 0px -55% 0px", threshold: [0, 0.01, 0.2, 0.5, 1] },
+    );
+    secciones.forEach((s) => obs.observe(s));
+    return () => obs.disconnect();
+  }, []);
+  return activa;
+}
+
 export function Encabezado() {
   const { unidades, setAbierto, destinoRef, pulso } = useCarrito();
+  const raiz = useRaizDuomate();
   const [scroll, setScroll] = useState(false);
-  const [menu, setMenu] = useState(false);
   const { scrollYProgress } = useScroll();
   const barra = useSpring(scrollYProgress, { stiffness: 120, damping: 30 });
+  const activa = useSeccionActiva();
+  const estado = useEstadoSucursal();
 
   useEffect(() => {
     const f = () => setScroll(window.scrollY > 24);
@@ -61,12 +98,24 @@ export function Encabezado() {
     return () => window.removeEventListener("scroll", f);
   }, []);
 
-  const enlaces = [
-    ["#tienda", "Tienda"],
-    ["#ritual", "El ritual"],
-    ["#sucursal", "Sucursal"],
-    ["#opiniones", "Opiniones"],
-  ];
+  const carrito = (
+    <motion.button ref={destinoRef} className="dm-boton-carrito" onClick={() => setAbierto(true)} aria-label={`Abrir carrito, ${unidades} productos`}>
+      <motion.span key={pulso} animate={pulso ? { scale: [1, 1.3, 0.9, 1], rotate: [0, -12, 8, 0] } : undefined} transition={{ duration: 0.5 }}>
+        <IconoBolsa size={22} />
+      </motion.span>
+      <AnimatePresence>
+        {unidades > 0 && (
+          <motion.span key="burbuja" className="dm-burbuja" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ type: "spring", stiffness: 500, damping: 18 }}>
+            <AnimatePresence mode="popLayout" initial={false}>
+              <motion.span key={unidades} initial={{ y: -8, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 8, opacity: 0 }}>
+                {unidades}
+              </motion.span>
+            </AnimatePresence>
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </motion.button>
+  );
 
   return (
     <>
@@ -75,113 +124,81 @@ export function Encabezado() {
           <IconoTienda size={15} /> Retiro gratis en sucursal · <IconoCamion size={15} /> Envío gratis desde {formatearPrecio(80000)} · Cupón <strong>DUO10</strong>
         </p>
       </div>
-      <header className={`dm-header ${scroll ? "es-flotante" : ""}`}>
-        <div className="dm-contenedor dm-header-fila">
-          <Logo />
-          <nav className="dm-nav" aria-label="Principal">
-            {enlaces.map(([href, t]) => (
-              <a key={href} href={href}>
-                {t}
-              </a>
-            ))}
-          </nav>
-          <div className="dm-header-acciones">
-            <a className="dm-boton dm-boton-fantasma dm-solo-escritorio" href="#sucursal">
-              <IconoPin size={17} /> Palermo
-            </a>
-            <motion.button ref={destinoRef} className="dm-boton-carrito" onClick={() => setAbierto(true)} aria-label={`Abrir carrito, ${unidades} productos`}>
-              <motion.span key={pulso} animate={pulso ? { scale: [1, 1.3, 0.9, 1], rotate: [0, -12, 8, 0] } : undefined} transition={{ duration: 0.5 }}>
-                <IconoBolsa size={22} />
-              </motion.span>
-              <AnimatePresence>
-                {unidades > 0 && (
-                  <motion.span key="burbuja" className="dm-burbuja" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ type: "spring", stiffness: 500, damping: 18 }}>
-                    <AnimatePresence mode="popLayout" initial={false}>
-                      <motion.span key={unidades} initial={{ y: -8, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 8, opacity: 0 }}>
-                        {unidades}
-                      </motion.span>
-                    </AnimatePresence>
-                  </motion.span>
-                )}
-              </AnimatePresence>
-            </motion.button>
-            <button className="dm-menu-boton" onClick={() => setMenu((m) => !m)} aria-expanded={menu} aria-controls="dm-menu-movil" aria-label="Menú">
-              {menu ? <IconoCerrar /> : <IconoMenu />}
-            </button>
-          </div>
-        </div>
-        <AnimatePresence>
-          {menu && (
-            <motion.nav
-              id="dm-menu-movil"
-              className="dm-menu-movil"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              aria-label="Menú móvil"
-            >
-              {enlaces.map(([href, t]) => (
-                <a key={href} href={href} onClick={() => setMenu(false)}>
-                  {t} <IconoFlecha size={16} />
-                </a>
-              ))}
-            </motion.nav>
-          )}
-        </AnimatePresence>
+      <div className={`dm-header ${scroll ? "es-flotante" : ""}`}>
+        <CommerceHeader
+          className="dm-contenedor dm-header-fila"
+          barClassName="bg-transparent p-0 md:p-0 backdrop-blur-none"
+          brand={<Logo />}
+          navigation={ENLACES}
+          activeHref={activa}
+          actions={carrito}
+          cta={{ label: "Sucursal Palermo", href: "#sucursal" }}
+          sheetContainer={raiz}
+          menuLabel="Menú"
+          menuDescription="Mates, bombillas, yerbas y termos. Retiro en Palermo en menos de 2 h."
+          mobileFooter={
+            <div className="flex items-start gap-3 rounded-[var(--radius)] bg-accent/60 p-4 text-sm">
+              <IconoPin size={20} />
+              <div>
+                <strong className="block text-foreground">Gorriti 4820, Palermo Soho</strong>
+                <span className="text-muted-foreground">{estado ? estado.texto : "Lun a vie 9–20 h · Sáb 10–19 h"}</span>
+              </div>
+            </div>
+          }
+        />
         <motion.div className="dm-progreso-scroll" style={{ scaleX: barra }} aria-hidden="true" />
-      </header>
+      </div>
     </>
   );
 }
 
 /* ---------------------------------- Hero ---------------------------------- */
 
-export function Hero({ onVer }: { onVer: (p: Producto) => void }) {
+const CATEGORIAS_HERO: { id: Categoria; titulo: string; detalle: string; arte: Arte; color: string }[] = [
+  { id: "mates", titulo: "Mates", detalle: "Curados y listos", arte: "imperial", color: "#8a5a36" },
+  { id: "bombillas", titulo: "Bombillas", detalle: "Alpaca que no se tapa", arte: "bombilla", color: "#c9a24b" },
+  { id: "yerbas", titulo: "Yerbas", detalle: "Estacionadas 24 meses", arte: "yerba", color: "#2f5a3e" },
+  { id: "termos", titulo: "Termos", detalle: "Pico cebador", arte: "termo", color: "#1f3d2b" },
+];
+
+export function Hero({ onVer, onCategoria }: { onVer: (p: Producto) => void; onCategoria: (c: Categoria) => void }) {
   const ref = useRef<HTMLElement>(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
-  const y = useTransform(scrollYProgress, [0, 1], [0, 120]);
+  const y = useTransform(scrollYProgress, [0, 1], [0, 90]);
   const rot = useTransform(scrollYProgress, [0, 1], [0, 10]);
   const destacado = PRODUCTOS.find((p) => p.id === "imperial-cincelado")!;
   const { agregar } = useCarrito();
   const estadoHero = useEstadoSucursal();
-  const titulo = ["El", "mate", "se", "comparte.", "El", "buen", "mate,", "se", "elige."];
 
   return (
-    <section id="inicio" ref={ref} className="dm-hero">
-      <div className="dm-hero-fondo" aria-hidden="true">
-        <motion.span className="dm-mancha dm-mancha-1" animate={{ scale: [1, 1.08, 1], x: [0, 20, 0] }} transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }} />
-        <motion.span className="dm-mancha dm-mancha-2" animate={{ scale: [1, 1.12, 1], y: [0, -24, 0] }} transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }} />
-      </div>
-      <div className="dm-contenedor dm-hero-grilla">
-        <div className="dm-hero-texto">
-          <motion.span className="dm-pastilla" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-            <span className={`dm-punto-vivo ${estadoHero && !estadoHero.abierta ? "es-cerrado" : ""}`} /> {estadoHero ? `Sucursal Palermo · ${estadoHero.texto.toLowerCase()}` : "Sucursal Palermo · retiro en menos de 2 h"}
-          </motion.span>
-          <h1>
-            {titulo.map((palabra, i) => (
-              <motion.span
-                key={i}
-                className={`dm-palabra ${i >= 4 ? "dm-palabra-acento" : ""}`}
-                initial={{ opacity: 0, y: 40, rotateX: -60 }}
-                animate={{ opacity: 1, y: 0, rotateX: 0 }}
-                transition={{ delay: 0.2 + i * 0.06, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-              >
-                {palabra}
-              </motion.span>
-            ))}
-          </h1>
-          <motion.p className="dm-hero-bajada" {...aparecer} transition={{ ...aparecer.transition, delay: 0.75 }}>
-            Mates curados por artesanos, bombillas de alpaca y yerbas estacionadas 24 meses. Elegí online y retirá en nuestra sucursal en menos de 2 horas.
-          </motion.p>
-          <motion.div className="dm-hero-botones" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }}>
-            <a href="#tienda" className="dm-boton dm-boton-principal dm-boton-grande">
-              Comprar ahora <IconoFlecha size={18} />
-            </a>
-            <a href="#ritual" className="dm-boton dm-boton-secundario dm-boton-grande">
-              Cómo curar tu mate
-            </a>
-          </motion.div>
-          <motion.ul className="dm-hero-datos" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.1 }}>
+    <section id="inicio" ref={ref} className="dm-hero" aria-labelledby="titulo-hero">
+      <CommerceHero
+        eyebrow={
+          <span className="dm-pastilla">
+            <span className={`dm-punto-vivo ${estadoHero && !estadoHero.abierta ? "es-cerrado" : ""}`} />{" "}
+            {estadoHero ? `Sucursal Palermo · ${estadoHero.texto.toLowerCase()}` : "Sucursal Palermo · retiro en menos de 2 h"}
+          </span>
+        }
+        title={
+          <span id="titulo-hero" className="text-primary">
+            El mate se comparte. <em className="text-[hsl(var(--destructive))]">El buen mate, se elige.</em>
+          </span>
+        }
+        description="Mates curados por artesanos, bombillas de alpaca y yerbas estacionadas 24 meses. Elegí online y retirá en nuestra sucursal en menos de 2 horas."
+        actions={
+          <>
+            <Button asChild size="lg" className="h-12 rounded-full px-7 text-base font-bold shadow-lg">
+              <a href="#tienda">
+                Comprar ahora <IconoFlecha size={18} />
+              </a>
+            </Button>
+            <Button asChild size="lg" variant="outline" className="h-12 rounded-full border-primary/25 bg-transparent px-7 text-base font-bold text-primary hover:bg-background/70">
+              <a href="#ritual">Cómo se prepara</a>
+            </Button>
+          </>
+        }
+        footer={
+          <ul className="dm-hero-datos">
             <li>
               <strong>4,9</strong>
               <Estrellas valor={4.9} size={13} />
@@ -195,61 +212,70 @@ export function Hero({ onVer }: { onVer: (p: Producto) => void }) {
               <strong>&lt; 2 h</strong>
               <span>para retirar tu pedido</span>
             </li>
-          </motion.ul>
-        </div>
+          </ul>
+        }
+        aside={
+          <motion.div className="dm-hero-visual" style={{ y }}>
+            <motion.div className="dm-hero-disco" initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }} />
+            <div className="dm-vapor" aria-hidden="true">
+              {[0, 1, 2].map((i) => (
+                <motion.span
+                  key={i}
+                  animate={{ y: [-0, -70], opacity: [0, 0.7, 0], scaleX: [1, 1.4, 1.8] }}
+                  transition={{ duration: 3.2, repeat: Infinity, delay: i * 1.05, ease: "easeOut" }}
+                />
+              ))}
+            </div>
+            <motion.div
+              className="dm-hero-mate"
+              style={{ rotate: rot }}
+              initial={{ y: 60, opacity: 0 }}
+              animate={{ y: [0, -14, 0], opacity: 1 }}
+              transition={{ y: { duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }, opacity: { duration: 0.8, delay: 0.3 } }}
+            >
+              <ArteProducto arte="imperial" color="#8a5a36" className="dm-arte" />
+            </motion.div>
 
-        <motion.div className="dm-hero-visual" style={{ y }}>
-          <motion.div className="dm-hero-disco" initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }} />
-          <motion.div className="dm-vapor" aria-hidden="true">
-            {[0, 1, 2].map((i) => (
-              <motion.span
-                key={i}
-                animate={{ y: [-0, -70], opacity: [0, 0.7, 0], scaleX: [1, 1.4, 1.8] }}
-                transition={{ duration: 3.2, repeat: Infinity, delay: i * 1.05, ease: "easeOut" }}
-              />
-            ))}
+            <motion.button
+              className="dm-hero-ficha"
+              initial={{ opacity: 0, x: 40 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 1.2, type: "spring", stiffness: 160, damping: 18 }}
+              whileHover={{ y: -4 }}
+              onClick={() => onVer(destacado)}
+            >
+              <span className="dm-sobretitulo">Edición limitada</span>
+              <strong>{destacado.nombre}</strong>
+              <span>{formatearPrecio(destacado.precio)}</span>
+            </motion.button>
+
+            <motion.button
+              className="dm-hero-ficha dm-hero-ficha-2"
+              initial={{ opacity: 0, x: -40 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 1.4, type: "spring", stiffness: 160, damping: 18 }}
+              whileHover={{ y: -4 }}
+              onClick={(e) => agregar(PRODUCTOS[0], PRODUCTOS[0].variantes[0].nombre, 1, e.currentTarget.getBoundingClientRect())}
+            >
+              <span className="dm-hero-ficha-icono">
+                <IconoBolsa size={18} />
+              </span>
+              <span>
+                <strong>Kit Duo Clásico</strong>
+                <span>Sumar al carrito · {formatearPrecio(PRODUCTOS[0].precio)}</span>
+              </span>
+            </motion.button>
           </motion.div>
-          <motion.div
-            className="dm-hero-mate"
-            style={{ rotate: rot }}
-            initial={{ y: 60, opacity: 0, rotate: -12 }}
-            animate={{ y: [0, -14, 0], opacity: 1 }}
-            transition={{ y: { duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }, opacity: { duration: 0.8, delay: 0.3 } }}
-          >
-            <ArteProducto arte="imperial" color="#8a5a36" className="dm-arte" />
-          </motion.div>
-
-          <motion.button
-            className="dm-hero-ficha"
-            initial={{ opacity: 0, x: 40 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 1.2, type: "spring", stiffness: 160, damping: 18 }}
-            whileHover={{ y: -4 }}
-            onClick={() => onVer(destacado)}
-          >
-            <span className="dm-sobretitulo">Edición limitada</span>
-            <strong>{destacado.nombre}</strong>
-            <span>{formatearPrecio(destacado.precio)}</span>
-          </motion.button>
-
-          <motion.button
-            className="dm-hero-ficha dm-hero-ficha-2"
-            initial={{ opacity: 0, x: -40 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 1.4, type: "spring", stiffness: 160, damping: 18 }}
-            whileHover={{ y: -4 }}
-            onClick={(e) => agregar(PRODUCTOS[0], PRODUCTOS[0].variantes[0].nombre, 1, e.currentTarget.getBoundingClientRect())}
-          >
-            <span className="dm-hero-ficha-icono">
-              <IconoBolsa size={18} />
-            </span>
-            <span>
-              <strong>Kit Duo Clásico</strong>
-              <span>Sumar al carrito · {formatearPrecio(PRODUCTOS[0].precio)}</span>
-            </span>
-          </motion.button>
-        </motion.div>
-      </div>
+        }
+        categories={CATEGORIAS_HERO.map((c) => ({
+          title: c.titulo,
+          subtitle: c.detalle,
+          href: "#tienda",
+          tint: c.color,
+          onSelect: () => onCategoria(c.id),
+          media: <ArteProducto arte={c.arte} color={c.color} className="dm-arte" />,
+        }))}
+      />
     </section>
   );
 }
