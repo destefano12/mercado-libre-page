@@ -52,7 +52,8 @@ $src = Get-ChildItem $tmpDir -Directory | Select-Object -First 1 | ForEach-Objec
 New-Item -ItemType Directory -Force -Path $Dest | Out-Null
 # Copia todo, pero NO pisa tu negocio.txt ni tu sesion de WhatsApp si ya existen
 $xf = @()
-if (Test-Path (Join-Path $Dest 'negocio.txt')) { $xf = @('/XF', 'negocio.txt') }
+$neg = Join-Path $Dest 'negocio.txt'
+if ((Test-Path $neg) -and -not (Select-String -Path $neg -Pattern 'Mi Negocio' -Quiet)) { $xf = @('/XF', 'negocio.txt') }
 robocopy $src $Dest /E /NFL /NDL /NJH /NJS /NP @xf | Out-Null
 Remove-Item $tmpZip, $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
 

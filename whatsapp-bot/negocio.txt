@@ -4,31 +4,26 @@
 #  Los cambios se aplican al instante, sin reiniciar el bot.
 # ============================================================
 
-NOMBRE DEL NEGOCIO: Mi Negocio
+NOMBRE DEL NEGOCIO: Roma Pilates (estudio de pilates)
+
+ESTILO DE RESPUESTA: español de Argentina, tratando al cliente de "vos" (ej: "¿Querés...?", "Te esperamos").
 
 DIRECCIÓN:
-Av. Ejemplo 123, Comuna, Ciudad
-Link de Google Maps: https://maps.google.com/?q=Av.+Ejemplo+123
+Av. Juan Bautista Alberdi 2998, C1406GSS, Ciudad Autónoma de Buenos Aires
+Google Maps: https://maps.google.com/?q=Av.+Juan+Bautista+Alberdi+2998,+CABA
 
 HORARIOS:
-- Lunes a viernes: 09:00 a 19:00
-- Sábado: 10:00 a 14:00
-- Domingo y festivos: cerrado
+- Lunes a viernes: 8:00 a 12:00 y 16:00 a 21:00
+- Sábado: 8:00 a 13:00
+- Domingo: cerrado
 
 PRECIOS:
-- Producto/servicio A: $10.000
-- Producto/servicio B: $15.000
-- Producto/servicio C: $25.000
+(Todavía no cargados. Si preguntan precios, no inventes: avisá al dueño.)
 
 MEDIOS DE PAGO:
-Efectivo, débito, crédito y transferencia.
+Mercado Pago y transferencia desde cualquier banco.
 
 PREGUNTAS FRECUENTES:
-P: ¿Hacen envíos?
-R: Sí, enviamos dentro de la ciudad. El costo depende de la comuna.
-
-P: ¿Necesito reservar hora?
-R: No es obligatorio, pero lo recomendamos los sábados.
-
-P: ¿Tienen estacionamiento?
-R: Sí, hay estacionamiento gratuito frente al local.
+(Agregá acá preguntas y respuestas con este formato)
+P: ...
+R: ...

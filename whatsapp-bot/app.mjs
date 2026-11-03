@@ -109,7 +109,7 @@ const flujoPrincipal = addKeyword(EVENTS.WELCOME).addAction(async (ctx, { flowDy
   try {
     let respuesta = await responder(id)
     if (!respuesta || respuesta.includes(NO_SE)) {
-      respuesta = 'Buena pregunta 🙌 Déjame consultarlo y te respondo en un momento.'
+      respuesta = '¡Buena pregunta! 🙌 Dejame consultarlo y te respondo en un ratito.'
       await avisarDueno(c, texto)
     }
     log(id, 'bot', respuesta)
