@@ -8,6 +8,10 @@ if not exist node_modules (
 start "" cmd /c "timeout /t 6 >nul & start http://localhost:3008"
 :inicio
 node app.mjs
+if %errorlevel%==2 (
+  pause
+  exit /b
+)
 echo.
 echo El bot se detuvo. Se reinicia solo en 5 segundos... (cerra esta ventana para apagarlo)
 timeout /t 5 >nul

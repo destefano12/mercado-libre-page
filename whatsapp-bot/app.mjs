@@ -21,6 +21,15 @@ if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY.includes('pega_aqu
 }
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
 
+// Si ya hay un bot abierto, no abrir otro: dos bots con la misma sesión hacen que WhatsApp la cierre
+const puertoLibre = await new Promise((ok) => {
+  const t = http.createServer().once('error', () => ok(false)).listen(PORT, () => t.close(() => ok(true)))
+})
+if (!puertoLibre) {
+  console.error(`\n⚠️  Ya hay un bot abierto (el puerto ${PORT} está en uso). Usá esa ventana o cerrala antes de abrir otra.\n`)
+  process.exit(2)
+}
+
 // ---------------------------------------------------------------- errores
 // Ningún error apaga el bot: se anota en errores.log y en el panel.
 const ERR_FILE = path.join(__dirname, 'errores.log')
@@ -141,7 +150,7 @@ const flujoPrincipal = addKeyword(EVENTS.WELCOME).addAction(async (ctx, { flowDy
   }
 })
 
-provider = createProvider(BaileysProvider, { name: 'bot', groupsIgnore: true, readStatus: false })
+provider = createProvider(BaileysProvider, { name: 'bot', groupsIgnore: true, readStatus: false, clearAuthOnLogout: true })
 
 provider.on('require_action', async ({ payload }) => {
   if (payload?.qr) {
@@ -156,7 +165,13 @@ provider.on('ready', () => {
   state.qr = null
   console.log('✅ WhatsApp conectado. El bot ya está respondiendo.')
 })
-provider.on('auth_failure', (info) => { state.status = 'desconectado'; anotarError('WhatsApp', JSON.stringify(info)) })
+provider.on('auth_failure', (info) => {
+  state.status = 'desconectado'
+  const txt = JSON.stringify(info)
+  anotarError('WhatsApp', txt.includes('440')
+    ? 'La sesión se abrió en otro bot o computador. Dejá un solo bot abierto y reinicialo.'
+    : txt)
+})
 
 const { httpServer } = await createBot({ flow: createFlow([flujoPrincipal]), provider, database: new MemoryDB() })
 // BuilderBot solo conecta con WhatsApp al iniciar su servidor interno (puerto PORT+1, no hace falta abrirlo)

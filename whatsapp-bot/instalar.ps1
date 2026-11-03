@@ -41,6 +41,11 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
 }
 Write-Host ("Node.js " + (node -v) + " listo.")
 
+# Cierra el bot si estaba abierto (dos bots a la vez hacen que WhatsApp cierre la sesion)
+Get-CimInstance Win32_Process -Filter "Name='cmd.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*iniciar.bat*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*app.mjs*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+Start-Sleep -Seconds 2
+
 # 2) Descargar el bot
 Paso "Descargando el bot en $Dest ..."
 $tmpZip = Join-Path $env:TEMP 'botwhatsapp.zip'
