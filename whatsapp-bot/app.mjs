@@ -21,6 +21,19 @@ if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY.includes('pega_aqu
 }
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
 
+// ---------------------------------------------------------------- errores
+// Ningún error apaga el bot: se anota en errores.log y en el panel.
+const ERR_FILE = path.join(__dirname, 'errores.log')
+let ultimoError = null
+function anotarError(origen, e) {
+  const msg = `[${new Date().toLocaleString()}] ${origen}: ${e?.stack || e?.message || e}`
+  console.error('❌ ' + msg)
+  ultimoError = { text: `${origen}: ${e?.message || e}`, ts: Date.now() }
+  try { fs.appendFileSync(ERR_FILE, msg + '\n') } catch {}
+}
+process.on('uncaughtException', (e) => anotarError('Error inesperado', e))
+process.on('unhandledRejection', (e) => anotarError('Error inesperado', e))
+
 // ---------------------------------------------------------------- estado
 fs.mkdirSync(DATA_DIR, { recursive: true })
 const state = {
@@ -91,7 +104,7 @@ async function avisarDueno(c, pregunta) {
   const destino = (process.env.NUMERO_DUENO || '').replace(/\D/g, '') || state.me
   if (!destino) return
   const aviso = `🔔 *El bot no supo responder*\n👤 ${c.name} (${c.id})\n❓ "${pregunta}"\n\nResponde tú desde el panel o desde WhatsApp.`
-  try { await provider.sendMessage(destino, aviso, {}) } catch (e) { console.error('No pude avisar al dueño:', e.message) }
+  try { await provider.sendMessage(destino, aviso, {}) } catch (e) { anotarError('Aviso al dueño', e) }
 }
 
 const flujoPrincipal = addKeyword(EVENTS.WELCOME).addAction(async (ctx, { flowDynamic }) => {
@@ -113,9 +126,9 @@ const flujoPrincipal = addKeyword(EVENTS.WELCOME).addAction(async (ctx, { flowDy
       await avisarDueno(c, texto)
     }
     log(id, 'bot', respuesta)
-    await flowDynamic(respuesta)
+    try { await flowDynamic(respuesta) } catch (e) { anotarError('Enviar respuesta', e); log(id, 'sistema', '⚠️ No se pudo enviar: ' + e.message) }
   } catch (e) {
-    console.error('Error con Gemini:', e.message)
+    anotarError('Gemini', e)
     log(id, 'sistema', '⚠️ Error con Gemini: ' + e.message)
     await avisarDueno(c, texto + '  (error de Gemini: ' + e.message + ')')
   }
@@ -136,7 +149,7 @@ provider.on('ready', () => {
   state.qr = null
   console.log('✅ WhatsApp conectado. El bot ya está respondiendo.')
 })
-provider.on('auth_failure', () => { state.status = 'desconectado' })
+provider.on('auth_failure', (info) => { state.status = 'desconectado'; anotarError('WhatsApp', JSON.stringify(info)) })
 
 const { httpServer } = await createBot({ flow: createFlow([flujoPrincipal]), provider, database: new MemoryDB() })
 // BuilderBot solo conecta con WhatsApp al iniciar su servidor interno (puerto PORT+1, no hace falta abrirlo)
@@ -163,7 +176,7 @@ http.createServer(async (req, res) => {
       const chats = Object.values(state.chats)
         .map(({ messages, ...c }) => ({ ...c, last: messages.at(-1) }))
         .sort((a, b) => (b.last?.ts || 0) - (a.last?.ts || 0))
-      return send(res, 200, { status: state.status, qr: state.qr, me: state.me, chats, alerts: state.alerts })
+      return send(res, 200, { status: state.status, qr: state.qr, me: state.me, chats, alerts: state.alerts, error: ultimoError })
     }
     if (req.method === 'GET' && url.pathname === '/api/chat') {
       const c = state.chats[url.searchParams.get('id')]
@@ -191,7 +204,7 @@ http.createServer(async (req, res) => {
     }
     send(res, 404, { error: 'no encontrado' })
   } catch (e) {
-    console.error(e)
+    anotarError('Panel', e)
     send(res, 500, { error: e.message })
   }
 }).listen(PORT, () => {

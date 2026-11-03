@@ -6,3 +6,4 @@ datos/
 baileys_store.json
 *.log
 !.env.example
+errores.log
