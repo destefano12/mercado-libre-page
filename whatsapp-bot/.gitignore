@@ -1,0 +1,8 @@
+node_modules/
+.env
+bot_sessions/
+*.qr.png
+datos/
+baileys_store.json
+*.log
+!.env.example

@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mi Bot WhatsApp</title>
+<style>
+  :root { --verde:#00a884; --fondo:#efeae2; --panel:#f0f2f5; --borde:#e9edef; --texto:#111b21; --gris:#667781; --mio:#d9fdd3; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:#d1d7db; color:var(--texto); height:100vh; overflow:hidden; }
+  .franja { position:fixed; inset:0 0 auto 0; height:127px; background:var(--verde); z-index:0; }
+  .app { position:relative; z-index:1; display:flex; height:calc(100vh - 38px); max-width:1600px; margin:19px auto; background:#fff; box-shadow:0 6px 18px rgba(11,20,26,.15); }
+  @media (max-width:1440px){ .app{ margin:0; height:100vh; } .franja{display:none} }
+
+  /* lateral */
+  .lateral { width:30%; min-width:300px; max-width:440px; display:flex; flex-direction:column; border-right:1px solid var(--borde); }
+  .cab { height:60px; background:var(--panel); display:flex; align-items:center; gap:12px; padding:0 16px; flex-shrink:0; }
+  .avatar { width:40px; height:40px; border-radius:50%; background:#dfe5e7; display:grid; place-items:center; font-weight:600; color:#fff; flex-shrink:0; }
+  .estado { font-size:13px; color:var(--gris); }
+  .punto { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; background:#aaa; }
+  .punto.on { background:#25d366; } .punto.qr { background:#f5a623; }
+  .alertas { background:#fff3c4; border-bottom:1px solid #f0e0a0; padding:10px 16px; font-size:13px; max-height:180px; overflow:auto; display:none; }
+  .alertas b { display:flex; justify-content:space-between; margin-bottom:6px; }
+  .alertas button { background:none; border:0; color:#8a6d00; cursor:pointer; font-size:12px; text-decoration:underline; }
+  .alerta { padding:6px 0; border-top:1px dashed #e8d58a; cursor:pointer; }
+  .lista { flex:1; overflow-y:auto; }
+  .item { display:flex; gap:12px; padding:0 0 0 13px; cursor:pointer; align-items:center; }
+  .item:hover { background:#f5f6f6; } .item.activo { background:#f0f2f5; }
+  .item .info { flex:1; min-width:0; border-bottom:1px solid var(--borde); padding:12px 15px 12px 0; }
+  .fila { display:flex; justify-content:space-between; gap:8px; }
+  .nombre { font-size:16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hora { font-size:12px; color:var(--gris); flex-shrink:0; }
+  .previa { font-size:14px; color:var(--gris); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .badge { background:#25d366; color:#fff; font-size:12px; border-radius:10px; padding:1px 7px; font-weight:600; }
+  .pausa { font-size:11px; background:#ffe1e1; color:#b00; border-radius:4px; padding:0 5px; margin-left:4px; }
+  .vacio { padding:40px 20px; text-align:center; color:var(--gris); font-size:14px; }
+
+  /* conversacion */
+  .main { flex:1; display:flex; flex-direction:column; background:var(--fondo); min-width:0;
+    background-image: radial-gradient(rgba(0,0,0,.035) 1px, transparent 1px); background-size:18px 18px; }
+  .main .cab { justify-content:space-between; border-left:1px solid var(--borde); }
+  .toggle { border:1px solid var(--verde); color:var(--verde); background:#fff; border-radius:18px; padding:6px 14px; cursor:pointer; font-size:13px; }
+  .toggle.pausado { background:var(--verde); color:#fff; }
+  .mensajes { flex:1; overflow-y:auto; padding:20px 7%; display:flex; flex-direction:column; gap:4px; }
+  .msg { max-width:65%; padding:6px 9px 8px; border-radius:8px; font-size:14.2px; line-height:19px; box-shadow:0 1px .5px rgba(11,20,26,.13); white-space:pre-wrap; word-wrap:break-word; }
+  .msg.cliente { background:#fff; align-self:flex-start; border-top-left-radius:0; }
+  .msg.bot, .msg.yo { background:var(--mio); align-self:flex-end; border-top-right-radius:0; }
+  .msg.sistema { align-self:center; background:#ffeecd; font-size:12.5px; color:#54656f; box-shadow:none; }
+  .msg .meta { font-size:11px; color:var(--gris); text-align:right; margin-top:2px; }
+  .etq { font-size:11px; font-weight:600; color:var(--verde); display:block; margin-bottom:2px; }
+  .msg.yo .etq { color:#53bdeb; }
+  .escribir { background:var(--panel); padding:10px 16px; display:flex; gap:10px; align-items:center; }
+  .escribir input { flex:1; border:0; border-radius:8px; padding:11px 14px; font-size:15px; outline:none; }
+  .escribir button { width:42px; height:42px; border-radius:50%; border:0; background:var(--verde); color:#fff; cursor:pointer; font-size:18px; }
+
+  /* portada / QR */
+  .portada { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:30px; background:#f8f9fa; border-bottom:6px solid #25d366; }
+  .portada h1 { font-weight:300; font-size:30px; color:#41525d; margin:18px 0 10px; }
+  .portada p { color:var(--gris); font-size:14px; line-height:22px; max-width:460px; }
+  .qrbox { display:flex; gap:40px; align-items:center; background:#fff; padding:40px; border-radius:6px; box-shadow:0 1px 3px rgba(0,0,0,.08); text-align:left; flex-wrap:wrap; justify-content:center; }
+  .qrbox ol { color:#3b4a54; font-size:16px; line-height:32px; padding-left:20px; max-width:380px; }
+  .qrbox img { width:264px; height:264px; }
+  .cargando { width:264px; height:264px; display:grid; place-items:center; color:var(--gris); border:1px dashed #ccc; }
+  .oculto { display:none !important; }
+
+  @media (max-width:760px){
+    .lateral{ width:100%; max-width:none; min-width:0; }
+    .app.con-chat .lateral{ display:none; } .app:not(.con-chat) .main{ display:none; }
+    .volver{ display:inline-block !important; }
+    .qrbox{ padding:20px; } .msg{ max-width:85%; }
+  }
+  .volver{ display:none; background:none; border:0; font-size:22px; cursor:pointer; color:#54656f; }
+</style>
+</head>
+<body>
+<div class="franja"></div>
+
+<!-- Pantalla de QR -->
+<div class="app" id="pantallaQR">
+  <div class="portada">
+    <div class="qrbox">
+      <div>
+        <h1 style="margin-top:0">Conecta tu bot</h1>
+        <ol>
+          <li>Abre <b>WhatsApp</b> en tu celular.</li>
+          <li>Toca <b>Menú ⋮</b> o <b>Configuración ⚙️</b> y elige <b>Dispositivos vinculados</b>.</li>
+          <li>Toca <b>Vincular un dispositivo</b>.</li>
+          <li>Apunta tu celular a esta pantalla para escanear el código.</li>
+        </ol>
+        <p id="txtEstado" style="margin-top:14px">Iniciando el bot…</p>
+      </div>
+      <div id="qrCont"><div class="cargando">Generando código QR…</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Pantalla principal -->
+<div class="app oculto" id="pantallaChat">
+  <aside class="lateral">
+    <div class="cab">
+      <div class="avatar" style="background:#25d366">🤖</div>
+      <div>
+        <div style="font-weight:600">Mi Bot</div>
+        <div class="estado"><span class="punto" id="punto"></span><span id="estadoTxt"></span></div>
+      </div>
+    </div>
+    <div class="alertas" id="alertas"></div>
+    <div class="lista" id="lista"></div>
+  </aside>
+
+  <section class="main">
+    <div class="portada" id="bienvenida">
+      <div style="font-size:72px">💬</div>
+      <h1>Tu bot está atendiendo</h1>
+      <p>Las conversaciones aparecerán a la izquierda en tiempo real.<br>
+      Haz clic en una para verla, responder tú mismo o <b>pausar el bot</b> en ese chat.<br>
+      Para cambiar horarios, precios o preguntas frecuentes edita <b>negocio.txt</b>.</p>
+    </div>
+    <div class="oculto" id="conversacion" style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <div class="cab">
+        <div style="display:flex;gap:12px;align-items:center;min-width:0">
+          <button class="volver" onclick="cerrarChat()">←</button>
+          <div class="avatar" id="convAvatar"></div>
+          <div style="min-width:0"><div class="nombre" id="convNombre"></div><div class="estado" id="convNum"></div></div>
+        </div>
+        <button class="toggle" id="btnPausa" onclick="togglePausa()"></button>
+      </div>
+      <div class="mensajes" id="mensajes"></div>
+      <form class="escribir" onsubmit="enviar(event)">
+        <input id="caja" placeholder="Escribe un mensaje (lo envías tú, no el bot)" autocomplete="off">
+        <button title="Enviar">➤</button>
+      </form>
+    </div>
+  </section>
+</div>
+
+<script>
+let actual = null, chatActual = null, ultimoTs = 0, alertasVistas = 0
+const $ = (id) => document.getElementById(id)
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]))
+const hora = (ts) => ts ? new Date(ts).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }) : ''
+const colores = ['#f59e0b','#3b82f6','#8b5cf6','#ec4899','#10b981','#ef4444','#06b6d4','#84cc16']
+const color = (id) => colores[[...String(id)].reduce((a, c) => a + c.charCodeAt(0), 0) % colores.length]
+const inicial = (n) => (String(n).trim()[0] || '?').toUpperCase()
+
+function beep() {
+  try { const a = new AudioContext(), o = a.createOscillator(); o.connect(a.destination); o.frequency.value = 880; o.start(); o.stop(a.currentTime + .15) } catch {}
+}
+
+async function tick() {
+  try {
+    const s = await fetch('/api/state').then((r) => r.json())
+    const conectado = s.status === 'conectado'
+    $('pantallaQR').classList.toggle('oculto', conectado)
+    $('pantallaChat').classList.toggle('oculto', !conectado)
+
+    if (!conectado) {
+      $('txtEstado').textContent = s.status === 'qr' ? 'El código se renueva cada minuto. Mantén esta página abierta.'
+        : s.status === 'desconectado' ? '⚠️ Sesión cerrada. Reinicia el bot para obtener un QR nuevo.' : 'Iniciando el bot…'
+      $('qrCont').innerHTML = s.qr ? `<img src="${s.qr}" alt="Código QR">` : '<div class="cargando">Generando código QR…</div>'
+      return
+    }
+
+    $('punto').className = 'punto on'
+    $('estadoTxt').textContent = 'Conectado' + (s.me ? ' · +' + s.me : '')
+
+    // alertas
+    if (s.alerts.length > alertasVistas) beep()
+    alertasVistas = s.alerts.length
+    $('alertas').style.display = s.alerts.length ? 'block' : 'none'
+    $('alertas').innerHTML = `<b>🔔 El bot no supo responder (${s.alerts.length}) <button onclick="limpiarAlertas()">limpiar</button></b>` +
+      s.alerts.map((a) => `<div class="alerta" onclick="abrir('${esc(a.chatId)}')"><b style="display:inline">${esc(a.name)}</b> · ${hora(a.ts)}<br>“${esc(a.question)}”</div>`).join('')
+
+    // lista
+    $('lista').innerHTML = s.chats.length ? s.chats.map((c) => `
+      <div class="item ${c.id === actual ? 'activo' : ''}" onclick="abrir('${esc(c.id)}')">
+        <div class="avatar" style="background:${color(c.id)}">${esc(inicial(c.name))}</div>
+        <div class="info">
+          <div class="fila"><span class="nombre">${esc(c.name)}${c.paused ? '<span class="pausa">bot pausado</span>' : ''}</span><span class="hora">${hora(c.last?.ts)}</span></div>
+          <div class="fila"><span class="previa">${c.last ? (c.last.from === 'bot' ? '🤖 ' : c.last.from === 'yo' ? '✓ ' : '') + esc(c.last.text) : ''}</span>${c.unread && c.id !== actual ? `<span class="badge">${c.unread}</span>` : ''}</div>
+        </div>
+      </div>`).join('') : '<div class="vacio">Aún no hay conversaciones.<br>Pídele a alguien que te escriba al WhatsApp 🙂</div>'
+
+    if (actual) await cargarChat()
+  } catch {
+    $('punto').className = 'punto'
+    $('estadoTxt').textContent = 'Sin conexión con el bot (¿está corriendo?)'
+  }
+}
+
+async function abrir(id) {
+  actual = id; ultimoTs = 0
+  $('bienvenida').classList.add('oculto')
+  $('conversacion').classList.remove('oculto')
+  $('pantallaChat').classList.add('con-chat')
+  await cargarChat(); tick()
+}
+function cerrarChat() {
+  actual = null
+  $('pantallaChat').classList.remove('con-chat')
+  $('conversacion').classList.add('oculto'); $('bienvenida').classList.remove('oculto')
+}
+
+async function cargarChat() {
+  const c = await fetch('/api/chat?id=' + encodeURIComponent(actual)).then((r) => r.json())
+  if (c.error) return
+  chatActual = c
+  $('convNombre').textContent = c.name
+  $('convNum').textContent = '+' + c.id
+  $('convAvatar').textContent = inicial(c.name); $('convAvatar').style.background = color(c.id)
+  $('btnPausa').textContent = c.paused ? '▶️ Reactivar bot' : '⏸️ Pausar bot y responder yo'
+  $('btnPausa').className = 'toggle' + (c.paused ? ' pausado' : '')
+  const ts = c.messages.at(-1)?.ts || 0
+  if (ts === ultimoTs) return
+  ultimoTs = ts
+  const etq = { bot: '🤖 Bot', yo: '👤 Tú' }
+  $('mensajes').innerHTML = c.messages.map((m) => `
+    <div class="msg ${m.from}">${etq[m.from] ? `<span class="etq">${etq[m.from]}</span>` : ''}${esc(m.text)}<div class="meta">${hora(m.ts)}</div></div>`).join('')
+  $('mensajes').scrollTop = $('mensajes').scrollHeight
+}
+
+async function enviar(e) {
+  e.preventDefault()
+  const text = $('caja').value.trim()
+  if (!text || !actual) return
+  $('caja').value = ''
+  const r = await fetch('/api/send', { method: 'POST', body: JSON.stringify({ id: actual, text }) }).then((r) => r.json())
+  if (r.error) alert('No se pudo enviar: ' + r.error)
+  cargarChat()
+}
+async function togglePausa() {
+  await fetch('/api/pause', { method: 'POST', body: JSON.stringify({ id: actual, paused: !chatActual.paused }) })
+  ultimoTs = 0; tick()
+}
+async function limpiarAlertas() { await fetch('/api/alerts/clear', { method: 'POST' }); alertasVistas = 0; tick() }
+
+tick(); setInterval(tick, 2000)
+</script>
+</body>
+</html>

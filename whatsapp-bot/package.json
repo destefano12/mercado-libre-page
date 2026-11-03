@@ -1,0 +1,17 @@
+{
+  "name": "whatsapp-bot-negocio",
+  "version": "1.0.0",
+  "description": "Bot de WhatsApp gratis y open source (BuilderBot + Gemini) con panel tipo WhatsApp Web",
+  "type": "module",
+  "main": "app.mjs",
+  "scripts": {
+    "start": "node app.mjs"
+  },
+  "dependencies": {
+    "@builderbot/bot": "1.4.4",
+    "@builderbot/provider-baileys": "1.4.4",
+    "@google/genai": "2.32.0",
+    "dotenv": "^18.0.9",
+    "qrcode": "^1.5.4"
+  }
+}
