@@ -75,6 +75,35 @@ function log(id, from, text, name) {
 }
 
 // ---------------------------------------------------------------- Gemini
+// Si un modelo está saturado (503/429/500), reintenta y prueba modelos de respaldo
+const MODELOS = [...new Set([MODEL, 'gemini-flash-latest', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-2.5-flash-lite'])]
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms))
+const codigo = (e) => Number(e?.status || e?.code || String(e?.message).match(/"code":\s*(\d{3})/)?.[1] || 0)
+async function generar(params) {
+  let ultimo
+  for (const model of MODELOS) {
+    for (let intento = 0; intento < 2; intento++) {
+      try {
+        return await ai.models.generateContent({ ...params, model })
+      } catch (e) {
+        ultimo = e
+        const c = codigo(e)
+        if (c === 400 || c === 401 || c === 403) throw e // clave inválida: no sirve reintentar
+        if (c === 404) break // modelo no existe: probar el siguiente
+        await esperar(1500 * (intento + 1))
+      }
+    }
+  }
+  throw ultimo
+}
+function explicarError(e) {
+  const c = codigo(e)
+  if (c === 400 || c === 401 || c === 403) return 'La clave de Gemini no es válida. Revisá GEMINI_API_KEY en el archivo .env'
+  if (c === 429) return 'Se alcanzó el límite gratis de Gemini por ahora. Se libera solo en un rato.'
+  if (c === 503 || c === 500) return 'Gemini está saturado en este momento (problema de Google, no tuyo). Reintentará solo.'
+  return e?.message || String(e)
+}
+
 function leerNegocio() {
   return fs.readFileSync(path.join(__dirname, 'negocio.txt'), 'utf8')
     .split('\n').filter((l) => !l.trim().startsWith('#')).join('\n').trim()
@@ -86,8 +115,7 @@ async function responder(chatId) {
     .slice(-12)
     .map((m) => ({ role: m.from === 'cliente' ? 'user' : 'model', parts: [{ text: m.text }] }))
 
-  const res = await ai.models.generateContent({
-    model: MODEL,
+  const res = await generar({
     contents: historial,
     config: {
       temperature: 0.3,
@@ -106,9 +134,9 @@ ${leerNegocio()}`,
 }
 
 // Prueba la clave de Gemini al arrancar, para avisar en el panel si está mal
-ai.models.generateContent({ model: MODEL, contents: 'Responde solo: OK' })
-  .then(() => console.log(`✅ Clave de Gemini OK (modelo ${MODEL})`))
-  .catch((e) => anotarError('Gemini (revisá GEMINI_API_KEY en el archivo .env)', e))
+generar({ contents: 'Responde solo: OK' })
+  .then(() => console.log('✅ Clave de Gemini OK'))
+  .catch((e) => anotarError('Gemini', { message: explicarError(e) }))
 
 // ---------------------------------------------------------------- bot
 let provider
@@ -142,11 +170,11 @@ const flujoPrincipal = addKeyword(EVENTS.WELCOME).addAction(async (ctx, { flowDy
     log(id, 'bot', respuesta)
     try { await flowDynamic(respuesta) } catch (e) { anotarError('Enviar respuesta', e); log(id, 'sistema', '⚠️ No se pudo enviar: ' + e.message) }
   } catch (e) {
-    anotarError('Gemini', e)
-    log(id, 'sistema', '⚠️ Error con Gemini: ' + e.message)
+    anotarError('Gemini', { message: explicarError(e) })
+    log(id, 'sistema', '⚠️ ' + explicarError(e))
     const disculpa = '¡Hola! 🙌 Recibimos tu mensaje, en un ratito te respondemos.'
     try { await flowDynamic(disculpa); log(id, 'bot', disculpa) } catch (e2) { anotarError('Enviar respuesta', e2) }
-    await avisarDueno(c, texto + '  (error de Gemini: ' + e.message + ')')
+    await avisarDueno(c, texto + '  (' + explicarError(e) + ')')
   }
 })
 
