@@ -152,7 +152,7 @@ function beep() {
 async function tick() {
   try {
     const s = await fetch('/api/state').then((r) => r.json())
-    const conectado = s.status === 'conectado'
+    const conectado = s.status === 'conectado' || s.status === 'reconectando'
     $('pantallaQR').classList.toggle('oculto', conectado)
     $('pantallaChat').classList.toggle('oculto', !conectado)
 
@@ -164,8 +164,8 @@ async function tick() {
       return
     }
 
-    $('punto').className = 'punto on'
-    $('estadoTxt').textContent = 'Conectado' + (s.me ? ' · +' + s.me : '')
+    $('punto').className = s.status === 'conectado' ? 'punto on' : 'punto qr'
+    $('estadoTxt').textContent = (s.status === 'conectado' ? 'Conectado' : 'Reconectando con WhatsApp…') + (s.me ? ' · +' + s.me : '')
     $('errorBar').style.display = s.error ? 'block' : 'none'
     if (s.error) $('errorBar').textContent = '⚠️ ' + hora(s.error.ts) + ' — ' + s.error.text
 

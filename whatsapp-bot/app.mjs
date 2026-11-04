@@ -264,6 +264,7 @@ provider.on('require_action', async ({ payload }) => {
   }
 })
 provider.on('host', (host) => { state.me = host?.phone || null })
+provider.on('message', (m) => console.log(`📩 Mensaje recibido de ${m?.from} (${m?.pushName || ''}): ${String(m?.body || '').slice(0, 60)}`))
 provider.on('ready', () => {
   state.status = 'conectado'
   state.qr = null
@@ -302,7 +303,10 @@ http.createServer(async (req, res) => {
       const chats = Object.values(state.chats)
         .map(({ messages, ...c }) => ({ ...c, last: messages.at(-1) }))
         .sort((a, b) => (b.last?.ts || 0) - (a.last?.ts || 0))
-      return send(res, 200, { status: state.status, qr: state.qr, me: state.me, chats, alerts: state.alerts, error: ultimoError })
+      // estado real: si el socket de WhatsApp se cortó, no mostrar "Conectado"
+      const ws = provider.vendor?.ws
+      const status = state.status === 'conectado' && ws && ws.isOpen === false ? 'reconectando' : state.status
+      return send(res, 200, { status, qr: state.qr, me: state.me, chats, alerts: state.alerts, error: ultimoError })
     }
     if (req.method === 'GET' && url.pathname === '/api/chat') {
       const c = state.chats[url.searchParams.get('id')]
