@@ -162,6 +162,46 @@ generar({ contents: 'Responde solo: OK' })
   .then(() => console.log('✅ Clave de Gemini OK'))
   .catch((e) => anotarError('Gemini', { message: explicarError(e) }))
 
+// ---------------------------------------------------------------- respuestas instantáneas
+// Horarios, dirección, pagos, precios y saludos se contestan al instante desde negocio.txt,
+// sin esperar a Gemini. Gemini solo se usa para las demás preguntas.
+const normalizar = (t) => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+function secciones() {
+  const out = {}
+  let actual = null
+  for (const linea of leerNegocio().split('\n')) {
+    const m = linea.match(/^([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ ]{2,}):\s*(.*)$/)
+    if (m) { actual = normalizar(m[1].trim()); out[actual] = m[2] ? [m[2]] : []; continue }
+    if (actual) out[actual].push(linea)
+  }
+  for (const k in out) out[k] = out[k].join('\n').trim()
+  return out
+}
+const TEMAS = [
+  { seccion: 'horarios', titulo: '🕐 *Horarios*', claves: /horario|\bhora|abren|abris|abre|cierran|cierra|atienden|atencion|abierto|domingo|sabado|feriado/ },
+  { seccion: 'direccion', titulo: '📍 *Dirección*', claves: /direcci|donde|ubica|queda|local|llego|llegar|mapa|calle|zona/ },
+  { seccion: 'medios de pago', titulo: '💳 *Formas de pago*', claves: /pago|pagar|abonar|abono|tarjeta|efectivo|transfer|mercado ?pago|debito|credito|cuotas/ },
+  { seccion: 'precios', titulo: '💲 *Precios*', claves: /precio|cuanto|cuesta|sale |salen|valor|costo|tarifa|cuota mensual|abono mensual|mensualidad/ },
+]
+const SALUDO = /^(hola+|buenas?|buen dia|buenos dias|buenas tardes|buenas noches|hey|holi|que tal|como va)[\s!.,?¡¿]*$/
+function respuestaInstantanea(texto) {
+  const t = normalizar(texto)
+  const sec = secciones()
+  const nombre = (sec['nombre del negocio'] || '').replace(/\s*\(.*\)\s*$/, '') || 'nosotros'
+  if (SALUDO.test(t)) return `¡Hola! 👋 Gracias por escribir a *${nombre}*. ¿En qué te puedo ayudar? Podés consultarme horarios, dirección, precios o formas de pago.`
+  const partes = []
+  for (const tema of TEMAS) {
+    if (!tema.claves.test(t)) continue
+    const info = sec[tema.seccion]
+    if (!info || /todav[ií]a no|no cargad|^\(/i.test(info)) return null // sin datos: que decida Gemini / avise al dueño
+    partes.push(`${tema.titulo}\n${info}`)
+  }
+  if (!partes.length) return null
+  // si la pregunta trae algo más que el tema (ej: "¿abren el sábado y hacen clases de prueba?") mejor que responda Gemini
+  if (t.split(/\s+/).length > 14) return null
+  return partes.join('\n\n')
+}
+
 // ---------------------------------------------------------------- bot
 let provider
 async function avisarDueno(c, pregunta) {
@@ -185,6 +225,13 @@ const flujoPrincipal = addKeyword(EVENTS.WELCOME).addAction(async (ctx, { flowDy
   const c = state.chats[id]
   if (c.paused) return // tú tomaste el control de este chat
 
+  const rapida = respuestaInstantanea(texto)
+  if (rapida) {
+    log(id, 'bot', rapida)
+    try { await flowDynamic(rapida) } catch (e) { anotarError('Enviar respuesta', e) }
+    console.log('⚡ Respuesta instantánea (sin Gemini)')
+    return
+  }
   // muestra "escribiendo..." en el WhatsApp del cliente mientras Gemini piensa
   const jid = ctx.key?.remoteJid || id
   Promise.resolve().then(() => provider.sendPresenceUpdate(jid, 'composing')).catch(() => {})
