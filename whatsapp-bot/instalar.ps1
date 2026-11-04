@@ -70,7 +70,7 @@ if (-not (Test-Path $envFile) -or (Get-Content $envFile -Raw) -match 'pega_aqui'
   Start-Process 'https://aistudio.google.com/apikey'
   do { $key = (Read-Host 'Pega aqui tu clave de Google AI Studio y presiona Enter').Trim() } while ($key.Length -lt 20)
   $num = (Read-Host 'Tu celular personal para recibir avisos (ej 56912345678). Enter para omitir').Trim() -replace '\D',''
-  $contenido = "GEMINI_API_KEY=$key`nGEMINI_MODEL=gemini-flash-latest`nNUMERO_DUENO=$num`nPORT=3008`n"
+  $contenido = "GEMINI_API_KEY=$key`nGEMINI_MODEL=gemini-2.5-flash-lite`nNUMERO_DUENO=$num`nPORT=3008`n"
   [IO.File]::WriteAllText($envFile, $contenido, (New-Object System.Text.UTF8Encoding $false))
 } else {
   Write-Host 'Ya tenias tu clave configurada, la mantengo.'

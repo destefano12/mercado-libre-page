@@ -10,7 +10,11 @@ import { BaileysProvider } from '@builderbot/provider-baileys'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PORT = Number(process.env.PORT || 3008)
-const MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest'
+// gemini-2.5-flash-lite: el más rápido del plan gratis y suficiente para preguntas frecuentes.
+// (gemini-flash-latest era el valor anterior por defecto: "piensa" antes de responder y es lento)
+const MODEL = !process.env.GEMINI_MODEL || process.env.GEMINI_MODEL === 'gemini-flash-latest'
+  ? 'gemini-2.5-flash-lite'
+  : process.env.GEMINI_MODEL
 const NO_SE = '[NO_SE]'
 const DATA_DIR = path.join(__dirname, 'datos')
 const CHATS_FILE = path.join(DATA_DIR, 'chats.json')
@@ -77,7 +81,7 @@ function log(id, from, text, name) {
 // ---------------------------------------------------------------- Gemini
 // Si un modelo está saturado o tarda, prueba otro. Nunca más de ~30 s en total
 // (BuilderBot corta cada mensaje a los 50 s y el cliente se quedaría sin respuesta).
-const MODELOS = [...new Set([MODEL, 'gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-flash-latest'])]
+const MODELOS = [...new Set([MODEL, 'gemini-2.5-flash-lite', 'gemini-flash-lite-latest', 'gemini-2.5-flash', 'gemini-flash-latest'])]
 const LIMITE_TOTAL_MS = 30000
 const LIMITE_POR_MODELO_MS = 12000
 let modeloBueno = null // el último que respondió bien se prueba primero
@@ -95,9 +99,14 @@ async function generar(params) {
       const res = await ai.models.generateContent({
         ...params,
         model,
-        config: { ...params.config, abortSignal: AbortSignal.timeout(Math.min(LIMITE_POR_MODELO_MS, resta)) },
+        config: {
+          ...params.config,
+          // sin "pensamiento" interno: responde en 1-3 s en vez de 5-15 s
+          ...(model.startsWith('gemini-2.5') ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+          abortSignal: AbortSignal.timeout(Math.min(LIMITE_POR_MODELO_MS, resta)),
+        },
       })
-      if (modeloBueno !== model) console.log(`🤖 Usando modelo ${model}`)
+      console.log(`⏱️  Gemini respondió en ${((Date.now() - inicio) / 1000).toFixed(1)} s (${model})`)
       modeloBueno = model
       return res
     } catch (e) {
@@ -176,8 +185,13 @@ const flujoPrincipal = addKeyword(EVENTS.WELCOME).addAction(async (ctx, { flowDy
   const c = state.chats[id]
   if (c.paused) return // tú tomaste el control de este chat
 
+  // muestra "escribiendo..." en el WhatsApp del cliente mientras Gemini piensa
+  const jid = ctx.key?.remoteJid || id
+  Promise.resolve().then(() => provider.sendPresenceUpdate(jid, 'composing')).catch(() => {})
+  const t0 = Date.now()
   try {
     let respuesta = await responder(id)
+    console.log(`💬 Respuesta lista en ${((Date.now() - t0) / 1000).toFixed(1)} s`)
     if (!respuesta || respuesta.includes(NO_SE)) {
       respuesta = '¡Buena pregunta! 🙌 Dejame consultarlo y te respondo en un ratito.'
       await avisarDueno(c, texto)
