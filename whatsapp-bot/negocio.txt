@@ -2,20 +2,50 @@
 #  INFORMACIÓN DE TU NEGOCIO  (edita este archivo con tus datos)
 #  El bot SOLO responde con lo que esté escrito aquí.
 #  Los cambios se aplican al instante, sin reiniciar el bot.
+#  Fuente: https://somosromastudio.com/
 # ============================================================
 
-NOMBRE DEL NEGOCIO: Roma Pilates (estudio de pilates)
+NOMBRE DEL NEGOCIO: Roma Estudio (Roma Pilates)
 
 ESTILO DE RESPUESTA: español de Argentina, tratando al cliente de "vos" (ej: "¿Querés...?", "Te esperamos").
+
+PÁGINA WEB:
+https://somosromastudio.com/
+
+QUÉ ES:
+Estudio boutique de Pilates Reformer en Buenos Aires. Clases guiadas de cerca, en grupos reducidos, para moverte con técnica, calma y continuidad. Hacemos SOLO Pilates Reformer.
 
 DIRECCIÓN:
 Av. Juan Bautista Alberdi 2998, C1406GSS, Ciudad Autónoma de Buenos Aires
 Google Maps: https://maps.google.com/?q=Av.+Juan+Bautista+Alberdi+2998,+CABA
 
 HORARIOS:
-- Lunes a viernes: 8:00 a 12:00 y 16:00 a 21:00
-- Sábado: 8:00 a 13:00
-- Domingo: cerrado
+Turnos de clase:
+- Lunes a viernes: 8 a 12 y 16 a 20 hs
+- Sábados: 9 a 13 hs
+- Domingos: cerrado
+
+RESERVAS:
+Los turnos se reservan desde la web: https://somosromastudio.com/ (sección «Reservar»).
+1. Entrá con tu cuenta (correo y DNI).
+2. Elegí día y horario en el cuadro de disponibilidad.
+3. Tu lugar queda confirmado al instante, sin esperar confirmación.
+Si es tu primera vez: tocá «Ingresar» → «No tengo una cuenta» y completá la ficha (3 minutos). La revisamos, te habilitamos la cuenta y te llega un correo de bienvenida (si no lo ves, mirá en spam).
+Hasta dos clases por semana, en días distintos, y una clase por día.
+
+CANCELACIONES:
+Cancelá desde «Mi cuenta» en https://somosromastudio.com/ hasta 8 horas antes de la clase y el lugar queda libre para otra persona. Pasado ese momento, la clase se pierde.
+
+CLASES:
+- Pilates Reformer: trabajo en camilla con resortes que gradúan la resistencia. Fortalece, alinea y mejora la movilidad, con poco impacto en las articulaciones.
+- Duración: 50 minutos.
+- Grupo: 6 camillas por clase.
+- Nivel: se adapta al tuyo. Sirve para quien nunca hizo actividad, para quien vuelve después de una lesión y para quien entrena hace años.
+- Días: lunes a sábado.
+- Llegá 5 minutos antes para empezar sin apuro.
+
+QUÉ LLEVAR:
+Medias antideslizantes (obligatorias) y ropa cómoda. Recomendamos traer una botella de agua. El resto del equipo lo pone el estudio.
 
 PRECIOS:
 (Todavía no cargados. Si preguntan precios, no inventes: avisá al dueño.)
@@ -23,7 +53,29 @@ PRECIOS:
 MEDIOS DE PAGO:
 Mercado Pago y transferencia desde cualquier banco.
 
+CONTACTO:
+- Web: https://somosromastudio.com/
+- Instagram: https://www.instagram.com/somos.romaestudio
+- WhatsApp: +54 9 11 2510-9107
+
 PREGUNTAS FRECUENTES:
-(Agregá acá preguntas y respuestas con este formato)
-P: ...
-R: ...
+P: ¿Necesito experiencia previa?
+R: No. Las clases se adaptan a tu nivel, sea tu primera vez o si ya practicás Pilates.
+
+P: ¿Qué tengo que llevar?
+R: Ropa cómoda y medias antideslizantes (obligatorias). El resto lo pone el estudio.
+
+P: ¿Cómo reservo un turno?
+R: Desde https://somosromastudio.com/ en «Reservar». Elegís día y horario y el lugar queda confirmado al instante. Necesitás tener tu cuenta activa.
+
+P: ¿Cómo me sumo si es mi primera vez?
+R: En https://somosromastudio.com/ tocá «Ingresar» → «No tengo una cuenta» y completá la ficha. Cuando la habilitamos te llega un correo para empezar a reservar.
+
+P: ¿Y si no puedo ir?
+R: Cancelá desde «Mi cuenta» hasta 8 horas antes. Pasado ese momento, la clase se pierde.
+
+P: ¿Cuántas clases puedo reservar por semana?
+R: Hasta dos, en días distintos.
+
+P: ¿Sirve si tengo una lesión?
+R: El Reformer permite trabajar con menos impacto y adaptar la resistencia, por eso acompañamos a quien vuelve de una lesión. Igual, consultá con tu médico antes de empezar.

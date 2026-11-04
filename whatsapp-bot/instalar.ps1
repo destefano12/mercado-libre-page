@@ -58,7 +58,10 @@ New-Item -ItemType Directory -Force -Path $Dest | Out-Null
 # Copia todo, pero NO pisa tu negocio.txt ni tu sesion de WhatsApp si ya existen
 $xf = @()
 $neg = Join-Path $Dest 'negocio.txt'
-if ((Test-Path $neg) -and -not (Select-String -Path $neg -Pattern 'Mi Negocio' -Quiet)) { $xf = @('/XF', 'negocio.txt') }
+if (Test-Path $neg) {
+  if (Select-String -Path $neg -Pattern 'somosromastudio' -Quiet) { $xf = @('/XF', 'negocio.txt') }  # ya es la version nueva: no tocar tus cambios
+  else { Copy-Item $neg (Join-Path $Dest 'negocio.anterior.txt') -Force }  # version vieja: se guarda una copia y se actualiza
+}
 robocopy $src $Dest /E /NFL /NDL /NJH /NJS /NP @xf | Out-Null
 Remove-Item $tmpZip, $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
 
