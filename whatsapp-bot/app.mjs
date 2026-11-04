@@ -123,7 +123,9 @@ function explicarError(e) {
   const c = codigo(e)
   if (claveInvalida(e)) return 'La clave de Gemini no es válida. Revisá GEMINI_API_KEY en el archivo .env'
   if (/AbortError|TimeoutError/.test(e?.name) || /aborted|tardó/i.test(String(e?.message))) return 'Gemini tardó demasiado en responder (está saturado). Reintentará con el próximo mensaje.'
-  if (c === 429) return 'Se alcanzó el límite gratis de Gemini por ahora. Se libera solo en un rato.'
+  if (c === 429) return /PerDay|per day|daily/i.test(String(e?.message))
+    ? 'Se alcanzó el límite gratis DIARIO de Gemini. Se libera solo a la medianoche de EE.UU. (~4-5 AM en Argentina). Mientras tanto las preguntas de horarios, dirección y pagos se siguen respondiendo al instante.'
+    : 'Se alcanzó el límite gratis POR MINUTO de Gemini (muchos mensajes juntos). Se libera solo en 1 minuto.'
   if (c === 503 || c === 500) return 'Gemini está saturado en este momento (problema de Google, no tuyo). Reintentará solo.'
   return e?.message || String(e)
 }
@@ -158,8 +160,9 @@ ${leerNegocio()}`,
 }
 
 // Prueba la clave de Gemini al arrancar, para avisar en el panel si está mal
-generar({ contents: 'Responde solo: OK' })
-  .then(() => console.log('✅ Clave de Gemini OK'))
+// (consulta los datos del modelo: no gasta del límite gratis de mensajes)
+ai.models.get({ model: MODEL })
+  .then(() => console.log(`✅ Clave de Gemini OK (modelo ${MODEL})`))
   .catch((e) => anotarError('Gemini', { message: explicarError(e) }))
 
 // ---------------------------------------------------------------- respuestas instantáneas
