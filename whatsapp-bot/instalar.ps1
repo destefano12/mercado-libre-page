@@ -76,6 +76,20 @@ if (-not (Test-Path $envFile) -or (Get-Content $envFile -Raw) -match 'pega_aqui'
   Write-Host 'Ya tenias tu clave configurada, la mantengo.'
 }
 
+# 3b) Clave de Groq (opcional, respaldo gratis si Gemini se queda sin limite)
+if (-not ((Get-Content $envFile -Raw) -match 'GROQ_API_KEY=\S')) {
+  Paso 'Respaldo gratis (opcional): Groq'
+  Write-Host 'Si Gemini se queda sin limite, el bot usa Groq (gratis, sin tarjeta).'
+  Write-Host 'Crea tu clave en https://console.groq.com/keys (boton "Create API Key").'
+  Start-Process 'https://console.groq.com/keys'
+  $groq = (Read-Host 'Pega aqui tu clave de Groq (empieza con gsk_) o presiona Enter para omitir').Trim()
+  if ($groq.Length -gt 20) {
+    $txt = (Get-Content $envFile -Raw) -replace '(?m)^GROQ_API_KEY=.*\r?\n?', ''
+    $txt = $txt.TrimEnd() + "`nGROQ_API_KEY=$groq`n"
+    [IO.File]::WriteAllText($envFile, $txt, (New-Object System.Text.UTF8Encoding $false))
+  }
+}
+
 # 4) Instalar dependencias
 Paso 'Instalando dependencias (1-2 minutos)...'
 Push-Location $Dest

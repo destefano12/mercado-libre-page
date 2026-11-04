@@ -88,12 +88,12 @@ let modeloBueno = null // el último que respondió bien se prueba primero
 const esperar = (ms) => new Promise((r) => setTimeout(r, ms))
 const codigo = (e) => Number(e?.status || e?.code || String(e?.message).match(/"code":\s*(\d{3})/)?.[1] || 0)
 const claveInvalida = (e) => [401, 403].includes(codigo(e)) || /API_KEY_INVALID|API key not valid/i.test(String(e?.message))
-async function generar(params) {
+async function generar(params, limiteTotal = LIMITE_TOTAL_MS) {
   const inicio = Date.now()
   let ultimo
   const orden = modeloBueno ? [modeloBueno, ...MODELOS.filter((m) => m !== modeloBueno)] : MODELOS
   for (const model of orden) {
-    const resta = LIMITE_TOTAL_MS - (Date.now() - inicio)
+    const resta = limiteTotal - (Date.now() - inicio)
     if (resta < 3000) break
     try {
       const res = await ai.models.generateContent({
@@ -135,17 +135,8 @@ function leerNegocio() {
     .split('\n').filter((l) => !l.trim().startsWith('#')).join('\n').trim()
 }
 
-async function responder(chatId) {
-  const historial = state.chats[chatId].messages
-    .filter((m) => m.from !== 'sistema')
-    .slice(-12)
-    .map((m) => ({ role: m.from === 'cliente' ? 'user' : 'model', parts: [{ text: m.text }] }))
-
-  const res = await generar({
-    contents: historial,
-    config: {
-      temperature: 0.3,
-      systemInstruction: `Eres el asistente de WhatsApp de un negocio. Respondes a clientes en español, de forma breve (máximo 3-4 líneas), amable y natural, como una persona del local. Puedes usar algún emoji, sin exagerar.
+function instrucciones() {
+  return `Eres el asistente de WhatsApp de un negocio. Respondes a clientes en español, de forma breve (máximo 3-4 líneas), amable y natural, como una persona del local. Puedes usar algún emoji, sin exagerar.
 
 REGLAS IMPORTANTES:
 1. Responde SOLO con la información de la sección INFORMACIÓN DEL NEGOCIO. Nunca inventes precios, horarios, productos, stock, promociones ni datos.
@@ -153,10 +144,57 @@ REGLAS IMPORTANTES:
 3. Si el cliente pregunta algo que NO está en la información, o pide algo que requiere a una persona (reclamos, reservas concretas, pedidos especiales, hablar con alguien), responde EXACTAMENTE con el texto ${NO_SE} y nada más.
 
 INFORMACIÓN DEL NEGOCIO:
-${leerNegocio()}`,
-    },
-  })
-  return (res.text || '').trim()
+${leerNegocio()}`
+}
+
+// ---------------------------------------------------------------- Groq (respaldo gratis)
+// Si Gemini está sin límite o saturado, responde Groq (https://console.groq.com/keys)
+const GROQ_KEY = (process.env.GROQ_API_KEY || '').trim()
+const GROQ_MODELOS = [...new Set([process.env.GROQ_MODEL || 'llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'openai/gpt-oss-20b'])]
+async function responderGroq(mensajes) {
+  let ultimo
+  for (const model of GROQ_MODELOS) {
+    try {
+      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          temperature: 0.3,
+          max_tokens: 400,
+          messages: [{ role: 'system', content: instrucciones() }, ...mensajes],
+        }),
+        signal: AbortSignal.timeout(10000),
+      })
+      const data = await r.json().catch(() => ({}))
+      if (r.ok) {
+        console.log(`⚡ Respondió Groq (${model})`)
+        return (data.choices?.[0]?.message?.content || '').trim()
+      }
+      ultimo = new Error(`Groq ${r.status}: ${data.error?.message || r.statusText}`)
+      if (r.status === 401) { ultimo = new Error('La clave de Groq no es válida. Revisá GROQ_API_KEY en el archivo .env'); break }
+    } catch (e) { ultimo = e }
+  }
+  throw ultimo
+}
+
+async function responder(chatId) {
+  const ultimos = state.chats[chatId].messages.filter((m) => m.from !== 'sistema').slice(-12)
+  try {
+    const res = await generar({
+      contents: ultimos.map((m) => ({ role: m.from === 'cliente' ? 'user' : 'model', parts: [{ text: m.text }] })),
+      config: { temperature: 0.3, systemInstruction: instrucciones() },
+    }, GROQ_KEY ? 15000 : LIMITE_TOTAL_MS)
+    return (res.text || '').trim()
+  } catch (e) {
+    if (!GROQ_KEY) throw e
+    console.log('↪️  Gemini no disponible (' + explicarError(e) + '). Probando con Groq...')
+    try {
+      return await responderGroq(ultimos.map((m) => ({ role: m.from === 'cliente' ? 'user' : 'assistant', content: m.text })))
+    } catch (e2) {
+      throw new Error(explicarError(e) + ' | Groq tampoco respondió: ' + (e2?.message || e2))
+    }
+  }
 }
 
 // Prueba la clave de Gemini al arrancar, para avisar en el panel si está mal
