@@ -136,7 +136,7 @@ function leerNegocio() {
 }
 
 function instrucciones() {
-  return `Eres el asistente de WhatsApp de un negocio. Respondes a clientes en español, de forma breve (máximo 3-4 líneas), amable y natural, como una persona del local. Puedes usar algún emoji, sin exagerar.
+  return `Eres el asistente de WhatsApp de un negocio. Respondes a clientes en español, de forma breve (máximo 3-4 líneas), con un tono profesional, serio y cordial, como la recepción de un estudio. NUNCA uses emojis, emoticones ni símbolos decorativos: solo texto y signos de puntuación normales (¡! ¿? . , : -). No uses asteriscos ni formato.
 
 REGLAS IMPORTANTES:
 1. Responde SOLO con la información de la sección INFORMACIÓN DEL NEGOCIO. Nunca inventes precios, horarios, clases, promociones, descuentos, profesores ni ningún dato.
@@ -222,20 +222,20 @@ function secciones() {
   return out
 }
 const TEMAS = [
-  { seccion: 'horarios', titulo: '🕐 *Horarios*', claves: /horario|\bhora|abren|abris|abre|cierran|cierra|atienden|atencion|abierto|domingo|sabado|feriado/ },
-  { seccion: 'direccion', titulo: '📍 *Dirección*', claves: /direcci|donde|ubica|queda|local|llego|llegar|mapa|calle|zona/ },
-  { seccion: 'medios de pago', titulo: '💳 *Formas de pago*', claves: /pago|pagar|abonar|abono|tarjeta|efectivo|transfer|mercado ?pago|debito|credito|cuotas/ },
-  { seccion: 'reservas', titulo: '📅 *Reservas*', claves: /reserv|turno|anotar|anoto|inscrib|agendar|cupo|disponibilidad|lugar para|primera vez|sumarme|empezar/ },
-  { seccion: 'cancelaciones', titulo: '❌ *Cancelaciones*', claves: /cancel|no puedo ir|no voy a poder|faltar|reprogram/ },
-  { seccion: 'que llevar', titulo: '🧦 *Qué llevar*', claves: /llevar|ropa|medias|vestimenta|que me pongo|calzado|zapatilla/ },
-  { seccion: 'precios', titulo: '💲 *Precios*', claves: /precio|cuanto|cuesta|sale |salen|valor|costo|tarifa|cuota mensual|abono mensual|mensualidad/ },
+  { seccion: 'horarios', titulo: 'Horarios:', claves: /horario|\bhora|abren|abris|abre|cierran|cierra|atienden|atencion|abierto|domingo|sabado|feriado/ },
+  { seccion: 'direccion', titulo: 'Dirección:', claves: /direcci|donde|ubica|queda|local|llego|llegar|mapa|calle|zona/ },
+  { seccion: 'medios de pago', titulo: 'Formas de pago:', claves: /pago|pagar|abonar|abono|tarjeta|efectivo|transfer|mercado ?pago|debito|credito|cuotas/ },
+  { seccion: 'reservas', titulo: 'Reservas:', claves: /reserv|turno|anotar|anoto|inscrib|agendar|cupo|disponibilidad|lugar para|primera vez|sumarme|empezar/ },
+  { seccion: 'cancelaciones', titulo: 'Cancelaciones:', claves: /cancel|no puedo ir|no voy a poder|faltar|reprogram/ },
+  { seccion: 'que llevar', titulo: 'Qué llevar:', claves: /llevar|ropa|medias|vestimenta|que me pongo|calzado|zapatilla/ },
+  { seccion: 'precios', titulo: 'Precios:', claves: /precio|cuanto|cuesta|sale |salen|valor|costo|tarifa|cuota mensual|abono mensual|mensualidad/ },
 ]
 const SALUDO = /^(hola+|buenas?|buen dia|buenos dias|buenas tardes|buenas noches|hey|holi|que tal|como va)[\s!.,?¡¿]*$/
 function respuestaInstantanea(texto) {
   const t = normalizar(texto)
   const sec = secciones()
   const nombre = (sec['nombre del negocio'] || '').replace(/\s*\(.*\)\s*$/, '') || 'nosotros'
-  if (SALUDO.test(t)) return `¡Hola! 👋 Gracias por escribir a *${nombre}*. ¿En qué te puedo ayudar? Podés consultarme horarios, reservas, clases, dirección o formas de pago.\n\n🌐 Para reservar tu turno: https://somosromastudio.com/`
+  if (SALUDO.test(t)) return `¡Hola! Gracias por comunicarte con ${nombre}. ¿En qué podemos ayudarte? Podés consultarnos por horarios, reservas, clases, dirección o formas de pago.\n\nPara reservar tu turno: https://somosromastudio.com/`
   const partes = []
   for (const tema of TEMAS) {
     if (!tema.claves.test(t)) continue
@@ -247,6 +247,22 @@ function respuestaInstantanea(texto) {
   // si la pregunta trae algo más que el tema (ej: "¿abren el sábado y hacen clases de prueba?") mejor que responda Gemini
   if (t.split(/\s+/).length > 14) return null
   return partes.join('\n\n')
+}
+
+// Quita emojis y asteriscos de todo lo que se le envía al cliente (tono serio, solo texto)
+const limpiar = (t) => String(t)
+  .replace(/[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\u{FE0F}\u{200D}\u{20E3}]/gu, '')
+  .replace(/\*/g, '')
+  .replace(/[ \t]+\n/g, '\n').replace(/[ \t]{2,}/g, ' ').trim()
+
+// Si avisan que la página o las reservas no funcionan: respuesta de contención + aviso al dueño
+const PROBLEMA_WEB = 'Lamentamos el inconveniente. Ya estamos al tanto y estamos trabajando para solucionarlo a la brevedad. ' +
+  'Si necesitás reservar o modificar un turno mientras tanto, indicanos tu nombre, el día y el horario que buscás, y lo gestionamos por este medio. Muchas gracias por tu paciencia.'
+function esProblemaWeb(texto) {
+  const t = normalizar(texto)
+  const habla = /pagina|web|sitio|link|enlace|app|aplicacion|plataforma|sistema|cuenta|reserv|turno|ingresar|login|contrasena|clave|dni|correo|mail/.test(t)
+  const falla = /problema|error|falla|no anda|no funciona|no carga|no abre|no me deja|no puedo (entrar|ingresar|reservar|cancelar|acceder|registrarme)|caid|se cuelga|no me llega|no llega|no aparece|no responde|bug|roto|rota/.test(t)
+  return habla && falla
 }
 
 // ---------------------------------------------------------------- bot
@@ -272,7 +288,13 @@ const flujoPrincipal = addKeyword(EVENTS.WELCOME).addAction(async (ctx, { flowDy
   const c = state.chats[id]
   if (c.paused) return // tú tomaste el control de este chat
 
-  const rapida = respuestaInstantanea(texto)
+  if (esProblemaWeb(texto)) {
+    log(id, 'bot', PROBLEMA_WEB)
+    try { await flowDynamic(PROBLEMA_WEB) } catch (e) { anotarError('Enviar respuesta', e) }
+    await avisarDueno(c, '[PROBLEMA CON LA WEB] ' + texto)
+    return
+  }
+  const rapida = respuestaInstantanea(texto) && limpiar(respuestaInstantanea(texto))
   if (rapida) {
     log(id, 'bot', rapida)
     try { await flowDynamic(rapida) } catch (e) { anotarError('Enviar respuesta', e) }
@@ -284,10 +306,10 @@ const flujoPrincipal = addKeyword(EVENTS.WELCOME).addAction(async (ctx, { flowDy
   Promise.resolve().then(() => provider.sendPresenceUpdate(jid, 'composing')).catch(() => {})
   const t0 = Date.now()
   try {
-    let respuesta = await responder(id)
+    let respuesta = limpiar(await responder(id))
     console.log(`💬 Respuesta lista en ${((Date.now() - t0) / 1000).toFixed(1)} s`)
     if (!respuesta || respuesta.includes(NO_SE)) {
-      respuesta = '¡Buena pregunta! 🙌 Dejame consultarlo y te respondo en un ratito. Mientras tanto podés ver más info en https://somosromastudio.com/'
+      respuesta = 'Gracias por tu consulta. Vamos a verificar esa información y te respondemos a la brevedad. Mientras tanto, podés encontrar más información en https://somosromastudio.com/'
       await avisarDueno(c, texto)
     }
     log(id, 'bot', respuesta)
@@ -295,7 +317,7 @@ const flujoPrincipal = addKeyword(EVENTS.WELCOME).addAction(async (ctx, { flowDy
   } catch (e) {
     anotarError('Gemini', { message: explicarError(e) })
     log(id, 'sistema', '⚠️ ' + explicarError(e))
-    const disculpa = '¡Hola! 🙌 Recibimos tu mensaje, en un ratito te respondemos.'
+    const disculpa = 'Hola, recibimos tu mensaje. Te respondemos a la brevedad. Muchas gracias.'
     try { await flowDynamic(disculpa); log(id, 'bot', disculpa) } catch (e2) { anotarError('Enviar respuesta', e2) }
     await avisarDueno(c, texto + '  (' + explicarError(e) + ')')
   }
