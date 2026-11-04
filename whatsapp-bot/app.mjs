@@ -75,30 +75,45 @@ function log(id, from, text, name) {
 }
 
 // ---------------------------------------------------------------- Gemini
-// Si un modelo está saturado (503/429/500), reintenta y prueba modelos de respaldo
-const MODELOS = [...new Set([MODEL, 'gemini-flash-latest', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-2.5-flash-lite'])]
+// Si un modelo está saturado o tarda, prueba otro. Nunca más de ~30 s en total
+// (BuilderBot corta cada mensaje a los 50 s y el cliente se quedaría sin respuesta).
+const MODELOS = [...new Set([MODEL, 'gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-flash-latest'])]
+const LIMITE_TOTAL_MS = 30000
+const LIMITE_POR_MODELO_MS = 12000
+let modeloBueno = null // el último que respondió bien se prueba primero
 const esperar = (ms) => new Promise((r) => setTimeout(r, ms))
 const codigo = (e) => Number(e?.status || e?.code || String(e?.message).match(/"code":\s*(\d{3})/)?.[1] || 0)
+const claveInvalida = (e) => [401, 403].includes(codigo(e)) || /API_KEY_INVALID|API key not valid/i.test(String(e?.message))
 async function generar(params) {
+  const inicio = Date.now()
   let ultimo
-  for (const model of MODELOS) {
-    for (let intento = 0; intento < 2; intento++) {
-      try {
-        return await ai.models.generateContent({ ...params, model })
-      } catch (e) {
-        ultimo = e
-        const c = codigo(e)
-        if (c === 400 || c === 401 || c === 403) throw e // clave inválida: no sirve reintentar
-        if (c === 404) break // modelo no existe: probar el siguiente
-        await esperar(1500 * (intento + 1))
-      }
+  const orden = modeloBueno ? [modeloBueno, ...MODELOS.filter((m) => m !== modeloBueno)] : MODELOS
+  for (const model of orden) {
+    const resta = LIMITE_TOTAL_MS - (Date.now() - inicio)
+    if (resta < 3000) break
+    try {
+      const res = await ai.models.generateContent({
+        ...params,
+        model,
+        config: { ...params.config, abortSignal: AbortSignal.timeout(Math.min(LIMITE_POR_MODELO_MS, resta)) },
+      })
+      if (modeloBueno !== model) console.log(`🤖 Usando modelo ${model}`)
+      modeloBueno = model
+      return res
+    } catch (e) {
+      ultimo = e
+      if (claveInvalida(e)) throw e // clave mal: no sirve reintentar
+      if (modeloBueno === model) modeloBueno = null
+      await esperar(300)
     }
   }
-  throw ultimo
+  throw ultimo || new Error('Gemini tardó demasiado en responder')
 }
+
 function explicarError(e) {
   const c = codigo(e)
-  if (c === 400 || c === 401 || c === 403) return 'La clave de Gemini no es válida. Revisá GEMINI_API_KEY en el archivo .env'
+  if (claveInvalida(e)) return 'La clave de Gemini no es válida. Revisá GEMINI_API_KEY en el archivo .env'
+  if (/AbortError|TimeoutError/.test(e?.name) || /aborted|tardó/i.test(String(e?.message))) return 'Gemini tardó demasiado en responder (está saturado). Reintentará con el próximo mensaje.'
   if (c === 429) return 'Se alcanzó el límite gratis de Gemini por ahora. Se libera solo en un rato.'
   if (c === 503 || c === 500) return 'Gemini está saturado en este momento (problema de Google, no tuyo). Reintentará solo.'
   return e?.message || String(e)
